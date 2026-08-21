@@ -1,6 +1,6 @@
 # Rolling Financial Plan — RFP-1 Decision Contract
 
-**Status:** RFP-1/RFP-2 decisions complete; RFP-3 Overview/Debt UX accepted at a stable checkpoint; financial safety certification pending the post-decision 30/90-day proof
+**Status:** RFP-1/RFP-2 decisions complete; RFP-3 Overview/Debt UX accepted at a stable checkpoint; post-decision 30/90-day financial safety certified 2026-08-21
 
 **Date:** 2026-08-14
 
@@ -349,16 +349,33 @@ recommendation ledger. Cash-source yield comparison remains
 This is advice only. No step initiates a transfer, security trade, sale, debt
 payment, or Cash Flow posting.
 
-### 2026-08-18 accepted checkpoint and remaining certification
+### 2026-08-18 accepted checkpoint; safety certified 2026-08-21
 
 The owner completed bounded visual testing and accepted the current Overview
-and Debt customer presentation. The financial result is not frozen until a
-separate post-decision safety proof confirms that the proposed decision leaves
+and Debt customer presentation. The separate post-decision safety proof now
+confirms that the proposed decision leaves
 account minimum buffers, current-month required obligations, the next 30 and 90
 days of gross obligations, the hard reserve, preferred liquidity, and staged
 capital intact using current cash only. The proof must not depend on future
 income, must count every obligation exactly once, must preserve corrected
 recurrence, and must reconcile Overview and Debt to the same canonical plan.
+The common source emits this evidence as
+`RFP_3_POST_DECISION_SAFETY_V1`; isolated Central `@387` passed 2/2 scenarios
+and 124/124 assertions with Restricted Provisioning and Drift PASS, both
+fixtures TRASHED, and the runner OFF. The checkpoint is financially certified;
+the owner approved the Overview/Debt freeze and Git commit/push on 2026-08-21.
+
+The owner then reconciled the two bounded 90-day displays. Gross operating
+obligations are `$125,454.92`. The reserve calculation permits a capped
+`$83,636.61` forecast-income offset but enforces a minimum floor equal to one
+third of gross outflows: `$125,454.92 / 3 = $41,818.31`. Therefore the displayed
+protected reserve is `$125,454.92 - $83,636.61 = $41,818.31`. Net irregular
+property contingency is already included in gross obligations; account buffers
+and Do Not Touch cash are separate protections, and no additional below-line
+component applies. Post-recommendation current cash is `$133,010.14`, so the
+independent no-future-income control retains `$7,555.22` above the full gross
+amount, or `1.06x`. The optional deployment is constrained by this unreduced
+gross test, not justified by the forecast-income offset.
 
 Checkpoint evidence is `$21,980.49` required this month, `$20,322.08` already
 covered, `$1,658.41` still to cover, `$41,895.78` extra payoff, `$43,554.19`

@@ -10,9 +10,9 @@ operator destinations.
 
 | Surface | URL | Account / purpose |
 | --- | --- | --- |
-| Personal bounded dashboard | https://script.google.com/macros/s/AKfycby9dt2uLRkaCwtTn9-SI2PnHKYmsSRWfqnSCmxaNt_qY1hTP2daoTWyL0LpUgwF4d08ew/exec | Owner-only daily workbook. Never use for Harness or destructive validation. The owner performed the push/deployment and visually accepted the 2026-08-18 Overview/Debt checkpoint; this is customer-facing bounded evidence, not Codex workbook-writer evidence, and financial safety certification remains pending the separate 30/90-day proof. Earlier owner-controlled RFP-6a acceptance imported 104 Samer Robinhood activities, reconciled the four holdings, exercised duplicate-safe re-import, and confirmed content-fitted system sheets. |
+| Personal bounded dashboard | https://script.google.com/macros/s/AKfycbycMA4qlzDASi3OWp650_kzg91ReoXC9xK78o2HerCtwFfQjnej6zJq_MpTxppKM44L/exec | Owner-only daily-workbook endpoint from the 2026-08-21 defect report, confirmed read-only as `@626`. Never use it for Harness or destructive validation. The owner performed bounded deployment/validation of the reviewed source and confirmed Anthropic Claude - Laith appears once as `$20` in August and the false July overdue card is gone. Post-validation inventory also contains a newly created owner-controlled `AKfycbwf66…RlvA` at `@627`; the owner-used singleton should be explicitly selected before the next routine bounded release. This remains customer-facing bounded evidence, not Codex workbook-writer evidence. The common-source 30/90-day financial-safety proof and creation-floor fix passed on isolated Central `@387`; Codex performed no bounded deployment or workbook write. |
 | Central Beta | https://script.google.com/macros/s/AKfycbyq_OGiupdGO79GMOImkIgYv19hqlN1JuJfieuDlkXH6Rp637MhZc6jz9uRW2ZxANBlPA/exec | Family-beta deployment, currently pinned at version 106. Do not update during isolated validation. |
-| Isolated Central validation | https://script.google.com/macros/s/AKfycbzMaD3Ur0H3VmatL4W2vVHlYhFOXF4cZSSjIcn3SwggbTCs9Q9F1_PH74F16lAFkUlWZQ/exec | Disposable runtime-validation deployment is currently `@381`; that version was deployed but its planned suite was not run and is not claimed as validated. The latest validated source is `@380`: Capital Allocation Foundation passed 2/2 scenarios and 110/110 assertions with Provisioning/Drift PASS, both marker-verified fixtures verified TRASHED, and the runner OFF. Central Beta remains version 106. |
+| Isolated Central validation | https://script.google.com/macros/s/AKfycbzMaD3Ur0H3VmatL4W2vVHlYhFOXF4cZSSjIcn3SwggbTCs9Q9F1_PH74F16lAFkUlWZQ/exec | Disposable runtime-validation deployment is currently `@387`. Capital Allocation Foundation passed 2/2 scenarios and 124/124 assertions with Restricted Provisioning and Drift PASS. Bills Regression passed 15/15 scenarios and 123/123 assertions; the exact new-bill creation-floor scenario passed 7/7. Every marker-verified Restricted fixture was verified TRASHED and the runner returned OFF. The Bills Edit Integrity fixture had one advisory Drift result while functional and Provisioning gates passed. Central Beta remains version 106. |
 
 Part 2A-3 suite `SUITE-PART-2A-AUTHORITATIVE-CASH-IMPORT` is runtime-proven on
 isolated Central `@358` by run `20260816-200938-c001`. Its only fixture was
@@ -56,7 +56,7 @@ expires.
 
 | Environment | Deployment ID | Rule |
 | --- | --- | --- |
-| Personal bounded production | AKfycbzSeG-MpuoxqM4FFdv5stdyoazZ0BTfva8lRTpJqPrlpcqR0LF-tTnCwN72CY5mqrYjRw | Current bounded deployment at version 555. Update this existing deployment for future reviewed releases; never create another bounded production URL. |
+| Personal bounded production | AKfycbycMA4qlzDASi3OWp650_kzg91ReoXC9xK78o2HerCtwFfQjnej6zJq_MpTxppKM44L | Defect-screenshot endpoint observed at `@626`. Owner validation subsequently created `AKfycbwf66qdm1AMzvHu3pnxIMw3xLynHavHKFSj-QtwFmeKYr3n1O-9lH2z_F3tVqoPU-RIvA` at `@627`; select one owner-used singleton before the next release rather than creating another URL. |
 | Central Beta | AKfycbyq_OGiupdGO79GMOImkIgYv19hqlN1JuJfieuDlkXH6Rp637MhZc6jz9uRW2ZxANBlPA | Keep pinned until an explicit Beta promotion decision. |
 | Isolated Central validation | AKfycbzMaD3Ur0H3VmatL4W2vVHlYhFOXF4cZSSjIcn3SwggbTCs9Q9F1_PH74F16lAFkUlWZQ | Safe target for approved isolated deployment updates. |
 
@@ -72,3 +72,12 @@ remained capable of running the pre-Weekday-guard Weekly AutoPay path, the user
 approved retiring bounded deployments `@551`, `@552`, `@553`, and `@554`.
 Post-cleanup inventory was verified as exactly bounded `@HEAD` plus production
 `@555`. Old URLs must not be used or recreated.
+
+**Current bounded inventory drift (2026-08-21):** the pre-validation read-only
+inventory contained 73 entries. The post-validation inventory contains 74,
+including the defect-screenshot endpoint `AKfycbycMA…KM44L` still at `@626` and
+a newly created owner-controlled `AKfycbwf66…RlvA` at `@627`. The owner reported
+the reviewed bill fix passed bounded validation. Codex did not deploy bounded
+source, create or retire a bounded deployment, or write to the bounded workbook.
+Selecting the future singleton and retiring superseded entries are destructive
+release administration and remain a separate, explicitly approved action.

@@ -31,7 +31,7 @@ assert.match(source,
   'Planning must use one request-scoped Activity Log dedupe index');
 assert.match(source, /getInputBillsDueRows_\(ss, asOfDate, tz, \{ readOnly: true \}\)/);
 assert.match(scenarios, /function getHarnessRfpCapitalAllocationScenario_\(\)[\s\S]*?expectedAssertionCount:\s*16/);
-assert.match(scenarios, /function getHarnessRfpCapitalAllocationWeeklyPlanScenario_\(\)[\s\S]*?expectedAssertionCount:\s*94/);
+assert.match(scenarios, /function getHarnessRfpCapitalAllocationWeeklyPlanScenario_\(\)[\s\S]*?expectedAssertionCount:\s*108/);
 assert.match(registry, /getHarnessRfpCapitalAllocationScenario_/);
 assert.match(registry, /getHarnessRfpCapitalAllocationWeeklyPlanScenario_/);
 assert.match(suites, /SUITE-RFP-CAPITAL-ALLOCATION-FOUNDATION[\s\S]*?REGRESSION-RFP-CAPITAL-ALLOCATION-FOUNDATION/);
@@ -63,8 +63,13 @@ assert.doesNotMatch(source, /balancedMonthlyDeploymentCap[^\n]{0,160}(?:0\.25|0\
 assert.match(source, /LIQUIDITY_FIRST[\s\S]*?BALANCED[\s\S]*?AGGRESSIVE_DEBT_REDUCTION/);
 assert.match(source, /readCapitalAllocationForecast90_/);
 assert.match(source,
-  /monthlyDebtEvidence = readCapitalAllocationMonthlyDebtEvidence_[\s\S]*?readCapitalAllocationObligations_[\s\S]*?monthlyDebtEvidence[\s\S]*?readCapitalAllocationForecast90_[\s\S]*?monthlyDebtEvidence/,
+  /monthlyDebtEvidenceResult = readCapitalAllocationMonthlyDebtEvidenceResult_[\s\S]*?monthlyDebtEvidence = monthlyDebtEvidenceResult\.rows[\s\S]*?readCapitalAllocationObligations_[\s\S]*?monthlyDebtEvidence[\s\S]*?readCapitalAllocationForecast90_[\s\S]*?monthlyDebtEvidence/,
   'one canonical monthly payment reconciliation must feed current requirements and the forecast');
+assert.match(source, /futureOperatingOutflows30Amount/,
+  'the safety proof must use a dated next-30-day gross obligation total');
+assert.doesNotMatch(source, /gross30DayOutflows\s*=\s*capitalAllocationMoney_\(gross90DayOutflows\s*\/\s*3\)/,
+  'next-30-day coverage must never be inferred as one third of the 90-day total');
+assert.match(source, /function buildCapitalAllocationSafetyProof_/);
 assert.match(source, /readCapitalAllocationFutureUpcoming_/);
 assert.match(source,
   /var frequency = normalizeFrequency_\(frequencyCol === -1 \? '' : display\[r\]\[frequencyCol\]\);[\s\S]*?buildInputBillDueCandidates_\(asOfDate, dueDay, frequency,/,
@@ -234,6 +239,23 @@ const duplicateEvidence = monthlyEvidence_([
 assert.equal(duplicateEvidence.recordedPaymentAmount, 100,
   'duplicate transaction evidence must be counted once');
 assert.equal(duplicateEvidence.remainingRequiredAmount, 140);
+const duplicateEvidenceResult = context.capitalAllocationBuildMonthlyDebtEvidenceResult_(
+  monthlyDebt, [
+    { evidenceId: 'same', accountName: 'Credit Card - Marriott', amount: 100,
+      paymentDate: '2026-08-09', evidenceClass: 'RECORDED_CASH_FLOW' },
+    { evidenceId: 'same', accountName: 'Credit Card - Marriott', amount: 100,
+      paymentDate: '2026-08-09', evidenceClass: 'RECORDED_CASH_FLOW' },
+    { evidenceId: 'unmatched', accountName: 'Unrelated card', amount: 50,
+      paymentDate: '2026-08-09', evidenceClass: 'RECORDED_CASH_FLOW' }
+  ], new Date(2026, 7, 18));
+assert.equal(duplicateEvidenceResult.audit.inputEvidenceCount, 3);
+assert.equal(duplicateEvidenceResult.audit.uniqueEvidenceCount, 2);
+assert.equal(duplicateEvidenceResult.audit.duplicateEvidenceSuppressedCount, 1,
+  'the proof packet must disclose the exact number of suppressed duplicate evidence rows');
+assert.equal(duplicateEvidenceResult.audit.matchedEvidenceCount, 1);
+assert.equal(duplicateEvidenceResult.audit.unmatchedEvidenceCount, 1,
+  'unmatched payment evidence must remain explicit without satisfying a debt');
+assert.equal(duplicateEvidenceResult.audit.ambiguousEvidenceCount, 0);
 const authoritativeRecorded = monthlyEvidence_([{ evidenceId: 'auth1',
   accountName: 'Credit Card - Marriott', amount: 240, paymentDate: '2026-08-09',
   evidenceClass: 'AUTHORITATIVE_IMPORTED' }]);
@@ -391,6 +413,14 @@ assert.deepEqual(Array.from(recurrenceContext.buildInputBillDueCandidates_(
   recurrenceDate(2027, 0, 15)), row => row.dueDate.getFullYear() + '-' + (row.dueDate.getMonth() + 1)),
 ['2027-1'], 'yearly recurrence must cross the calendar-year boundary once');
 
+assert.equal(context.capitalAllocationForecastRowsWithinDays_([
+  { dueDate: '2026-08-25', amount: 100 },
+  { dueDate: '2026-09-10', amount: 200 },
+  { dueDate: '2026-09-17', amount: 300 },
+  { dueDate: '2026-10-20', amount: 400 }
+], new Date(2026, 7, 18), 30), 200,
+  'the exact 30-day ledger must include days 8-29 and exclude current-week and later obligations');
+
 const unknownScheduleFindings = [];
 const unknownScheduleValues = [
   ['Payee', 'Default Amount', 'Due Day', 'Active', 'Frequency', 'Start Month', 'Category', 'Varies'],
@@ -457,7 +487,7 @@ const facts = {
   liquidity: {
     cashToUse: 7450,
     accounts: [
-      { accountName: 'Operating', balance: 10000, minBuffer: 2500, usable: 7500, included: true },
+      { accountName: 'Operating', balance: 9950, minBuffer: 2500, usable: 7450, included: true },
       { accountName: 'Emergency', balance: 12000, minBuffer: 0, usable: 0,
         included: false, excludedReason: 'do_not_touch_policy' },
       { accountName: 'Property reserve', balance: 500, minBuffer: 1500, usable: 0, included: true }
@@ -519,10 +549,19 @@ planFacts.forecast90 = {
   futureDebtMinimumsAmount: 1800,
   futureUpcomingAmount: 600,
   futureOperatingOutflowsAmount: 3600,
+  futureOperatingOutflows30Amount: 1200,
   futureInvestmentCommitmentsAmount: 6000,
   propertyContingencyAmount: 0,
-  requiredReserveAmount: 2000
+  requiredReserveAmount: 2000,
+  obligationOwnership: {
+    trackedBills: 'bills', debtMinimums: 'debts', upcoming: 'upcoming',
+    property: 'property', cashFlow: 'payment evidence', investmentPolicy: 'separate'
+  }
 };
+planFacts.monthlyDebtEvidenceAudit = { inputEvidenceCount: 0, uniqueEvidenceCount: 0,
+  duplicateEvidenceSuppressedCount: 0, matchedEvidenceCount: 0,
+  unmatchedEvidenceCount: 0, ambiguousEvidenceCount: 0, recordedEvidenceCount: 0,
+  institutionConfirmedEvidenceCount: 0, obligationStatusCounts: {} };
 planFacts.existingInvestmentContributions = [{ name: 'Robinhood', amount: 500,
   scheduledAmount: 500, frequency: 'weekly',
   matchedInvestmentId: 'INV-1', matchedAccountName: 'Samer Robinhood' },
@@ -611,7 +650,7 @@ const householdFacts = {
       type: 'Credit Card', active: true, balance: 32947.12, minimumPayment: 988.41,
       interestRate: 20.24, dueDay: 22, dueDayKnown: true },
     { name: 'Credit Card - United', originalName: 'United',
-      type: 'Credit Card', active: true, balance: 8974.51, minimumPayment: 269.24,
+      type: 'Credit Card', active: true, balance: 8974.51, minimumPayment: 269,
       interestRate: 20.24, dueDay: 16, dueDayKnown: true },
     { name: 'Required term-debt service', originalName: 'Required term-debt service',
       type: 'Mortgage', active: true, balance: 1500000, minimumPayment: 19019.36,
@@ -635,9 +674,18 @@ const householdFacts = {
     futureBillsAmount: 27530.21, futureDebtMinimumsAmount: 58978.57,
     futureUpcomingAmount: 38500, propertyContingencyAmount: 678.57,
     futureOperatingOutflowsAmount: 125687.35, expectedIncome: 90584.70,
+    futureOperatingOutflows30Amount: 41895.78,
     incomeOffsetAmount: 83791.57, minimumOperatingFloorAmount: 41895.78,
-    requiredReserveAmount: 41895.78
+    requiredReserveAmount: 41895.78,
+    obligationOwnership: {
+      trackedBills: 'bills', debtMinimums: 'debts', upcoming: 'upcoming',
+      property: 'property', cashFlow: 'payment evidence', investmentPolicy: 'separate'
+    }
   },
+  monthlyDebtEvidenceAudit: { inputEvidenceCount: 0, uniqueEvidenceCount: 0,
+    duplicateEvidenceSuppressedCount: 0, matchedEvidenceCount: 0,
+    unmatchedEvidenceCount: 0, ambiguousEvidenceCount: 0, recordedEvidenceCount: 0,
+    institutionConfirmedEvidenceCount: 0, obligationStatusCounts: {} },
   dataQuality: []
 };
 const householdPlan = context.buildCapitalAllocationPlan_(householdFacts);
@@ -646,7 +694,7 @@ assert.equal(householdPlan.summary.standingInvestmentFunded, 500);
 assert.equal(householdPlan.deploymentPace.cashAfterRequiredAndPolicyFloor, 173909.10);
 assert.equal(householdPlan.deploymentPace.hardOperatingFloor, 41895.78);
 assert.equal(householdPlan.deploymentPace.cushionComponents.normalizedMonthlyOutflows, 41895.78);
-assert.equal(householdPlan.deploymentPace.cushionComponents.monthlyDebtService, 21980.73);
+assert.equal(householdPlan.deploymentPace.cushionComponents.monthlyDebtService, 21980.49);
 assert.equal(householdPlan.deploymentPace.cushionComponents.monthlyPropertyRisk, 226.19);
 assert.equal(householdPlan.deploymentPace.preferredLiquidityTarget, 83791.56);
 assert.equal(householdPlan.deploymentPace.capitalAbovePreferredLiquidity, 90117.54);
@@ -664,6 +712,29 @@ assert.equal(householdPlan.deploymentPace.gross90DayObligations, 125687.35);
 assert.equal(householdPlan.deploymentPace.coverage30Days, 3.15);
 assert.equal(householdPlan.deploymentPace.coverage90Days, 1.05);
 assert.equal(householdPlan.deploymentPace.coverageStatus, 'COVERED_WITH_CURRENT_CASH');
+assert.equal(householdPlan.safetyProof.schemaVersion, 'RFP_3_POST_DECISION_SAFETY_V1');
+assert.equal(householdPlan.safetyProof.status, 'PASS');
+assert.equal(householdPlan.safetyProof.postDecision.coverage30DaySurplus, 90117.54);
+assert.equal(householdPlan.safetyProof.postDecision.coverage90DaySurplus, 6325.97);
+assert.equal(householdPlan.safetyProof.reconciliation.cashIdentityDifference, 0);
+assert.equal(householdPlan.safetyProof.reconciliation.stagedCapitalIdentityDifference, 0);
+assert.equal(householdPlan.safetyProof.checks.noFutureIncomeRequired, true);
+assert.equal(householdPlan.safetyProof.checks.eligibleCashMatchesAccountSources, true);
+assert.equal(householdPlan.safetyProof.checks.paymentEvidenceDeduplicated, true);
+assert.equal(householdPlan.safetyProof.checks.obligationsCountedExactlyOnce, true);
+assert.equal(householdPlan.safetyProof.checks.recommendationAwaitingConfirmation, true);
+assert.deepEqual(Array.from(householdPlan.safetyProof.decision.debtAvalanche,
+  row => [row.targetName, row.amount]), [
+  ['Credit Card - American Express', 39790.53],
+  ['Credit Card - CitiAA', 2105.25]
+]);
+const ownershipCollisionFacts = JSON.parse(JSON.stringify(householdFacts));
+ownershipCollisionFacts.forecast90.obligationOwnership.trackedBills =
+  ownershipCollisionFacts.forecast90.obligationOwnership.debtMinimums;
+const ownershipCollisionPlan = context.buildCapitalAllocationPlan_(ownershipCollisionFacts);
+assert.equal(ownershipCollisionPlan.safetyProof.checks.obligationsCountedExactlyOnce, false,
+  'two obligation classes assigned to the same ownership bucket must fail closed');
+assert.equal(ownershipCollisionPlan.safetyProof.status, 'FAIL_CLOSED');
 assert.equal(householdPlan.deploymentPace.futureIncomeReliedUponForOptionalDeployment, false,
   'today\'s optional deployment must remain safe without unreceived future income');
 assert.ok(householdPlan.summary.endingCash >= householdPlan.deploymentPace.hardOperatingFloor,
@@ -701,6 +772,7 @@ assert.equal(resilienceLimitedPlan.deploymentPace.futureIncomeReliedUponForOptio
 
 const missingCushionFacts = JSON.parse(JSON.stringify(householdFacts));
 delete missingCushionFacts.forecast90.futureOperatingOutflowsAmount;
+delete missingCushionFacts.forecast90.futureOperatingOutflows30Amount;
 delete missingCushionFacts.forecast90.futureBillsAmount;
 delete missingCushionFacts.forecast90.futureDebtMinimumsAmount;
 delete missingCushionFacts.forecast90.futureUpcomingAmount;
@@ -886,12 +958,12 @@ assert.equal(Math.round((monthlyDebtModel.requiredTotal + monthlyDebtModel.extra
   'monthly debt summary must expose the exact overlap instead of inviting double counting');
 const householdMonthlyDebtModel = clientContext.capitalAllocationMonthlyDebtPlanModel_(
   householdPlan, clientContext.capitalAllocationPrimaryDecisionModel_(householdPlan));
-assert.equal(householdMonthlyDebtModel.requiredTotal, 21980.73,
+assert.equal(householdMonthlyDebtModel.requiredTotal, 21980.49,
   'monthly required-payment visibility must include the current term-debt obligation');
 assert.equal(householdMonthlyDebtModel.extraTotal, 41895.78);
 assert.equal(householdMonthlyDebtModel.requiredIncludedTotal, 1193.72,
   'the Amex monthly requirement must be shown but not added again inside its full payoff');
-assert.equal(householdMonthlyDebtModel.totalPlanned, 62682.79);
+assert.equal(householdMonthlyDebtModel.totalPlanned, 62682.55);
 assert.equal(Math.round((householdMonthlyDebtModel.requiredTotal + householdMonthlyDebtModel.extraTotal -
   householdMonthlyDebtModel.requiredIncludedTotal) * 100) / 100,
   householdMonthlyDebtModel.totalPlanned,
@@ -913,7 +985,7 @@ assert.match(clientContext.capitalAllocationCashViewHtml_(householdPlan),
   /Choose your pace[\s\S]*?Potential excess cash[\s\S]*?\$90,117\.54[\s\S]*?Recommended to deploy this month[\s\S]*?\$41,895\.78[\s\S]*?Intentionally held for future decisions[\s\S]*?\$48,221\.76/,
   'Cash must explain the monthly staging decision');
 assert.match(householdMonthlyDebtSummaryHtml,
-  /Required payments this month[\s\S]*?\$21,980\.73[\s\S]*?Extra payoff[\s\S]*?\$41,895\.78[\s\S]*?Remaining debt payments this month[\s\S]*?\$62,682\.79/,
+  /Required payments this month[\s\S]*?\$21,980\.49[\s\S]*?Extra payoff[\s\S]*?\$41,895\.78[\s\S]*?Remaining debt payments this month[\s\S]*?\$62,682\.55/,
   'Debt must reconcile all required debt obligations with the staged optional payoff');
 assert.match(debtViewHtml, /Credit-card debt now[\s\S]*?\$98,712\.16[\s\S]*?Expected credit-card debt after current recommendations[\s\S]*?\$55,694\.62/,
   'current and expected revolving balances must remain explicitly distinct');

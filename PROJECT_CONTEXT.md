@@ -4,8 +4,8 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
 
 ## Current Product Status (August 2026)
 
-- **Stage:** **Stage 3 — Beta Readiness (current).** **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** The capability estimate remains **Family Beta Readiness ~97–98% · External / Public Beta Readiness ~92%**. The last formal independent advocate score is **8.3/10** on isolated Central `@180`; it remains official because the isolated `@196` **7.2/10** run was read-only and evidence-limited, not a comparable writer-inclusive rescore. Isolated Central is deployed at `@381`, whose planned suite was not run; the latest validated source is `@380`, where Capital Allocation Foundation passed 2/2 scenarios and 110/110 assertions with Provisioning/Drift PASS, verified Trash cleanup, and the runner OFF. Part 2A-1 stable financial identity passed at `@356`, Part 2A-2 Financial Facts at `@357`, Part 2A-3 authoritative cash import at `@358`, Part 2A-4 authoritative revolving-debt import at `@363`, and Part 2A-5 shadow-only Data Refresh / Plan Readiness at `@369`. RFP-2 provides optional multi-account **Income-Producing Accounts** designations with stable investment identity and no `INPUT - Investments` schema change. `RFP-6a` remains runtime-proven: preview-first Robinhood activity import writes only normalized, deduplicated system activity and derived holdings, while `INPUT - Investments` remains the balance authority and raw CSV is not retained. The owner-controlled bounded import saved 104 Samer Robinhood activities and reconciled JEPQ/QQQ/QQQI/SPYI holdings; later duplicate-safe acceptance confirmed shared content fitting. Central Beta remains `@106`. The owner controls the bounded deployment and visually accepted the 2026-08-18 Overview/Debt checkpoint; Codex did not mutate the bounded workbook. Customer-facing operations and the broad `3j` audit are deferred, not waived. `BETA_10_OUT_OF_10_PLAN.md` defines the ≥95/100 release standard and monetization foundations; `FULL_BETA_REMAINING_PLAN.md` is the authoritative numbered open inventory with estimates, regression homes, and the optimized execution model.
-- **Architecture:** Central App operational — **stable, family-beta capable**. The production / bound workbook remains protected (bound mode unchanged); the central architecture is operational and runtime-validated.
+- **Stage:** **Stage 3 — Beta Readiness (current).** **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** The capability estimate remains **Family Beta Readiness ~97–98% · External / Public Beta Readiness ~92%**. The last formal independent advocate score is **8.3/10** on isolated Central `@180`; it remains official because the isolated `@196` **7.2/10** run was read-only and evidence-limited, not a comparable writer-inclusive rescore. Isolated Central is deployed and validated at `@387`: Capital Allocation Foundation passed 2/2 scenarios and 124/124 assertions with Restricted provisioning and Drift PASS, both marker-verified fixtures TRASHED, and the runner OFF; Bills Regression passed 15/15 scenarios and 123/123 assertions with every Restricted fixture TRASHED, including the exact new-bill creation-floor regression. This completes the deterministic post-decision 30/90-day financial-safety certification for the accepted Overview/Debt checkpoint and corrects the legacy blank-floor AutoPay recurrence defect. Part 2A-1 stable financial identity passed at `@356`, Part 2A-2 Financial Facts at `@357`, Part 2A-3 authoritative cash import at `@358`, Part 2A-4 authoritative revolving-debt import at `@363`, and Part 2A-5 shadow-only Data Refresh / Plan Readiness at `@369`. RFP-2 provides optional multi-account **Income-Producing Accounts** designations with stable investment identity and no `INPUT - Investments` schema change. `RFP-6a` remains runtime-proven: preview-first Robinhood activity import writes only normalized, deduplicated system activity and derived holdings, while `INPUT - Investments` remains the balance authority and raw CSV is not retained. The owner-controlled bounded import saved 104 Samer Robinhood activities and reconciled JEPQ/QQQ/QQQI/SPYI holdings; later duplicate-safe acceptance confirmed shared content fitting. Central Beta remains `@106`. The owner controls the bounded deployment and visually accepted the 2026-08-18 Overview/Debt checkpoint; Codex did not mutate the bounded workbook. Customer-facing operations and the broad `3j` audit are deferred, not waived. `BETA_10_OUT_OF_10_PLAN.md` defines the ≥95/100 release standard and monetization foundations; `FULL_BETA_REMAINING_PLAN.md` is the authoritative numbered open inventory with estimates, regression homes, and the optimized execution model.
+- **Architecture:** Central App operational — **stable, family-beta capable**. The production / bound workbook remains protected (bound mode unchanged); the central architecture is operational and runtime-validated. Read-only inventory on 2026-08-21 identified the defect-screenshot endpoint as `AKfycbycMA…KM44L` at `@626`; post-validation inventory contains 74 bounded entries, including a newly created owner-controlled `AKfycbwf66…RlvA` at `@627`, so the prior singleton-inventory statement is stale. The owner validated the reviewed source and confirmed Anthropic Claude - Laith appears once as `$20` in August and the false July overdue card is gone. Codex did not deploy bounded source or write to the bounded workbook, and deployment cleanup remains a separate approval-gated operation.
 - **Completed (working in central mode):** Provisioning, Workbook Mapping, Dashboard, Planner, Assets, Properties, Cash Flow, Bills, Debts, Income, Activity, Email.
 - **Current Debt navigation (2026-07-31):** Debt maintenance lives under **Assets & Liabilities → Debt accounts**. **Planning → Debt Overview** is read-only comparison, and **Planning → Rolling Debt Payoff** is the actionable month-by-month plan. Older historical notes that say `Planning → Debts` describe the former navigation label only.
 - **Recently completed (this initiative):**
@@ -221,8 +221,9 @@ is introduced in Part 1.
 
 **Pre-travel Overview/Debt checkpoint (2026-08-18):** the user completed bounded
 visual testing and accepted the current customer presentation. Overview UX and
-Debt UX are therefore **ACCEPTED / STABLE CHECKPOINT**, while financial safety
-certification remains **PENDING 30/90-day post-decision validation**. The
+Debt UX are therefore **ACCEPTED / STABLE CHECKPOINT**. The deterministic
+financial safety certification is now **PASS / COMPLETE** after the 2026-08-21
+post-decision 30/90-day proof. The
 accepted bounded-style evidence is: `$21,980.49` required this month,
 `$20,322.08` already covered, `$1,658.41` still to cover, `$41,895.78` extra
 payoff, `$43,554.19` remaining debt payments this month, `$98,712.16` current
@@ -235,16 +236,33 @@ Amex and `$2,105.25` to CitiAA. The projected `$1,193.72/month` cash release
 remains conditional on refreshed evidence confirming Amex at zero. These are
 evidence values, not constants.
 
-The resume task is the post-decision safety proof: demonstrate that the proposed
-decision leaves account buffers, current-month requirements, the next 30 and 90
-days of gross obligations, the hard reserve, preferred liquidity, and staged
-capital intact using current cash only. It must prove future income is not
-required, obligations are counted once, recurrence corrections remain sound,
-and Overview/Debt share one canonical plan. Only after that proof may the
-checkpoint be financially frozen. The following milestone is real customer
+The post-decision proof now emits one read-only
+`RFP_3_POST_DECISION_SAFETY_V1` packet from the canonical plan and fails closed
+unless account sources reconcile, buffers and exclusions remain intact, current
+requirements and gross 30/90-day obligations are covered by current cash,
+reserve and preferred liquidity survive, staged capital reconciles, pacing
+authority exists, source ownership is unique, recurrence inputs are resolved,
+payment evidence is audited/deduplicated, and recommendation remains distinct
+from confirmation. Isolated Central `@387` passed 124/124 assertions. A
+follow-up Bills regression on the same source passed 123/123 assertions and
+proved that immutable `bill_add` evidence supplies the creation-month floor
+when a legacy row's Schedule Effective Date is blank. The
+following milestone is real customer
 Import / Refresh for cash and credit-card balances, minimum payments, due dates,
 APRs, and effective/observed timestamps, with freshness and shadow comparison
 before any authority switch.
+
+The final bounded 90-day reconciliation also passed. Gross operating
+obligations are `$125,454.92`; the protected reserve is the separately computed
+net floor. The reserve permits at most `$83,636.61` of forecast-income offset
+while preserving one third of gross outflows, so `$125,454.92 - $83,636.61 =
+$41,818.31`, exactly the displayed protected amount. Property contingency is
+already inside gross obligations; account buffers and Do Not Touch cash remain
+separate, and no additional below-line reserve component applies. Current cash
+after the recommendation is `$133,010.14`, leaving `$7,555.22` above the full
+unreduced gross obligations (`1.06x`). Because optional deployment is capped
+against that gross current-cash test, unreceived future income is not required
+for 90-day solvency.
 
 Governing product rules remain: required obligations first and exactly once;
 Unknown never becomes zero; future income never becomes current cash; optional
@@ -256,10 +274,11 @@ not institution confirmation; recommendations are not confirmations; and every
 recommendation must reconcile to explainable source facts.
 
 Repository checkpoint: canonical checkout
-`/Users/stheodos/Desktop/Samer-Financial-Planner`, branch `main`, HEAD
-`c088aecbb5d1ab5d8d040104213af66d784d7f57`, tracking `origin/main`. The
-working tree is intentionally dirty and the current Planning checkpoint remains
-uncommitted. No `.codex-stage-*` material is part of the candidate.
+`/Users/stheodos/Desktop/Samer-Financial-Planner`, branch `main`, based on
+`8fc333b0c41b68777cff2d734a71db2938432f88` and tracking `origin/main`. The
+owner approved the combined Overview/Debt financial freeze, 30/90-day proof,
+and new-bill recurrence fix for commit/push on 2026-08-21. No
+`.codex-stage-*` or generated material is part of the candidate.
 
 **What remains before broad Beta:** close the separate `3j` accessibility task (with `3k` reserved for the frozen-candidate advocate rerun); return to deferred compound Activity correction (`5j`–`5m`); finish final financial/workbook/recovery proof (`5a`–`5f`); finish operations/support (`6a`–`6f`) and monetization-ready policy/architecture (`7a`–`7f`); then freeze and prove the exact candidate (`8a`–`8f`) before the supervised cohort and separately approved Beta promotion (`9a`–`9e`). If the frozen source/deployment differs from `8aa4bf5` / `@318`, `8b` must rerun the complete 20-pair Planner campaign. `FULL_BETA_REMAINING_PLAN.md` is the detailed open inventory and evidence authority.
 

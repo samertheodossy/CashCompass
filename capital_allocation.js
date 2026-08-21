@@ -8,6 +8,7 @@
 
 var CAPITAL_ALLOCATION_SCHEMA_VERSION_ = 'RFP_3A_V1';
 var CAPITAL_ALLOCATION_PLAN_SCHEMA_VERSION_ = 'RFP_3B_V2';
+var CAPITAL_ALLOCATION_SAFETY_PROOF_SCHEMA_VERSION_ = 'RFP_3_POST_DECISION_SAFETY_V1';
 var CAPITAL_ALLOCATION_RECOMMENDATION_STATES_ = [
   'PROPOSED', 'AWAITING_CONFIRMATION', 'CONFIRMED', 'SUPERSEDED'
 ];
@@ -116,6 +117,7 @@ function buildCapitalAllocationPlan_(facts) {
     monthlyOutlook: null,
     forecast90: facts && facts.forecast90 || {},
     monthlyDebtEvidence: facts && facts.monthlyDebtEvidence || [],
+    monthlyDebtEvidenceAudit: facts && facts.monthlyDebtEvidenceAudit || {},
     existingInvestmentContributions: facts && facts.existingInvestmentContributions || [],
     dataQuality: queue.dataQuality,
     queue: queue,
@@ -406,13 +408,16 @@ function buildCapitalAllocationDeploymentPace_(facts, plan, inputs) {
       Number(forecast.futureDebtMinimumsAmount || 0) +
       Number(forecast.futureUpcomingAmount || 0) +
       Number(forecast.propertyContingencyAmount || 0)));
-  var gross30DayOutflows = capitalAllocationMoney_(gross90DayOutflows / 3);
+  var gross30DayOutflows = isFinite(Number(forecast.futureOperatingOutflows30Amount))
+    ? Math.max(0, capitalAllocationMoney_(forecast.futureOperatingOutflows30Amount)) : 0;
   var hasSafeForecastOutflows = isFinite(Number(forecast.futureOperatingOutflowsAmount)) ||
     (isFinite(Number(forecast.futureBillsAmount)) &&
       isFinite(Number(forecast.futureDebtMinimumsAmount)) &&
       isFinite(Number(forecast.futureUpcomingAmount)));
+  var hasSafe30DayOutflows = isFinite(Number(forecast.futureOperatingOutflows30Amount));
   var hasSafeBalancedCushion = !!(facts && facts.forecast90 &&
     Array.isArray(facts.debts) && hasSafeForecastOutflows &&
+    hasSafe30DayOutflows &&
     isFinite(Number(forecast.propertyContingencyAmount)) &&
     balancedLiquidityCushion > 0);
   var tracking = facts && facts.deploymentTracking || {};
@@ -688,7 +693,196 @@ function finalizeCapitalAllocationDecisionViews_(facts, plan) {
   plan.afterAction = buildCapitalAllocationAfterAction_(facts, plan);
   plan.nextDollar = buildCapitalAllocationNextDollar_(facts, plan);
   plan.whyNot = buildCapitalAllocationWhyNot_(facts, plan);
+  plan.safetyProof = buildCapitalAllocationSafetyProof_(facts, plan);
   return plan;
+}
+
+function buildCapitalAllocationSafetyProof_(facts, plan) {
+  var pace = plan && plan.deploymentPace || {};
+  var accounts = facts && facts.liquidity && facts.liquidity.accounts || [];
+  var accountProof = accounts.map(function(account) {
+    var balance = Math.max(0, capitalAllocationMoney_(account.balance || 0));
+    var eligible = account.included ? Math.max(0,
+      capitalAllocationMoney_(account.usable || 0)) : 0;
+    return {
+      accountId: account.accountId || '', accountName: account.accountName || '',
+      balance: balance, minimumBuffer: Math.max(0,
+        capitalAllocationMoney_(account.minBuffer || 0)),
+      eligibleAmount: eligible,
+      protectedOrExcludedAmount: Math.max(0, capitalAllocationMoney_(balance - eligible)),
+      included: !!account.included, exclusionReason: account.excludedReason || '',
+      usePolicy: account.usePolicy || '', planningRole: account.planningRole || '',
+      provenance: account.provenance || 'SYS - Accounts'
+    };
+  });
+  var eligibleCash = capitalAllocationMoney_(accountProof.reduce(function(sum, row) {
+    return sum + Number(row.eligibleAmount || 0);
+  }, 0));
+  var protectedCash = capitalAllocationMoney_(accountProof.reduce(function(sum, row) {
+    return sum + Number(row.protectedOrExcludedAmount || 0);
+  }, 0));
+  var requiredThisWeek = capitalAllocationMoney_(plan.summary.householdRequiredThisWeek || 0);
+  var optionalDeployment = capitalAllocationMoney_(pace.recommendedAcceleratedDeployment || 0);
+  var stagedCapital = capitalAllocationMoney_(pace.intentionallyStagedCapital || 0);
+  var robinhood = capitalAllocationMoney_(plan.summary.standingInvestmentFunded || 0);
+  var postDecisionCash = capitalAllocationMoney_(plan.summary.endingCash || 0);
+  var gross30 = capitalAllocationMoney_(pace.gross30DayObligations || 0);
+  var gross90 = capitalAllocationMoney_(pace.gross90DayObligations || 0);
+  var coverage30Surplus = capitalAllocationMoney_(postDecisionCash - gross30);
+  var coverage90Surplus = capitalAllocationMoney_(postDecisionCash - gross90);
+  var futureIncomeReliedUpon = pace.futureIncomeReliedUponForOptionalDeployment !== false ||
+    Number(plan.summary.expectedIncomeThisWeek || 0) !== 0;
+  var cashIdentityDifference = capitalAllocationMoney_(
+    Number(plan.summary.openingCash || 0) + Number(plan.summary.expectedIncomeThisWeek || 0) -
+    requiredThisWeek - robinhood - optionalDeployment - postDecisionCash);
+  var stagedIdentityDifference = capitalAllocationMoney_(
+    Number(pace.capitalAbovePreferredLiquidity || 0) - optionalDeployment - stagedCapital);
+  if (Math.abs(cashIdentityDifference) < 0.005) cashIdentityDifference = 0;
+  if (Math.abs(stagedIdentityDifference) < 0.005) stagedIdentityDifference = 0;
+  var evidenceAudit = facts && facts.monthlyDebtEvidenceAudit ||
+    capitalAllocationMonthlyDebtEvidenceAuditFromRows_(facts && facts.monthlyDebtEvidence || []);
+  var protectedRequiredUses = capitalAllocationMoney_((plan.weeklyActions || [])
+    .filter(function(row) {
+      return row.actionClass === 'REQUIRED_ACTION' || row.actionClass === 'POLICY_FLOOR';
+    }).reduce(function(sum, row) { return sum + Number(row.amount || 0); }, 0));
+  var ownership = facts && facts.forecast90 && facts.forecast90.obligationOwnership || {};
+  var ownershipKeys = ['trackedBills', 'debtMinimums', 'upcoming', 'property',
+    'cashFlow', 'investmentPolicy'];
+  var ownershipValues = ownershipKeys.map(function(key) {
+    return String(ownership[key] || '').trim();
+  });
+  var uniqueOwnershipValues = {};
+  ownershipValues.forEach(function(value) {
+    if (value) uniqueOwnershipValues[value] = true;
+  });
+  var evidenceCountsAreComplete = [evidenceAudit.inputEvidenceCount,
+    evidenceAudit.uniqueEvidenceCount, evidenceAudit.duplicateEvidenceSuppressedCount,
+    evidenceAudit.matchedEvidenceCount, evidenceAudit.unmatchedEvidenceCount,
+    evidenceAudit.ambiguousEvidenceCount, evidenceAudit.recordedEvidenceCount,
+    evidenceAudit.institutionConfirmedEvidenceCount]
+    .every(function(value) { return isFinite(Number(value)) && Number(value) >= 0; });
+  var currentMonthDebt = (facts && facts.monthlyDebtEvidence || []).map(function(row) {
+    return {
+      name: row.name, dueDate: row.dueDate, status: row.status,
+      obligationAmount: capitalAllocationMoney_(row.obligationAmount || 0),
+      recordedPaymentAmount: capitalAllocationMoney_(row.recordedPaymentAmount || 0),
+      reconciledPaymentAmount: capitalAllocationMoney_(row.reconciledPaymentAmount || 0),
+      remainingRequiredAmount: capitalAllocationMoney_(row.remainingRequiredAmount || 0),
+      evidenceCount: Number(row.evidenceCount || 0),
+      evidenceClass: row.evidenceClass || 'NONE', provenance: row.provenance || ''
+    };
+  });
+  var avalanche = (plan.weeklyActions || []).filter(function(row) {
+    return row.actionType === 'PAY_EXTRA_DEBT' && Number(row.amount || 0) > 0;
+  }).map(function(row) {
+    return { targetName: row.targetName, amount: capitalAllocationMoney_(row.amount),
+      recommendationState: row.recommendationState || 'PROPOSED' };
+  });
+  var canonicalPlanIdentity = capitalAllocationProposalId_(JSON.stringify({
+    asOfDate: plan.asOfDate, openingCash: plan.summary.openingCash,
+    requiredThisWeek: requiredThisWeek, robinhood: robinhood,
+    optionalDeployment: optionalDeployment, stagedCapital: stagedCapital,
+    postDecisionCash: postDecisionCash, gross30: gross30, gross90: gross90,
+    debtActions: avalanche
+  }));
+  var checks = {
+    eligibleCashMatchesAccountSources: accountProof.length > 0 &&
+      Math.abs(eligibleCash - Number(plan.summary.openingCash || 0)) < 0.005,
+    accountBuffersIntact: accountProof.every(function(row) {
+      return row.protectedOrExcludedAmount + 0.005 >= Math.min(row.balance, row.minimumBuffer) &&
+        (!row.included ? row.eligibleAmount === 0 : true);
+    }),
+    restrictedAccountsExcluded: accountProof.every(function(row) {
+      return row.included || row.eligibleAmount === 0;
+    }),
+    currentRequiredObligationsProtected: plan.reconciliation && plan.reconciliation.exact &&
+      Math.abs(protectedRequiredUses - requiredThisWeek - robinhood) < 0.005,
+    gross30DaysCoveredWithCurrentCash: coverage30Surplus >= -0.005,
+    gross90DaysCoveredWithCurrentCash: coverage90Surplus >= -0.005,
+    hardOperatingReserveIntact: postDecisionCash + 0.005 >= Number(pace.hardOperatingFloor || 0),
+    preferredLiquidityIntact: postDecisionCash + 0.005 >= Number(pace.preferredLiquidityTarget || 0),
+    stagedCapitalAvailable: stagedCapital >= -0.005 && Math.abs(stagedIdentityDifference) < 0.005,
+    noFutureIncomeRequired: !futureIncomeReliedUpon,
+    exactCashReconciliation: Math.abs(cashIdentityDifference) < 0.005 &&
+      plan.reconciliation && plan.reconciliation.exact,
+    paymentEvidenceDeduplicated: evidenceCountsAreComplete &&
+      Number(evidenceAudit.uniqueEvidenceCount) +
+        Number(evidenceAudit.duplicateEvidenceSuppressedCount) ===
+          Number(evidenceAudit.inputEvidenceCount) &&
+      Number(evidenceAudit.matchedEvidenceCount) +
+        Number(evidenceAudit.unmatchedEvidenceCount) +
+        Number(evidenceAudit.ambiguousEvidenceCount) ===
+          Number(evidenceAudit.uniqueEvidenceCount),
+    recordedAndInstitutionEvidenceSeparated: evidenceCountsAreComplete &&
+      Number(evidenceAudit.recordedEvidenceCount) +
+        Number(evidenceAudit.institutionConfirmedEvidenceCount) ===
+          Number(evidenceAudit.uniqueEvidenceCount),
+    obligationsCountedExactlyOnce: ownershipValues.every(function(value) {
+      return !!value;
+    }) && Object.keys(uniqueOwnershipValues).length === ownershipKeys.length,
+    recurrenceSchedulesResolved: !(plan.dataQuality || []).some(function(row) {
+      return row.blocksAllocation && /(?:FREQUENCY|RECURRENCE|SCHEDULE|ESTIMATE_MISSING)/
+        .test(String(row.findingId || ''));
+    }),
+    recommendationAwaitingConfirmation: plan.recommendationLifecycle &&
+      plan.recommendationLifecycle.currentPlanState === 'PROPOSED' &&
+      plan.recommendationLifecycle.downstreamEffectsState === 'AWAITING_CONFIRMATION' &&
+      plan.afterAction && Number(plan.afterAction.confirmedReleasedMonthlyMinimums || 0) === 0,
+    pacingAuthorityAvailable: pace.acceleratedDeploymentStatus === 'READY'
+  };
+  var pass = Object.keys(checks).every(function(key) { return checks[key] === true; });
+  return {
+    schemaVersion: CAPITAL_ALLOCATION_SAFETY_PROOF_SCHEMA_VERSION_,
+    status: pass ? 'PASS' : 'FAIL_CLOSED', canonicalPlanIdentity: canonicalPlanIdentity,
+    sourceInputs: {
+      eligibleCash: { amount: eligibleCash, provenance: facts && facts.liquidity &&
+        facts.liquidity.provenance || 'SYS - Accounts' },
+      accounts: accountProof,
+      currentMonthDebtObligations: currentMonthDebt,
+      forecast: {
+        gross30DayObligations: gross30, gross90DayObligations: gross90,
+        hardOperatingReserve: capitalAllocationMoney_(pace.hardOperatingFloor || 0),
+        preferredLiquidity: capitalAllocationMoney_(pace.preferredLiquidityTarget || 0),
+        balancedCushion: capitalAllocationMoney_(pace.balancedLiquidityCushion || 0),
+        provenance: facts && facts.forecast90 && facts.forecast90.provenance || ''
+      }
+    },
+    preDecision: { eligibleCash: eligibleCash, protectedOrExcludedCash: protectedCash,
+      currentRequiredObligations: requiredThisWeek,
+      robinhoodPolicyCommitment: robinhood },
+    decision: { trancheMaximum: capitalAllocationMoney_(pace.balancedMonthlyDeploymentCap || 0),
+      optionalDeployment: optionalDeployment, stagedCapital: stagedCapital,
+      debtAvalanche: avalanche, robinhoodHandling: plan.investmentPolicy || {} },
+    postDecision: { cash: postDecisionCash,
+      coverage30DaySurplus: coverage30Surplus, coverage90DaySurplus: coverage90Surplus,
+      futureIncomeReliedUpon: futureIncomeReliedUpon },
+    reconciliation: {
+      cashIdentity: 'eligible cash + received current-week inflows = current required obligations + Robinhood policy commitment + optional deployment + post-decision cash',
+      cashIdentityDifference: cashIdentityDifference,
+      stagedCapitalIdentity: 'capital above preferred liquidity = optional deployment + staged capital',
+      stagedCapitalIdentityDifference: stagedIdentityDifference,
+      paymentEvidence: evidenceAudit,
+      obligationOwnership: ownership
+    },
+    checks: checks,
+    uncertainties: (plan.dataQuality || []).map(function(row) {
+      return { findingId: row.findingId, severity: row.severity,
+        blocksAllocation: !!row.blocksAllocation, message: row.message, provenance: row.provenance };
+    })
+  };
+}
+
+function capitalAllocationMonthlyDebtEvidenceAuditFromRows_(rows) {
+  var statuses = {};
+  (rows || []).forEach(function(row) {
+    var status = String(row && row.status || 'UNKNOWN');
+    statuses[status] = Number(statuses[status] || 0) + 1;
+  });
+  return { inputEvidenceCount: null, uniqueEvidenceCount: null,
+    duplicateEvidenceSuppressedCount: null, unmatchedEvidenceCount: null,
+    ambiguousEvidenceCount: statuses.PAYMENT_STATUS_UNKNOWN || 0,
+    obligationStatusCounts: statuses,
+    note: 'Synthetic facts supplied reconciled obligation rows without raw payment-evidence audit counts.' };
 }
 
 function capitalAllocationPolicyFloorOverrideReasons_(facts, inputs) {
@@ -1421,8 +1615,9 @@ function readCapitalAllocationFacts_(ss, asOfDate) {
     var property = readCapitalAllocationProperty_(ss, asOfDate, findings);
     var income = readCapitalAllocationIncome_(ss, findings, property);
     var debts = readCapitalAllocationDebts_(ss, findings);
-    var monthlyDebtEvidence = readCapitalAllocationMonthlyDebtEvidence_(
+    var monthlyDebtEvidenceResult = readCapitalAllocationMonthlyDebtEvidenceResult_(
       ss, asOfDate, debts);
+    var monthlyDebtEvidence = monthlyDebtEvidenceResult.rows;
     var assetFoundation = readCapitalAllocationAssetFoundation_(ss);
     var incomeProducingAccounts = readCapitalAllocationInvestments_(ss, assetFoundation);
     var obligationResult = readCapitalAllocationObligations_(
@@ -1435,6 +1630,7 @@ function readCapitalAllocationFacts_(ss, asOfDate) {
       income: income,
       property: property,
       monthlyDebtEvidence: monthlyDebtEvidence,
+      monthlyDebtEvidenceAudit: monthlyDebtEvidenceResult.audit,
       incomeProducingAccounts: incomeProducingAccounts
     });
     return {
@@ -1580,6 +1776,10 @@ function readCapitalAllocationDebts_(ss, findings) {
 }
 
 function readCapitalAllocationMonthlyDebtEvidence_(ss, asOfDate, debts) {
+  return readCapitalAllocationMonthlyDebtEvidenceResult_(ss, asOfDate, debts).rows;
+}
+
+function readCapitalAllocationMonthlyDebtEvidenceResult_(ss, asOfDate, debts) {
   var year = asOfDate.getFullYear();
   var sheet = typeof tryGetCashFlowSheet_ === 'function'
     ? tryGetCashFlowSheet_(ss, year) : ss.getSheetByName(getCashFlowSheetName_(year));
@@ -1607,16 +1807,24 @@ function readCapitalAllocationMonthlyDebtEvidence_(ss, asOfDate, debts) {
       }
     }
   }
-  return capitalAllocationBuildMonthlyDebtEvidence_(debts, payments, asOfDate);
+  return capitalAllocationBuildMonthlyDebtEvidenceResult_(debts, payments, asOfDate);
 }
 
 function capitalAllocationBuildMonthlyDebtEvidence_(debts, paymentRows, asOfDate) {
+  return capitalAllocationBuildMonthlyDebtEvidenceResult_(debts, paymentRows, asOfDate).rows;
+}
+
+function capitalAllocationBuildMonthlyDebtEvidenceResult_(debts, paymentRows, asOfDate) {
   var seenEvidence = {};
+  var duplicateEvidenceSuppressedCount = 0;
   var uniquePayments = (paymentRows || []).filter(function(row) {
     var id = String(row && row.evidenceId || '').trim();
     if (!id) id = 'PAYMENT:' + capitalAllocationKey_(row && row.accountName) + ':' +
       String(row && row.paymentDate || '') + ':' + Number(row && row.amount || 0);
-    if (seenEvidence[id]) return false;
+    if (seenEvidence[id]) {
+      duplicateEvidenceSuppressedCount += 1;
+      return false;
+    }
     seenEvidence[id] = true;
     return true;
   });
@@ -1641,7 +1849,7 @@ function capitalAllocationBuildMonthlyDebtEvidence_(debts, paymentRows, asOfDate
       return count + (keys[paymentKey] ? 1 : 0);
     }, 0);
   });
-  return activeDebts.map(function(debt, debtIndex) {
+  var rows = activeDebts.map(function(debt, debtIndex) {
     var keys = debtKeys[debtIndex];
     var matches = uniquePayments.filter(function(payment) {
       var key = String(payment.normalizedAccountName || '').trim() ||
@@ -1678,6 +1886,35 @@ function capitalAllocationBuildMonthlyDebtEvidence_(debts, paymentRows, asOfDate
         matches.length ? String(matches[0].evidenceClass || 'RECORDED') : 'NONE',
       provenance: matches.map(function(row) { return row.provenance || ''; }).filter(Boolean).join(' / ') };
   });
+  var unmatchedEvidenceCount = uniquePayments.filter(function(row) {
+    return !row.ambiguous && Number(row.__matchedDebtCount || 0) === 0;
+  }).length;
+  var ambiguousEvidenceCount = uniquePayments.filter(function(row) {
+    return !!row.ambiguous || Number(row.__matchedDebtCount || 0) > 1;
+  }).length;
+  var matchedEvidenceCount = uniquePayments.filter(function(row) {
+    return !row.ambiguous && Number(row.__matchedDebtCount || 0) === 1;
+  }).length;
+  var statusCounts = {};
+  rows.forEach(function(row) {
+    statusCounts[row.status] = Number(statusCounts[row.status] || 0) + 1;
+  });
+  return { rows: rows, audit: {
+    inputEvidenceCount: (paymentRows || []).length,
+    uniqueEvidenceCount: uniquePayments.length,
+    duplicateEvidenceSuppressedCount: duplicateEvidenceSuppressedCount,
+    matchedEvidenceCount: matchedEvidenceCount,
+    unmatchedEvidenceCount: unmatchedEvidenceCount,
+    ambiguousEvidenceCount: ambiguousEvidenceCount,
+    recordedEvidenceCount: uniquePayments.filter(function(row) {
+      return row.evidenceClass !== 'AUTHORITATIVE_IMPORTED';
+    }).length,
+    institutionConfirmedEvidenceCount: uniquePayments.filter(function(row) {
+      return row.evidenceClass === 'AUTHORITATIVE_IMPORTED';
+    }).length,
+    obligationStatusCounts: statusCounts,
+    deduplicationKey: 'evidenceId; fallback account + payment date + amount'
+  } };
 }
 
 function readCapitalAllocationIncome_(ss, findings, property) {
@@ -1921,6 +2158,11 @@ function readCapitalAllocationForecast90_(ss, asOfDate, findings, context) {
   var futureOperatingOutflows = capitalAllocationMoney_(
     futureBills.total + futureDebtMinimums.total + futureUpcoming.total +
     propertyContingency.additionalReserveAmount);
+  var futureOperatingOutflows30 = capitalAllocationMoney_(
+    capitalAllocationForecastRowsWithinDays_(futureBills.rows, asOfDate, 30) +
+    capitalAllocationForecastRowsWithinDays_(futureDebtMinimums.rows, asOfDate, 30) +
+    capitalAllocationForecastRowsWithinDays_(futureUpcoming.rows, asOfDate, 30) +
+    propertyContingency.additionalReserveAmount / 3);
   var totalOutflows = capitalAllocationMoney_(currentRequiredAmount +
     futureOperatingOutflows + futureInvestmentCommitments.total);
   var expectedIncome = capitalAllocationMoney_(context.income &&
@@ -1944,6 +2186,7 @@ function readCapitalAllocationForecast90_(ss, asOfDate, findings, context) {
     propertyContingencyRows: propertyContingency.rows,
     propertyScheduledTypesExcluded: propertyContingency.scheduledTypesExcluded,
     futureOperatingOutflowsAmount: futureOperatingOutflows,
+    futureOperatingOutflows30Amount: futureOperatingOutflows30,
     totalOutflows: totalOutflows,
     expectedIncome: expectedIncome,
     expectedNonRentalIncome: capitalAllocationMoney_(Number(context.income &&
@@ -1959,8 +2202,25 @@ function readCapitalAllocationForecast90_(ss, asOfDate, findings, context) {
     futureDebtMinimums: futureDebtMinimums.rows,
     futureUpcoming: futureUpcoming.rows,
     futureInvestmentCommitments: futureInvestmentCommitments.rows,
+    obligationOwnership: {
+      trackedBills: 'INPUT - Bills owns non-debt scheduled obligations',
+      debtMinimums: 'INPUT - Debts owns every active debt minimum; matching tracked Bills are suppressed',
+      upcoming: 'INPUT - Upcoming Expenses owns dated one-time and irregular-known obligations',
+      property: 'Bills, Debts, and Upcoming own scheduled property costs; HOUSES history supplies only net irregular contingency',
+      cashFlow: 'Current-month Cash Flow supplies recorded payment evidence, not a second future obligation',
+      investmentPolicy: 'Robinhood policy commitments remain separate from gross operating obligations'
+    },
     provenance: 'INPUT - Bills / INPUT - Debts / INPUT - Upcoming Expenses / INPUT - Cash Flow / SYS - Assets / HOUSES - *'
   };
+}
+
+function capitalAllocationForecastRowsWithinDays_(rows, asOfDate, horizonDays) {
+  return capitalAllocationMoney_((rows || []).reduce(function(sum, row) {
+    var due = capitalAllocationDate_(row && row.dueDate);
+    if (!due) return sum;
+    var days = daysBetween_(stripTime_(asOfDate), stripTime_(due));
+    return days > 7 && days < horizonDays ? sum + Number(row.amount || 0) : sum;
+  }, 0));
 }
 
 function readCapitalAllocationFutureInvestmentCommitments_(accounts, asOfDate, horizonEnd) {

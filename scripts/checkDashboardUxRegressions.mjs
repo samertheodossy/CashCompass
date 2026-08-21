@@ -2435,6 +2435,12 @@ assert.match(addBillWriterSlice,
 assert.match(addBillWriterSlice,
   /scheduleEffectiveDate:\s*newBillScheduleEffectiveDate/,
   'Bill-add Activity evidence must record the creation-month schedule floor');
+assert.match(billsServer,
+  /function readBillCreationEffectiveDatesFromActivity_[\s\S]*?bill_add[\s\S]*?parseDateOnlySheetCell_[\s\S]*?new Date\(addedOn\.getFullYear\(\), addedOn\.getMonth\(\), 1\)/,
+  'Blank schedule floors must recover the bill creation month from immutable bill_add evidence');
+assert.match(billsServer,
+  /if \(!scheduleEffectiveDate\)[\s\S]*?readBillCreationEffectiveDatesFromActivity_[\s\S]*?billCreationEffectiveDates\[normPayee\] \|\| null/,
+  'Bills Due must apply the Activity creation floor before generating occurrences');
 const billsHarness = files['test_harness_scenarios_bills.js'];
 const creationFloorStart = billsHarness.indexOf('function getHarnessBillsNewCreationFloorScenario_()');
 const weeklyScenarioStart = billsHarness.indexOf('function getHarnessBillsWeeklyScenario_()', creationFloorStart);

@@ -383,17 +383,31 @@ Aug 28, and Meriwest `$400.00` due Aug 28. The recommendation applies
 These figures are checkpoint evidence, never hard-coded future expectations.
 
 Checkpoint status is **Overview UX: ACCEPTED / STABLE CHECKPOINT** and **Debt
-UX: ACCEPTED / STABLE CHECKPOINT**. **Financial safety certification remains
-PENDING** the post-decision 30/90-day validation. That validation is the next
-task and must prove account buffers, current-month obligations, next-30-day and
-next-90-day gross obligations, hard reserve, preferred liquidity, staged
-capital, current-cash-only coverage, recurrence correctness, exact-once
-obligation counting, and canonical Overview/Debt reconciliation. A genuine
-financial defect may be corrected later without reopening the accepted UX
-unnecessarily. After the proof passes, freeze Overview/Debt, commit and push the
-checkpoint, then begin the real customer Import / Refresh milestone for cash
-balances, card balances, minimums, due dates, APRs, timestamps/freshness, and
-shadow comparison before any Planning-authority switch.
+UX: ACCEPTED / STABLE CHECKPOINT**. **Financial safety certification is PASS /
+COMPLETE (2026-08-21)**. The canonical fail-closed packet proves account
+buffers, current requirements, next-30-day and next-90-day gross obligations,
+hard reserve, preferred liquidity, staged capital, current-cash-only coverage,
+recurrence correctness, unique obligation ownership, payment-evidence
+deduplication, and canonical Overview/Debt reconciliation. Isolated Central
+`@387` passed 2/2 scenarios and 124/124 assertions with Restricted Provisioning
+and Drift PASS, both fixtures TRASHED, and the runner OFF. A genuine financial
+defect may be corrected later without reopening the accepted UX unnecessarily.
+Final bounded reconciliation confirmed that the `$41,818.31` protected reserve
+is the net floor after a capped `$83,636.61` forecast-income offset from
+`$125,454.92` gross obligations, while the independent current-cash test uses
+the full gross amount. Post-decision cash of `$133,010.14` leaves `$7,555.22`
+headroom (`1.06x`), so optional deployment requires no unreceived future income.
+After this checkpoint is committed and pushed, begin the real customer Import / Refresh
+milestone for cash balances, card balances, minimums, due dates, APRs,
+timestamps/freshness, and shadow comparison before any Planning-authority
+switch.
+
+The same `@387` source also fixes a newly tracked AutoPay bill inheriting a
+false prior-month overdue occurrence when its row-level effective date is
+blank. Bills Due now uses the immutable `bill_add` creation month as a read-only
+fallback before recurrence generation. Bills Regression passed 15/15 scenarios
+and 123/123 assertions with every Restricted fixture TRASHED; the runner
+returned OFF.
 
 **RFP-3b local candidate ready for visual review:** the deterministic kernel
 now orders required actions, a rolling 90-day operating reserve, account-buffer

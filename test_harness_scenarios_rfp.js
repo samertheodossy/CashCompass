@@ -1189,7 +1189,7 @@ function getHarnessRfpCapitalAllocationScenario_() {
         liquidity: {
           cashToUse: 7450,
           accounts: [
-            { accountName: 'Operating', balance: 10000, minBuffer: 2500, usable: 7500, included: true },
+            { accountName: 'Operating', balance: 9950, minBuffer: 2500, usable: 7450, included: true },
             { accountName: 'Emergency', balance: 12000, minBuffer: 0, usable: 0,
               included: false, excludedReason: 'do_not_touch_policy' },
             { accountName: 'Property reserve', balance: 500, minBuffer: 1500, usable: 0, included: true }
@@ -1285,7 +1285,7 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
     id: 'REGRESSION-RFP-CAPITAL-ALLOCATION-WEEKLY-PLAN',
     category: 'REGRESSION',
     executionLevel: 'PURE',
-    expectedAssertionCount: 94,
+    expectedAssertionCount: 108,
     description: 'Prove deterministic weekly ranking, recommendation lifecycle states, auditable eligible cash, variable-bill estimate handling, 90-day cash protection, debt-before-investment allocation, exact reconciliation, explicit waits, and a monthly rollup derived from the same actions.',
     requiresTrashCleanup: true,
     expectedSheets: ['SYS - Meta'],
@@ -1298,7 +1298,7 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
         liquidity: {
           cashToUse: 7450,
           accounts: [
-            { accountName: 'Operating', balance: 10000, minBuffer: 2500, usable: 7500, included: true },
+            { accountName: 'Operating', balance: 9950, minBuffer: 2500, usable: 7450, included: true },
             { accountName: 'Emergency', balance: 12000, minBuffer: 0, usable: 0,
               included: false, excludedReason: 'do_not_touch_policy' },
             { accountName: 'Property reserve', balance: 500, minBuffer: 1500, usable: 0, included: true }
@@ -1310,10 +1310,19 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
           futureBillsAmount: 1200, futureDebtMinimumsAmount: 1800,
           futureUpcomingAmount: 600, futureInvestmentCommitmentsAmount: 6000,
           futureOperatingOutflowsAmount: 3600,
+          futureOperatingOutflows30Amount: 1200,
           propertyContingencyAmount: 0,
           expectedIncome: 9000, expectedNonRentalIncome: 6000,
-          expectedRentalIncome: 3000, requiredReserveAmount: 2000
+          expectedRentalIncome: 3000, requiredReserveAmount: 2000,
+          obligationOwnership: {
+            trackedBills: 'bills', debtMinimums: 'debts', upcoming: 'upcoming',
+            property: 'property', cashFlow: 'payment evidence', investmentPolicy: 'separate'
+          }
         },
+        monthlyDebtEvidenceAudit: { inputEvidenceCount: 0, uniqueEvidenceCount: 0,
+          duplicateEvidenceSuppressedCount: 0, matchedEvidenceCount: 0,
+          unmatchedEvidenceCount: 0, ambiguousEvidenceCount: 0, recordedEvidenceCount: 0,
+          institutionConfirmedEvidenceCount: 0, obligationStatusCounts: {} },
         debts: [
           { name: 'High APR card', originalName: 'High APR card', type: 'Credit Card', active: true,
             balance: 10000, minimumPayment: 300, interestRate: 26.99 },
@@ -1405,7 +1414,7 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
       ctx.assert.equals('Eligible cash audit exposes balance, buffer, and usable amount',
         operatingAudit.visibleBalance + ':' + operatingAudit.minimumBuffer + ':' +
           operatingAudit.eligibleAmount,
-        '10000:2500:7500', { module: mod });
+        '9950:2500:7450', { module: mod });
       ctx.assert.equals('Configured buffers avoid silent zero-buffer warnings',
         ctx.first.capitalSourceLadder.zeroBufferWarningCount, 0, { module: mod });
       var protectedAudit = buildCapitalAllocationSourceLadder_({ liquidity: { accounts: [
@@ -1454,6 +1463,48 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
           ctx.first.deploymentPace.coverage90Days + ':' +
           ctx.first.deploymentPace.futureIncomeReliedUponForOptionalDeployment,
         '3.83:1.28:false', { module: mod });
+      ctx.assert.equals('Safety proof schema is explicit',
+        ctx.first.safetyProof.schemaVersion,
+        'RFP_3_POST_DECISION_SAFETY_V1', { module: mod });
+      ctx.assert.equals('Post-decision safety proof passes all invariants',
+        ctx.first.safetyProof.status, 'PASS', { module: mod });
+      ctx.assert.equals('Safety proof preserves account buffers and exclusions',
+        ctx.first.safetyProof.checks.accountBuffersIntact + ':' +
+          ctx.first.safetyProof.checks.restrictedAccountsExcluded,
+        'true:true', { module: mod });
+      ctx.assert.equals('Safety proof uses dated 30-day gross obligations',
+        ctx.first.safetyProof.sourceInputs.forecast.gross30DayObligations,
+        1200, { module: mod });
+      ctx.assert.equals('Safety proof uses complete 90-day gross obligations',
+        ctx.first.safetyProof.sourceInputs.forecast.gross90DayObligations,
+        3600, { module: mod });
+      ctx.assert.equals('Thirty-day current-cash surplus is explicit',
+        ctx.first.safetyProof.postDecision.coverage30DaySurplus,
+        3400, { module: mod });
+      ctx.assert.equals('Ninety-day current-cash surplus is explicit',
+        ctx.first.safetyProof.postDecision.coverage90DaySurplus,
+        1000, { module: mod });
+      ctx.assert.equals('Safety proof does not use future income',
+        ctx.first.safetyProof.checks.noFutureIncomeRequired,
+        true, { module: mod });
+      ctx.assert.equals('Safety proof reconciles cash exactly',
+        ctx.first.safetyProof.reconciliation.cashIdentityDifference,
+        0, { module: mod });
+      ctx.assert.equals('Safety proof preserves proposal versus confirmation',
+        ctx.first.safetyProof.checks.recommendationAwaitingConfirmation,
+        true, { module: mod });
+      ctx.assert.equals('Eligible cash reconciles to account-level sources',
+        ctx.first.safetyProof.checks.eligibleCashMatchesAccountSources,
+        true, { module: mod });
+      ctx.assert.equals('Payment evidence has an exact deduplication identity',
+        ctx.first.safetyProof.checks.paymentEvidenceDeduplicated,
+        true, { module: mod });
+      ctx.assert.equals('Recorded and institution evidence remain separate',
+        ctx.first.safetyProof.checks.recordedAndInstitutionEvidenceSeparated,
+        true, { module: mod });
+      ctx.assert.equals('Obligation ownership is complete and exact-once',
+        ctx.first.safetyProof.checks.obligationsCountedExactlyOnce,
+        true, { module: mod });
       ctx.assert.equals('Balanced mode intentionally retains liquidity',
         ctx.first.deploymentPace.intentionallyRetainedLiquidity, 4600, { module: mod });
       ctx.assert.equals('Snapshot proposal is idempotent rather than additive',
@@ -1595,6 +1646,7 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
         { module: mod });
       var missingPacingFacts = JSON.parse(JSON.stringify(ctx.facts));
       delete missingPacingFacts.forecast90.futureOperatingOutflowsAmount;
+      delete missingPacingFacts.forecast90.futureOperatingOutflows30Amount;
       delete missingPacingFacts.forecast90.futureBillsAmount;
       delete missingPacingFacts.forecast90.futureDebtMinimumsAmount;
       delete missingPacingFacts.forecast90.futureUpcomingAmount;

@@ -157,6 +157,22 @@ function getHarnessBillsNewCreationFloorScenario_() {
       f.futureDueCandidates = buildInputBillDueCandidates_(
         f.today, 26, 'monthly', 1, '', f.effectiveDate, null
       );
+      ctx.assertWritable();
+      appendActivityLog_(ctx.ss, {
+        eventType: 'bill_add', entryDate: '2026-08-21', amount: 20,
+        direction: 'expense', payee: 'Anthropic Claude - Laith',
+        category: 'Subscriptions', accountSource: 'CREDIT_CARD',
+        cashFlowSheet: '', cashFlowMonth: '', dedupeKey: '',
+        details: JSON.stringify({ detailsVersion: 1, startMonth: 5,
+          dueDay: 4, autopay: 'Yes' })
+      });
+      f.activityCreationDates = readBillCreationEffectiveDatesFromActivity_(
+        ctx.ss, Session.getScriptTimeZone());
+      f.activityFloor = f.activityCreationDates[
+        normalizeBillName_('Anthropic Claude - Laith')];
+      f.activityFloorCandidates = buildInputBillDueCandidates_(
+        new Date(2026, 7, 21), 4, 'monthly', 5, '', f.activityFloor, null
+      );
     },
     expectedOutcome: function(ctx) {
       var f = ctx.newBillFloor;
@@ -174,6 +190,15 @@ function getHarnessBillsNewCreationFloorScenario_() {
         futureDates.indexOf('2026-07-26') >= 0, true, { module: 'Bills' });
       ctx.assert.equals('Future-due bill also excludes prior month',
         futureDates.indexOf('2026-06-26'), -1, { module: 'Bills' });
+      var activityDates = f.activityFloorCandidates.map(function(c) {
+        return Utilities.formatDate(c.dueDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      });
+      ctx.assert.dateEquals('Blank row floor falls back to bill_add creation month',
+        f.activityFloor, new Date(2026, 7, 1), { module: 'Bills' });
+      ctx.assert.equals('Activity creation floor excludes the false July overdue item',
+        activityDates.indexOf('2026-07-04'), -1, { module: 'Bills' });
+      ctx.assert.equals('Activity creation floor retains the current August occurrence',
+        activityDates.indexOf('2026-08-04') >= 0, true, { module: 'Bills' });
     }
   };
 }

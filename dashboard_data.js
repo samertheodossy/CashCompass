@@ -2598,6 +2598,7 @@ function getInputBillsDueRows_(ss, today, tz, options) {
   // (monthly lets a malformed-sheet getCashFlowRowMap_ throw propagate; weekly
   // catches and caches null per year), so only the successful build is memoized.
   const cfRowMapByYear = {};
+  var billCreationEffectiveDates = null;
   function cfRowMapForYear_(year, sheet) {
     if (!(year in cfRowMapByYear)) {
       cfRowMapByYear[year] = getCashFlowRowMap_(sheet);
@@ -2658,6 +2659,7 @@ function getInputBillsDueRows_(ss, today, tz, options) {
     const autopay = normalizeYesNo_(colMap.autopay === -1 ? '' : display[r][colMap.autopay]);
     const frequency = normalizeFrequency_(display[r][colMap.frequency]);
     const startMonth = colMap.startMonth === -1 ? 1 : (Number(values[r][colMap.startMonth]) || 1);
+    const normPayee = normalizeBillName_(payee);
     // Optional weekday anchor (Phase 3). Blank / missing column / unrecognized
     // value → treated as no weekday, i.e. legacy Due Day occurrence display.
     // Weekly unattended AutoPay separately requires a recognized Weekday.
@@ -2698,6 +2700,20 @@ function getInputBillsDueRows_(ss, today, tz, options) {
         workbookTz
       );
     }
+    // Backward-compatible creation floor. Current add-bill writes stamp the
+    // Schedule Effective Date directly, but a bill created through an older
+    // deployment can have that cell blank even though its immutable bill_add
+    // Activity row proves when tracking began. Use the latest matching add
+    // event as a read-only fallback so a newly tracked bill never inherits the
+    // recurrence engine's prior-month look-back. Manually seeded legacy rows
+    // without bill_add evidence keep their existing blank-floor behavior.
+    if (!scheduleEffectiveDate) {
+      if (billCreationEffectiveDates === null) {
+        billCreationEffectiveDates = readBillCreationEffectiveDatesFromActivity_(
+          ss, workbookTz);
+      }
+      scheduleEffectiveDate = billCreationEffectiveDates[normPayee] || null;
+    }
     const notes = colMap.notes === -1 ? '' : String(display[r][colMap.notes] || '').trim();
     // Normalize to the same canonical form used by Flow Source writes
     // (CASH | CREDIT_CARD). Empty is allowed — downstream callers treat a
@@ -2710,8 +2726,6 @@ function getInputBillsDueRows_(ss, today, tz, options) {
       : '';
 
     const candidates = buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth, weekday, scheduleEffectiveDate, anchorDate);
-    const normPayee = normalizeBillName_(payee);
-
     // The proven monthly path below assumes exactly ONE occurrence per month
     // and treats "the month cell is non-empty" as the handled signal. Weekly /
     // biweekly bills expand into several occurrences that share a single month
@@ -3064,6 +3078,37 @@ function getInputBillsDueRows_(ss, today, tz, options) {
       try { autopayLock.releaseLock(); } catch (_relErr) { /* best-effort */ }
     }
   }
+}
+
+/**
+ * Resolve the latest immutable bill_add date for each normalized payee as the
+ * first day of that creation month. This is a read-only compatibility seam for
+ * bill rows whose Schedule Effective Date is blank; it never repairs or writes
+ * the Bills sheet and never invents a date when Activity evidence is absent.
+ */
+function readBillCreationEffectiveDatesFromActivity_(ss, workbookTz) {
+  var out = {};
+  var sheetName = typeof ACTIVITY_LOG_SHEET_NAME === 'string'
+    ? ACTIVITY_LOG_SHEET_NAME : 'LOG - Activity';
+  var sheet = ss && ss.getSheetByName ? ss.getSheetByName(sheetName) : null;
+  if (!sheet || sheet.getLastRow() < 2) return out;
+  var count = sheet.getLastRow() - 1;
+  // Columns B:F are Event Type, Entry Date, Amount, Direction, and Payee.
+  // Reading this narrow block keeps the compatibility fallback inexpensive.
+  var values = sheet.getRange(2, 2, count, 5).getValues();
+  var display = sheet.getRange(2, 2, count, 5).getDisplayValues();
+  for (var i = 0; i < values.length; i++) {
+    if (String(display[i][0] || values[i][0] || '').trim().toLowerCase() !== 'bill_add') {
+      continue;
+    }
+    var payee = String(display[i][4] || values[i][4] || '').trim();
+    var key = normalizeBillName_(payee);
+    if (!key) continue;
+    var addedOn = parseDateOnlySheetCell_(values[i][1], display[i][1], workbookTz);
+    if (!addedOn) continue;
+    out[key] = new Date(addedOn.getFullYear(), addedOn.getMonth(), 1);
+  }
+  return out;
 }
 
 /**

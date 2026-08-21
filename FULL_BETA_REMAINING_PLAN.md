@@ -246,7 +246,7 @@ cross-device recommendation state and cash-yield economics remain later work.
 **Pre-travel RFP-3 checkpoint — 2026-08-18:** the user completed bounded visual
 testing and accepted the Overview and Debt presentation. Record **Overview UX:
 ACCEPTED / STABLE CHECKPOINT**, **Debt UX: ACCEPTED / STABLE CHECKPOINT**, and
-**Financial safety certification: PENDING 30/90-day post-decision validation**.
+**Financial safety certification: PASS / COMPLETE (2026-08-21)**.
 The accepted evidence is `$21,980.49` required this month, `$20,322.08` covered,
 `$1,658.41` still to cover, `$41,895.78` extra payoff, `$43,554.19` remaining
 monthly debt payments, `$98,712.16` current card debt, and `$55,827.97`
@@ -258,15 +258,46 @@ extra payoff is Amex `$39,790.53` plus CitiAA `$2,105.25`; the projected
 `$1,193.72/month` release remains conditional on confirmed Amex payoff. Treat
 all values as evidence, not future constants.
 
-**Next open task — post-decision 30/90-day safety proof:** verify buffers,
-current-month requirements, next-30-day and next-90-day gross obligations, hard
-reserve, preferred liquidity, staged capital, and current-cash-only coverage;
-prove no reliance on unreceived income, no duplicate obligation, correct
-recurrence, and one canonical Overview/Debt plan. Do not call the financial
-checkpoint frozen until this passes. Then freeze/commit/push the checkpoint and
-start the customer Import / Refresh milestone: current cash/card balances,
-minimums, due dates, APRs, timestamps/freshness, and shadow comparison before
-any Planning-authority migration.
+**Post-decision 30/90-day safety proof — COMPLETE:** the common source now emits
+one fail-closed safety packet from the canonical plan. Permanent regressions
+cover account buffers and exclusions, current requirements, exact dated 30-day
+and gross 90-day coverage, reserve/preferred liquidity, Balanced pacing and
+staged capital, no-future-income deployment, exact source ownership,
+deduplicated payment evidence, recurrence, and recommendation/confirmation
+separation. Isolated Central `@387` passed 2/2 scenarios and 124/124 assertions
+with Restricted Provisioning and Drift PASS; both marker-verified fixtures were
+TRASHED and the runner returned OFF. The owner approved the Overview/Debt freeze
+and this combined checkpoint for commit/push on 2026-08-21.
+
+**Bounded 90-day reconciliation — PASS (2026-08-21):** Planning displayed
+`$125,454.92` of gross 90-day operating obligations and a `$41,818.31`
+protected reserve. These are intentionally different controls. The gross total
+already includes future tracked Bills, debt minimums, Upcoming expenses, and
+the net irregular-property contingency, with debt-owned Bills and scheduled
+property costs suppressed from duplicate ownership. The reserve formula keeps
+at least one third of gross outflows: `$125,454.92 / 3 = $41,818.31`. The
+permitted forecast-income offset is therefore capped at `$83,636.61`, so
+`$125,454.92 - $83,636.61 = $41,818.31`; there is no additional below-line
+reserve component. Account buffers and Do Not Touch amounts remain separate
+protections. Post-recommendation current cash is `$133,010.14`, producing
+`$7,555.22` gross headroom and `1.06x` coverage. The deployment limiter tests
+current cash against the unreduced `$125,454.92`, not the net reserve, so the
+optional deployment does not rely on unreceived future income.
+
+**Next open product milestone — customer Import / Refresh:** after this Git
+checkpoint is committed and pushed, continue with current cash/card balances, minimums, due
+dates, APRs, timestamps/freshness, and shadow comparison before any
+Planning-authority migration.
+
+**Post-checkpoint Bills recurrence defect — FIXED / VALIDATED:** a newly added
+AutoPay bill with a blank legacy `Schedule Effective Date` now derives its
+creation-month floor read-only from the latest immutable matching `bill_add`
+Activity row. It can no longer inherit a false prior-month overdue occurrence;
+manually seeded legacy bills without creation evidence retain their prior
+behavior. Isolated Central `@387` Bills Regression passed 15/15 scenarios and
+123/123 assertions; all Restricted fixtures were TRASHED. The Edit Integrity
+fixture retained one advisory Drift finding while its functional and
+Provisioning gates passed. The runner returned OFF.
 
 The controlling invariants are required obligations first and exactly once;
 Unknown is not zero; future income is not current cash; optional investing is
