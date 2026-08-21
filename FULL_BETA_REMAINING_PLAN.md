@@ -132,28 +132,33 @@ closed. They are retained here so the work map does not lose history.
 The at-a-glance inventory below is **open-only**. Detailed group tables retain
 recently completed `5h` and `5i` as implementation history.
 
-## 0. Highest-priority Rolling Financial Plan program
+## 0. Frozen Planning foundation and next accuracy milestone
 
-The Rolling Financial Plan is the current product priority. It uses CashCompass'
-existing current household data to account for obligations, reserves, and every
-active remaining debt while calculating how to fund **Samer Robinhood** to build
-the family's long-term income pipeline. It composes existing capabilities; it does not replace
-Rolling Debt Payoff or require security-level holdings for its base plan.
+The Rolling Financial Plan foundation is frozen at commit `9a6cb96`: Overview is
+**FROZEN**, Debt is **FROZEN**, and the 30/90-day post-decision safety proof is
+**PROVEN**. It uses CashCompass' household facts to account for obligations,
+reserves, every active remaining debt, and the separately approved Samer
+Robinhood policy. The foundation composes existing capabilities; it does not
+replace Rolling Debt Payoff or require security-level holdings for its base
+plan. The current priority is the shadow-only Cash + Credit Card Import / Refresh
+accuracy milestone described below; residual RFP experience/evidence items stay
+separate and do not reopen the frozen Overview/Debt checkpoint.
 
 | ID | Increment | Exit evidence | Estimate |
 |---|---|---|---:|
-| RFP-1 | Read-only household funding reconciliation and decision contract | Audit, proposed defaults, waterfall, compatibility boundary, and test contract are complete in `ROLLING_FINANCIAL_PLAN_DECISION_CONTRACT.md`; zero or more investments may be explicitly designated as **Income-Producing Accounts**, including Samer Robinhood; every active positive-balance debt is included with no APR threshold and rate affects ordering only; remaining product decisions are pending | 0.5–1 d |
+| RFP-1 | Read-only household funding reconciliation and decision contract | Complete in `ROLLING_FINANCIAL_PLAN_DECISION_CONTRACT.md`: accepted waterfall, compatibility boundary, required-first/exact-once ownership, explicit Income-Producing designations including Samer Robinhood, every active positive-balance debt with APR affecting order rather than inclusion, independent reserve/pacing controls, and frozen lifecycle semantics | Complete |
 | RFP-2 | Optional account-purpose and funding metadata | Complete on isolated Central `@349`: explicit zero/one/many Income-Producing designations use stable investment IDs, survive rename and Stop/Reactivate, preserve blank legacy behavior, and do not change `INPUT - Investments`; disposable closeout passed 19/19 with verified cleanup | Complete |
-| RFP-3 | Deterministic Capital Allocation Queue and read-only recommendation engine | Build a canonical household snapshot and an in-memory queue with hard constraints separated from discretionary candidates. CashCompass deterministically owns eligibility, ranking, allocation, counterfactual math, and exact cash reconciliation; the result must not depend on an LLM. Produce an ordered weekly action ledger and monthly aggregation from the same decisions, with source/provenance, confidence, remaining cash after every action, zero-dollar reasons, named minimum/extra debt amounts, safely affordable Income-Producing Account funding, protected cash, and explicit waits. Existing Rolling Debt Payoff calculations remain intact; no transfers, trades, payments, or workbook recommendation writes | 2–3 d |
+| RFP-3 | Deterministic Capital Allocation Queue and read-only recommendation engine | Complete frozen foundation in `9a6cb96`: one canonical plan owns eligibility, ranking, allocation, exact reconciliation, required/optional separation, Balanced pacing, gross 30/90-day current-cash safety, payment-evidence audit, recommendation lifecycle, and Overview/Debt values. No LLM controls numbers or order; no transfer, trade, payment, or workbook recommendation write | Complete |
 
-`RFP-3a` is complete on isolated Central `@353`: canonical read-only facts,
+`RFP-3a` completed on isolated Central `@353`: canonical read-only facts,
 blocking data-quality findings, required constraints, and an unranked in-memory
 candidate queue. Run `20260814-112123-c4fd` passed 16/16 assertions in 5.7 s
 with Provisioning/Drift PASS, verified Trash cleanup, and the runner returned
-OFF. It allocates $0 by design. Ranking, weekly/monthly allocation,
-counterfactuals, and UI remain open until later separately reviewed slices.
+OFF. It allocates $0 by design; the later RFP-3b and safety slices subsequently
+completed the ranking, weekly/monthly allocation, UI, and frozen proof.
 
-`RFP-3b` is locally implemented and awaiting visual/runtime acceptance. It adds
+`RFP-3b` is complete and owner-accepted, with final safety evidence on isolated
+Central `@387` and source committed as `9a6cb96`. It adds
 the pure weekly ranking/allocation kernel, exact remaining-cash ledger,
 current-week-derived monthly rollup, no-write tracked-Bill occurrence reader,
 and the integrated read-only Planning **This Week** experience. This Week is
@@ -284,10 +289,15 @@ protections. Post-recommendation current cash is `$133,010.14`, producing
 current cash against the unreduced `$125,454.92`, not the net reserve, so the
 optional deployment does not rely on unreceived future income.
 
-**Next open product milestone — customer Import / Refresh:** after this Git
-checkpoint is committed and pushed, continue with current cash/card balances, minimums, due
-dates, APRs, timestamps/freshness, and shadow comparison before any
-Planning-authority migration.
+**Next open product milestone — customer Import / Refresh:** checkpoint
+`9a6cb96` is committed and pushed. Under the combined Cash + Credit Card label,
+implement revolving-debt/credit-card evidence first, then bank/cash evidence,
+with balances, minimums, due dates, applicable APRs, timestamps/freshness,
+provenance, and shadow comparison before any Planning-authority migration. The
+canonical later order is loans/mortgages; investment accounts; holdings and
+tax-aware data; Bills/income/property/retirement/known commitments plus targeted
+transaction evidence; then an explicit authority checkpoint. See
+`PART_2A_FINANCIAL_FACTS_CONTRACT.md → §§11–15`.
 
 **Post-checkpoint Bills recurrence defect — FIXED / VALIDATED:** a newly added
 AutoPay bill with a blank legacy `Schedule Effective Date` now derives its
@@ -307,11 +317,24 @@ optionality and never deploys all potential excess automatically; the debt
 avalanche receives only the approved paced amount; recorded payment and
 institution-confirmed payment remain distinct; recommendation and confirmation
 remain distinct; and every result remains explainable and source-reconciled.
+
+**Planning foundation closure:** Overview **FROZEN**; Debt **FROZEN**; 30/90-day
+post-decision safety **PROVEN**; Planning foundation **STABLE CHECKPOINT**. The
+completed proof certifies calculation semantics, not the currency of manually
+maintained facts, which are known to be stale. The next accuracy milestone is
+Cash + Credit Card Import / Refresh in shadow mode: authoritative cash and
+revolving-debt balances/minimums/due dates/APRs, fact-level effective dates,
+freshness, provenance, and exact comparison to existing Planning values. No
+silent authority switch, payment execution, broad transaction import, or
+authority migration is included; migration requires a later explicit
+checkpoint. Rewards/spend optimization, recurring schedule/gap modeling,
+brokerage/holdings/tax-aware optimization, and existing retirement/property/data
+phases remain deferred.
 | RFP-4 | Complete **This Week** decision experience and **Why not?** comparisons | Mature the integrated This Week view with amount, source, destination, reason, required/recommended status, expected benefit, liquidity/tax/risk effects when supported, confidence, and remaining cash. Why not? compares backend-calculated alternatives such as debt payment, investment funding, or holding liquidity; an optional LLM may explain validated results but cannot change their numbers or order | 1.5–2.5 d |
 | RFP-5 | Disposable-workbook and isolated runtime proof | Marker-verified fixtures prove deterministic repeatability, exact reconciliation, reserve shortfall, mixed APRs, net rental income, multiple Income-Producing Accounts, missing metadata, zero-dollar investment recommendations, counterfactual comparisons, and legacy behavior; cleanup and environment boundaries verified | 1–2 d |
 | RFP-6a | Broker activity, holdings, and portfolio-intention foundation | Complete on isolated Central `@351` and owner-accepted on the bounded app: preview-first Robinhood CSV import on a selected Income-Producing account; server-side option/unrelated/admin exclusions; raw CSV is not retained; duplicate-safe normalized `SYS - Investment Activity`; derived `SYS - Investment Holdings`; opening capital, later contributions, purchases, quantities, dividends, and weekly recurring buys. `INPUT - Investments` remains the account-total authority. Robinhood's blank disclaimer footer is excluded and reported without weakening the fail-closed rule for transaction-bearing rows with no date. Run `20260814-070625-5dbc` passed both integration scenarios and 40/40 assertions in 136.0 s, with Restricted sharing, provisioning/drift PASS, verified Trash cleanup, and the runner OFF. The first owner-controlled bounded import saved 104 Samer Robinhood activities; JEPQ, QQQ, QQQI, and SPYI quantities reconciled to the later broker view after the next weekly buys and dividend reinvestment. Post-proof common-source commit `529ce88` adds an account-first Portfolio activity drawer, editable recurring plans kept separate from imported facts, and checkpointed ticker review that reopens after a later purchase without retroactively importing excluded history. The owner accepted the bounded presentation; this extension is not claimed as part of the earlier isolated `@351` evidence | Complete |
 | RFP-6b | Holdings and target-allocation analysis | Additive position model produces Hold/Add/Reduce/Sell/Review by holding and account; household-wide concentration/overlap; and a Samer Robinhood allocation by ticker/fund (for example QQQ/JEPQ/QQQI/SPYI/other approved holdings/cash) totaling 100%, including contribution routing and rebalance bands. No recommendation from account totals alone; base weekly plan remains independent | 2–4 d after RFP-6a proof and current prices/distribution inputs |
-| RFP-6c | Product data-import framework and adapter expansion | Extract the RFP-6a Robinhood path into a reusable CashCompass import framework shared by Investments, Bank Accounts, Debts, Bills, Income, Houses/valuations, and future domains. Common controls cover source detection, account/entity mapping, Preview, validation, confirmation, import history/status, provenance/as-of dates, duplicate reporting, actionable row-level errors, audit/rollback, and safe overlapping re-imports. Each domain retains its own normalized contract, business rules, permissions, and adapter registry; brokerage activity, bank transactions, balances, bills, and property valuations are not forced into one universal row schema. Robinhood is the first adapter, with E*TRADE/M1/Schwab and other approved file formats added incrementally. Preserve raw-file non-retention by default. Any future direct provider connection is a separate read-only security/privacy review and is not implied by file import | 3–6 d for common framework extraction and a second-domain proof; later adapters commonly 0.5–1.5 d each |
+| RFP-6c | Product data-import framework and adapter expansion | Reusable infrastructure follows the canonical Part 2A lifecycle rather than creating a separate authority path. Common controls cover source detection, stable identity mapping, Preview, validation, shadow comparison/review, provenance/as-of dates, import history, duplicates, actionable errors, audit/rollback, and safe re-import. Domain contracts retain their own semantics and adapters. Implementation order is revolving debt → bank/cash → loans/mortgages → investment accounts → holdings/tax-aware data → household domains/targeted evidence → later authority migration. Raw files remain non-retained by default; direct connections require separate read-only security/privacy review | Enabling framework only; each domain remains a separately reviewed slice under `PART_2A_FINANCIAL_FACTS_CONTRACT.md → §§11–15` |
 | Part 2A-0 / 2A-1 | Normalized contracts and stable financial identity | Complete in commit `9dc7c5a`: additive account and source-link registries cover CASH, DEBT, INVESTMENT, RETIREMENT, and PROPERTY; existing Investment IDs are adopted; owner/registration conflicts and ambiguous source links fail closed; raw external identifiers are replaced with source-scoped protected keys and masked display. Isolated Central `@356` run `20260815-115249-7301` passed 7/7 with Provisioning/Drift PASS and verified Trash cleanup | Complete |
 | Part 2A-2 | Financial Facts Foundation | Complete on isolated Central `@357`: additive append-only `SYS - Financial Facts`; all 14 typed fact/value contracts; exact Effective As Of vs Observed At provenance; versioned category thresholds and fact-specific precedence under `DATA_QUALITY_POLICY_V1`; deterministic current selection; conflict preservation; decision-specific confidence/actionability; legacy UNKNOWN timestamps; idempotent supersession; bulk shadow reads and rebuildable in-memory current projection. Existing Part 1 readers remain authoritative; no Current Facts sheet, production import, OAuth/connector, tax-lot behavior, or Planning authority switch | Two scenarios passed 25/25 assertions in 18.8 s with Provisioning/Drift PASS, both marker-verified fixtures verified TRASHED, and the disposable runner OFF. Stop before production fact import/shadow authority work |
 | Part 2A-3 | First Authoritative Cash Import | Runtime-proven on isolated Central `@358`: source-neutral cash evidence contract; OFX/QFX ledger/available balance adapter; protected fail-closed identity matching; per-account deterministic Preview/Apply; append-only CURRENT_BALANCE/optional AVAILABLE_BALANCE/optional APY facts; exact effective/observed time; sanitized import-run manifest; duplicate no-op; verified-manual fallback; exact-match versus difference-detected reconciliation at currency-minor-unit precision; separately versioned planning materiality intentionally remains not yet decided; freshness/actionability and `CASH_YIELD_DATA_REQUIRED` diagnostics. Existing Planning reader and every household policy remain untouched | Run `20260816-200938-c001` passed 1/1 scenario and 24/24 assertions in 23.8 s with Provisioning/Drift PASS, verified Trash cleanup, and runner OFF. Real owner Ally/Bank of America exports remain unproven until supplied; no bounded testing and no Planning authority switch |
@@ -319,6 +342,7 @@ remain distinct; and every result remains explainable and source-reconciled.
 | Part 2A-5 | Data Refresh & Plan Readiness UI | Runtime-proven shadow-only candidate on isolated Central `@369`: compact Planning Overview status plus This Week → Data for actionable cash/card review, per-fact freshness, exact legacy-vs-normalized differences, granular readiness, collapsed audit details, and verified-manual carried-balance APR review. Customer states distinguish Not connected, More data needed, Needs review, and Ready for review; empty domains cannot pass as Ready 0 / 0. Proposed debt actions use recommended/expected/projected wording; completed-state language requires confirmation. Existing Planning values remain authoritative | Run `20260817-102843-e241` passed 1/1 scenario and 35/35 assertions in 29.8 s; companion Capital Allocation run `20260817-102943-17fd` passed 2/2 scenarios and 99/99 assertions in 17.3 s. Restricted sharing, Provisioning/Drift PASS, all fixtures verified TRASHED, and runner OFF. No bounded writer test, authority switch, Current Facts sheet, schema migration, or Part 1 calculation change |
 | Future CC Rewards | Credit Card Rewards & Spend Optimization | Later phase after debt-data authority and debt optimization: determine cards safe for new spend, exclude or penalize likely expensive revolving spend, then rank net reward by category using multipliers, rotating categories, restrictions, promo windows, caps, fees/credits, FX fees, and point valuation. Explain the winner and allow “do not use while revolving” outcomes | Deferred. Rewards must never override debt/interest risk. No current schema, UI, or recommendation behavior |
 | Future Bill Scheduling | Recurring Bill Schedule & Gap Modeling | Later phase after current Part 2A data-authority and debt work: derive period expectations for monthly, every-other-month, every-N-month, quarterly, semiannual, annual, seasonal/custom, irregular-known, and one-time expenses. Preserve `0.00` as explicitly known non-due, an amount as actual/expected, and blank/Unknown as insufficient evidence. Keep historical actuals separate from future expectations; support dates, intervals, exceptions, skips, amount changes, and optional sinking-fund planning | Deferred. Prefer rendering recurrence-derived known zeros rather than physically writing artificial zero entries. No current recurrence schema, zero-fill behavior, sinking-fund logic, or UI change |
+| Future Debt Freedom | Whole-Household Debt Freedom Planner | Continuously reforecast a confidence-labeled debt-free date and phase roadmap across every liability and economically justified resource; compare More Liquidity, Balanced, Faster Debt-Free, and Custom strategies; work backward from five-/seven-year targets; roll only confirmed released payments; and evaluate HELOC/refinance, investment, property-equity, tax, and known-event tradeoffs | Deferred until authoritative cross-domain facts are sufficiently current. Never improve the date by violating required obligations, liquidity, 30/90-day safety, tax, retirement, or other protections. Canonical contract: `ROLLING_FINANCIAL_PLAN_DECISION_CONTRACT.md → Future north star` |
 | RFP-7 | Tax-lot-aware sale plan | Additive lot basis makes Reduce/Sell guidance tax-aware by account, acquisition date, basis, gain/loss, and holding period. Missing basis forces a warning or Review; no automatic trade and no prerequisite for the base plan | 2–4 d after granular data |
 
 **Compatibility gates for every increment:** one reviewed slice and one commit
@@ -326,19 +350,20 @@ boundary at a time; no broad sheet rewrite or migration; missing new metadata
 means current behavior; no automatic cash transfer, security sale, or debt
 payment; bounded is never a test target; and every writer test creates and
 continuously verifies its own disposable workbook. `5n` is reconciled inside
-`RFP-1` but closes only when its existing exit criteria pass. Houses, Income,
-and Bills under `3o` are paused behind the core `RFP-1`–`RFP-5` sequence, not
-removed.
+the completed `RFP-1` foundation. Houses, Income, and Bills under `3o` are
+paused behind the current shadow-only Cash + Credit Card Import / Refresh
+accuracy milestone, not removed. Residual `RFP-4`/`RFP-5` experience/evidence
+work remains separately tracked and does not reopen frozen Overview/Debt UX.
 
 ## Open list at a glance
 
 | Order | Open IDs | Workstream | Focused estimate |
 |---:|---|---|---:|
-| 1 | `RFP-3`–`RFP-5` | Rolling Financial Plan allocation kernel, This Week experience, and proof, one compatibility-gated increment at a time | 4.5–7.5 d |
+| 1 | Next Import / Refresh slice | Revolving-debt/credit-card facts first, shadow comparison/review only; then bank/cash | Estimate only in the separately approved implementation plan |
 | 2 | `3o` | Resume Houses, Income, and Bills product consistency/shared lifecycle | 4–7 d |
 | 3 | `3j`, `3k` | Separate accessibility closeout and frozen-candidate advocate score | 4–7 d |
 | 4 | `5j`–`5m` | Deferred safe correction families and audit disposition | 4.5–8 d including integrated disposable-workbook validation |
-| 5 | `5a`–`5f`, `5n` | Remaining financial/workbook proof; `5n` begins within `RFP-1` | 5–12.5 d before credited overlap |
+| 5 | `5a`–`5f`, `5n` | Remaining financial/workbook proof; preserve the completed RFP-1 reconciliation | 5–12.5 d before credited overlap |
 | 6 | `6a`–`6f` | Release operations, support, privacy, and known limitations | 3.5–6.5 d |
 | 7 | `7a`–`7f` | Monetization-ready policy and architecture foundation; no billing activation | 5–10 d |
 | 8 | `8a`–`8f` | Freeze, complete exact-candidate evidence, score, and READY verdict | 3.5–7 d plus fixes |
@@ -725,8 +750,8 @@ not block early engineering.
 | Completed Aug 6 ordinary Save follow-up | `4f` Save investigation closed on isolated `@322`: p50/p95 improved from 11.060/17.568 s to 6.520/9.418 s | Populated Dashboard V10 run `FR-afc35e3b-77ff-4c91-88cb-88f28c55fa0f` passed 24/24, Restricted sharing, zero errors, and verified Trash cleanup | Beta stayed `@106`; bounded stayed untouched; no Git commit or push yet | Strict 6 s budget remains a documented near-miss; no required Save/audit stage is weakened |
 | Completed Aug 6 UX closeout | `3e`–`3i` and `3m` runtime-complete on isolated `@325` | Populated `FR-51e0f9a0-0d1b-4049-9eea-36b1107a0976` passed 24/24; First-Run `FR-78d9e3b6-a907-4959-bbca-db0966f623f1` passed 16/16; Restricted sharing and cleanup verified | Beta stayed `@106`; bounded stayed untouched; source commit `993720c` is on `origin/main` | Context, filters, Setup progress, Help, composition, readiness, and customer language close together; `3j` remains separate |
 | Completed Aug 6 money-format closeout | `3n` / `REG-067` runtime-complete on isolated `@331` | Populated V12 run `FR-f7719f23-9248-41fa-9f5c-7327db963ce3` passed 26/26 with clean console, Restricted sharing, and verified cleanup | Source commit `d1278ef` is on `origin/main`; Beta stayed `@106`; bounded stayed untouched | Normal-path money is grouped `$x.xx` with signs before `$`; stored values and writers are unchanged |
-| Current Rolling Financial Plan contract | `RFP-1`; reconcile existing household sources and define the financial waterfall before implementation | Produce the source map, stable Robinhood identity, decision rules, current-versus-exact-month reconciliation, missing-data report, and test matrix | No runtime change; Beta stays `@106`; bounded stays untouched | Reviewed decision contract makes the later slices additive and independently testable |
-| Paused product-consistency closeout | Resume `3o` Houses → Income → Bills after core `RFP-1`–`RFP-5`; Debt, Bank, and Investments are complete through `@343`, shared fit `3p` through `@341` | Existing Debt, Bank, Investment, and `REG-070` evidence remains valid for its exact source; new House, Income, and Bill slices require their own guarded proof of counted inactive inventory, duplicate-safe Reactivate, history preservation, Activity evidence, and cleanup | Beta stays `@106`; bounded stays user-controlled | One customer intent maps to one obvious action; Add never substitutes for Reactivate; cross-sheet lifecycle remains guarded |
+| Current accuracy milestone | Cash + Credit Card Import / Refresh: revolving debt first, bank/cash second, all shadow-only | Preserve metadata, stable identity, exact legacy comparison, customer review, fail-closed freshness, privacy, and byte/value equivalence before any authority change | No runtime work in this documentation pass; Beta stays `@106`; bounded stays untouched | Reviewed slice proves current account/statement facts without switching Planning authority or importing transactions broadly |
+| Paused product-consistency closeout | Resume `3o` Houses → Income → Bills after the current Import / Refresh slice; Debt, Bank, and Investments are complete through `@343`, shared fit `3p` through `@341` | Existing Debt, Bank, Investment, and `REG-070` evidence remains valid for its exact source; new House, Income, and Bill slices require their own guarded proof of counted inactive inventory, duplicate-safe Reactivate, history preservation, Activity evidence, and cleanup | Beta stays `@106`; bounded stays user-controlled | One customer intent maps to one obvious action; Add never substitutes for Reactivate; cross-sheet lifecycle remains guarded |
 | Separate accessibility closeout | Complete `3j` alone | Keyboard, focus, names, target size, contrast, reduced motion, and supported-width evidence | Continue operations foundations during browser waits | Accessibility reaches its release gate without broadening the prior UX patch |
 | Deferred correction return | Implement and prove `5j`–`5m` on guarded disposable workbooks | Advance `5a`–`5f` candidate matrix/recovery proof | Continue known limitations and support posture | Supported correction families are atomic; unsupported audit rows remain honest |
 | Candidate preparation | Finish every remaining `5a`–`5f` prerequisite | Complete fixture, visual, accessibility, and operations evidence | Finish Groups 6–7 | Candidate prerequisites are complete before one freeze |
@@ -736,7 +761,8 @@ not block early engineering.
 ## Explicitly outside broad-Beta scope
 
 - production billing activation;
-- bank/account aggregation;
+- broad bank/account aggregation, provider connectivity, and transaction
+  ingestion beyond the current shadow account/statement-fact accuracy milestone;
 - Chat/Assistant;
 - Money Plan Phase 2;
 - generic reversal of legacy Activity rows whose original state cannot be proved;

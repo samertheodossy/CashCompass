@@ -52,9 +52,9 @@ sole-admin configuration and mapping fingerprints. No bounded workbook was used.
 The Financial Plan refresh budget is ratified for `8aa4bf5` / isolated `@318`:
 first p50/p95 is 12.890/16.773 s, repeat is 12.350/16.034 s, and combined is
 12.600/16.773 s against the 30/60 s budgets. This does not make the full product
-READY. Remaining `4d` flow measurements, every missing exact-candidate suite and
-server scenario, the final 10/10 scorecard, and the supervised cohort remain
-required. If source or deployment changes before the frozen-candidate gate, the
+READY. Cross-flow `4d` and ordinary-Save `4f` are complete; every missing
+exact-candidate suite and server scenario, the final 10/10 scorecard, and the
+supervised cohort remain required. If source or deployment changes before the frozen-candidate gate, the
 Performance suite becomes stale and must be rerun under `8b`. The current broad-
 Beta decision therefore remains **NOT READY**. See
 `P1_RELEASE_EVIDENCE_CONTRACT.md`.

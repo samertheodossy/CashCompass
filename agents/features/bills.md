@@ -230,7 +230,7 @@ When sources disagree, this DRAFT follows executable behavior and higher-precede
 | Autopay | Yes/No | Allows internal past-due actuals posting | Optional | `No` | Yes/No normalization |
 | Active | Yes/No | Controls whether the bill is managed/generated | Yes | Add defaults `Yes` | Normalized active rows only |
 | Payment Source | `CASH` / `CREDIT_CARD` | Cash Flow Flow Source hint | Required by Add/Edit payload; optional legacy header | None | Canonical enum |
-| Frequency | Canonical label | Recurrence cadence | Required by Add/Edit payload; optional legacy header | Reader normalization defaults unknown to Monthly | Accepted-label allow-list on writes |
+| Frequency | Canonical label | Recurrence cadence | Required by Add/Edit payload; optional legacy header | Unsupported or blank normalizes to `unknown` and never falls through to Monthly | Accepted-label allow-list on writes; forecast fails closed until supported schedule evidence exists |
 | Start Month | Integer 1–12 | Eligibility/cadence anchor | Optional | Current month on Add; reader fallback `1` | Integer range |
 | Notes | Text, max 500 | User context | Optional | Blank | Trim/truncate |
 | Weekday | Full weekday label | Weekly weekday; Biweekly weekday partner | Optional | Blank → legacy Due Day display/manual handling; no Weekly AutoPay | Recognized label on write normalization |

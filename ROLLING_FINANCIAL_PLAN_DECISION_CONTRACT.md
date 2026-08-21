@@ -393,6 +393,77 @@ cash balances, credit-card balances, minimum payments, due dates, APRs, and
 effective/observed timestamps, with freshness and shadow comparison before any
 Planning-authority switch.
 
+### Frozen Planning foundation handoff — 2026-08-21
+
+| Area | Final checkpoint status |
+| --- | --- |
+| Overview | **FROZEN** |
+| Debt | **FROZEN** |
+| 30/90-day post-decision safety | **PROVEN** |
+| Planning foundation | **STABLE CHECKPOINT** |
+
+The governing calculation and evidence invariants are:
+
+1. Required actions are funded before optional actions.
+2. Each underlying financial obligation is protected appropriately and counted
+   financially exactly once across Bills, Debts, Cash Flow payment evidence,
+   Forecast, Upcoming, and property inputs.
+3. A manually or internally recorded payment is evidence of a recorded action,
+   not institution-authoritative confirmation. Unknown or missing evidence never
+   silently becomes zero, paid, monthly, current, or confirmed.
+4. Recurrence produces actual scheduled occurrences. Monthly, weekly,
+   biweekly, bimonthly, quarterly, semiannual, and annual schedules retain their
+   real cadence; unsupported, irregular-known, and one-time schedules require
+   explicit supported evidence and never fall through to Monthly.
+5. Optional investment contributions are not operating obligations. Robinhood
+   retains its separately approved policy-floor and emergency-override treatment.
+6. Account buffers, Do Not Touch accounts, and other account protections are
+   applied before eligible capital is calculated.
+7. The forecast-income-adjusted hard operating reserve and the post-decision
+   gross-obligation solvency test are separate controls. Gross obligations are
+   calculated without relying on future income. A permitted forecast-income
+   offset may reduce only the net reserve, subject to its floor. Optional
+   deployment is constrained independently so current post-action cash covers
+   applicable gross 30/90-day obligations; today's optional deployment cannot
+   depend on unreceived future income.
+8. Balanced pacing is separate from reserve protection. Balanced Monthly Risk
+   Tranche V1 is the lesser of potential excess capital and the calculated
+   Balanced liquidity cushion. It is a monthly maximum, never a target, and
+   Balanced does not automatically deploy all capital above preferred liquidity.
+   Same-month confirmed and awaiting-confirmation optional deployment consume
+   remaining period capacity; refresh does not create a new full tranche.
+   Missing pacing authority fails closed rather than becoming unlimited.
+9. Debt avalanche ranking consumes only the already-approved paced optional
+   budget. It decides destination order, not household deployment capacity, and
+   may compare revolving and term-debt economics under their distinct rules.
+10. Recommendation, recorded payment, expected payoff, awaiting confirmation,
+    and confirmed payoff remain distinct lifecycle states. Overview and Debt
+    consume one canonical plan; display never feeds values back into it.
+
+Checkpoint dollar amounts remain evidence, not permanent policy constants. In
+the accepted bounded proof, `$125,454.92` gross 90-day obligations were distinct
+from the `$41,818.31` forecast-income-adjusted hard operating floor. Current cash
+after the recommendation was `$133,010.14`, above gross obligations by
+`$7,555.22` (`1.06x`), so that recommendation did not require forecast income to
+arrive.
+
+**Known data limitation:** manually maintained cash and debt facts are known to
+be stale. This frozen foundation certifies calculation semantics and safety
+behavior, not institution-current balances.
+
+**Next accuracy milestone — Cash + Credit Card Import / Refresh:** ingest or
+refresh authoritative cash balances and revolving-debt balances, minimums, due
+dates, and applicable APRs with fact-level effective dates, freshness, and
+provenance. Compare imported evidence against current Planning values in shadow
+mode. Do not silently switch Planning authority, execute payments, or broadly
+import transactions unless a later approved slice explicitly includes them.
+Authority migration requires a separate explicit checkpoint.
+
+Deferred work remains deferred: Credit Card Rewards & Spend Optimization;
+Recurring Bill Schedule & Gap Modeling; brokerage/holdings/tax-aware
+optimization; future Planning authority migration; and the existing retirement,
+property, and broader data phases.
+
 ## Approved weekly and monthly action-plan contract
 
 **Approved 2026-08-13:** the primary output is an executable decision schedule,
@@ -513,7 +584,7 @@ restrictions, and tax lots remain later inputs; missing values are not invented.
 `RFP-6c` productizes ingestion without changing this model. The common import
 orchestrator provides format detection, entity mapping, Preview, validation,
 Save, deduplication, provenance/as-of status, import history, actionable errors,
-audit, and rollback. Domain adapters then map into separate authoritative
+audit, and rollback. Domain adapters then map into separate normalized evidence
 contracts for investments, bank activity, debts, bills, income, and property
 valuations; a trade and a house valuation never become the same generic record.
 File support never implies custody, trade authority, or permission to overwrite
@@ -544,14 +615,63 @@ adds lot ID, acquisition date, quantity, cost basis, unrealized gain/loss, and
 short/long-term status. Missing fields lower confidence or force **Review**; they
 are never silently invented.
 
+## Future north star — Whole-Household Debt Freedom Planner
+
+The long-range extension of the frozen weekly/monthly plan is a continuously
+updated household capital-allocation roadmap that answers:
+
+- when the household can reasonably become debt-free;
+- which sequence across credit cards, HELOCs, mortgages, auto loans,
+  personal/credit-union loans, and other debt gets there safely;
+- what must change this month/year to reach a target such as five versus seven
+  years;
+- when refinancing/consolidation is economically justified, when released
+  payments snowball to the next debt, and when investing is preferable to
+  further low-rate payoff;
+- what liquidity remains protected and how sensitive the result is to income,
+  rates, returns, property costs, taxes, and unexpected expenses.
+
+It consumes current cash; forecast free cash flow and income changes; confirmed
+released payments; optionally redirectable contributions; investment assets
+only when transfer/sale/borrowing is economically and tax justified; property
+equity and HELOC/refinance decisions; and explicit bonuses, RSUs, or other known
+liquidity events. Future income and events affect forecasts but never become
+today's cash.
+
+The experience should show a dated estimate with confidence and assumptions,
+phase-by-phase actions, projected balances, and comparable More Liquidity,
+Balanced, Faster Debt-Free, and Custom strategies. A target-date question works
+backward to the additional monthly/annual principal required and identifies
+feasible sources with explicit tradeoffs. The estimate is never a promise and
+reforecasts when authoritative facts change.
+
+HELOC/refinance analysis must compare interest savings with fees, variable-rate
+risk, repayment term, property-equity/security risk, and the behavioral risk of
+rebuilding card balances. A lower HELOC rate alone never authorizes converting
+unsecured debt into debt secured by the home.
+
+Confirmed released minimums automatically become candidate capacity for the
+next plan; projected or recorded-as-paid evidence does not release them. The
+same deterministic required-first, exact-once, reserve, pacing, lifecycle, and
+source-reconciliation contracts continue to govern every simulated year.
+
+**Non-negotiable:** CashCompass must never recommend an earlier debt-free date
+by violating required obligations, protected liquidity, post-decision 30/90-day
+safety, tax constraints, retirement restrictions/match economics, or other
+approved household protections.
+
+This capability is deferred until the Part 2A import/freshness model supplies
+reliable debt, cash, income/obligation, investment, property, term/rate, and
+known-event facts. It is not part of the current shadow Import / Refresh slice.
+
 ## RFP-1 exit assessment
 
 The source audit, gap analysis, waterfall, compatibility boundary, and test
-contract are complete. Four decisions are approved: **Samer Robinhood** is the
+contract are complete. The approved/frozen foundation establishes that **Samer Robinhood** is the
 account the plan must deliberately fund to build the family's long-term income
 pipeline, and the plan includes **every active debt with a remaining balance
 with no APR threshold**; the plan produces one reconciled weekly action schedule
 and monthly rollup; and Samer Robinhood is tracked by its observed growth and
-income production with no artificial goal or deadline. RFP-1 remains
-decision-pending for the other product decisions above. No RFP-2 implementation
-should start before that checkpoint.
+income production with no artificial goal or deadline. Later data, portfolio,
+and Whole-Household Debt Freedom Planner decisions remain separately gated; they
+do not reopen the frozen Overview/Debt foundation.

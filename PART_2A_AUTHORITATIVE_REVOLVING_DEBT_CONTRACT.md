@@ -93,3 +93,20 @@ Workbook Drift passed. The marker-verified fixture was verified TRASHED and the
 disposable runner returned OFF. The run proved exact byte-equivalence of both
 the legacy `INPUT - Debts` row and the Planning output before and after shadow
 evidence writes.
+
+## Frozen-foundation relationship — 2026-08-21
+
+Overview and Debt are frozen and the 30/90-day calculation semantics are
+proven, but manually maintained revolving-debt facts are known stale. This
+adapter is therefore the evidence boundary for the next real customer Cash +
+Credit Card Import / Refresh milestone, initially shadow-only. Current balance,
+contractual minimum, exact due date, and applicable APR must retain fact-level
+effective date, freshness, and provenance and reconcile against existing
+Planning values. No imported fact silently changes Planning authority, releases
+a minimum, confirms a payoff, executes a payment, or imports transactions
+broadly. Authority migration requires a later explicit checkpoint.
+
+This is Phase 1 of the canonical long-term import order in
+`PART_2A_FINANCIAL_FACTS_CONTRACT.md → §§11–15`. Future statement/payment-status,
+promotional, and deferred-interest facts use the same shadow review lifecycle;
+they do not create a second debt authority path.

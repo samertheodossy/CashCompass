@@ -8,7 +8,7 @@
 
 ---
 
-## Current status (2026-08-14)
+## Current status (2026-08-21)
 
 **Completed:**
 
@@ -35,23 +35,27 @@
 
 **Now / next:**
 
-- **Highest-priority program:** **Rolling Financial Plan (`RFP`)**, now advancing
-  from its completed decision and investment-data foundations into a deterministic
-  household capital-allocation engine. The program will account for obligations, reserves, and
-  every active remaining debt while deliberately funding explicitly designated
-  **Income-Producing Accounts**, including Samer Robinhood, to build the family's
-  long-term income pipeline. Rolling Debt Payoff remains the
-  detailed debt engine. CashCompass remains the source of current household truth.
-- **Current milestone:** **`RFP-3`, read-only Capital Allocation Queue and weekly
-  recommendation engine.** CashCompass—not an LLM—will deterministically build
-  the household snapshot, enforce hard constraints, generate and rank candidate
-  uses of capital, allocate available dollars, calculate counterfactuals, and
-  reconcile every action to ending cash. The LLM may explain validated results,
-  compare scenarios, and identify interactions; it may not invent inputs or
-  silently change calculations or ranking. The primary output is **This Week**,
-  with a monthly aggregation derived from the same weekly decisions.
+- **Frozen Planning checkpoint:** **Overview FROZEN · Debt FROZEN · 30/90-day
+  post-decision safety PROVEN · Planning foundation STABLE.** Commit `9a6cb96`
+  contains the canonical required-first/exact-once plan, recurrence and payment-
+  evidence corrections, independent reserve and Balanced-pacing protections,
+  gross current-cash 30/90-day solvency checks, and the accepted Overview/Debt
+  presentation. Do not reopen ordinary Overview or Debt UX work.
+- **Highest-priority accuracy milestone:** **Cash + Credit Card Import / Refresh**,
+  initially shadow-only. Implement revolving-debt/credit-card evidence first
+  because it controls debt-paydown safety, then bank/cash evidence. Ingest
+  balances, contractual minimums, due dates, applicable APRs, and supporting
+  statement/account facts with effective/observed timestamps, freshness, and
+  provenance; then compare them exactly with the manually maintained values
+  Planning currently consumes. The canonical cross-domain lifecycle and later
+  domain order live in `PART_2A_FINANCIAL_FACTS_CONTRACT.md → §§11–15`.
+- **Authority boundary:** the frozen checkpoint certifies calculation semantics,
+  not institution-current balances. The existing manual facts are known stale.
+  This next slice does not silently switch Planning authority, execute payments,
+  or broadly import transactions. Any authority migration requires a later
+  explicit checkpoint.
 - **Paused, not waived:** finish `3o` Houses, Income, and Bills after the core
-  `RFP` slices. Debt, Bank Account, and Investment convergence are
+  Import / Refresh accuracy slice. Debt, Bank Account, and Investment convergence are
   runtime-complete through isolated `@343`; shared changed-column fit `3p` is
   complete through `@341`. The remaining contract is explicit inactive
   inventory plus Reactivate of the existing identity, with Edit/Rename where
@@ -397,10 +401,9 @@ is the net floor after a capped `$83,636.61` forecast-income offset from
 `$125,454.92` gross obligations, while the independent current-cash test uses
 the full gross amount. Post-decision cash of `$133,010.14` leaves `$7,555.22`
 headroom (`1.06x`), so optional deployment requires no unreceived future income.
-After this checkpoint is committed and pushed, begin the real customer Import / Refresh
-milestone for cash balances, card balances, minimums, due dates, APRs,
-timestamps/freshness, and shadow comparison before any Planning-authority
-switch.
+Checkpoint `9a6cb96` is committed and pushed. The next milestone is the real
+customer Import / Refresh program under the debt-risk-first sequence defined in
+`PART_2A_FINANCIAL_FACTS_CONTRACT.md → §§11–15`.
 
 The same `@387` source also fixes a newly tracked AutoPay bill inheriting a
 false prior-month overdue occurrence when its row-level effective date is
@@ -409,7 +412,7 @@ fallback before recurrence generation. Bills Regression passed 15/15 scenarios
 and 123/123 assertions with every Restricted fixture TRASHED; the runner
 returned OFF.
 
-**RFP-3b local candidate ready for visual review:** the deterministic kernel
+**RFP-3b completed checkpoint (implementation detail retained):** the deterministic kernel
 now orders required actions, a rolling 90-day operating reserve, account-buffer
 restoration, extra debt by APR, confirmed Income-Producing funding pace, and explicit held cash; caps extra principal
 after same-week minimums; and reconciles every cash use to ending cash. A
@@ -464,9 +467,8 @@ exact Robinhood policy-floor override and reserve surplus, removes behavioral AP
 thresholds, keeps a 25% unknown-property-repair contingency floor,
 requires visible stable identity for brokerage pools, and removes retirement or
 custodial assets from actionable Capital Source Ladder candidates.
-Local focused and full regressions pass;
-isolated runtime proof and owner visual acceptance remain open before RFP-3b is
-called complete.
+The final source is committed as `9a6cb96`; isolated Central `@387`, owner
+visual acceptance, and the 30/90-day proof close this RFP-3b foundation.
 
 **Rolling Financial Plan sequence:** `RFP-1` read-only contract → `RFP-2`
 optional funding-purpose metadata → `RFP-6a` broker activity/holdings foundation
@@ -494,6 +496,15 @@ non-retained by default. Any future direct provider connection requires its own
 read-only security, consent, token-storage, privacy, and support review. This
 work does not block the base household plan or expand the current `RFP-6a`
 runtime-validation boundary.
+
+**RFP-6c sequencing clarification (2026-08-21):** RFP-6c is reusable import
+infrastructure, not authority to ingest every domain at once. The canonical
+long-term order is revolving debt → bank/cash → loans/mortgages → investment
+accounts → holdings/tax-aware data → Bills, income, property, retirement, known
+commitments, and targeted transaction evidence → later authority migration.
+See `PART_2A_FINANCIAL_FACTS_CONTRACT.md → §§11–15`. Where the older RFP-6c
+adapter list appears broader, this ordered Part 2A lifecycle controls
+implementation.
 
 ### Part 2A normalized financial data foundation
 
@@ -552,14 +563,31 @@ runtime-validation boundary.
   were untouched. Companion Capital Allocation run `20260817-102943-17fd`
   passed 2/2 scenarios and 99/99 assertions after the proposed/awaiting/confirmed
   customer-language correction, with both fixtures verified TRASHED.
-  Deferred UX follow-up: bounded testing showed that top-level **Planning → Cash**
-  can be confused with the internal **Data → Cash** section. After Part 2A-5 is
-  frozen, evaluate a small internal label clarification such as **Cash data**;
-  do not redesign or casually rename the major Planning navigation.
-- **Stop after 2A-5:** the combined cash-plus-revolving-debt authority switch,
-  persisted Current Facts, and customer import UI require separate review.
+  Deferred UX note: bounded testing showed that top-level **Planning → Cash**
+  can be confused with the internal **Data → Cash** section. This does not
+  reopen the frozen Overview/Debt checkpoint and is outside the next accuracy
+  milestone; any future label change requires its own focused approval.
+- **Planning foundation checkpoint after 2A-5:** Overview and Debt are frozen,
+  30/90-day safety is proven, and calculation semantics are stable. Manually
+  maintained cash/card facts are nevertheless known to be stale. The next
+  accuracy milestone is real customer Cash + Credit Card Import / Refresh,
+  initially shadow-only, with effective dates, freshness, provenance, and exact
+  comparison against current Planning values. The combined authority switch,
+  persisted Current Facts, payment execution, broad transaction import, and
+  authority migration remain stopped behind later explicit review.
+- **Canonical long-term import/data model:**
+  `PART_2A_FINANCIAL_FACTS_CONTRACT.md → §§11–15` owns the shared evidence →
+  normalization → stable-identity match → shadow comparison → review → later
+  authority → recalculation lifecycle. The first slice does not cross the
+  authority boundary. After revolving debt and cash, the planned order is
+  loans/mortgages; investment accounts; holdings/tax-aware data; Bills/income/
+  property/retirement/known commitments plus targeted transaction evidence;
+  then a separately approved authority migration.
 
-**Remaining broad-Beta sequence:** close the core `RFP-1`–`RFP-5` program;
+**Remaining broad-Beta sequence:** preserve the frozen Planning foundation while
+the shadow-only Cash + Credit Card Import / Refresh accuracy milestone proceeds;
+retain residual `RFP-4`/`RFP-5` broader-experience and evidence work as separate
+future items rather than reopening Overview/Debt UX;
 resume and close `3o` Houses, Income, and Bills; close the separate `3j` task; return to
 the deferred `5j`–`5m` correction families; finish `5a`–`5f`
 financial/workbook/recovery proof; finish `6a`–`6f` operations and
@@ -595,6 +623,19 @@ Performance under `8b`. Preserve Beta `@106` plus the user-controlled bounded de
 
 ### Priority 4 — Future features
 
+- **Whole-Household Debt Freedom Planner** *(north-star capability; after the
+  import/freshness foundation)* — continuously construct the safest
+  high-confidence path from today's next dollar to debt freedom across credit
+  cards, HELOCs, mortgages, auto/personal/credit-union loans, and other debt.
+  Compare More Liquidity, Balanced, Faster Debt-Free, and Custom strategies;
+  answer five-year versus seven-year target questions; roll confirmed freed
+  payments into the next best use; evaluate refinance/HELOC, investing,
+  property-equity, and known liquidity-event tradeoffs; and continuously
+  reforecast a confidence-labeled date as authoritative facts change. It may
+  never accelerate the date by violating required obligations, liquidity,
+  30/90-day safety, taxes, retirement restrictions/match economics, or other
+  household protections. Canonical future contract:
+  `ROLLING_FINANCIAL_PLAN_DECISION_CONTRACT.md → Future north star`.
 - **Credit Card Rewards & Spend Optimization** *(later phase, only after debt-data
   authority and debt optimization are complete)* — answer “Which credit card
   should I use for this purchase/category right now?” from reward multipliers,
@@ -621,7 +662,10 @@ Performance under `8b`. Preserve Beta `@106` plus the user-controlled bounded de
   physically filling workbook cells with artificial zero records. No recurrence
   schema, zero-fill behavior, sinking-fund logic, or UI change belongs in Part 2A.
 - **AutoPay Pending Confirmation UX** *(future product enhancement — after Test Harness / Release Readiness)* — visually distinguish AutoPay bills that are **awaiting payment confirmation** from bills that **require manual action**, without hiding them or inferring payment from the due date. Keeps current behavior; adds an "AutoPay Pending" state/badge and a future auto-transition **Pending → Confirmed → Completed** once a matching payment is detected via manual entry / bank import / future bank sync (then removed from the Bills Due attention queue). Never auto-complete AutoPay bills without payment evidence. Full spec: `ENHANCEMENTS.md → Future — AutoPay Pending Confirmation UX`.
-- Money Plan Phase 2, Account Aggregation & Transaction Import, Chat / Assistant, Paid Product framework, and other post-beta product direction (`PRODUCT_VISION.md`, `ENHANCEMENTS.md`).
+- Money Plan Phase 2; broad provider-connected Account Aggregation & Transaction
+  Import beyond the current shadow fact milestone; Chat / Assistant; Paid
+  Product framework; and other post-beta product direction (`PRODUCT_VISION.md`,
+  `ENHANCEMENTS.md`).
 - **Monetization preparation begins before billing:** define customer/value proposition, packaging hypotheses, entitlement seams, owned-data guarantees, privacy/terms/support posture, cost metrics, and billing architecture during beta hardening. Actual payment collection remains gated on demonstrated trust, repeated use, supportability, and the 10/10 release standard.
 
 ---

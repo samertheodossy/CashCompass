@@ -24,7 +24,7 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
 - **P0 Project Stabilization — ✅ complete 2026-07-20:** ProductDecision inventory, documentation synchronization, static Tier-2 Central resolver verification, Recovery Validation 6F, and the two-track isolated Central UX/runtime pass are closed. The source fixes were pushed to the Central project and only the isolated deployment was updated to `@114`; Beta remains `@106` and no bound deployment or owner/bounded workbook was touched. The representative populated fixture verified real Bank, Investment, House, and Debt rendering; selection/action gating; property equity; Setup/Help language; subtab retention; and broad navigation with a clean console. The Central-owned fixture was returned to Drive Trash after testing.
 - **Status snapshot (2026-08-07):** Central Architecture ~96%+; the major platform, recovery, financial-integrity, workbook, Validator, Harness, and Release Readiness foundations are shipped. The shared correction foundation `5h` and direct Quick Add/Donation correction `5i` remain committed foundations in `d040a34` and `16b6a8f`, with clean guarded isolated Central `@240` evidence. Bill occurrence correction (`5j`) is deferred for a later focused redesign. The completed page-UX slices are `3c` in `7c0e2ac` at isolated `@293`, `3a` in `be76bdb` at `@294`, and `3b` in `3e2db4f` at `@298`. Follow-up Bill reliability commit `433bfed` is user-verified at `@299`. Exact-owner Performance Planner evidence is ratified for `8aa4bf5` / isolated `@318`; `4d` cross-flow measurement is complete on `@319`; ordinary Save `4f` is closed on `@322` as a 41.0% p50 improvement with a documented strict-budget near-miss; Retirement `4g` is closed on `@328`; and money-format consistency `3n` / `REG-067` is committed and pushed as `d1278ef` after a 26/26 Populated V12 PASS on `@331`. Beta remains `@106`; bounded deployment and workbook control remain with the user.
 
-**Current implementation priority (2026-08-14):** complete the core Rolling Financial Plan sequence, then resume `3o`, the product-consistency/shared-lifecycle wave. Debt, Bank Account, and Investment convergence are complete through isolated `@343`; shared changed-column fit `3p` is complete through `@341`. Houses, Income Sources, and Bills remain as separate guarded migrations. Each must expose counted inactive inventory and explicit Reactivate of the preserved existing identity; Houses and Income retain pending Edit/Rename convergence, and Bills must replace re-add-as-recovery with duplicate-safe reactivation. `5n` audits and reconciles latest-known Dashboard totals with exact-month ledger totals before any calculation-basis change. The broad `3j` accessibility closeout and operations/support/privacy `6a`–`6f` are deferred until this internal product pass is complete, not waived. Bill occurrence correction (`5j`) remains a separate later redesign. This priority change does not reopen the completed `5h`/`5i` foundations.
+**Current implementation priority (2026-08-21):** preserve the frozen Planning foundation and begin the real customer **Cash + Credit Card Import / Refresh** accuracy milestone as separately reviewed, shadow-only slices. Within that named milestone, revolving-debt/credit-card evidence comes first because it directly controls debt-paydown decisions; bank/cash evidence follows. Normalize balances, contractual minimums, exact due dates, applicable APRs, and supporting account/statement facts with effective/observed timestamps, freshness, provenance, protected identity, and conflict state. Compare against current Planning values without silently switching authority, importing transactions broadly, or executing payments. The canonical long-term lifecycle and later order—loans/mortgages; investment accounts; holdings/tax-aware data; household domains and targeted evidence; then separately approved authority migration—live in `PART_2A_FINANCIAL_FACTS_CONTRACT.md → §§11–15`. The earlier `3o` Houses/Income/Bills convergence, `3j` accessibility, `5j`–`5m` corrections, operations/privacy, rewards, bill-gap modeling, broader portfolio optimization, and retirement/property optimization remain deferred; none reopens frozen Overview/Debt UX.
 
 **Part 2A normalized-data foundation (2026-08-15):** 2A-0 contracts and 2A-1
 stable financial identity are committed in `9dc7c5a` and validated on isolated
@@ -145,7 +145,7 @@ implementation evidence. Isolated Central `@353` run
 `20260814-112123-c4fd` passed 16/16 assertions in 5.7 s with Provisioning and
 Drift PASS, verified Trash cleanup, and the disposable runner returned OFF.
 
-**RFP-3b local candidate (2026-08-14):** the same module now adds a pure
+**RFP-3b completed checkpoint (implemented 2026-08-14; frozen 2026-08-21):** the same module now adds a pure
 weekly ranking/allocation kernel with an exact cash ledger and a monthly rollup
 derived only from the current week. `dashboard_data.js` exposes the established
 tracked-Bill recurrence/handled-state reader through an explicit `readOnly`
@@ -193,10 +193,10 @@ customer view groups cash, commitments, protected balances, investment funding,
 extra debt, and held cash into summary cards. Zero-dollar choices live
 under What waits, while the full deterministic ledger remains available under
 View calculation details.
-Focused checks and the complete local regression suite pass. Isolated runtime
-proof and owner visual acceptance are not yet claimed.
+Final isolated Central `@387`, owner visual acceptance, and the accepted
+30/90-day safety proof close this foundation in commit `9a6cb96`.
 
-**RFP-3 Capital Deployment Pace correction (local candidate):** the read-only
+**RFP-3 Capital Deployment Pace correction (accepted/frozen):** the read-only
 plan now answers **how much** before the unchanged ranker answers **where**.
 `BALANCED` is the default and is not a percentage: preferred liquidity equals
 the held 90-day hard floor plus the largest of normalized monthly forecast
@@ -263,6 +263,27 @@ after the recommendation is `$133,010.14`, leaving `$7,555.22` above the full
 unreduced gross obligations (`1.06x`). Because optional deployment is capped
 against that gross current-cash test, unreceived future income is not required
 for 90-day solvency.
+
+**Frozen Planning foundation handoff (2026-08-21):** Overview is **FROZEN**,
+Debt is **FROZEN**, 30/90-day post-decision safety is **PROVEN**, and the
+Planning foundation is a **STABLE CHECKPOINT**. The checkpoint certifies the
+calculation semantics and safety lifecycle; it does not certify that manually
+maintained balances, minimums, due dates, or APRs are institution-current.
+Those facts are known to be stale. The next accuracy milestone is shadow-only
+**Cash + Credit Card Import / Refresh**: ingest authoritative evidence with
+effective date, observation time, freshness, and provenance; compare it with
+existing Planning values; make no silent authority switch; execute no payment;
+and avoid broad transaction import unless a separately approved slice includes
+it. `ROLLING_FINANCIAL_PLAN_DECISION_CONTRACT.md` contains the complete frozen
+invariant and next-phase boundary.
+
+The import authority lifecycle is canonical in
+`PART_2A_FINANCIAL_FACTS_CONTRACT.md → §§11–15`: evidence is normalized and
+matched to stable identity, compared with existing Planning values, shown for
+review, and only later promoted at an explicit authority checkpoint before
+recalculation. Equivalent facts must produce the same financial semantics
+regardless of source. Initial slices prioritize account/statement facts; broad
+transaction ingestion remains out of scope.
 
 Governing product rules remain: required obligations first and exactly once;
 Unknown never becomes zero; future income never becomes current cash; optional
@@ -439,7 +460,7 @@ Central App operational and runtime-validated — per-user provisioning, workboo
 
 ### Financial Integrity — Phase 3 complete
 
-Read-only, admin-gated **Audit Framework** + **Debt Audit** + **shared debt Active helper (Phase 2)** + the **`NOT_INITIALIZED`** state are shipped. The framework observes calc-basis differences neutrally; the convergence work (declaring a canonical basis and reconciling to it) is the remaining Beta-Gate item.
+Read-only, admin-gated **Audit Framework** + **Debt Audit** + **shared debt Active helper (Phase 2)** + the **`NOT_INITIALIZED`** state are shipped. Canonical-basis convergence and its isolated evidence are complete; final exact-release-candidate replay remains a separate release gate.
 
 - Canonical financial basis — Option A plus the common Central/bounded Planner/Rolling/Dashboard path, five read-only audits, canonical History capture/freshness, and Release Readiness inventory passed isolated Validation `@156` suite `20260722-164849-6081` 53/53 with Provisioning/Drift/Restricted/Trash PASS. The bounded workbook was never a test target (`FINANCIAL_INTEGRITY_PHASE_3_PLAN.md`)
 - Planner / Dashboard / Rolling Debt convergence to $0.01
@@ -467,9 +488,9 @@ Stable and family-beta capable; provisioning is proven across multiple accounts;
 
 ### External / Public Beta Readiness — ~92%
 
-Architecture, recovery, core/lifecycle workflows, and the automated Release Readiness path are built; remaining gaps include ordinary Save performance follow-up under `4f`, final-candidate replay if source/deployment changes, financial-model convergence, regression prevention, user-lifecycle handling, and operational support.
+Architecture, recovery, core/lifecycle workflows, the frozen Planning foundation, and the automated Release Readiness path are built. Ordinary Save `4f` and financial-model convergence are complete; remaining gaps include final-candidate replay if source/deployment changes, regression prevention, user-lifecycle handling, and operational support.
 
-- Remaining `4f` ordinary Save follow-up + conditional frozen-candidate percentile replay + final Release Readiness verdict + regression prevention
+- Conditional frozen-candidate percentile replay + final Release Readiness verdict + regression prevention
 - User-lifecycle handling + invite flow
 - Support workflows + operational monitoring
 
@@ -491,9 +512,9 @@ High-level technical-status mirror. `ROADMAP.md` controls priority and sequence;
 - **Stage 3 — Beta Readiness** *(current)* — P0 Project Stabilization, P1 evidence engineering, House Financial Accuracy V1, the `@318` Planner percentile gate, `@319` cross-flow measurement, and the `@322` ordinary Save investigation are complete. Active work continues through finished-feeling UX and the other candidate-preparation gates. The Beta Gate still requires a complete final exact-candidate verdict, runtime regression evidence, and product-quality proof; rerun Planner percentiles if the frozen candidate differs. Goal: **10/10 Beta Release Candidate — provably correct, recoverable, responsive, understandable, private, and supportable.**
 - **Stage 4 — Supervised Family Validation Cohort** — limited, consented users on explicitly safe candidates; close support; recovery slices (6D.2b / 6E.2); feedback and workflow stabilization. This stage produces learning evidence and does not authorize broad or monetized release.
 - **Stage 5 — 10/10 Beta Release Candidate and External Beta** — the exact candidate passes the scorecard and all hard gates before broader invited use; support, privacy, invite flow, user-lifecycle handling, scalability, and monetization foundations are ready. **Money Plan Phase 2** and **Income Expected/Due Workflow** remain Version 1 differentiators.
-- **Stage 6 — Version 2 / Future Platform** — Chat / Assistant, Operations Dashboard, expanded operational metrics/monitoring/analytics, billing activation, Account Aggregation & Transaction Import, and other product expansion. Beta-critical foundations are established earlier even when full features remain future work.
+- **Stage 6 — Version 2 / Future Platform** — Chat / Assistant, Operations Dashboard, expanded operational metrics/monitoring/analytics, billing activation, broad provider-connected Account Aggregation & Transaction Import beyond the current shadow fact milestone, the Whole-Household Debt Freedom Planner, and other product expansion. Beta-critical foundations are established earlier even when full features remain future work.
 
-**Current priority and sequence:** `ROADMAP.md` — **P0 Project Stabilization (complete) → P1 Release Readiness engineering plus the `@318` Planner percentile gate (complete) → P2 House Financial Accuracy V1 (complete) → P3 finished-feeling UX and remaining performance flows → complete frozen-candidate Release Readiness verdict → 10/10 Beta Release Candidate gate**. A supervised cohort may run during hardening, but it does not replace the release gate. Detailed Beta Gate tasks and evidence inventories live in `TODO.md`; `BETA_10_OUT_OF_10_PLAN.md` defines the quality and monetization-readiness standard; this document records technical status.
+**Current priority and sequence:** `ROADMAP.md` — preserve the frozen Planning foundation; complete shadow-only Cash + Credit Card Import / Refresh (revolving debt first, bank/cash second); resume `3o`; finish accessibility and deferred corrections; then complete exact-candidate Release Readiness and the 10/10 Beta gate. The future Whole-Household Debt Freedom Planner depends on the authoritative fact foundation and is not part of the current slice. A supervised cohort may run during hardening, but it does not replace the release gate.
 
 **Beta Gate:** Recovery Validation is complete. Golden Workbook Convergence, Financial Integrity, Validator/Test Harness/Release Readiness evidence, and the runtime regression checklist remain governed by `ROADMAP.md`.
 
@@ -527,9 +548,15 @@ High-level technical-status mirror. `ROADMAP.md` controls priority and sequence;
 - **6D.2b — Create New Workbook** *(remaining, P1)* — self-service "start fresh" recovery action (designed; not implemented).
 - **6E.2 — Admin Set Mapping** *(remaining, P2)* — guarded admin remap (designed; not implemented).
 
-## Future Initiative — Account Aggregation & Transaction Import
+## Account facts now; broad Account Aggregation & Transaction Import later
 
-A strategic, post-beta product direction captured here so it is not lost behind the current Recovery Validation work. **It is a future product capability, not a current blocker** — see the explicit note at the end of this section. Authoritative copy lives here; `README.md` and `TODO.md` mirror it.
+The current shadow-only Cash + Credit Card Import / Refresh accuracy milestone
+is the first account/statement-fact layer of this direction. Full connectivity,
+broad transaction ingestion, categorization, spending analysis, and an
+aggregation platform remain later capabilities. The canonical fact lifecycle
+and implementation order live in
+`PART_2A_FINANCIAL_FACTS_CONTRACT.md → §§11–15`; this section preserves the
+larger platform vision without creating a separate authority model.
 
 **Foundational import infrastructure already in the codebase** (so this is an extension, not a green-field build): a **Bank Import workflow**, **account matching / linking**, **External ID support**, **balance-snapshot application**, and **import-staging concepts** (`bank_import.js`; review/Apply surface under Assets → Bank Accounts; see `TODO.md → Bank Import — status & resume plan`).
 
@@ -539,11 +566,16 @@ A strategic, post-beta product direction captured here so it is not lost behind 
 - **Phase 2 — Transactions:** import transactions; categorize transactions; suggest Cash Flow entries; detect recurring bills / subscriptions.
 - **Phase 3 — Aggregation layer:** CashCompass becomes the primary financial aggregation layer — automated monthly updates, spending analysis, budget insights, net-worth automation.
 
-**Status:** Concept validated. Partially scaffolded (Bank Import infrastructure exists). **Not actively in development.**
+**Status:** Account/statement fact Import / Refresh is the current next
+accuracy milestone, documentation complete and implementation not started in
+this task. Broad transactions and the full aggregation layer remain future.
 
 **Priority:** Post-Recovery Validation, Post-Family Beta, and **before Paid Product scaling** — the connectivity / import surface is the natural first paid-tier feature (see `ENHANCEMENTS.md → Future direction — Monetization` and `TODO.md → Monetization (future)`).
 
-**Explicit note:** this is a strategic product initiative and is **NOT a current blocker** for **Recovery Validation (6F)**, **Family Beta**, or **External Beta**. Those tracks proceed independently.
+**Explicit note:** the current shadow fact milestone does not silently switch
+Planning authority and is not authorization for broad transactions or provider
+connectivity. The later aggregation platform is not a prerequisite for the
+frozen Planning foundation or recovery evidence.
 
 ## Weekly/Biweekly Weekday Recurrence Support — ✅ DELIVERED (Recurrence Engine V2, 2026-07-09)
 

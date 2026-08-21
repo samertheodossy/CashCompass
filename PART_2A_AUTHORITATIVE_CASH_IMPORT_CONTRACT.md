@@ -85,3 +85,20 @@ marker-verified disposable suite
 target. Isolated run `20260816-200938-c001` passed the suite's single scenario
 and 24/24 assertions in 23.8 seconds with Provisioning/Drift PASS, its fixture
 verified TRASHED, and the disposable runner returned OFF.
+
+## Frozen-foundation relationship — 2026-08-21
+
+The Planning foundation is now stable, but manually maintained cash facts are
+known stale. This runtime-proven adapter is a foundation for the next real
+customer Cash + Credit Card Import / Refresh milestone; it is not evidence that
+customer balances are currently connected or fresh. The next slice must retain
+effective dates, freshness, and provenance and compare imported cash with the
+existing Planning value in shadow mode. It must not silently switch authority,
+execute transfers or payments, or broaden into transaction import without
+separate approval.
+
+This is Phase 2, after revolving-debt/credit-card evidence, in the canonical
+long-term order at `PART_2A_FINANCIAL_FACTS_CONTRACT.md → §§11–15`. Account
+ownership/registration, status, buffers, Do Not Touch, and restricted/custodial
+policy remain distinct from imported balance facts and cannot be overwritten by
+an adapter.

@@ -35,6 +35,12 @@ Companion run `20260817-102943-17fd` passed both Capital Allocation scenarios
 and 99/99 assertions, proving that the presentation cleanup did not change the
 approved reserve, Robinhood floor, or debt-allocation mathematics.
 
+Planning checkpoint source `9a6cb966ee1bb2c5192b04f2a27723e889e4fc7b` is on
+`main` and `origin/main`. Overview and Debt are frozen, and 30/90-day safety is
+proven. This evidence certifies calculation semantics, not institution-current
+balances; the next Cash + Credit Card Import / Refresh phase remains
+shadow-only until a separate authority checkpoint.
+
 ## Validation entry point
 
 | Surface | URL | Account / purpose |

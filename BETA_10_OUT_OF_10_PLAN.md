@@ -46,17 +46,14 @@ Trusted users may participate in a **supervised validation cohort** before the r
 - Dates do not waive this plan's score, safety, financial, privacy, performance,
   cohort, or Release Readiness gates.
 
-The reconciled execution waves are: completed through Jul 31 — platform,
-recovery, core Bills Pay, tracked-editor convergence, Activity action truth,
-Overview trust, unattended browser orchestration, controlled loading,
-Skip/Stop safety, Retirement runtime, Quick Add/Upcoming language, correction
-foundation/direct correction, and UX items `3a`–`3c`; current — finish the
-remaining UX/accessibility work beginning with `3e`; next — return to deferred
-compound Activity correction `5j`–`5m`; then — close performance,
-financial/workbook/recovery, operations/support, and monetization-ready
-architecture; finally — freeze and prove the exact candidate before the
-supervised cohort, final scorecard, and go/no-go. Calendar targets must be
-rebaselined after the deferred `5j` design is measured; dates never waive gates.
+The reconciled execution waves now preserve the frozen Planning checkpoint and
+start with the shadow-only Cash + Credit Card Import / Refresh accuracy
+milestone (revolving debt first, bank/cash second). Then resume `3o`, complete
+the separate accessibility and deferred Activity-correction work, close final
+financial/workbook/recovery and operations/support gates, and freeze/prove the
+exact release candidate before the supervised cohort, scorecard, and go/no-go.
+The future Whole-Household Debt Freedom Planner and broad transaction
+aggregation remain outside this immediate slice. Dates never waive gates.
 
 The optimized model uses three coordinated lanes: critical engineering,
 UX/evidence, and operations/product foundation. Operations and monetization
@@ -374,18 +371,21 @@ Populated Dashboard V7 18/18 are the latest browser evidence. The last formal
 advocate score remains 8.3/10; the `@196` 7.2 read-only score is an
 evidence-limited discovery score, not a comparable regression.
 
-The immediate gate is the remaining UX/accessibility closeout, beginning with
-`3e`. Debt context/routing (`3c`, `7c0e2ac`), contextual loading states (`3a`,
-`be76bdb`), and Dashboard empty/error states (`3b`, `3e2db4f`) are complete
-through isolated Central `@298`. Follow-up Bill reliability commit `433bfed`
-closes `REG-041` and `REG-042` with user verification on isolated Central
-`@299`. Bill occurrence correction (`5j`) is deferred
-for a later focused redesign, but `5j`–`5m` remain required before broad Beta.
-After the remaining UX work, return to those correction families, complete the
-performance, financial-integrity, recovery, operations, and monetization-ready
-architecture gates, including the remaining `4f` ordinary-Save completion
-follow-up after `4d` measured Save, loaded navigation, and populated Overview;
-freeze the exact candidate; rerun the 20-pair
+The immediate product-accuracy gate is shadow-only **Cash + Credit Card Import /
+Refresh**. The Planning foundation is frozen at `9a6cb96`: Overview and Debt are
+FROZEN, post-decision 30/90-day safety is PROVEN, and isolated Central `@387`
+passed the final Capital Allocation and Bills suites with cleanup verified and
+the runner OFF. This checkpoint certifies calculation semantics, not the
+currency of manually maintained facts, which are known stale. The next slice
+ingests authoritative cash and revolving-debt balances, contractual minimums,
+due dates, and APRs with effective/observed timestamps, freshness, and
+provenance; compares them against Planning in shadow mode; and makes no silent
+authority switch, payment, or broad transaction import.
+
+After that separately reviewed accuracy slice, resume `3o`, the remaining
+UX/accessibility work, and the deferred `5j`–`5m` correction families; then
+complete the remaining recovery, operations, and monetization-ready architecture
+gates. Freeze the exact release candidate; rerun the 20-pair
 percentile campaign only if the frozen source/deployment differs from
 `8aa4bf5` / `@318`; finalize Release Readiness; complete
 supervised cohort proof; and run the full 10/10 scorecard before broad Beta.
