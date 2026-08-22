@@ -638,21 +638,33 @@ function renderInactiveBankAccounts_() {
 function reactivateBankAccountFromManage_(row) {
   var name = String(row && row.accountName || '').trim();
   if (!name || !row.sysAccountsRow) return;
-  if (!window.confirm('Reactivate "' + name + '"?\n\nIts existing balance history and import connection will be preserved.')) return;
-  setStatusLoading('bank_status', 'Reactivating bank account…');
-  google.script.run
-    .withSuccessHandler(function(res) {
-      setStatus('bank_status', (res && res.message) || 'Bank account reactivated.', false);
-      loadBankSection();
-      if (typeof refreshSnapshot === 'function') refreshSnapshot();
-    })
-    .withFailureHandler(function(err) {
-      setStatus('bank_status', (err.message || String(err)), true);
-    })
-    .reactivateBankAccountFromDashboard({
-      sysAccountsRow: row.sysAccountsRow,
-      expectedAccountName: name
-    });
+  openDashboardConfirm_({
+    eyebrow: 'Bank accounts',
+    title: 'Reactivate this bank account?',
+    subjectLabel: 'Account',
+    subject: name,
+    message: 'This account will return to active CashCompass tracking.',
+    consequences: ['Existing balance history and the import connection are preserved.'],
+    cancelLabel: 'Keep inactive',
+    confirmLabel: 'Reactivate account',
+    danger: false,
+    onConfirm: function() {
+      setStatusLoading('bank_status', 'Reactivating bank account…');
+      google.script.run
+        .withSuccessHandler(function(res) {
+          setStatus('bank_status', (res && res.message) || 'Bank account reactivated.', false);
+          loadBankSection();
+          if (typeof refreshSnapshot === 'function') refreshSnapshot();
+        })
+        .withFailureHandler(function(err) {
+          setStatus('bank_status', (err.message || String(err)), true);
+        })
+        .reactivateBankAccountFromDashboard({
+          sysAccountsRow: row.sysAccountsRow,
+          expectedAccountName: name
+        });
+    }
+  });
 }
 
 function loadBankSection() {
@@ -1030,26 +1042,30 @@ function stopTrackingBank() {
     return;
   }
 
-  const confirmed = window.confirm(
-    'Stop tracking "' + account + '"?\n\n' +
-    'The account will no longer appear in the Bank Account selector. ' +
-    'All history is preserved — you can still view past values for reporting.'
-  );
-  if (!confirmed) return;
-
-  setStatusLoading('bank_status', 'Stopping tracking…');
-
-  google.script.run
-    .withSuccessHandler(function(res) {
-      setStatus('bank_status', (res && res.message) || 'Stopped tracking.', false);
-      loadBankSection();
-      loadBankData();
-      if (typeof refreshSnapshot === 'function') refreshSnapshot();
-    })
-    .withFailureHandler(function(err) {
-      setStatus('bank_status', (err.message || String(err)), true);
-    })
-    .deactivateBankAccountFromDashboard({ accountName: account });
+  openDashboardConfirm_({
+    eyebrow: 'Bank accounts',
+    title: 'Stop tracking this bank account?',
+    subjectLabel: 'Account',
+    subject: account,
+    message: 'This account will leave the active Bank Account selector.',
+    consequences: ['All balance history remains available for reporting.'],
+    cancelLabel: 'Keep tracking',
+    confirmLabel: 'Stop tracking',
+    onConfirm: function() {
+      setStatusLoading('bank_status', 'Stopping tracking…');
+      google.script.run
+        .withSuccessHandler(function(res) {
+          setStatus('bank_status', (res && res.message) || 'Stopped tracking.', false);
+          loadBankSection();
+          loadBankData();
+          if (typeof refreshSnapshot === 'function') refreshSnapshot();
+        })
+        .withFailureHandler(function(err) {
+          setStatus('bank_status', (err.message || String(err)), true);
+        })
+        .deactivateBankAccountFromDashboard({ accountName: account });
+    }
+  });
 }
 
 function saveBank() {
@@ -1383,11 +1399,29 @@ function onInvestmentPortfolioAccountChanged_() {
   var investmentId = String(select && select.value || '').trim();
   if (__investmentPortfolioSelectedId && investmentId !== __investmentPortfolioSelectedId &&
       (__investmentActivityImportState.rawCsv || __investmentActivityImportState.preview)) {
-    if (!window.confirm('Switch accounts and discard the current CSV preview?')) {
-      select.value = __investmentPortfolioSelectedId;
-      return;
-    }
+    var priorInvestmentId = __investmentPortfolioSelectedId;
+    openDashboardConfirm_({
+      eyebrow: 'Investment import',
+      title: 'Discard this CSV preview?',
+      subjectLabel: 'Next account',
+      subject: select && select.options && select.selectedIndex >= 0
+        ? select.options[select.selectedIndex].text : investmentId,
+      message: 'Switching accounts will clear the current unsaved CSV preview.',
+      consequences: ['No imported activity will be written by this action.'],
+      cancelLabel: 'Keep preview',
+      confirmLabel: 'Discard and switch',
+      onConfirm: function() {
+        applyInvestmentPortfolioAccountChange_(select, investmentId);
+      }
+    });
+    select.value = priorInvestmentId;
+    return;
   }
+  applyInvestmentPortfolioAccountChange_(select, investmentId);
+}
+
+function applyInvestmentPortfolioAccountChange_(select, investmentId) {
+  if (select) select.value = investmentId;
   __investmentPortfolioSelectedId = investmentId;
   clearInvestmentActivityImport_();
   closeInvestmentPlanEditor_();
@@ -2084,21 +2118,33 @@ function renderInactiveInvestmentAccounts_() {
 function reactivateInvestmentFromManage_(row) {
   var name = String(row && row.accountName || '').trim();
   if (!name || !row.sysAssetsRow) return;
-  if (!window.confirm('Reactivate "' + name + '"?\n\nIts existing values and history will be preserved.')) return;
-  setStatusLoading('inv_status', 'Reactivating investment…');
-  google.script.run
-    .withSuccessHandler(function(res) {
-      setStatus('inv_status', (res && res.message) || 'Investment reactivated.', false);
-      loadInvestmentSection();
-      if (typeof refreshSnapshot === 'function') refreshSnapshot();
-    })
-    .withFailureHandler(function(err) {
-      setStatus('inv_status', (err.message || String(err)), true);
-    })
-    .reactivateInvestmentAccountFromDashboard({
-      sysAssetsRow: row.sysAssetsRow,
-      expectedAccountName: name
-    });
+  openDashboardConfirm_({
+    eyebrow: 'Investments',
+    title: 'Reactivate this investment?',
+    subjectLabel: 'Account',
+    subject: name,
+    message: 'This investment will return to active CashCompass tracking.',
+    consequences: ['Existing values and history are preserved.'],
+    cancelLabel: 'Keep inactive',
+    confirmLabel: 'Reactivate investment',
+    danger: false,
+    onConfirm: function() {
+      setStatusLoading('inv_status', 'Reactivating investment…');
+      google.script.run
+        .withSuccessHandler(function(res) {
+          setStatus('inv_status', (res && res.message) || 'Investment reactivated.', false);
+          loadInvestmentSection();
+          if (typeof refreshSnapshot === 'function') refreshSnapshot();
+        })
+        .withFailureHandler(function(err) {
+          setStatus('inv_status', (err.message || String(err)), true);
+        })
+        .reactivateInvestmentAccountFromDashboard({
+          sysAssetsRow: row.sysAssetsRow,
+          expectedAccountName: name
+        });
+    }
+  });
 }
 
 function loadInvestmentSection() {
@@ -2370,29 +2416,33 @@ function stopTrackingInvestment() {
     return;
   }
 
-  const confirmed = window.confirm(
-    'Stop tracking "' + account + '"?\n\n' +
-    'The account will no longer appear in the Investment Account selector. ' +
-    'All history is preserved — you can still view past values for reporting.'
-  );
-  if (!confirmed) return;
-
-  setStatusLoading('inv_status', 'Stopping tracking…');
-
-  google.script.run
-    .withSuccessHandler(function(res) {
-      setStatus('inv_status', (res && res.message) || 'Stopped tracking.', false);
-      loadInvestmentSection();
-      loadInvestmentData();
-      if (typeof refreshSnapshot === 'function') refreshSnapshot();
-    })
-    .withFailureHandler(function(err) {
-      setStatus('inv_status', (err.message || String(err)), true);
-    })
-    .deactivateInvestmentAccountFromDashboard({
-      sysAssetsRow: managementRow.sysAssetsRow,
-      expectedAccountName: account
-    });
+  openDashboardConfirm_({
+    eyebrow: 'Investments',
+    title: 'Stop tracking this investment?',
+    subjectLabel: 'Account',
+    subject: account,
+    message: 'This account will leave the active Investment Account selector.',
+    consequences: ['All values and history remain available for reporting.'],
+    cancelLabel: 'Keep tracking',
+    confirmLabel: 'Stop tracking',
+    onConfirm: function() {
+      setStatusLoading('inv_status', 'Stopping tracking…');
+      google.script.run
+        .withSuccessHandler(function(res) {
+          setStatus('inv_status', (res && res.message) || 'Stopped tracking.', false);
+          loadInvestmentSection();
+          loadInvestmentData();
+          if (typeof refreshSnapshot === 'function') refreshSnapshot();
+        })
+        .withFailureHandler(function(err) {
+          setStatus('inv_status', (err.message || String(err)), true);
+        })
+        .deactivateInvestmentAccountFromDashboard({
+          sysAssetsRow: managementRow.sysAssetsRow,
+          expectedAccountName: account
+        });
+    }
+  });
 }
 
 /* =============================================================

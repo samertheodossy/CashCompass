@@ -229,6 +229,13 @@
     .sd-wb { font-size: 12.5px; margin-top: 12px; }
 
     .hidden { display: none !important; }
+    .vt-confirm-backdrop[hidden] { display:none; }
+    .vt-confirm-backdrop { position:fixed; inset:0; z-index:2000; display:grid; place-items:center; padding:18px; background:rgba(15,23,42,.62); }
+    .vt-confirm-dialog { width:min(440px,100%); padding:20px; border:1px solid var(--line); border-radius:14px; background:#fff; box-shadow:0 24px 64px rgba(15,23,42,.3); }
+    .vt-confirm-dialog h2 { margin:0 0 8px; }
+    .vt-confirm-dialog p { color:var(--ink-mute); line-height:1.5; }
+    .vt-confirm-dialog .btn-row { justify-content:flex-end; }
+    .vt-confirm-danger { border-color:var(--red-fg); background:var(--red-fg); color:#fff; }
 
     @media (max-width: 640px) {
       body { padding: 16px 10px 48px; }
@@ -494,6 +501,17 @@
       <div class="soon"><div class="t">Regression</div><div class="badge">Coming soon</div></div>
     </div>
   </div>
+</div>
+
+<div id="vt-confirm-backdrop" class="vt-confirm-backdrop" hidden onclick="vtRRConfirmBackdropClick_(event)">
+  <section class="vt-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="vt-confirm-title" aria-describedby="vt-confirm-message" tabindex="-1">
+    <h2 id="vt-confirm-title">Finalize incomplete run?</h2>
+    <p id="vt-confirm-message">This archives the current run as NOT READY. Start a new run to execute the remaining checks.</p>
+    <div class="btn-row">
+      <button type="button" id="vt-confirm-cancel" onclick="vtRRCloseFinalizeConfirm_(false)">Continue checking</button>
+      <button type="button" class="vt-confirm-danger" onclick="vtRRCloseFinalizeConfirm_(true)">Finalize as NOT READY</button>
+    </div>
+  </section>
 </div>
 
 <script>
@@ -990,9 +1008,37 @@
   function vtRRFinalize() {
     if (!vtRRKeepRunning && vtRRState && vtRRState.status === 'IN_PROGRESS') {
       var total = (vtRRState.inventory && vtRRState.inventory.scenarioIds || []).length;
-      if (Number(vtRRState.cursor || 0) < total &&
-          !window.confirm('Finalize this incomplete run as NOT READY? You will need to start a new run to execute the remaining checks.')) return;
+      if (Number(vtRRState.cursor || 0) < total) {
+        document.getElementById('vt-confirm-backdrop').hidden = false;
+        document.getElementById('vt-confirm-cancel').focus();
+        return;
+      }
     }
+    vtRRFinalizeConfirmed_();
+  }
+
+  function vtRRCloseFinalizeConfirm_(confirmed) {
+    var backdrop = document.getElementById('vt-confirm-backdrop');
+    if (!backdrop || backdrop.hidden) return;
+    backdrop.hidden = true;
+    if (confirmed) vtRRFinalizeConfirmed_();
+  }
+
+  function vtRRConfirmBackdropClick_(event) {
+    if (event && event.target && event.target.id === 'vt-confirm-backdrop') {
+      vtRRCloseFinalizeConfirm_(false);
+    }
+  }
+
+  document.addEventListener('keydown', function(event) {
+    var backdrop = document.getElementById('vt-confirm-backdrop');
+    if (event.key === 'Escape' && backdrop && !backdrop.hidden) {
+      event.preventDefault();
+      vtRRCloseFinalizeConfirm_(false);
+    }
+  });
+
+  function vtRRFinalizeConfirmed_() {
     vtRRKeepRunning = false; vtRRBusy = true; vtRRSyncButtons();
     vtRRSetStatus(vtSpin('Refreshing browser evidence and calculating the fail-closed verdict…'), false);
     google.script.run

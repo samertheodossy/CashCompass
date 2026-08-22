@@ -851,19 +851,21 @@ function activityDeleteClick_(ev) {
   if (String(btn.getAttribute('data-event-type') || '').toLowerCase() !== 'donation') return;
   var row = parseInt(btn.getAttribute('data-sheet-row'), 10);
   if (!isFinite(row) || row < 2) return;
-  if (
-    !confirm(
-      'Remove this donation from Activity?\n\nIf the matching donation record still exists (same charity, date, amount, tax year, payment type, comments), it is deleted too. Otherwise only the log line is removed.'
-    )
-  ) {
-    return;
-  }
-
-  var statusEl = document.getElementById('act_status');
-  btn.disabled = true;
-
-  google.script.run
-    .withSuccessHandler(function(res) {
+  openDashboardConfirm_({
+    eyebrow: 'Activity',
+    title: 'Remove this donation entry?',
+    message: 'CashCompass will remove this line from Activity.',
+    consequences: [
+      'A matching donation record is also removed only when charity, date, amount, tax year, payment type, and comments still match.',
+      'If that evidence no longer matches, the donation record is left unchanged.'
+    ],
+    cancelLabel: 'Keep entry',
+    confirmLabel: 'Remove entry',
+    onConfirm: function() {
+      var statusEl = document.getElementById('act_status');
+      btn.disabled = true;
+      google.script.run
+        .withSuccessHandler(function(res) {
       btn.disabled = false;
       if (!res || !res.ok) {
         if (statusEl) {
@@ -893,18 +895,20 @@ function activityDeleteClick_(ev) {
         }
       }
       loadActivitySection();
-    })
-    .withFailureHandler(function(err) {
-      btn.disabled = false;
-      if (statusEl) {
-        statusEl.textContent = customerSafeErrorMessage_(
-          err && err.message ? err.message : String(err),
-          'Could not remove that activity entry. Please refresh and try again.'
-        );
-        statusEl.className = 'status error';
-      }
-    })
-    .deleteActivityLogRow(row);
+        })
+        .withFailureHandler(function(err) {
+          btn.disabled = false;
+          if (statusEl) {
+            statusEl.textContent = customerSafeErrorMessage_(
+              err && err.message ? err.message : String(err),
+              'Could not remove that activity entry. Please refresh and try again.'
+            );
+            statusEl.className = 'status error';
+          }
+        })
+        .deleteActivityLogRow(row);
+    }
+  });
 }
 
 /**

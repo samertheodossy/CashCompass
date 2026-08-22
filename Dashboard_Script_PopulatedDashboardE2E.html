@@ -54,6 +54,15 @@
     });
   }
 
+  async function acceptCashCompassConfirmation_(label) {
+    await waitFor(function() {
+      var backdrop = document.getElementById('dashboard_confirm_backdrop');
+      var submit = document.getElementById('dashboard_confirm_submit_btn');
+      return backdrop && !backdrop.hidden && submit && !submit.disabled;
+    }, 10000, label + ' CashCompass confirmation');
+    document.getElementById('dashboard_confirm_submit_btn').click();
+  }
+
   function add(id, pass, detail) {
     assertions.push({ id: id, pass: pass === true, detail: String(detail || '') });
   }
@@ -476,8 +485,6 @@
   }
 
   async function exerciseBillSkipStopSafety() {
-    var originalConfirm = window.confirm;
-    var confirmations = [];
     var checks = [];
     try {
       if (typeof showPage === 'function') showPage('cashflow');
@@ -510,13 +517,48 @@
       }, 90000, 'the active synthetic bill');
       var manageEntry = storedEntryByPayee_(window.__dashboardActiveBills, expected.billPayee);
       var originalPayee = manageEntry.row.payee;
+
+      // Reproduce the bounded first-open edit race. Category suggestions may
+      // still be loading, but changing only AutoPay must enable Save without
+      // requiring an unrelated Payment Source toggle.
+      openBillEditForm(manageEntry.key);
+      await waitFor(function() {
+        return __billsFormMode.mode === 'edit' &&
+          text('bills_form_save_btn') === 'Save changes';
+      }, 10000, 'the Bill edit form');
+      var paymentSourceSelect = document.getElementById('bills_add_payment_source');
+      var paymentSourceBefore = paymentSourceSelect && paymentSourceSelect.value;
+      var autopaySelect = document.getElementById('bills_add_autopay');
+      if (autopaySelect) {
+        autopaySelect.value = 'Yes';
+        autopaySelect.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      var billSaveButton = document.getElementById('bills_form_save_btn');
+      var autopayOnlyReady = !!billSaveButton && !billSaveButton.disabled &&
+        paymentSourceSelect && paymentSourceSelect.value === paymentSourceBefore;
+      if (billSaveButton) billSaveButton.click();
+      await waitFor(function() {
+        return __billsFormMode.mode === 'add' &&
+          !!storedEntryByPayee_(window.__dashboardActiveBills, expected.billPayee);
+      }, 90000, 'the AutoPay-only Bill edit to save');
+      var autopayInspection = await inspectBillLifecycle_();
+      var autopayVerified = autopayInspection && autopayInspection.ok &&
+        autopayInspection.verification;
+      checks.push(autopayOnlyReady && !!autopayVerified &&
+        autopayVerified.autopayYes === true &&
+        Number(autopayVerified.updateActivityCount) === 1);
+      manageEntry = storedEntryByPayee_(window.__dashboardActiveBills, originalPayee);
+
       manageEntry.row.payee = originalPayee + ' stale';
-      window.confirm = function(message) {
-        confirmations.push(String(message || ''));
-        return true;
-      };
       stopTrackingBillFromDashboard(manageEntry.key);
-      window.confirm = originalConfirm;
+      await waitFor(function() {
+        var dialog = document.getElementById('bill_stop_dialog_backdrop');
+        return dialog && !dialog.hidden;
+      }, 10000, 'the Stop tracking confirmation');
+        var stopDialogText = text('bill_stop_dialog');
+        checks.push(/History is preserved/i.test(stopDialogText) &&
+          /Past payments and Activity history stay available/i.test(stopDialogText));
+      confirmStopTrackingBill_();
       await waitFor(function() {
         var status = document.getElementById('bills_due_status');
         return status && status.classList.contains('error') &&
@@ -527,18 +569,19 @@
       checks.push(!!staleVerified && staleVerified.rowPresent === true &&
         staleVerified.inactive === false &&
         Number(staleVerified.deactivateActivityCount) === 0);
+      closeBillStopDialog_();
 
       loadDashboardActionSections();
       await waitFor(function() {
         return !!storedEntryByPayee_(window.__dashboardActiveBills, originalPayee);
       }, 90000, 'the active synthetic bill to reload after stale rejection');
       manageEntry = storedEntryByPayee_(window.__dashboardActiveBills, originalPayee);
-      window.confirm = function(message) {
-        confirmations.push(String(message || ''));
-        return true;
-      };
       stopTrackingBillFromDashboard(manageEntry.key);
-      window.confirm = originalConfirm;
+      await waitFor(function() {
+        var dialog = document.getElementById('bill_stop_dialog_backdrop');
+        return dialog && !dialog.hidden;
+      }, 10000, 'the refreshed Stop tracking confirmation');
+      confirmStopTrackingBill_();
       await waitFor(function() {
         return /Tracking stopped/i.test(text('bills_due_status'));
       }, 90000, 'Stop tracking recovery');
@@ -548,25 +591,52 @@
 
       var inspected = await inspectBillLifecycle_();
       var verified = inspected && inspected.ok && inspected.verification;
-      checks.push(confirmations.some(function(message) {
-        return /History is preserved/i.test(message);
-      }));
       checks.push(!!verified && verified.rowPresent === true &&
         verified.inactive === true &&
         verified.dueDayPreserved === true &&
         verified.amountPreserved === true &&
         verified.frequencyPreserved === true &&
-        verified.notesPreserved === true);
+        verified.notesPreserved === true &&
+        verified.autopayYes === true);
       checks.push(!!verified && Number(verified.skipActivityCount) === 1 &&
         Number(verified.deactivateActivityCount) === 1);
+
+      if (!__billsInactiveVisible) toggleInactiveBillsView_();
+      await waitFor(function() {
+        return !!storedEntryByPayee_(window.__dashboardInactiveBills, expected.billPayee);
+      }, 90000, 'the preserved inactive bill inventory');
+      var inactiveEntry = storedEntryByPayee_(window.__dashboardInactiveBills, expected.billPayee);
+      checks.push(!!inactiveEntry && Number(inactiveEntry.row.inputBillsRow) > 1);
+      reactivateBillFromManage_(inactiveEntry.key);
+      await waitFor(function() {
+        var dialog = document.getElementById('dashboard_confirm_backdrop');
+        return dialog && !dialog.hidden;
+      }, 10000, 'the Bill Reactivate confirmation');
+      confirmDashboardAction_();
+      await waitFor(function() {
+        return /Reactivated/i.test(text('bills_due_status'));
+      }, 90000, 'Bill Reactivate recovery');
+      await waitFor(function() {
+        return !!storedEntryByPayee_(window.__dashboardActiveBills, expected.billPayee);
+      }, 90000, 'the reactivated bill to return to Manage');
+      var reactivatedInspection = await inspectBillLifecycle_();
+      var reactivated = reactivatedInspection && reactivatedInspection.ok &&
+        reactivatedInspection.verification;
+      checks.push(!!reactivated && reactivated.active === true &&
+        reactivated.inactive === false &&
+        Number(reactivated.reactivateActivityCount) === 1 &&
+        Number(reactivated.deactivateActivityCount) === 1);
     } finally {
-      window.confirm = originalConfirm;
+      var stopBackdrop = document.getElementById('bill_stop_dialog_backdrop');
+      if (stopBackdrop && !stopBackdrop.hidden && !__billStopDialogBusy) closeBillStopDialog_();
+      var confirmBackdrop = document.getElementById('dashboard_confirm_backdrop');
+      if (confirmBackdrop && !confirmBackdrop.hidden) closeDashboardConfirm_(false);
     }
 
     return {
-      pass: checks.length === 5 && checks.every(Boolean),
-      detail: checks.length === 5 && checks.every(Boolean)
-        ? 'Skip required explicit consequence confirmation; stale Stop tracking failed closed; retry succeeded with the bill row, schedule, history, and immutable Activity evidence preserved.'
+      pass: checks.length === 8 && checks.every(Boolean),
+      detail: checks.length === 8 && checks.every(Boolean)
+        ? 'AutoPay-only Edit saved without a Payment Source toggle; Skip required explicit consequence confirmation; stale Stop tracking failed closed; the preserved inactive bill was discoverable and duplicate-safe Reactivate restored the same row with immutable lifecycle evidence.'
         : 'One or more Bill Skip/Stop safety checks failed: ' + JSON.stringify(checks)
     };
   }
@@ -667,9 +737,7 @@
         trackedEditorFailures.push('Bank manage inventory');
       }
       var bankLifecyclePass = false;
-      var originalBankConfirm = window.confirm;
-      try {
-        window.confirm = function() { return true; };
+      {
         var bankManageHost = document.getElementById('bank_manage_list');
         var bankEditButton = Array.prototype.find.call(
           bankManageHost ? bankManageHost.querySelectorAll('button') : [],
@@ -717,6 +785,7 @@
           function(button) { return String(button.textContent || '').trim() === 'Stop tracking'; }
         );
         if (bankStopButton) bankStopButton.click();
+        await acceptCashCompassConfirmation_('Bank Stop tracking');
         await waitFor(function() {
           return !hasOption('bank_account', expected.bankName) &&
             (__bankInactiveRows || []).some(function(row) {
@@ -730,6 +799,7 @@
           function(button) { return String(button.textContent || '').trim() === 'Reactivate'; }
         );
         if (reactivateButton) reactivateButton.click();
+        await acceptCashCompassConfirmation_('Bank Reactivate');
         await waitFor(function() {
           var restored = window.__bankManagementByName &&
             window.__bankManagementByName[expected.bankName.toLowerCase()];
@@ -739,8 +809,6 @@
             });
         }, 90000, 'Bank Reactivate lifecycle');
         bankLifecyclePass = true;
-      } finally {
-        window.confirm = originalBankConfirm;
       }
       if (!bankLifecyclePass) trackedEditorFailures.push('Bank Edit/Rename/Reactivate lifecycle');
 
@@ -766,9 +834,7 @@
         trackedEditorFailures.push('Investment manage inventory');
       }
       var investmentLifecyclePass = false;
-      var originalInvestmentConfirm = window.confirm;
-      try {
-        window.confirm = function() { return true; };
+      {
         var investmentManageHost = document.getElementById('inv_manage_list');
         var investmentEditButton = Array.prototype.find.call(
           investmentManageHost ? investmentManageHost.querySelectorAll('button') : [],
@@ -816,6 +882,7 @@
           function(button) { return String(button.textContent || '').trim() === 'Stop tracking'; }
         );
         if (investmentStopButton) investmentStopButton.click();
+        await acceptCashCompassConfirmation_('Investment Stop tracking');
         await waitFor(function() {
           return !hasOption('inv_account', expected.investmentName) &&
             (__investmentInactiveRows || []).some(function(row) {
@@ -829,6 +896,7 @@
           function(button) { return String(button.textContent || '').trim() === 'Reactivate'; }
         );
         if (reactivateInvestmentButton) reactivateInvestmentButton.click();
+        await acceptCashCompassConfirmation_('Investment Reactivate');
         await waitFor(function() {
           var restored = window.__investmentManagementByName &&
             window.__investmentManagementByName[expected.investmentName.toLowerCase()];
@@ -838,8 +906,6 @@
             });
         }, 90000, 'Investment Reactivate lifecycle');
         investmentLifecyclePass = true;
-      } finally {
-        window.confirm = originalInvestmentConfirm;
       }
       if (!investmentLifecyclePass) {
         trackedEditorFailures.push('Investment Edit/Rename/Reactivate lifecycle');

@@ -1193,12 +1193,12 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
               <label>Notes (optional)</label>
               <input type="text" id="bills_add_notes" maxlength="500" autocomplete="off">
               <label>Autopay</label>
-              <select id="bills_add_autopay">
+              <select id="bills_add_autopay" onchange="syncBillsFormReadiness_()">
                 <option value="No" selected>No</option>
                 <option value="Yes">Yes</option>
               </select>
               <label>Varies month to month</label>
-              <select id="bills_add_varies">
+              <select id="bills_add_varies" onchange="syncBillsFormReadiness_()">
                 <option value="No" selected>No</option>
                 <option value="Yes">Yes</option>
               </select>
@@ -1216,9 +1216,17 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <div>
             <p class="bills-view-purpose">Every recurring bill you currently track. Use Edit to update details or Stop tracking to deactivate it while preserving history.</p>
           </div>
+          <div>
+            <button type="button" id="bills_show_inactive_btn" class="small-btn debt-inactive-toggle" onclick="toggleInactiveBillsView_()" aria-expanded="false" aria-controls="bills_inactive_wrap"><span class="debt-caret" aria-hidden="true">&#9656;</span>Show inactive bills</button>
+          </div>
         </div>
         <div id="bills_manage_list" class="bills-manage-list">
           <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading recurring bills…</span></div>
+        </div>
+        <div id="bills_inactive_wrap" class="debt-inactive-section" style="display:none;">
+          <div class="card-title">Inactive bills</div>
+          <p class="muted" style="margin:0 0 12px 0;">These bills no longer create future occurrences. Their original definitions, recorded payments, and Activity history are preserved. Reactivate restores the existing bill without creating a duplicate.</p>
+          <div id="bills_inactive_list" class="bills-manage-list"></div>
         </div>
       </section>
     </div>
@@ -1397,6 +1405,113 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             onclick="submitBillSkip()">Skip occurrence</button>
         </div>
       </aside>
+    </div>
+
+    <div
+      id="bill_stop_dialog_backdrop"
+      class="bill-stop-dialog-backdrop"
+      hidden
+      onclick="onBillStopDialogBackdropClick_(event)">
+      <section
+        id="bill_stop_dialog"
+        class="bill-stop-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bill_stop_dialog_title"
+        aria-describedby="bill_stop_dialog_help"
+        tabindex="-1">
+        <div class="bill-stop-dialog-head">
+          <div class="bill-stop-dialog-icon" aria-hidden="true">!</div>
+          <div>
+            <div class="bill-pay-drawer-eyebrow">Bills</div>
+            <h2 id="bill_stop_dialog_title">Stop tracking this bill?</h2>
+          </div>
+          <button
+            type="button"
+            id="bill_stop_close_btn"
+            class="bill-pay-drawer-close"
+            aria-label="Close Stop tracking confirmation"
+            onclick="closeBillStopDialog_()">×</button>
+        </div>
+
+        <div class="bill-stop-dialog-body">
+          <div class="bill-stop-dialog-bill">
+            <span>Bill</span>
+            <strong id="bill_stop_payee">—</strong>
+          </div>
+          <p id="bill_stop_dialog_help">
+            This bill will leave your active Bills list and future occurrences will no longer appear.
+          </p>
+          <ul class="bill-stop-dialog-consequences">
+            <li><strong>History is preserved.</strong> Past payments and Activity history stay available.</li>
+            <li>The recurring bill row and its schedule details are preserved.</li>
+          </ul>
+          <div id="bill_stop_status" class="status" role="status" aria-live="polite"></div>
+        </div>
+
+        <div class="bill-stop-dialog-actions">
+          <button
+            type="button"
+            id="bill_stop_cancel_btn"
+            class="small-btn"
+            onclick="closeBillStopDialog_()">Keep tracking</button>
+          <button
+            type="button"
+            id="bill_stop_submit_btn"
+            class="small-btn danger"
+            onclick="confirmStopTrackingBill_()">Stop tracking</button>
+        </div>
+      </section>
+    </div>
+
+    <div
+      id="dashboard_confirm_backdrop"
+      class="bill-stop-dialog-backdrop"
+      hidden
+      onclick="onDashboardConfirmBackdropClick_(event)">
+      <section
+        id="dashboard_confirm_dialog"
+        class="bill-stop-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="dashboard_confirm_title"
+        aria-describedby="dashboard_confirm_message"
+        tabindex="-1">
+        <div class="bill-stop-dialog-head">
+          <div id="dashboard_confirm_icon" class="bill-stop-dialog-icon" aria-hidden="true">!</div>
+          <div>
+            <div id="dashboard_confirm_eyebrow" class="bill-pay-drawer-eyebrow">CashCompass</div>
+            <h2 id="dashboard_confirm_title">Confirm action</h2>
+          </div>
+          <button
+            type="button"
+            id="dashboard_confirm_close_btn"
+            class="bill-pay-drawer-close"
+            aria-label="Close confirmation"
+            onclick="closeDashboardConfirm_(false)">×</button>
+        </div>
+        <div class="bill-stop-dialog-body">
+          <div id="dashboard_confirm_subject_wrap" class="bill-stop-dialog-bill" hidden>
+            <span id="dashboard_confirm_subject_label">Item</span>
+            <strong id="dashboard_confirm_subject">—</strong>
+          </div>
+          <p id="dashboard_confirm_message"></p>
+          <ul id="dashboard_confirm_consequences" class="bill-stop-dialog-consequences"></ul>
+          <div id="dashboard_confirm_status" class="status" role="status" aria-live="polite"></div>
+        </div>
+        <div class="bill-stop-dialog-actions">
+          <button
+            type="button"
+            id="dashboard_confirm_cancel_btn"
+            class="small-btn"
+            onclick="closeDashboardConfirm_(false)">Cancel</button>
+          <button
+            type="button"
+            id="dashboard_confirm_submit_btn"
+            class="small-btn danger"
+            onclick="confirmDashboardAction_()">Confirm</button>
+        </div>
+      </section>
     </div>
 
     <div id="income" class="panel">

@@ -296,6 +296,10 @@ function addBillFromDashboard(payload) {
     'yyyy-MM-dd'
   );
 
+  var addLock = LockService.getUserLock();
+  addLock.waitLock(10000);
+  try {
+
   // Ensure-before-write guard. Idempotent no-op on populated workbooks;
   // on fresh workbooks it seeds the canonical INPUT - Bills structure
   // the header read a few lines below expects. Mirrors the Bank Accounts
@@ -359,6 +363,27 @@ function addBillFromDashboard(payload) {
       var label2 = String(headerDisplay[i2] || '').trim();
       if (label2) headerMap[label2.toLowerCase()] = i2;
     }
+  }
+
+  // Add is never a recovery mechanism. A matching active row must be edited;
+  // a matching inactive row must be restored through Show inactive bills.
+  // This runs under the same user lock as insertion so two concurrent Adds
+  // cannot both pass the identity check and create duplicate definitions.
+  var existingDisplay = sheet.getDataRange().getDisplayValues();
+  var payeeColForIdentity = headerIndex_('Payee');
+  var activeColForIdentity = headerIndex_('Active');
+  var requestedIdentity = payee.toLowerCase().replace(/\s+/g, ' ');
+  for (var existingRow = 1; existingRow < existingDisplay.length; existingRow++) {
+    var existingValues = existingDisplay[existingRow] || [];
+    var existingPayee = String(existingValues[payeeColForIdentity] || '').trim();
+    if (existingPayee.toLowerCase().replace(/\s+/g, ' ') !== requestedIdentity) continue;
+    if (normalizeYesNo_(existingValues[activeColForIdentity]) === 'no') {
+      throw new Error(
+        '"' + existingPayee + '" is inactive. Open Manage bills → Show inactive bills ' +
+        'and use Reactivate to preserve its existing schedule and history.'
+      );
+    }
+    throw new Error('A bill named "' + existingPayee + '" is already tracked. Edit the existing bill instead.');
   }
 
   var row = new Array(headerDisplay.length);
@@ -532,6 +557,9 @@ function addBillFromDashboard(payload) {
     cashFlowRowSeeded: cashFlowRowSeeded,
     scheduleEffectiveDate: newBillScheduleEffectiveDate
   };
+  } finally {
+    try { addLock.releaseLock(); } catch (_releaseAddBillLock) {}
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -553,8 +581,8 @@ function addBillFromDashboard(payload) {
  *  - A Payee rename coordinates the exact linked Expense Payee cell on the
  *    current-year Cash Flow sheet. Historical year sheets and month values are
  *    never rewritten; missing, ambiguous, or colliding links fail closed.
- *  - Refuses inactive bills — Stop tracking is the canonical
- *    lifecycle path; re-adding is the way to revive history.
+ *  - Refuses inactive bills — Stop tracking / Reactivate own lifecycle;
+ *    Add never revives or duplicates a preserved identity.
  *  - No-op save (no field actually changed) returns
  *    { ok:true, message:'No changes.' } WITHOUT writing, logging, or
  *    touching dashboard freshness state.
@@ -734,7 +762,9 @@ function updateTrackedBillFromDashboard(payload, optionalSs) {
   var activeIdx = headerIndex_('Active');
   var currentActive = activeIdx === -1 ? 'yes' : normalizeYesNo_(rowDisplay[activeIdx]);
   if (currentActive === 'no') {
-    throw new Error('Bill is inactive. Use Add bill to re-add it.');
+    throw new Error(
+      'Bill is inactive. Open Manage bills → Show inactive bills and use Reactivate.'
+    );
   }
 
   // ---- Build a per-field diff against the row's current sheet values. ----
@@ -1145,7 +1175,7 @@ function updateTrackedBillFromDashboard(payload, optionalSs) {
  *
  * @returns {{ok:boolean, message:string, payee:string}}
  */
-function deactivateBillFromDashboard(payload) {
+function deactivateBillFromDashboard(payload, optionalSs) {
   validateRequired_(payload, ['sheetRow', 'payee']);
 
   var targetRow = Math.round(Number(payload.sheetRow));
@@ -1156,7 +1186,10 @@ function deactivateBillFromDashboard(payload) {
   var expectedPayee = String(payload.payee || '').trim();
   if (!expectedPayee) throw new Error('Payee is required.');
 
-  var ss = getUserSpreadsheet_();
+  var deactivateLock = LockService.getUserLock();
+  deactivateLock.waitLock(10000);
+  try {
+  var ss = optionalSs || getUserSpreadsheet_();
   var sheet = getSheet_(ss, 'BILLS');
 
   if (targetRow > sheet.getLastRow()) {
@@ -1239,6 +1272,129 @@ function deactivateBillFromDashboard(payload) {
     message: 'Tracking stopped — ' + actualPayee + ' removed from bills',
     payee: actualPayee
   };
+  } finally {
+    try { deactivateLock.releaseLock(); } catch (_releaseDeactivateLock) {}
+  }
+}
+
+/**
+ * Restore one preserved inactive INPUT - Bills row.
+ *
+ * The exact sheet row and payee are re-verified under the user lock so a
+ * stale Manage view cannot activate a different bill. Reactivation fails
+ * closed when another active row already uses the same payee; recovery must
+ * never create two active logical definitions for one bill identity.
+ */
+function reactivateBillFromDashboard(payload, optionalSs) {
+  validateRequired_(payload, ['sheetRow', 'payee']);
+  var targetRow = Math.round(Number(payload.sheetRow));
+  var expectedPayee = String(payload.payee || '').trim();
+  if (!isFinite(targetRow) || targetRow < 2 || !expectedPayee) {
+    throw new Error('Invalid inactive bill. Please refresh and try again.');
+  }
+
+  var lock = LockService.getUserLock();
+  lock.waitLock(10000);
+  try {
+    var ss = optionalSs || getUserSpreadsheet_();
+    var sheet = getSheet_(ss, 'BILLS');
+    if (targetRow > sheet.getLastRow()) {
+      throw new Error('Bill row is out of range. The sheet may have been edited; please refresh.');
+    }
+
+    var lastCol = sheet.getLastColumn();
+    var display = sheet.getRange(1, 1, sheet.getLastRow(), lastCol).getDisplayValues();
+    var headers = display[0] || [];
+    var headerMap = {};
+    for (var i = 0; i < headers.length; i++) {
+      var label = String(headers[i] || '').trim();
+      if (label) headerMap[label.toLowerCase()] = i;
+    }
+    function headerIndex_(name) {
+      var key = String(name || '').trim().toLowerCase();
+      return Object.prototype.hasOwnProperty.call(headerMap, key) ? headerMap[key] : -1;
+    }
+
+    var payeeCol = headerIndex_('Payee');
+    var activeCol = headerIndex_('Active');
+    if (payeeCol === -1 || activeCol === -1) {
+      throw new Error('Bills sheet is missing required Payee or Active headers.');
+    }
+
+    var targetDisplay = display[targetRow - 1] || [];
+    var actualPayee = String(targetDisplay[payeeCol] || '').trim();
+    if (!actualPayee) throw new Error('No bill found on the selected row; please refresh.');
+    if (actualPayee !== expectedPayee) {
+      throw new Error(
+        'Bill has moved on the sheet (expected "' + expectedPayee +
+        '", found "' + actualPayee + '"). Please refresh and try again.'
+      );
+    }
+
+    var currentActive = normalizeYesNo_(targetDisplay[activeCol]);
+    if (currentActive === 'yes') {
+      return {
+        ok: true,
+        message: '"' + actualPayee + '" is already active.',
+        payee: actualPayee,
+        alreadyActive: true
+      };
+    }
+
+    var identity = actualPayee.toLowerCase();
+    for (var r = 1; r < display.length; r++) {
+      if (r + 1 === targetRow) continue;
+      var row = display[r] || [];
+      if (String(row[payeeCol] || '').trim().toLowerCase() !== identity) continue;
+      if (normalizeYesNo_(row[activeCol]) === 'yes') {
+        throw new Error(
+          'An active bill named "' + actualPayee + '" already exists. ' +
+          'CashCompass did not reactivate a duplicate.'
+        );
+      }
+    }
+
+    sheet.getRange(targetRow, activeCol + 1).setValue('Yes');
+
+    try {
+      var categoryCol = headerIndex_('Category');
+      appendActivityLog_(ss, {
+        eventType: 'bill_reactivate',
+        entryDate: Utilities.formatDate(
+          stripTime_(new Date()),
+          Session.getScriptTimeZone(),
+          'yyyy-MM-dd'
+        ),
+        amount: 0,
+        direction: 'expense',
+        payee: actualPayee,
+        category: categoryCol === -1 ? '' : String(targetDisplay[categoryCol] || '').trim(),
+        accountSource: '',
+        cashFlowSheet: '',
+        cashFlowMonth: '',
+        dedupeKey: '',
+        details: JSON.stringify({
+          detailsVersion: 1,
+          sheetRow: targetRow,
+          previousActive: String(targetDisplay[activeCol] || 'No'),
+          newActive: 'Yes',
+          reason: 'reactivate'
+        })
+      });
+    } catch (logErr) {
+      Logger.log('reactivateBillFromDashboard activity log: ' + logErr);
+    }
+
+    touchDashboardSourceUpdated_('bills');
+    return {
+      ok: true,
+      message: 'Reactivated "' + actualPayee + '". Future occurrences are tracked again.',
+      payee: actualPayee,
+      alreadyActive: false
+    };
+  } finally {
+    try { lock.releaseLock(); } catch (_releaseReactivateLock) {}
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1290,12 +1446,11 @@ function getBillCategoriesFromDashboard() {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Active bills — management view                                            */
+/*  Bills — active/inactive management views                                  */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Return every active row in INPUT - Bills as a compact list for the "All
- * active bills" management section of the Bills page.
+ * Return rows in INPUT - Bills matching one normalized lifecycle state.
  *
  * Active = any row whose normalized Active column is 'yes' (blank rows skipped).
  *
@@ -1323,8 +1478,9 @@ function getBillCategoriesFromDashboard() {
  *   notes:string
  * }>}
  */
-function getActiveBillsForManagementFromDashboard() {
-  var ss = getUserSpreadsheet_();
+function getBillsForManagementByState_(expectedState, optionalSs) {
+  var normalizedExpectedState = expectedState === 'no' ? 'no' : 'yes';
+  var ss = optionalSs || getUserSpreadsheet_();
   // First-run safety: INPUT - Bills may be missing on a blank workbook.
   // Return an empty list so the Bills management section renders its
   // "No active bills yet" empty state instead of throwing a red banner.
@@ -1369,7 +1525,7 @@ function getActiveBillsForManagementFromDashboard() {
 
     var activeRaw = row[idx.Active];
     var activeNorm = normalizeYesNo_(activeRaw);
-    if (activeNorm !== 'yes') continue;
+    if (activeNorm !== normalizedExpectedState) continue;
 
     var defaultAmount = 0;
     if (idx['Default Amount'] !== undefined) {
@@ -1422,6 +1578,16 @@ function getActiveBillsForManagementFromDashboard() {
   });
 
   return out;
+}
+
+/** Return active recurring bills for Manage bills. */
+function getActiveBillsForManagementFromDashboard(optionalSs) {
+  return getBillsForManagementByState_('yes', optionalSs);
+}
+
+/** Return preserved inactive recurring bills for Show inactive bills. */
+function getInactiveBillsForManagementFromDashboard(optionalSs) {
+  return getBillsForManagementByState_('no', optionalSs);
 }
 
 /* -------------------------------------------------------------------------- */

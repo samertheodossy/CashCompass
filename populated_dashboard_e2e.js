@@ -438,7 +438,7 @@ function pdE2EInspectBillLifecycle(runId) {
       var header = String(headers[c] || '').trim();
       if (header) headerMap[header] = c;
     }
-    ['Payee', 'Due Day', 'Default Amount', 'Active', 'Frequency', 'Notes'].forEach(function(required) {
+    ['Payee', 'Due Day', 'Default Amount', 'Active', 'Frequency', 'Notes', 'Autopay'].forEach(function(required) {
       if (!Object.prototype.hasOwnProperty.call(headerMap, required)) {
         throw new Error('Synthetic Bills verification is missing required structure.');
       }
@@ -457,12 +457,16 @@ function pdE2EInspectBillLifecycle(runId) {
       ? activity.getRange(2, 1, activity.getLastRow() - 1, ACTIVITY_LOG_HEADERS.length).getValues()
       : [];
     var skipCount = 0;
+    var updateCount = 0;
     var deactivateCount = 0;
+    var reactivateCount = 0;
     activityValues.forEach(function(activityRow) {
       if (String(activityRow[5] || '').trim() !== bill.payee) return;
       var eventType = String(activityRow[1] || '').trim();
       if (eventType === 'bill_skip') skipCount++;
+      if (eventType === 'bill_update') updateCount++;
       if (eventType === 'bill_deactivate') deactivateCount++;
+      if (eventType === 'bill_reactivate') reactivateCount++;
     });
 
     assertFirstRunE2EFixture_(state, email, false);
@@ -470,6 +474,7 @@ function pdE2EInspectBillLifecycle(runId) {
       ok: true,
       verification: {
         rowPresent: !!row,
+        active: !!row && normalizeYesNo_(row[headerMap.Active]) === 'yes',
         inactive: !!row && normalizeYesNo_(row[headerMap.Active]) === 'no',
         dueDayPreserved: !!row && Number(row[headerMap['Due Day']]) === Number(bill.dueDay),
         amountPreserved: !!row && Math.abs(Number(row[headerMap['Default Amount']]) - Number(bill.amount)) < 0.005,
@@ -477,8 +482,11 @@ function pdE2EInspectBillLifecycle(runId) {
           String(row[headerMap.Frequency] || '').trim().toLowerCase() ===
           String(bill.frequency || '').trim().toLowerCase(),
         notesPreserved: !!row && String(row[headerMap.Notes] || '').trim() === 'Synthetic harness bill',
+        autopayYes: !!row && normalizeYesNo_(row[headerMap.Autopay]) === 'yes',
         skipActivityCount: skipCount,
-        deactivateActivityCount: deactivateCount
+        updateActivityCount: updateCount,
+        deactivateActivityCount: deactivateCount,
+        reactivateActivityCount: reactivateCount
       }
     };
   });

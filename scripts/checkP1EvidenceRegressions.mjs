@@ -440,10 +440,16 @@ assert.match(populatedBrowser,
   /exerciseBillSkipStopSafety[\s\S]*?skipBillFromDashboard\(skipKey\)[\s\S]*?originalPayee \+ ' stale'[\s\S]*?stopTrackingBillFromDashboard\(manageEntry\.key\)[\s\S]*?staleInspection = await inspectBillLifecycle_\(\)[\s\S]*?staleVerified\.inactive === false[\s\S]*?loadDashboardActionSections\(\)[\s\S]*?stopTrackingBillFromDashboard\(manageEntry\.key\)/,
   'Populated Bill evidence must prove Skip, server-verified stale Stop rejection, fresh UI recovery, and valid Stop in order');
 assert.match(populatedBrowser,
+  /openBillEditForm\(manageEntry\.key\)[\s\S]*?autopaySelect\.dispatchEvent\(new Event\('change'[\s\S]*?autopayOnlyReady[\s\S]*?billSaveButton\.click\(\)[\s\S]*?autopayVerified\.autopayYes === true[\s\S]*?updateActivityCount\) === 1/,
+  'Populated Bill evidence must prove an AutoPay-only edit enables and persists without changing Payment Source');
+assert.match(populatedBrowser,
   /No payment will be recorded[\s\S]*?History is preserved[\s\S]*?skipActivityCount[\s\S]*?deactivateActivityCount/,
   'Populated Bill evidence must verify confirmation consequences and immutable Activity evidence');
+assert.match(populatedBrowser,
+  /window\.__dashboardInactiveBills[\s\S]*?reactivateBillFromManage_\(inactiveEntry\.key\)[\s\S]*?confirmDashboardAction_\(\)[\s\S]*?reactivated\.active === true[\s\S]*?reactivateActivityCount/,
+  'Populated Bill evidence must discover the preserved inactive row and reactivate it through the real guarded UI');
 assert.match(populatedE2E,
-  /function pdE2EInspectBillLifecycle\(runId\)[\s\S]*?assertFirstRunE2EFixture_\(state, email, false\)[\s\S]*?rowPresent[\s\S]*?inactive[\s\S]*?dueDayPreserved[\s\S]*?amountPreserved[\s\S]*?frequencyPreserved[\s\S]*?notesPreserved/,
+  /function pdE2EInspectBillLifecycle\(runId\)[\s\S]*?assertFirstRunE2EFixture_\(state, email, false\)[\s\S]*?rowPresent[\s\S]*?active[\s\S]*?inactive[\s\S]*?dueDayPreserved[\s\S]*?amountPreserved[\s\S]*?frequencyPreserved[\s\S]*?notesPreserved[\s\S]*?autopayYes[\s\S]*?updateActivityCount[\s\S]*?reactivateActivityCount/,
   'Bill lifecycle verification must stay read-only, exact-fixture guarded, and preserve the source row');
 assert.match(populatedUi, /cashcompass2026@gmail\.com[\s\S]*?never accepts a workbook ID[\s\S]*?bounded workbook/,
   'Populated Dashboard control UI must explain its fixed disposable safety boundary');

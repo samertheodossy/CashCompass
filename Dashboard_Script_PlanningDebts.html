@@ -726,21 +726,23 @@ function stopTrackingDebtFromManage_(key) {
     return;
   }
 
-  const confirmed = window.confirm(
-    'Stop tracking "' + account + '"?\n\n' +
-    'This debt will:\n' +
-    '\u2022 remain in your history\n' +
-    '\u2022 no longer affect Dashboard totals\n' +
-    '\u2022 no longer affect Net Worth\n' +
-    '\u2022 no longer affect Planning\n\n' +
-    'You can restore it later from\n' +
-    'Manage Debts \u2192 Show inactive debts.'
-  );
-  if (!confirmed) return;
-
-  setStatusLoading('debt_status', 'Stopping tracking…');
-  google.script.run
-    .withSuccessHandler(function(res) {
+  openDashboardConfirm_({
+    eyebrow: 'Debt accounts',
+    title: 'Stop tracking this debt?',
+    subjectLabel: 'Account',
+    subject: account,
+    message: 'This debt will leave active CashCompass calculations.',
+    consequences: [
+      'History is preserved.',
+      'Dashboard totals, Net Worth, and Planning will no longer include it.',
+      'You can restore it from Manage debts → Show inactive debts.'
+    ],
+    cancelLabel: 'Keep tracking',
+    confirmLabel: 'Stop tracking',
+    onConfirm: function() {
+      setStatusLoading('debt_status', 'Stopping tracking…');
+      google.script.run
+        .withSuccessHandler(function(res) {
       const msg = (res && res.alreadyInactive)
         ? account + ' is already inactive.'
         : account + ' is now inactive. History has been preserved.';
@@ -751,11 +753,13 @@ function stopTrackingDebtFromManage_(key) {
       if (typeof loadDebtSection === 'function') loadDebtSection();
       if (typeof refreshSnapshot === 'function') refreshSnapshot();
       if (typeof loadDashboardActionSections === 'function') loadDashboardActionSections();
-    })
-    .withFailureHandler(function(err) {
-      setStatus('debt_status', (err.message || String(err)), true);
-    })
-    .deactivateDebtFromDashboard({ accountName: account });
+        })
+        .withFailureHandler(function(err) {
+          setStatus('debt_status', (err.message || String(err)), true);
+        })
+        .deactivateDebtFromDashboard({ accountName: account });
+    }
+  });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -867,18 +871,22 @@ function reactivateDebtFromManage_(key) {
     return;
   }
 
-  const confirmed = window.confirm(
-    'Reactivate "' + account + '"?\n\n' +
-    'This restores the existing debt row (Active = Yes). Balance, due date, ' +
-    'type, credit limit, minimum payment, interest rate, and Cash Flow history ' +
-    'are unchanged. The debt will be tracked again and counted in totals and ' +
-    'the planner.'
-  );
-  if (!confirmed) return;
-
-  setStatusLoading('debt_status', 'Reactivating…');
-  google.script.run
-    .withSuccessHandler(function(res) {
+  openDashboardConfirm_({
+    eyebrow: 'Debt accounts',
+    title: 'Reactivate this debt?',
+    subjectLabel: 'Account',
+    subject: account,
+    message: 'This debt will return to active tracking and CashCompass totals.',
+    consequences: [
+      'Balance, due date, type, credit limit, minimum payment, interest rate, and Cash Flow history remain unchanged.'
+    ],
+    cancelLabel: 'Keep inactive',
+    confirmLabel: 'Reactivate debt',
+    danger: false,
+    onConfirm: function() {
+      setStatusLoading('debt_status', 'Reactivating…');
+      google.script.run
+        .withSuccessHandler(function(res) {
       const msg = (res && res.alreadyActive)
         ? account + ' is already active.'
         : account + ' has been reactivated.';
@@ -890,11 +898,13 @@ function reactivateDebtFromManage_(key) {
       if (typeof loadDebtSection === 'function') loadDebtSection();
       if (typeof refreshSnapshot === 'function') refreshSnapshot();
       if (typeof loadDashboardActionSections === 'function') loadDashboardActionSections();
-    })
-    .withFailureHandler(function(err) {
-      setStatus('debt_status', (err.message || String(err)), true);
-    })
-    .reactivateDebtFromDashboard({ accountName: account });
+        })
+        .withFailureHandler(function(err) {
+          setStatus('debt_status', (err.message || String(err)), true);
+        })
+        .reactivateDebtFromDashboard({ accountName: account });
+    }
+  });
 }
 
 function resetDebtAddForm_() {
@@ -1266,22 +1276,23 @@ function stopTrackingDebt() {
     return;
   }
 
-  const confirmed = window.confirm(
-    'Stop tracking "' + account + '"?\n\n' +
-    'This debt will:\n' +
-    '\u2022 remain in your history\n' +
-    '\u2022 no longer affect Dashboard totals\n' +
-    '\u2022 no longer affect Net Worth\n' +
-    '\u2022 no longer affect Planning\n\n' +
-    'You can restore it later from\n' +
-    'Manage Debts \u2192 Show inactive debts.'
-  );
-  if (!confirmed) return;
-
-  setStatusLoading('debt_status', 'Stopping tracking…');
-
-  google.script.run
-    .withSuccessHandler(function(res) {
+  openDashboardConfirm_({
+    eyebrow: 'Debt accounts',
+    title: 'Stop tracking this debt?',
+    subjectLabel: 'Account',
+    subject: account,
+    message: 'This debt will leave active CashCompass calculations.',
+    consequences: [
+      'History is preserved.',
+      'Dashboard totals, Net Worth, and Planning will no longer include it.',
+      'You can restore it from Manage debts → Show inactive debts.'
+    ],
+    cancelLabel: 'Keep tracking',
+    confirmLabel: 'Stop tracking',
+    onConfirm: function() {
+      setStatusLoading('debt_status', 'Stopping tracking…');
+      google.script.run
+        .withSuccessHandler(function(res) {
       const msg = (res && res.alreadyInactive)
         ? account + ' is already inactive.'
         : account + ' is now inactive. History has been preserved.';
@@ -1293,9 +1304,11 @@ function stopTrackingDebt() {
       if (typeof loadDashboardActionSections === 'function') {
         loadDashboardActionSections();
       }
-    })
-    .withFailureHandler(function(err) {
-      setStatus('debt_status', (err.message || String(err)), true);
-    })
-    .deactivateDebtFromDashboard({ accountName: account });
+        })
+        .withFailureHandler(function(err) {
+          setStatus('debt_status', (err.message || String(err)), true);
+        })
+        .deactivateDebtFromDashboard({ accountName: account });
+    }
+  });
 }

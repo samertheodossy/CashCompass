@@ -12,6 +12,116 @@
 // --------------------------------------------------------------------------
 var APP_DEBUG_MODE = false;
 
+var __dashboardConfirmState = null;
+var __dashboardConfirmPreviousFocus = null;
+var __dashboardConfirmKeyHandlerInstalled = false;
+
+function installDashboardConfirmKeyHandler_() {
+  if (__dashboardConfirmKeyHandlerInstalled) return;
+  document.addEventListener('keydown', function(event) {
+    var backdrop = document.getElementById('dashboard_confirm_backdrop');
+    if (!backdrop || backdrop.hidden || !__dashboardConfirmState) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeDashboardConfirm_(false);
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    var focusable = Array.prototype.slice.call(
+      backdrop.querySelectorAll('button:not([disabled])')
+    );
+    if (!focusable.length) return;
+    var first = focusable[0];
+    var last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+  __dashboardConfirmKeyHandlerInstalled = true;
+}
+
+function openDashboardConfirm_(options) {
+  var config = options || {};
+  var backdrop = document.getElementById('dashboard_confirm_backdrop');
+  if (!backdrop || typeof config.onConfirm !== 'function') return false;
+  installDashboardConfirmKeyHandler_();
+  __dashboardConfirmPreviousFocus = document.activeElement;
+  __dashboardConfirmState = {
+    onConfirm: config.onConfirm,
+    submitted: false,
+    bodyHadDrawerOpen: document.body.classList.contains('drawer-open')
+  };
+
+  document.getElementById('dashboard_confirm_eyebrow').textContent =
+    String(config.eyebrow || 'CashCompass');
+  document.getElementById('dashboard_confirm_title').textContent =
+    String(config.title || 'Confirm action');
+  document.getElementById('dashboard_confirm_message').textContent =
+    String(config.message || 'Please confirm that you want to continue.');
+
+  var subjectWrap = document.getElementById('dashboard_confirm_subject_wrap');
+  var subject = String(config.subject || '').trim();
+  subjectWrap.hidden = !subject;
+  document.getElementById('dashboard_confirm_subject_label').textContent =
+    String(config.subjectLabel || 'Item');
+  document.getElementById('dashboard_confirm_subject').textContent = subject || '—';
+
+  var list = document.getElementById('dashboard_confirm_consequences');
+  list.replaceChildren();
+  (Array.isArray(config.consequences) ? config.consequences : []).forEach(function(item) {
+    var li = document.createElement('li');
+    li.textContent = String(item || '');
+    list.appendChild(li);
+  });
+
+  var cancel = document.getElementById('dashboard_confirm_cancel_btn');
+  var submit = document.getElementById('dashboard_confirm_submit_btn');
+  var close = document.getElementById('dashboard_confirm_close_btn');
+  cancel.textContent = String(config.cancelLabel || 'Cancel');
+  submit.textContent = String(config.confirmLabel || 'Confirm');
+  cancel.disabled = false;
+  submit.disabled = false;
+  close.disabled = false;
+  submit.classList.toggle('danger', config.danger !== false);
+  submit.classList.toggle('is-neutral', config.danger === false);
+  document.getElementById('dashboard_confirm_icon').classList.toggle(
+    'is-neutral', config.danger === false);
+  document.getElementById('dashboard_confirm_status').textContent = '';
+  backdrop.hidden = false;
+  document.body.classList.add('drawer-open');
+  cancel.focus();
+  return true;
+}
+
+function closeDashboardConfirm_(confirmed) {
+  var backdrop = document.getElementById('dashboard_confirm_backdrop');
+  var state = __dashboardConfirmState;
+  if (!backdrop || backdrop.hidden || !state || state.submitted) return;
+  backdrop.hidden = true;
+  __dashboardConfirmState = null;
+  if (!state.bodyHadDrawerOpen) document.body.classList.remove('drawer-open');
+  var prior = __dashboardConfirmPreviousFocus;
+  __dashboardConfirmPreviousFocus = null;
+  if (prior && typeof prior.focus === 'function') prior.focus();
+  if (confirmed) state.onConfirm();
+}
+
+function confirmDashboardAction_() {
+  var state = __dashboardConfirmState;
+  if (!state || state.submitted) return;
+  closeDashboardConfirm_(true);
+}
+
+function onDashboardConfirmBackdropClick_(event) {
+  if (event && event.target && event.target.id === 'dashboard_confirm_backdrop') {
+    closeDashboardConfirm_(false);
+  }
+}
+
 function isDebugMode() {
   if (APP_DEBUG_MODE === true) return true;
   try {

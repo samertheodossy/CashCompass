@@ -25,8 +25,8 @@ function harnessCreateBillsMaintenanceFixture_(ctx, options) {
     options.startMonth || 1,
     'Original note',
     options.weekday || '',
-    '',
-    ''
+    options.anchorDate || '',
+    options.scheduleEffectiveDate || ''
   ];
   bills.getRange(2, 1, 1, row.length).setValues([row]);
 
@@ -72,7 +72,7 @@ function getHarnessBillsEditIntegrityScenario_() {
     id: 'REGRESSION-BILLS-EDIT-INTEGRITY',
     category: 'REGRESSION',
     executionLevel: 'E2E',
-    description: 'Verify exact current-year Bill payee propagation, dynamic text and currency-column sizing, collision refusal, category-race fallback, immutable audit, and audit-failure rollback.',
+    description: 'Verify exact Bill edit propagation and rollback plus discoverable inactive inventory and stale/duplicate-safe reactivation of the preserved row.',
     expectedSheets: [
       'INPUT - Settings',
       'INPUT - Bills',
@@ -115,6 +115,21 @@ function getHarnessBillsEditIntegrityScenario_() {
       state.billPayeeWidthAfterRename = state.bills.getColumnWidth(1);
       state.billAmountWidthAfterEdit = state.bills.getColumnWidth(state.defaultAmountCol);
       state.cashFlowPayeeWidthAfterRename = state.cashFlow.getColumnWidth(cfHeader.payeeCol);
+
+      // A customer must be able to change only AutoPay. Keep every other
+      // editable value byte-for-value identical and prove the production
+      // writer reports exactly one changed field.
+      ctx.assertWritable();
+      state.autopayOnly = updateTrackedBillFromDashboard(
+        harnessBillEditPayload_(state, 'Harness Power', 'Harness Power', {
+          defaultAmount: 1234567890123.45,
+          autopay: 'Yes'
+        }),
+        ctx.ss
+      );
+      state.autopayAfterOnlyEdit = state.bills
+        .getRange(2, state.header.indexOf('Autopay') + 1)
+        .getDisplayValue();
 
       // Prove the shared helper's gutter against the real Sheets sizing
       // engine. Remove the gutter with a raw auto-resize, capture that tight
@@ -174,6 +189,90 @@ function getHarnessBillsEditIntegrityScenario_() {
       state.cashFlowPayeeAfterRollback = state.cashFlow
         .getRange(state.cashFlowRow, cfHeader.payeeCol)
         .getDisplayValue();
+      state.historyMonthCol = getMonthColumnByDate_(state.cashFlow, stripTime_(new Date()), 1);
+      state.cashFlow.getRange(state.cashFlowRow, state.historyMonthCol).setValue(-42.25);
+      state.cashFlowHistoryBeforeLifecycle = state.cashFlow
+        .getRange(state.cashFlowRow, state.historyMonthCol).getValue();
+
+      // Give the preserved row a representative Bills V2 configuration, then
+      // prove the production Stop/Reactivate lifecycle never rewrites it.
+      var activeCol = state.header.indexOf('Active') + 1;
+      var lifecycleConfig = {
+        Category: 'Investment',
+        'Due Day': 3,
+        'Default Amount': 625.50,
+        Varies: 'No',
+        Autopay: 'Yes',
+        'Payment Source': 'CREDIT_CARD',
+        Frequency: 'Biweekly',
+        'Start Month': 5,
+        Notes: 'Preserve this lifecycle configuration',
+        Weekday: 'Monday',
+        'Anchor Date': '2026-08-03',
+        'Schedule Effective Date': '2026-08-01'
+      };
+      Object.keys(lifecycleConfig).forEach(function(label) {
+        state.bills.getRange(
+          state.billRow,
+          state.header.indexOf(label) + 1
+        ).setValue(lifecycleConfig[label]);
+      });
+      state.lifecycleConfigBefore = state.bills
+        .getRange(state.billRow, 1, 1, state.header.length)
+        .getDisplayValues()[0];
+
+      state.firstStop = deactivateBillFromDashboard(
+        { sheetRow: state.billRow, payee: 'Harness Power' }, ctx.ss);
+      state.activeAfterFirstStop = state.bills
+        .getRange(state.billRow, activeCol).getDisplayValue();
+      state.inactiveBeforeReactivate = getInactiveBillsForManagementFromDashboard(ctx.ss)
+        .filter(function(row) { return row.payee === 'Harness Power'; }).length;
+      try {
+        reactivateBillFromDashboard({ sheetRow: state.billRow, payee: 'Harness Power stale' }, ctx.ss);
+        state.reactivateStaleError = '';
+      } catch (staleErr) {
+        state.reactivateStaleError = String(staleErr && staleErr.message || staleErr);
+      }
+
+      var duplicateRow = [
+        'Harness Power', 'Utilities', 10, 50, 'No', 'No', 'Yes',
+        'CASH', 'Monthly', 1, 'Duplicate guard', '', '', ''
+      ];
+      state.bills.getRange(3, 1, 1, duplicateRow.length).setValues([duplicateRow]);
+      try {
+        reactivateBillFromDashboard({ sheetRow: state.billRow, payee: 'Harness Power' }, ctx.ss);
+        state.reactivateDuplicateError = '';
+      } catch (duplicateErr) {
+        state.reactivateDuplicateError = String(duplicateErr && duplicateErr.message || duplicateErr);
+      }
+      state.bills.deleteRow(3);
+      state.reactivate = reactivateBillFromDashboard(
+        { sheetRow: state.billRow, payee: 'Harness Power' }, ctx.ss);
+      state.activeAfterReactivate = state.bills
+        .getRange(state.billRow, activeCol).getDisplayValue();
+      state.inactiveAfterReactivate = getInactiveBillsForManagementFromDashboard(ctx.ss)
+        .filter(function(row) { return row.payee === 'Harness Power'; }).length;
+      state.activeAfterReactivateCount = getActiveBillsForManagementFromDashboard(ctx.ss)
+        .filter(function(row) { return row.payee === 'Harness Power'; }).length;
+      state.lifecycleConfigAfterReactivate = state.bills
+        .getRange(state.billRow, 1, 1, state.header.length)
+        .getDisplayValues()[0];
+      state.alreadyActiveReactivate = reactivateBillFromDashboard(
+        { sheetRow: state.billRow, payee: 'Harness Power' }, ctx.ss);
+
+      state.secondStop = deactivateBillFromDashboard(
+        { sheetRow: state.billRow, payee: 'Harness Power' }, ctx.ss);
+      state.activeAfterSecondStop = state.bills
+        .getRange(state.billRow, activeCol).getDisplayValue();
+      state.inactiveAfterSecondStop = getInactiveBillsForManagementFromDashboard(ctx.ss)
+        .filter(function(row) { return row.payee === 'Harness Power'; }).length;
+      state.activeAfterSecondStopCount = getActiveBillsForManagementFromDashboard(ctx.ss)
+        .filter(function(row) { return row.payee === 'Harness Power'; }).length;
+      state.lifecycleConfigAfterSecondStop = state.bills
+        .getRange(state.billRow, 1, 1, state.header.length)
+        .getDisplayValues()[0];
+      state.cashFlowHistoryAfterLifecycle = state.cashFlow
+        .getRange(state.cashFlowRow, state.historyMonthCol).getValue();
 
       var activity = ctx.ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
       var activityRows = activity ? activity.getDataRange().getDisplayValues() : [];
@@ -184,6 +283,14 @@ function getHarnessBillsEditIntegrityScenario_() {
           return details.linkedCashFlowRename &&
             details.linkedCashFlowRename.newPayee === 'Harness Power';
         } catch (_e) { return false; }
+      }).length;
+      state.reactivateAuditCount = activityRows.filter(function(row) {
+        return String(row[1] || '') === 'bill_reactivate' &&
+          String(row[5] || '') === 'Harness Power';
+      }).length;
+      state.deactivateAuditCount = activityRows.filter(function(row) {
+        return String(row[1] || '') === 'bill_deactivate' &&
+          String(row[5] || '') === 'Harness Power';
       }).length;
     },
     expectedOutcome: function(ctx) {
@@ -202,6 +309,9 @@ function getHarnessBillsEditIntegrityScenario_() {
         { module: mod }
       );
       ctx.assert.equals('Rename writes exactly one immutable audit entry', state.renameAuditCount, 1, { module: mod });
+      ctx.assert.equals('AutoPay-only edit succeeds', state.autopayOnly.ok, true, { module: mod });
+      ctx.assert.equals('AutoPay-only edit changes exactly AutoPay', JSON.stringify(state.autopayOnly.changedFields), JSON.stringify(['autopay']), { module: mod });
+      ctx.assert.equals('AutoPay-only edit persists Yes', state.autopayAfterOnlyEdit, 'Yes', { module: mod });
       ctx.assert.equals('Missing category retains verified row category', state.categoryAfterFallback, 'Utilities', { module: mod });
       ctx.assert.equals('Category-race fallback save succeeds', state.categoryFallback.ok, true, { module: mod });
       ctx.assert.equals('Destination collision is refused', /already uses the new payee/.test(state.collisionError), true, { module: mod });
@@ -209,6 +319,38 @@ function getHarnessBillsEditIntegrityScenario_() {
       ctx.assert.equals('Bill payee restored after audit failure', state.billPayeeAfterRollback, 'Harness Power', { module: mod });
       ctx.assert.equals('Cash Flow payee restored after audit failure', state.cashFlowPayeeAfterRollback, 'Harness Power', { module: mod });
       ctx.assert.equals('Companion Bill edit restored after audit failure', state.billNotesAfterRollback, 'Category request was still loading', { module: mod });
+      ctx.assert.equals('First Stop uses production writer successfully', state.firstStop.ok, true, { module: mod });
+      ctx.assert.equals('First Stop preserves the Bill row as inactive', state.activeAfterFirstStop, 'No', { module: mod });
+      ctx.assert.equals('Stopped Bill appears in inactive inventory', state.inactiveBeforeReactivate, 1, { module: mod });
+      ctx.assert.equals('Stale Bill Reactivate is refused', /moved on the sheet/.test(state.reactivateStaleError), true, { module: mod });
+      ctx.assert.equals('Duplicate active Bill Reactivate is refused', /active bill named/.test(state.reactivateDuplicateError), true, { module: mod });
+      ctx.assert.equals('Bill Reactivate restores Active on the preserved row', state.activeAfterReactivate, 'Yes', { module: mod });
+      ctx.assert.equals('Reactivated Bill leaves inactive inventory', state.inactiveAfterReactivate, 0, { module: mod });
+      ctx.assert.equals('Reactivated Bill appears exactly once in active inventory', state.activeAfterReactivateCount, 1, { module: mod });
+      ctx.assert.equals('Bill Reactivate returns success', state.reactivate.ok, true, { module: mod });
+      ctx.assert.equals('Already-active Reactivate is an identity-preserving no-op', state.alreadyActiveReactivate.alreadyActive, true, { module: mod });
+      ctx.assert.equals('Bill Reactivate writes one immutable audit entry', state.reactivateAuditCount, 1, { module: mod });
+      ctx.assert.equals(
+        'Bills V2 configuration survives Stop and Reactivate',
+        JSON.stringify(state.lifecycleConfigAfterReactivate),
+        JSON.stringify(state.lifecycleConfigBefore),
+        { module: mod }
+      );
+      ctx.assert.equals('Reactivated Bill can be stopped again', state.secondStop.ok, true, { module: mod });
+      ctx.assert.equals('Second Stop returns the preserved row to inactive', state.activeAfterSecondStop, 'No', { module: mod });
+      ctx.assert.equals('Second Stop exposes exactly one inactive Bill', state.inactiveAfterSecondStop, 1, { module: mod });
+      ctx.assert.equals('Second Stop leaves no active duplicate', state.activeAfterSecondStopCount, 0, { module: mod });
+      ctx.assert.equals(
+        'Bills V2 configuration survives the complete round trip',
+        JSON.stringify(state.lifecycleConfigAfterSecondStop),
+        JSON.stringify(state.lifecycleConfigBefore.map(function(value, index) {
+          return index === state.header.indexOf('Active') ? 'No' : value;
+        })),
+        { module: mod }
+      );
+      ctx.assert.equals('Two Stops write two immutable audit entries', state.deactivateAuditCount, 2, { module: mod });
+      ctx.assert.equals('Earlier Bill rename history survives the lifecycle', state.renameAuditCount, 1, { module: mod });
+      ctx.assert.equals('Existing Cash Flow payment history survives the lifecycle', state.cashFlowHistoryAfterLifecycle, state.cashFlowHistoryBeforeLifecycle, { module: mod });
     }
   };
 }

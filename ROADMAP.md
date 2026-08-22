@@ -54,15 +54,17 @@
   This next slice does not silently switch Planning authority, execute payments,
   or broadly import transactions. Any authority migration requires a later
   explicit checkpoint.
-- **Paused, not waived:** finish `3o` Houses, Income, and Bills after the core
+- **Paused, not waived:** finish `3o` Houses and Income after the core
   Import / Refresh accuracy slice. Debt, Bank Account, and Investment convergence are
   runtime-complete through isolated `@343`; shared changed-column fit `3p` is
   complete through `@341`. The remaining contract is explicit inactive
   inventory plus Reactivate of the existing identity, with Edit/Rename where
   applicable, history preservation, duplicate/stale guards, coordinated
-  rollback, and Activity evidence. Bills must replace the current re-add
-  guidance with true reactivation so Stop tracking cannot lead to a second
-  logical Bill row. Financial follow-up `5n` remains folded into the `RFP-1`
+  rollback, and Activity evidence. Bills is source-complete in the current
+  candidate: Manage exposes counted inactive rows, Reactivate restores the
+  stale-guarded preserved row under lock, Add refuses active/inactive duplicate
+  identities, and `bill_reactivate` records lifecycle evidence. Isolated runtime
+  and owner bounded acceptance remain pending. Financial follow-up `5n` remains folded into the `RFP-1`
   reporting-basis audit and closes only if its own reconciliation exit criteria
   pass.
 - Customer-facing operations/support/privacy work (`6a`–`6f`) and the broad
@@ -97,7 +99,7 @@ must be based on measured compound-operation evidence after its focused redesign
 | Completed Aug 5 | Closed `4a`–`4c`, `4e`, and `4f` for source `8aa4bf5` on isolated `@318`; exact-owner Performance passed 20/20 with ratified Planner p50/p95 budgets, Restricted fixtures, verified cleanup, Beta `@106`, and bounded untouched. |
 | Completed Aug 6 | Closed combined UX items `3e`–`3i` and `3m` on isolated `@325`; Populated 24/24 and First-Run 16/16 passed with Restricted fixtures and verified cleanup. |
 | Current | Execute `RFP-1`: read-only household funding reconciliation and decision contract. No schema, writer, calculation, UI, or deployment change. |
-| Next | Implement the Rolling Financial Plan one gated slice at a time: optional funding-purpose metadata → read-only decision engine → feature-flagged Planning UI → disposable-workbook proof. Then resume `3o` Houses → Income → Bills. |
+| Next | Preserve the frozen Planning foundation, complete the current accuracy milestone, then resume `3o` Houses → Income and the pending Bills runtime proof. |
 | Candidate preparation | Close financial/workbook/recovery proof `5a`–`5f`, operations/support `6a`–`6f`, and monetization-ready architecture `7a`–`7f`. |
 | Frozen candidate | Complete `8a`–`8f`, the exact-candidate advocate rerun `3k`, and full Release Readiness; rerun Performance under `8b` if the frozen source/deployment differs from `8aa4bf5` / `@318`. |
 | Promotion | Complete `9a`–`9e`: five-to-seven-day supervised cohort, final scorecard, go/no-go, and separately approved Beta promotion. |
@@ -588,7 +590,7 @@ implementation.
 the shadow-only Cash + Credit Card Import / Refresh accuracy milestone proceeds;
 retain residual `RFP-4`/`RFP-5` broader-experience and evidence work as separate
 future items rather than reopening Overview/Debt UX;
-resume and close `3o` Houses, Income, and Bills; close the separate `3j` task; return to
+resume and close `3o` Houses and Income plus the pending Bills runtime proof; close the separate `3j` task; return to
 the deferred `5j`–`5m` correction families; finish `5a`–`5f`
 financial/workbook/recovery proof; finish `6a`–`6f` operations and
 `7a`–`7f` product foundation; then complete frozen-candidate evidence `8a`–`8f`
@@ -678,6 +680,25 @@ Performance under `8b`. Preserve Beta `@106` plus the user-controlled bounded de
   Prefer rendering derived zero values from the recurrence rule instead of
   physically filling workbook cells with artificial zero records. No recurrence
   schema, zero-fill behavior, sinking-fund logic, or UI change belongs in Part 2A.
+- **Recurring Bill & Subscription Discovery** *(future capability, only after a
+  proven safe source of transaction-level credit-card/bank evidence)* — normalize
+  merchant/source evidence, detect plausible recurrence, compare it with existing
+  Bills, and classify a candidate as a match, conflict, duplicate, stale amount or
+  cadence, or possibly overlooked obligation. The customer reviews the supporting
+  transactions near **Cash Flow → Bills** and may choose Add as bill, Link to an
+  existing bill, Review/update, Ignore, Not recurring, or Review later. Stable
+  pattern/evidence identity must retain resolved decisions so rejected suggestions
+  do not repeatedly return. Imported patterns are discovery evidence, never Bill
+  authority: CashCompass must not silently create, edit, deactivate, or reactivate
+  a Bill or change its amount, cadence, due date, AutoPay, or payment source.
+  Detection must distinguish variable, quarterly/semiannual/annual, installment,
+  ordinary repeated-purchase, refund/reversal, pending/posted, duplicate-import,
+  descriptor-variation, intermediary, and cross-account cases; unsupported
+  recurrence remains Unknown, and missing observations cannot imply cancellation
+  without sufficiently complete source coverage. This is a separate
+  transaction-ingestion milestone, not part of account-facts Credit Card Import /
+  Refresh Phase 1. Current import architecture should avoid unnecessarily blocking
+  the later capability, but account-level facts alone are not sufficient.
 - **AutoPay Pending Confirmation UX** *(future product enhancement — after Test Harness / Release Readiness)* — visually distinguish AutoPay bills that are **awaiting payment confirmation** from bills that **require manual action**, without hiding them or inferring payment from the due date. Keeps current behavior; adds an "AutoPay Pending" state/badge and a future auto-transition **Pending → Confirmed → Completed** once a matching payment is detected via manual entry / bank import / future bank sync (then removed from the Bills Due attention queue). Never auto-complete AutoPay bills without payment evidence. Full spec: `ENHANCEMENTS.md → Future — AutoPay Pending Confirmation UX`.
 - Money Plan Phase 2; broad provider-connected Account Aggregation & Transaction
   Import beyond the current shadow fact milestone; Chat / Assistant; Paid

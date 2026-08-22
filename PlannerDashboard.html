@@ -178,6 +178,34 @@
       line-height: 1.5;
     }
 
+    .cc-confirm-backdrop[hidden] { display: none; }
+    .cc-confirm-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      background: rgba(15, 23, 42, 0.58);
+    }
+    .cc-confirm-dialog {
+      width: min(420px, 100%);
+      overflow: hidden;
+      border: 1px solid #dbe3ee;
+      border-radius: 14px;
+      background: #ffffff;
+      box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28);
+    }
+    .cc-confirm-head, .cc-confirm-body, .cc-confirm-actions { padding: 16px; }
+    .cc-confirm-head { border-bottom: 1px solid #e2e8f0; }
+    .cc-confirm-head small { color: #1f4e78; font-weight: 800; text-transform: uppercase; }
+    .cc-confirm-head h3 { margin: 4px 0 0; color: #0f172a; }
+    .cc-confirm-subject { padding: 10px; border-radius: 8px; background: #f8fafc; font-weight: 700; }
+    .cc-confirm-body p { font-size: 13px; line-height: 1.5; }
+    .cc-confirm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .cc-confirm-actions button { margin: 0; }
+    .cc-confirm-danger { background: #b91c1c; }
+
     .muted {
       color: #475569;
     }
@@ -509,7 +537,64 @@
   <div id="pay_status" class="status"></div>
 </div>
 
+<div id="cc_confirm_backdrop" class="cc-confirm-backdrop" hidden onclick="ccConfirmBackdropClick_(event)">
+  <section class="cc-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="cc_confirm_title" aria-describedby="cc_confirm_message" tabindex="-1">
+    <div class="cc-confirm-head"><small>CashCompass</small><h3 id="cc_confirm_title">Confirm action</h3></div>
+    <div class="cc-confirm-body">
+      <div id="cc_confirm_subject" class="cc-confirm-subject"></div>
+      <p id="cc_confirm_message"></p>
+    </div>
+    <div class="cc-confirm-actions">
+      <button type="button" id="cc_confirm_cancel" class="secondary" onclick="ccCloseConfirm_(false)">Cancel</button>
+      <button type="button" id="cc_confirm_submit" class="cc-confirm-danger" onclick="ccCloseConfirm_(true)">Confirm</button>
+    </div>
+  </section>
+</div>
+
 <script>
+var __ccConfirmState = null;
+var __ccConfirmPriorFocus = null;
+
+function ccOpenConfirm_(options) {
+  var config = options || {};
+  var backdrop = document.getElementById('cc_confirm_backdrop');
+  if (!backdrop || typeof config.onConfirm !== 'function') return;
+  __ccConfirmState = { onConfirm: config.onConfirm };
+  __ccConfirmPriorFocus = document.activeElement;
+  document.getElementById('cc_confirm_title').textContent = config.title || 'Confirm action';
+  document.getElementById('cc_confirm_subject').textContent = config.subject || '';
+  document.getElementById('cc_confirm_subject').hidden = !config.subject;
+  document.getElementById('cc_confirm_message').textContent = config.message || '';
+  document.getElementById('cc_confirm_cancel').textContent = config.cancelLabel || 'Cancel';
+  document.getElementById('cc_confirm_submit').textContent = config.confirmLabel || 'Confirm';
+  backdrop.hidden = false;
+  document.getElementById('cc_confirm_cancel').focus();
+}
+
+function ccCloseConfirm_(confirmed) {
+  var backdrop = document.getElementById('cc_confirm_backdrop');
+  var state = __ccConfirmState;
+  if (!backdrop || backdrop.hidden || !state) return;
+  backdrop.hidden = true;
+  __ccConfirmState = null;
+  if (__ccConfirmPriorFocus && typeof __ccConfirmPriorFocus.focus === 'function') {
+    __ccConfirmPriorFocus.focus();
+  }
+  __ccConfirmPriorFocus = null;
+  if (confirmed) state.onConfirm();
+}
+
+function ccConfirmBackdropClick_(event) {
+  if (event && event.target && event.target.id === 'cc_confirm_backdrop') ccCloseConfirm_(false);
+}
+
+document.addEventListener('keydown', function(event) {
+  var backdrop = document.getElementById('cc_confirm_backdrop');
+  if (event.key === 'Escape' && backdrop && !backdrop.hidden) {
+    event.preventDefault();
+    ccCloseConfirm_(false);
+  }
+});
 let bankCurrentData = null;
 let paymentPayees = [];
 
@@ -861,30 +946,30 @@ function stopTrackingHouse() {
     return;
   }
 
-  const confirmed = window.confirm(
-    'Stop tracking "' + house + '"?\n\n' +
-    'The house will no longer appear in the House Values or House Expenses ' +
-    'selectors. The HOUSES - ' + house + ' sheet and all history stay in ' +
-    'place. You can still view past values and expenses for reporting.'
-  );
-  if (!confirmed) return;
-
-  setStatus('house_status', 'Stopping tracking…', false);
-
-  google.script.run
-    .withSuccessHandler(function(res) {
-      setStatus('house_status', (res && res.message) || 'Stopped tracking.', false);
-      if (typeof loadHouseSection === 'function') {
-        try { loadHouseSection(); } catch (e) {}
-      }
-      if (typeof loadHouseData === 'function') {
-        try { loadHouseData(); } catch (e) {}
-      }
-    })
-    .withFailureHandler(function(err) {
-      setStatus('house_status', (err.message || String(err)), true);
-    })
-    .deactivateHouseFromDashboard({ houseName: house });
+  ccOpenConfirm_({
+    title: 'Stop tracking this house?',
+    subject: house,
+    message: 'It will leave current selectors. The house sheet, past values, expenses, and history remain available for reporting.',
+    cancelLabel: 'Keep tracking',
+    confirmLabel: 'Stop tracking',
+    onConfirm: function() {
+      setStatus('house_status', 'Stopping tracking…', false);
+      google.script.run
+        .withSuccessHandler(function(res) {
+          setStatus('house_status', (res && res.message) || 'Stopped tracking.', false);
+          if (typeof loadHouseSection === 'function') {
+            try { loadHouseSection(); } catch (e) {}
+          }
+          if (typeof loadHouseData === 'function') {
+            try { loadHouseData(); } catch (e) {}
+          }
+        })
+        .withFailureHandler(function(err) {
+          setStatus('house_status', (err.message || String(err)), true);
+        })
+        .deactivateHouseFromDashboard({ houseName: house });
+    }
+  });
 }
 
 // Guards against double-submit of Create house (sidebar variant). Kept in
@@ -1298,26 +1383,27 @@ function stopTrackingBank() {
     return;
   }
 
-  const confirmed = window.confirm(
-    'Stop tracking "' + account + '"?\n\n' +
-    'The account will no longer appear in the Bank Account selector. ' +
-    'Your past balances remain available for reporting.'
-  );
-  if (!confirmed) return;
-
-  setStatusLoading('bank_status', 'Stopping tracking…');
-
-  google.script.run
-    .withSuccessHandler(function(res) {
-      setStatus('bank_status', (res && res.message) || 'Stopped tracking.', false);
-      loadBankSection();
-      loadBankData();
-      if (typeof refreshSnapshot === 'function') refreshSnapshot();
-    })
-    .withFailureHandler(function(err) {
-      setStatus('bank_status', (err.message || String(err)), true);
-    })
-    .deactivateBankAccountFromDashboard({ accountName: account });
+  ccOpenConfirm_({
+    title: 'Stop tracking this bank account?',
+    subject: account,
+    message: 'It will leave the active selector. Past balances remain available for reporting.',
+    cancelLabel: 'Keep tracking',
+    confirmLabel: 'Stop tracking',
+    onConfirm: function() {
+      setStatusLoading('bank_status', 'Stopping tracking…');
+      google.script.run
+        .withSuccessHandler(function(res) {
+          setStatus('bank_status', (res && res.message) || 'Stopped tracking.', false);
+          loadBankSection();
+          loadBankData();
+          if (typeof refreshSnapshot === 'function') refreshSnapshot();
+        })
+        .withFailureHandler(function(err) {
+          setStatus('bank_status', (err.message || String(err)), true);
+        })
+        .deactivateBankAccountFromDashboard({ accountName: account });
+    }
+  });
 }
 
 function saveBank() {
@@ -1611,24 +1697,26 @@ function stopTrackingInvestment() {
     return;
   }
 
-  const confirmed = window.confirm(
-    'Stop tracking "' + account + '"?\n\n' +
-    'The account will no longer appear in the Investment Account selector. ' +
-    'Your past values remain available for reporting.'
-  );
-  if (!confirmed) return;
-
-  setStatusLoading('inv_status', 'Stopping tracking…');
-  google.script.run
-    .withSuccessHandler(function(res) {
-      setStatus('inv_status', (res && res.message) || 'Stopped tracking.', false);
-      loadInvestmentSection();
-      loadInvestmentData();
-    })
-    .withFailureHandler(function(err) {
-      setStatus('inv_status', (err.message || String(err)), true);
-    })
-    .deactivateInvestmentAccountFromDashboard({ accountName: account });
+  ccOpenConfirm_({
+    title: 'Stop tracking this investment?',
+    subject: account,
+    message: 'It will leave the active selector. Past values remain available for reporting.',
+    cancelLabel: 'Keep tracking',
+    confirmLabel: 'Stop tracking',
+    onConfirm: function() {
+      setStatusLoading('inv_status', 'Stopping tracking…');
+      google.script.run
+        .withSuccessHandler(function(res) {
+          setStatus('inv_status', (res && res.message) || 'Stopped tracking.', false);
+          loadInvestmentSection();
+          loadInvestmentData();
+        })
+        .withFailureHandler(function(err) {
+          setStatus('inv_status', (err.message || String(err)), true);
+        })
+        .deactivateInvestmentAccountFromDashboard({ accountName: account });
+    }
+  });
 }
 
 /* Payments */

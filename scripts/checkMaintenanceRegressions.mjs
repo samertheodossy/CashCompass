@@ -115,7 +115,10 @@ for (const pattern of [
   /SpreadsheetApp\.flush\(\)[\s\S]*verifiedBillPayee[\s\S]*verifiedCashFlowPayee/,
   /linkedCashFlowRename && activityLogged !== true[\s\S]*rollbackAppliedBillEdit_/,
   /billEditFitTargets[\s\S]*fitContentColumnsToContents_/,
-  /if \(!category\) category = String\(currentCategory \|\| ''\)\.trim\(\)/
+  /if \(!category\) category = String\(currentCategory \|\| ''\)\.trim\(\)/,
+  /function getInactiveBillsForManagementFromDashboard\(optionalSs\)[\s\S]*getBillsForManagementByState_\('no', optionalSs\)/,
+  /function deactivateBillFromDashboard\(payload, optionalSs\)[\s\S]*LockService\.getUserLock\(\)[\s\S]*bill_deactivate/,
+  /function reactivateBillFromDashboard\(payload, optionalSs\)[\s\S]*LockService\.getUserLock\(\)[\s\S]*active bill named[\s\S]*bill_reactivate/
 ]) {
   assert.match(bills, pattern, 'Bill Edit integrity contract is incomplete');
 }
@@ -329,6 +332,18 @@ for (const id of [
 }
 assert.match(files['test_harness_scenarios.js'], /getHarnessBillsEditIntegrityScenario_/,
   'Maintenance scenarios must be discoverable by the harness registry');
+assert.match(files['test_harness_scenarios_maintenance.js'],
+  /firstStop[\s\S]*inactiveBeforeReactivate[\s\S]*reactivateStaleError[\s\S]*reactivateDuplicateError[\s\S]*activeAfterReactivateCount[\s\S]*alreadyActiveReactivate[\s\S]*secondStop[\s\S]*inactiveAfterSecondStop[\s\S]*deactivateAuditCount/,
+  'Bill maintenance evidence must prove the complete Stop, inactive discovery, stale/duplicate-safe Reactivate, and Stop-again lifecycle');
+assert.match(files['test_harness_scenarios_maintenance.js'],
+  /state\.autopayOnly = updateTrackedBillFromDashboard[\s\S]*?autopay: 'Yes'[\s\S]*?AutoPay-only edit changes exactly AutoPay[\s\S]*?JSON\.stringify\(\['autopay'\]\)[\s\S]*?AutoPay-only edit persists Yes/,
+  'Bill maintenance evidence must retain the exact AutoPay-only server regression');
+assert.match(files['test_harness_scenarios_maintenance.js'],
+  /Frequency: 'Biweekly'[\s\S]*Weekday: 'Monday'[\s\S]*'Anchor Date': '2026-08-03'[\s\S]*'Schedule Effective Date': '2026-08-01'[\s\S]*lifecycleConfigAfterSecondStop/,
+  'Bill lifecycle evidence must preserve representative Bills V2 recurrence configuration');
+assert.match(files['test_harness_scenarios_maintenance.js'],
+  /cashFlowHistoryBeforeLifecycle[\s\S]*cashFlowHistoryAfterLifecycle[\s\S]*Existing Cash Flow payment history survives the lifecycle/,
+  'Bill lifecycle evidence must preserve linked Cash Flow history');
 assert.match(files['test_harness_scenarios.js'], /getHarnessDonationFullEditScenario_/,
   'Full donation edit scenario must be discoverable by the harness registry');
 

@@ -379,33 +379,36 @@ function stopTrackingHouse() {
     return;
   }
 
-  const confirmed = window.confirm(
-    'Stop tracking "' + house + '"?\n\n' +
-    'The house will no longer appear in the House Values or House Expenses ' +
-    'selectors or current calculations. All past values and expenses are ' +
-    'preserved for reporting.'
-  );
-  if (!confirmed) return;
-
-  setStatusLoading('house_status', 'Stopping tracking…');
-
-  google.script.run
-    .withSuccessHandler(function(res) {
-      setStatus('house_status', (res && res.message) || 'Stopped tracking.', false);
-      // Refresh Update dropdown so the sold house drops out of the list.
-      loadHouseSection();
-      // Clear the right-hand info panel since the house is no longer visible.
-      loadHouseData();
-      // Refresh House Expenses picker immediately (mirrors createHouse()).
-      if (typeof loadHouseExpensesSection === 'function') {
-        try { loadHouseExpensesSection(); } catch (e) {}
-      }
-      if (typeof refreshSnapshot === 'function') refreshSnapshot();
-    })
-    .withFailureHandler(function(err) {
-      setStatus('house_status', (err.message || String(err)), true);
-    })
-    .deactivateHouseFromDashboard({ houseName: house });
+  openDashboardConfirm_({
+    eyebrow: 'Properties',
+    title: 'Stop tracking this house?',
+    subjectLabel: 'House',
+    subject: house,
+    message: 'This house will leave current property selectors and calculations.',
+    consequences: [
+      'All past values and expenses remain available for reporting.',
+      'The underlying house sheet and history are preserved.'
+    ],
+    cancelLabel: 'Keep tracking',
+    confirmLabel: 'Stop tracking',
+    onConfirm: function() {
+      setStatusLoading('house_status', 'Stopping tracking…');
+      google.script.run
+        .withSuccessHandler(function(res) {
+          setStatus('house_status', (res && res.message) || 'Stopped tracking.', false);
+          loadHouseSection();
+          loadHouseData();
+          if (typeof loadHouseExpensesSection === 'function') {
+            try { loadHouseExpensesSection(); } catch (e) {}
+          }
+          if (typeof refreshSnapshot === 'function') refreshSnapshot();
+        })
+        .withFailureHandler(function(err) {
+          setStatus('house_status', (err.message || String(err)), true);
+        })
+        .deactivateHouseFromDashboard({ houseName: house });
+    }
+  });
 }
 
 function saveHouse() {

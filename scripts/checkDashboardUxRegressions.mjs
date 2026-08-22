@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import vm from 'node:vm';
 
 const files = Object.fromEntries(await Promise.all([
@@ -32,6 +32,7 @@ const files = Object.fromEntries(await Promise.all([
   'InvestmentsUI.html',
   'PlannerDashboard.html',
   'PlannerDashboardWeb.html',
+  'ValidationTestingUI.html',
   'QuickAddPaymentUI.html',
   'quick_add_payment.js',
   'activity_log.js',
@@ -55,6 +56,54 @@ const files = Object.fromEntries(await Promise.all([
 ].map(async (name) => [name, await readFile(new URL(`../${name}`, import.meta.url), 'utf8')])));
 
 const render = files['Dashboard_Script_Render.html'];
+// Native browser dialogs are forbidden on every shipped/root HTML surface,
+// not only the main dashboard script includes. Read the directory inventory so
+// a newly added standalone UI or test console is covered automatically.
+const browserHtmlNames = (await readdir(new URL('../', import.meta.url), { withFileTypes: true }))
+  .filter((entry) => entry.isFile() && entry.name.endsWith('.html'))
+  .map((entry) => entry.name)
+  .sort();
+const browserUiSources = await Promise.all(browserHtmlNames.map(async (name) => [
+  name,
+  await readFile(new URL(`../${name}`, import.meta.url), 'utf8')
+]));
+for (const [name, source] of browserUiSources) {
+  // Ignore explanatory comments while retaining scripts, inline handlers, and
+  // executable markup. This avoids treating customer copy such as
+  // "prompt (Select a category)" as a native prompt call.
+  const executableSource = source
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  assert.doesNotMatch(executableSource, /window\s*\.\s*(?:alert|confirm|prompt)\b/,
+    `${name} must not call, patch, or depend on browser-native dialogs`);
+  assert.doesNotMatch(executableSource, /(?<![A-Za-z0-9_$.-])(?:alert|confirm|prompt)\s*\(/,
+    `${name} must not call an inline, nested, or unqualified browser-native dialog`);
+}
+assert.match(files['Dashboard_Body.html'],
+  /id="dashboard_confirm_dialog"[\s\S]*?role="dialog"[\s\S]*?aria-modal="true"[\s\S]*?id="dashboard_confirm_cancel_btn"[\s\S]*?id="dashboard_confirm_submit_btn"/,
+  'The web dashboard must provide one accessible reusable CashCompass confirmation surface');
+assert.match(render,
+  /function openDashboardConfirm_\(options\)[\s\S]*?cancel\.focus\(\)[\s\S]*?function closeDashboardConfirm_\(confirmed\)/,
+  'The shared confirmation must focus the safe action and own cancel/confirm behavior');
+for (const [name, action, writer] of [
+  ['Dashboard_Script_AssetsHouseValues.html', 'stopTrackingHouse', 'deactivateHouseFromDashboard'],
+  ['Dashboard_Script_AssetsBankInvestments.html', 'stopTrackingBank', 'deactivateBankAccountFromDashboard'],
+  ['Dashboard_Script_AssetsBankInvestments.html', 'reactivateBankAccountFromManage_', 'reactivateBankAccountFromDashboard'],
+  ['Dashboard_Script_AssetsBankInvestments.html', 'stopTrackingInvestment', 'deactivateInvestmentAccountFromDashboard'],
+  ['Dashboard_Script_AssetsBankInvestments.html', 'reactivateInvestmentFromManage_', 'reactivateInvestmentAccountFromDashboard'],
+  ['Dashboard_Script_Activity.html', 'activityDeleteClick_', 'deleteActivityLogRow'],
+  ['Dashboard_Script_Income.html', 'stopTrackingIncomeSource', 'deactivateIncomeSourceFromDashboard'],
+  ['Dashboard_Script_BillsDue.html', 'reactivateBillFromManage_', 'reactivateBillFromDashboard'],
+  ['Dashboard_Script_PlanningDebts.html', 'stopTrackingDebtFromManage_', 'deactivateDebtFromDashboard'],
+  ['Dashboard_Script_PlanningDebts.html', 'reactivateDebtFromManage_', 'reactivateDebtFromDashboard'],
+  ['Dashboard_Script_PlanningDebts.html', 'stopTrackingDebt', 'deactivateDebtFromDashboard']
+]) {
+  const actionSource = functionSource_(files[name], action);
+  assert.match(actionSource,
+    new RegExp(`openDashboardConfirm_[\\s\\S]*?onConfirm:[\\s\\S]*?${writer}`),
+    `${action} must defer ${writer} until the CashCompass confirmation is accepted`);
+}
 for (const [page, tab] of Object.entries({
   assets: 'houses',
   cashflow: 'payments',
@@ -2140,6 +2189,199 @@ assert.equal(skipActionElement('bill_skip_drawer_backdrop').hidden, true,
   'A successful Bill Skip must close the drawer');
 assert.deepEqual(skipRefreshCounts, { bills: 1, snapshot: 1, preview: 1 },
   'A successful Bill Skip must refresh Bills, snapshot, and payment preview exactly once');
+
+assert.match(body,
+  /id="bill_stop_dialog"[\s\S]*?role="dialog"[\s\S]*?aria-modal="true"[\s\S]*?id="bill_stop_cancel_btn"[\s\S]*?Keep tracking[\s\S]*?id="bill_stop_submit_btn"[\s\S]*?Stop tracking/,
+  'Bill Stop tracking must use a branded accessible confirmation with explicit action labels');
+assert.match(body,
+  /id="bill_stop_dialog_help"[\s\S]*?leave your active Bills list[\s\S]*?Past payments and Activity history stay available[\s\S]*?schedule details are preserved/,
+  'Bill Stop tracking must explain both the active-view effect and preserved history');
+assert.match(body,
+  /id="bills_show_inactive_btn"[\s\S]*?Show inactive bills[\s\S]*?id="bills_inactive_wrap"[\s\S]*?Reactivate restores the existing bill without creating a duplicate/,
+  'Manage bills must expose the preserved inactive inventory and explain true reactivation');
+assert.match(billsDueClient,
+  /function refreshInactiveBills_[\s\S]*?getInactiveBillsForManagementFromDashboard[\s\S]*?function renderInactiveBillsList_[\s\S]*?Reactivate[\s\S]*?function reactivateBillFromManage_/,
+  'Bills must load and render inactive rows with an explicit Reactivate action');
+assert.match(billsDueClient,
+  /function reactivateBillFromManage_[\s\S]*?sheetRow[\s\S]*?openDashboardConfirm_[\s\S]*?No duplicate bill will be created[\s\S]*?reactivateBillFromDashboard\(\{ sheetRow: sheetRow, payee: payee \}\)/,
+  'Bill Reactivate must use the CashCompass confirmation and preserve the stable row guard');
+assert.match(files['bills.js'],
+  /function getInactiveBillsForManagementFromDashboard\(optionalSs\)[\s\S]*?getBillsForManagementByState_\('no', optionalSs\)/,
+  'The inactive Bills inventory must read only preserved Active=No rows');
+assert.match(files['bills.js'],
+  /function reactivateBillFromDashboard\(payload, optionalSs\)[\s\S]*?LockService\.getUserLock\(\)[\s\S]*?actualPayee !== expectedPayee[\s\S]*?active bill named[\s\S]*?setValue\('Yes'\)[\s\S]*?eventType: 'bill_reactivate'/,
+  'Bill Reactivate must lock, reject stale or duplicate identity, restore the existing row, and log lifecycle evidence');
+assert.match(files['bills.js'],
+  /function addBillFromDashboard\(payload\)[\s\S]*?LockService\.getUserLock\(\)[\s\S]*?Show inactive bills[\s\S]*?already tracked/,
+  'Bill Add must refuse active and inactive duplicate identities under the user lock');
+assert.match(files['activity_log.js'],
+  /bill_reactivate[\s\S]*?Bill reactivated[\s\S]*?et === 'bill_reactivate'/,
+  'Activity must classify Bill Reactivate as a non-monetary lifecycle event');
+assert.match(styles,
+  /\.bill-stop-dialog-backdrop[\s\S]*?place-items:\s*center[\s\S]*?\.bill-stop-dialog[\s\S]*?border-radius:\s*16px/,
+  'Bill Stop tracking must render as a centered CashCompass dialog rather than browser chrome');
+const billStopStart = billsDueClient.indexOf('var __billStopDialogState = null;');
+const billStopEnd = billsDueClient.indexOf('function loadRecurringBillsUi_(', billStopStart);
+assert.ok(billStopStart >= 0 && billStopEnd > billStopStart,
+  'Bill Stop tracking controller must remain directly executable in regression coverage');
+const billStopSlice = billsDueClient.slice(billStopStart, billStopEnd);
+assert.doesNotMatch(billStopSlice, /window\.confirm|\bconfirm\s*\(/,
+  'Bill Stop tracking must never fall back to a browser-native confirmation dialog');
+assert.match(billStopSlice,
+  /function confirmStopTrackingBill_\(\)[\s\S]*?if \(__billStopDialogBusy \|\| !__billStopDialogState\) return;[\s\S]*?setBillStopDialogBusy_\(true\)[\s\S]*?\.deactivateBillFromDashboard/,
+  'Bill Stop tracking must guard duplicate submits before calling the existing writer');
+assert.match(billStopSlice,
+  /function setBillStopDialogBusy_[\s\S]*?close\.disabled = __billStopDialogBusy[\s\S]*?cancel\.disabled = __billStopDialogBusy[\s\S]*?submit\.disabled = __billStopDialogBusy/,
+  'Bill Stop tracking must prevent dismissing or resubmitting while its write is uncertain');
+
+const billStopRpcCalls = [];
+let billStopRpcSuccess = null;
+let billStopRpcFailure = null;
+const billStopRpcRunner = {
+  withSuccessHandler(handler) { billStopRpcSuccess = handler; return this; },
+  withFailureHandler(handler) { billStopRpcFailure = handler; return this; },
+  deactivateBillFromDashboard(payload) { billStopRpcCalls.push(payload); return this; }
+};
+const billStopElements = {};
+const billStopOrigin = { focusCount: 0, focus() { this.focusCount += 1; } };
+function billStopElement(id) {
+  return billStopElements[id] || (billStopElements[id] = {
+    id,
+    hidden: id === 'bill_stop_dialog_backdrop',
+    disabled: false,
+    textContent: '',
+    offsetParent: {},
+    focusCount: 0,
+    focus() { this.focusCount += 1; billStopDocument.activeElement = this; },
+    querySelectorAll() {
+      return [billStopElement('bill_stop_close_btn'), billStopElement('bill_stop_cancel_btn'),
+        billStopElement('bill_stop_submit_btn')];
+    }
+  });
+}
+let billStopKeyHandler = null;
+const billStopDocument = {
+  activeElement: billStopOrigin,
+  body: { classList: { add() {}, remove() {} } },
+  documentElement: { contains: () => true },
+  getElementById: billStopElement,
+  addEventListener(type, handler) { if (type === 'keydown') billStopKeyHandler = handler; }
+};
+const billStopRefreshCounts = { bills: 0, inactive: 0, snapshot: 0, preview: 0 };
+const billStopStatuses = [];
+const billStopController = Function(
+  'document', 'window', 'setTimeout', 'setStatus', 'setBillsStatus_', 'google',
+  'loadDashboardActionSections', 'refreshInactiveBills_', 'refreshSnapshot', 'loadPaymentPreview',
+  `${billStopSlice}; return {
+    open: openBillStopDialog_, close: closeBillStopDialog_,
+    backdrop: onBillStopDialogBackdropClick_, submit: confirmStopTrackingBill_
+  };`
+)(
+  billStopDocument, { __dashboardActiveBills: {} }, fn => fn(), () => {},
+  (message, isError) => billStopStatuses.push({ message, isError }),
+  { script: { run: billStopRpcRunner } },
+  () => { billStopRefreshCounts.bills += 1; },
+  () => { billStopRefreshCounts.inactive += 1; },
+  () => { billStopRefreshCounts.snapshot += 1; },
+  () => { billStopRefreshCounts.preview += 1; }
+);
+billStopController.open('cancel', { payee: 'Keep me' }, 12);
+assert.equal(billStopElement('bill_stop_dialog_backdrop').hidden, false,
+  'Opening Bill Stop tracking must reveal the CashCompass dialog');
+assert.equal(billStopElement('bill_stop_cancel_btn').focusCount, 1,
+  'Bill Stop tracking must initially focus the safe Keep tracking action');
+billStopController.close();
+billStopController.open('backdrop', { payee: 'Backdrop' }, 13);
+billStopController.backdrop({ target: billStopElement('bill_stop_dialog_backdrop'),
+  currentTarget: billStopElement('bill_stop_dialog_backdrop') });
+billStopController.open('escape', { payee: 'Escape' }, 14);
+billStopKeyHandler({ key: 'Escape', preventDefault() {} });
+assert.equal(billStopRpcCalls.length, 0,
+  'Keep tracking, backdrop, and Escape must never call the Bill deactivate writer');
+billStopController.open('write', { payee: 'M1 Investment' }, 15);
+billStopController.submit();
+billStopController.submit();
+assert.deepEqual(billStopRpcCalls, [{ sheetRow: 15, payee: 'M1 Investment' }],
+  'Repeated Stop tracking submission while busy must issue exactly one writer call');
+billStopController.close();
+assert.equal(billStopElement('bill_stop_dialog_backdrop').hidden, false,
+  'Bill Stop tracking must stay visible while the writer outcome is uncertain');
+billStopRpcFailure(new Error('That bill moved on the sheet. Please refresh.'));
+assert.equal(billStopElement('bill_stop_submit_btn').disabled, false,
+  'A failed Stop tracking attempt must restore the deliberate retry action');
+assert.equal(billStopElement('bill_stop_dialog_backdrop').hidden, false,
+  'A failed Stop tracking attempt must keep its explanation visible');
+billStopController.submit();
+assert.equal(billStopRpcCalls.length, 2,
+  'A deliberate Stop tracking retry must preserve the original row and payee guard');
+billStopRpcSuccess({ message: 'Tracking stopped' });
+assert.equal(billStopElement('bill_stop_dialog_backdrop').hidden, true,
+  'A successful Stop tracking attempt must close the dialog');
+assert.deepEqual(billStopRefreshCounts, { bills: 1, inactive: 1, snapshot: 1, preview: 1 },
+  'Successful Stop tracking must refresh active/inactive Bills, snapshot, and payment preview exactly once');
+assert.ok(billStopStatuses.some(row => row.isError && /moved on the sheet/i.test(row.message)),
+  'A failed Stop tracking attempt must preserve its stale-row explanation');
+
+const sharedConfirmStart = render.indexOf('var __dashboardConfirmState = null;');
+const sharedConfirmEnd = render.indexOf('function isDebugMode()', sharedConfirmStart);
+assert.ok(sharedConfirmStart >= 0 && sharedConfirmEnd > sharedConfirmStart,
+  'The shared CashCompass confirmation controller must remain directly executable');
+const sharedConfirmSlice = render.slice(sharedConfirmStart, sharedConfirmEnd);
+const sharedConfirmElements = {};
+function sharedConfirmElement(id) {
+  return sharedConfirmElements[id] || (sharedConfirmElements[id] = {
+    id,
+    hidden: id === 'dashboard_confirm_backdrop' || id === 'dashboard_confirm_subject_wrap',
+    disabled: false,
+    textContent: '',
+    children: [],
+    classList: { toggle() {}, add() {}, remove() {} },
+    focus() { sharedConfirmDocument.activeElement = this; },
+    replaceChildren() { this.children = []; },
+    appendChild(child) { this.children.push(child); },
+    querySelectorAll() {
+      return [sharedConfirmElement('dashboard_confirm_close_btn'),
+        sharedConfirmElement('dashboard_confirm_cancel_btn'),
+        sharedConfirmElement('dashboard_confirm_submit_btn')].filter(el => !el.disabled);
+    }
+  });
+}
+let sharedConfirmKeyHandler = null;
+const sharedConfirmOrigin = { focusCount: 0, focus() { this.focusCount += 1; } };
+const sharedConfirmDocument = {
+  activeElement: sharedConfirmOrigin,
+  body: { classList: { add() {}, remove() {}, contains() { return false; } } },
+  getElementById: sharedConfirmElement,
+  createElement() { return sharedConfirmElement(`created-${Math.random()}`); },
+  addEventListener(type, handler) { if (type === 'keydown') sharedConfirmKeyHandler = handler; }
+};
+let sharedConfirmWrites = 0;
+const sharedConfirmController = Function(
+  'document',
+  `${sharedConfirmSlice}; return { open: openDashboardConfirm_, close: closeDashboardConfirm_,
+    submit: confirmDashboardAction_, backdrop: onDashboardConfirmBackdropClick_ };`
+)(sharedConfirmDocument);
+sharedConfirmController.open({
+  title: 'Cancel test', consequences: ['History is preserved.'],
+  onConfirm: () => { sharedConfirmWrites += 1; }
+});
+assert.equal(sharedConfirmDocument.activeElement.id, 'dashboard_confirm_cancel_btn',
+  'The shared confirmation must initially focus its safe action');
+sharedConfirmController.close(false);
+sharedConfirmController.open({ onConfirm: () => { sharedConfirmWrites += 1; } });
+sharedConfirmController.backdrop({ target: sharedConfirmElement('dashboard_confirm_backdrop') });
+sharedConfirmController.open({ onConfirm: () => { sharedConfirmWrites += 1; } });
+sharedConfirmKeyHandler({ key: 'Escape', preventDefault() {} });
+assert.equal(sharedConfirmWrites, 0,
+  'Button cancel, backdrop cancel, and Escape must never execute a shared confirmed action');
+sharedConfirmController.open({ onConfirm: () => { sharedConfirmWrites += 1; } });
+sharedConfirmController.submit();
+sharedConfirmController.submit();
+assert.equal(sharedConfirmWrites, 1,
+  'The shared confirmation must execute an accepted action exactly once');
+assert.equal(sharedConfirmElement('dashboard_confirm_backdrop').hidden, true,
+  'The shared confirmation must close after acceptance');
+
 assert.match(billsDueClient,
   /Skipped "[\s\S]*?No payment was recorded; future occurrences remain scheduled/,
   'Skip success must explain the outcome without exposing the internal zero-cell mechanism');
@@ -3595,6 +3837,14 @@ assert.match(body, /value="CASH" selected>Bank account<\/option>[\s\S]*?value="C
   'Bill payment sources must show customer labels while preserving stored tokens');
 assert.doesNotMatch(body, />CASH \(pay from bank\)<|>CREDIT_CARD \(pay on a card\)</,
   'Bill form must not expose stored payment-source tokens');
+assert.match(body, /id="bills_add_autopay"[^>]*onchange="syncBillsFormReadiness_\(\)"/,
+  'Bill AutoPay changes must immediately re-evaluate Save readiness');
+assert.match(body, /id="bills_add_varies"[^>]*onchange="syncBillsFormReadiness_\(\)"/,
+  'Bill Varies changes must immediately re-evaluate Save readiness');
+assert.match(files['Dashboard_Script_BillsDue.html'], /const editingCategory = __billsFormMode\.mode === 'edit'[\s\S]*?categoryValue \|\| editingCategory/,
+  'Bill Edit must retain its verified category while asynchronous suggestions load');
+assert.match(files['Dashboard_Script_BillsDue.html'], /setBillsFormModeToEdit_\(\{[\s\S]*?sheetRow:[\s\S]*?payee:[\s\S]*?category: bill\.category/,
+  'Bill Edit state must carry the existing category for first-open readiness');
 for (const id of ['pay_save_btn', 'up_save_btn', 'don_save_btn', 'bills_form_save_btn', 'hx_add_btn']) {
   assert.match(body, new RegExp(`id=["']${id}["'][^>]*\\sdisabled`),
     `${id} must start disabled until minimum valid input exists`);

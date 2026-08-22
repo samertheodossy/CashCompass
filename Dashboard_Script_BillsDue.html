@@ -647,6 +647,7 @@ function setBillsView(view) {
   window.__billsActiveView = target;
   window.__billsViewSelectionGeneration =
     Number(window.__billsViewSelectionGeneration || 0) + 1;
+  if (target === 'manage' && !__billsInactiveLoaded) refreshInactiveBills_();
 }
 
 function loadDashboardActionSections() {
@@ -1053,6 +1054,107 @@ function skipBillFromDashboard(skipKey) {
  * Stop tracking is driven from the management list only — the payload store
  * is keyed by management-row index, never by execution-card index.
  */
+var __billStopDialogState = null;
+var __billStopDialogBusy = false;
+var __billStopDialogPreviousFocus = null;
+var __billStopDialogKeyHandlerInstalled = false;
+
+function setBillStopDialogStatus_(message, isError) {
+  setStatus('bill_stop_status', message || '', !!isError);
+}
+
+function installBillStopDialogKeyHandler_() {
+  if (__billStopDialogKeyHandlerInstalled) return;
+  __billStopDialogKeyHandlerInstalled = true;
+  document.addEventListener('keydown', function(event) {
+    var backdrop = document.getElementById('bill_stop_dialog_backdrop');
+    if (!backdrop || backdrop.hidden) return;
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeBillStopDialog_();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+
+    var dialog = document.getElementById('bill_stop_dialog');
+    if (!dialog) return;
+    var focusable = Array.prototype.slice.call(
+      dialog.querySelectorAll('button:not([disabled])')
+    ).filter(function(el) {
+      return !el.hidden && el.offsetParent !== null;
+    });
+    if (!focusable.length) return;
+    var first = focusable[0];
+    var last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+}
+
+function setBillStopDialogBusy_(busy) {
+  __billStopDialogBusy = !!busy;
+  var close = document.getElementById('bill_stop_close_btn');
+  var cancel = document.getElementById('bill_stop_cancel_btn');
+  var submit = document.getElementById('bill_stop_submit_btn');
+  if (close) close.disabled = __billStopDialogBusy;
+  if (cancel) cancel.disabled = __billStopDialogBusy;
+  if (submit) {
+    submit.disabled = __billStopDialogBusy;
+    submit.textContent = __billStopDialogBusy ? 'Stopping…' : 'Stop tracking';
+  }
+}
+
+function openBillStopDialog_(billKey, bill, sheetRow) {
+  var backdrop = document.getElementById('bill_stop_dialog_backdrop');
+  var dialog = document.getElementById('bill_stop_dialog');
+  if (!backdrop || !dialog) {
+    setBillsStatus_('The Stop tracking confirmation could not open. Please refresh and try again.', true);
+    return;
+  }
+  var payee = String(bill.payee || 'This bill').trim();
+  __billStopDialogState = {
+    billKey: String(billKey || '').trim(),
+    sheetRow: sheetRow,
+    payee: payee
+  };
+  __billStopDialogPreviousFocus = document.activeElement;
+  setBillStopDialogBusy_(false);
+  setBillStopDialogStatus_('', false);
+  document.getElementById('bill_stop_payee').textContent = payee;
+  backdrop.hidden = false;
+  document.body.classList.add('bill-pay-drawer-open');
+  installBillStopDialogKeyHandler_();
+  setTimeout(function() {
+    var keep = document.getElementById('bill_stop_cancel_btn');
+    if (keep) keep.focus();
+    else dialog.focus();
+  }, 0);
+}
+
+function closeBillStopDialog_() {
+  if (__billStopDialogBusy) return;
+  var backdrop = document.getElementById('bill_stop_dialog_backdrop');
+  if (backdrop) backdrop.hidden = true;
+  document.body.classList.remove('bill-pay-drawer-open');
+  __billStopDialogState = null;
+  var previousFocus = __billStopDialogPreviousFocus;
+  __billStopDialogPreviousFocus = null;
+  if (previousFocus && typeof previousFocus.focus === 'function' &&
+      document.documentElement.contains(previousFocus)) {
+    previousFocus.focus();
+  }
+}
+
+function onBillStopDialogBackdropClick_(event) {
+  if (event && event.target === event.currentTarget) closeBillStopDialog_();
+}
+
 function stopTrackingBillFromDashboard(billKey) {
   const store = window.__dashboardActiveBills || {};
   const bill = store[billKey];
@@ -1068,28 +1170,35 @@ function stopTrackingBillFromDashboard(billKey) {
     return;
   }
 
-  const payeeLabel = bill.payee || 'this bill';
-  const confirmed = window.confirm(
-    'Stop tracking "' + payeeLabel + '"?\n\n' +
-    'It will no longer appear in Bills. History is preserved.'
-  );
-  if (!confirmed) return;
+  openBillStopDialog_(billKey, bill, sheetRow);
+}
 
-  setStatusLoading('bills_due_status', 'Stopping tracking…');
+function confirmStopTrackingBill_() {
+  if (__billStopDialogBusy || !__billStopDialogState) return;
+  var state = __billStopDialogState;
+
+  setBillStopDialogBusy_(true);
+  setBillStopDialogStatus_('Stopping tracking…', false);
 
   google.script.run
     .withSuccessHandler(function(res) {
+      setBillStopDialogBusy_(false);
+      closeBillStopDialog_();
       setBillsStatus_((res && res.message) || 'Tracking stopped', false);
       loadDashboardActionSections();
+      refreshInactiveBills_();
       if (typeof refreshSnapshot === 'function') refreshSnapshot();
       if (typeof loadPaymentPreview === 'function') loadPaymentPreview();
     })
     .withFailureHandler(function(err) {
-      setBillsStatus_((err.message || String(err)), true);
+      var message = (err && err.message) ? err.message : String(err);
+      setBillStopDialogBusy_(false);
+      setBillStopDialogStatus_(message, true);
+      setBillsStatus_(message, true);
     })
     .deactivateBillFromDashboard({
-      sheetRow: sheetRow,
-      payee: bill.payee || ''
+      sheetRow: state.sheetRow,
+      payee: state.payee
     });
 }
 
@@ -1176,6 +1285,9 @@ function skipRecurringBill(skipKey) {
  */
 var __billsManageSort = { column: 'dueDay', dir: 'asc' };
 var __billsManageRows = [];
+var __billsInactiveRows = [];
+var __billsInactiveVisible = false;
+var __billsInactiveLoaded = false;
 
 function routeBillsToAddIfAuthoritativelyEmpty_(rows, viewGeneration) {
   if (!Array.isArray(rows) || rows.length !== 0) return false;
@@ -1385,6 +1497,139 @@ function renderActiveBillsList_(rows) {
     '</div>';
 }
 
+function updateInactiveBillsToggleLabel_() {
+  const btn = document.getElementById('bills_show_inactive_btn');
+  if (!btn) return;
+  const caret = __billsInactiveVisible ? '\u25BE' : '\u25B8';
+  const verb = __billsInactiveVisible ? 'Hide inactive bills' : 'Show inactive bills';
+  const count = __billsInactiveLoaded ? ' (' + __billsInactiveRows.length + ')' : '';
+  btn.innerHTML = '<span class="debt-caret" aria-hidden="true">' + caret + '</span>' + verb + count;
+  btn.setAttribute('aria-expanded', __billsInactiveVisible ? 'true' : 'false');
+}
+
+function toggleInactiveBillsView_() {
+  const wrap = document.getElementById('bills_inactive_wrap');
+  __billsInactiveVisible = !__billsInactiveVisible;
+  if (wrap) wrap.style.display = __billsInactiveVisible ? 'block' : 'none';
+  updateInactiveBillsToggleLabel_();
+  if (__billsInactiveVisible && !__billsInactiveLoaded) refreshInactiveBills_();
+}
+
+function refreshInactiveBills_() {
+  const host = document.getElementById('bills_inactive_list');
+  if (host) host.innerHTML = loadingBlockHtml('Loading inactive bills…');
+  google.script.run
+    .withSuccessHandler(function(rows) {
+      __billsInactiveRows = Array.isArray(rows) ? rows : [];
+      __billsInactiveLoaded = true;
+      renderInactiveBillsList_(__billsInactiveRows);
+      updateInactiveBillsToggleLabel_();
+    })
+    .withFailureHandler(function(err) {
+      __billsInactiveLoaded = false;
+      if (host) host.innerHTML = '<p class="debt-inactive-empty">Couldn\u2019t load inactive bills — please try again.</p>';
+      setBillsStatus_(customerSafeErrorMessage_(
+        err && err.message ? err.message : String(err),
+        'Could not load inactive bills. Please refresh and try again.'
+      ), true);
+      updateInactiveBillsToggleLabel_();
+    })
+    .getInactiveBillsForManagementFromDashboard();
+}
+
+function renderInactiveBillsList_(rows) {
+  const host = document.getElementById('bills_inactive_list');
+  if (!host) return;
+  __billsInactiveRows = Array.isArray(rows) ? rows.slice() : [];
+  window.__dashboardInactiveBills = {};
+
+  if (!__billsInactiveRows.length) {
+    host.innerHTML = '<p class="debt-inactive-empty">No inactive bills.</p>';
+    return;
+  }
+
+  const rowsHtml = __billsInactiveRows.map(function(r, idx) {
+    const key = 'binact::' + idx;
+    window.__dashboardInactiveBills[key] = r;
+    const amount = Number(r.defaultAmount || 0) > 0
+      ? fmtCurrency(r.defaultAmount)
+      : (String(r.varies || '').toLowerCase() === 'yes'
+        ? '<span class="muted">Varies</span>' : '<span class="muted">—</span>');
+    return (
+      '<tr>' +
+        '<td><strong>' + escapeHtml(r.payee || 'Bill') + '</strong></td>' +
+        '<td class="bills-manage-num">' + amount + '</td>' +
+        '<td>' + escapeHtml(r.frequency || '—') + '</td>' +
+        '<td>' + escapeHtml(r.paymentSource || '—') + '</td>' +
+        '<td>' + escapeHtml(r.category || '—') + '</td>' +
+        '<td class="bills-manage-actions">' +
+          '<button class="small-btn success bill-reactivate-btn" ' +
+            'title="Restore this existing bill without creating a duplicate" ' +
+            'onclick="reactivateBillFromManage_(\'' + escapeJs(key) + '\')">Reactivate</button>' +
+        '</td>' +
+      '</tr>'
+    );
+  }).join('');
+
+  host.innerHTML =
+    '<div class="bills-manage-tablewrap">' +
+      '<table class="bills-manage-table">' +
+        '<thead><tr>' +
+          '<th scope="col">Payee</th>' +
+          '<th scope="col" class="bills-manage-num">Default</th>' +
+          '<th scope="col">Frequency</th>' +
+          '<th scope="col">Source</th>' +
+          '<th scope="col">Category</th>' +
+          '<th scope="col" class="bills-manage-actions">Action</th>' +
+        '</tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody>' +
+      '</table>' +
+    '</div>';
+}
+
+function reactivateBillFromManage_(key) {
+  const row = (window.__dashboardInactiveBills || {})[key];
+  const payee = row ? String(row.payee || '').trim() : '';
+  const sheetRow = row ? Number(row.inputBillsRow) : 0;
+  if (!payee || !isFinite(sheetRow) || sheetRow < 2) {
+    setBillsStatus_('Couldn\u2019t resolve that inactive bill — please refresh.', true);
+    return;
+  }
+
+  openDashboardConfirm_({
+    eyebrow: 'Bills',
+    title: 'Reactivate this bill?',
+    subjectLabel: 'Bill',
+    subject: payee,
+    message: 'This existing bill will return to active tracking and future occurrences.',
+    consequences: [
+      'The preserved schedule and bill details will be reused.',
+      'No duplicate bill will be created and recorded payment history remains unchanged.'
+    ],
+    cancelLabel: 'Keep inactive',
+    confirmLabel: 'Reactivate bill',
+    danger: false,
+    onConfirm: function() {
+      setBillsStatus_('Reactivating bill…', false);
+      google.script.run
+        .withSuccessHandler(function(res) {
+          setBillsStatus_((res && res.message) || 'Bill reactivated.', false);
+          loadDashboardActionSections();
+          refreshInactiveBills_();
+          if (typeof refreshSnapshot === 'function') refreshSnapshot();
+          if (typeof loadPaymentPreview === 'function') loadPaymentPreview();
+        })
+        .withFailureHandler(function(err) {
+          setBillsStatus_(customerSafeErrorMessage_(
+            err && err.message ? err.message : String(err),
+            'Could not reactivate that bill. Please refresh and try again.'
+          ), true);
+        })
+        .reactivateBillFromDashboard({ sheetRow: sheetRow, payee: payee });
+    }
+  });
+}
+
 function buildBillsSortableHeader_(column, label, extraClass) {
   const isActive = __billsManageSort.column === column;
   const dir = isActive ? __billsManageSort.dir : '';
@@ -1521,9 +1766,12 @@ function syncBillsFormReadiness_() {
 
   const due = Number(dueDay && dueDay.value);
   const categoryValue = String(category && category.value || '').trim();
+  const editingCategory = __billsFormMode.mode === 'edit' && __billsFormMode.editing
+    ? String(__billsFormMode.editing.category || '').trim()
+    : '';
   const resolvedCategory = categoryValue === '__other__'
     ? String(other && other.value || '').trim()
-    : categoryValue;
+    : (categoryValue || editingCategory);
   save.disabled = !(
     payee && String(payee.value || '').trim() &&
     dueDay && String(dueDay.value || '').trim() &&
@@ -2050,7 +2298,12 @@ function openBillEditForm(billKey) {
 
   setBillsFormModeToEdit_({
     sheetRow: sheetRow,
-    payee: bill.payee || ''
+    payee: bill.payee || '',
+    // Category suggestions load asynchronously on a cold form. Preserve the
+    // lock-verified management value in edit state so a valid one-field edit
+    // (for example AutoPay No -> Yes) can enable Save immediately without
+    // requiring an unrelated Payment Source toggle.
+    category: bill.category || ''
   });
 
   // Text + numeric + select fields all set via id. Defaults match

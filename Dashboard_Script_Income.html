@@ -417,26 +417,30 @@ function stopTrackingIncomeSource(key) {
   }
 
   var nameLabel = src.sourceName || 'this income source';
-  var confirmed = window.confirm(
-    'Stop tracking "' + nameLabel + '"?\n\n' +
-    'This source will no longer be included in recurring income totals. ' +
-    'Existing Cash Flow history is preserved.'
-  );
-  if (!confirmed) return;
-
-  setStatusLoading('income_status', 'Stopping tracking…');
-
-  google.script.run
-    .withSuccessHandler(function(res) {
-      setIncomeStatus_((res && res.message) || 'Stopped tracking.', false);
-      loadIncomeSourcesSection();
-    })
-    .withFailureHandler(function(err) {
-      setIncomeStatus_((err && err.message ? err.message : String(err)), true);
-    })
-    .deactivateIncomeSourceFromDashboard({
-      groupKey: groupKey,
-      year: year,
-      sourceName: src.sourceName || ''
-    });
+  openDashboardConfirm_({
+    eyebrow: 'Income',
+    title: 'Stop tracking this income source?',
+    subjectLabel: 'Source',
+    subject: nameLabel,
+    message: 'This source will no longer be included in recurring income totals.',
+    consequences: ['Existing Cash Flow history is preserved.'],
+    cancelLabel: 'Keep tracking',
+    confirmLabel: 'Stop tracking',
+    onConfirm: function() {
+      setStatusLoading('income_status', 'Stopping tracking…');
+      google.script.run
+        .withSuccessHandler(function(res) {
+          setIncomeStatus_((res && res.message) || 'Stopped tracking.', false);
+          loadIncomeSourcesSection();
+        })
+        .withFailureHandler(function(err) {
+          setIncomeStatus_((err && err.message ? err.message : String(err)), true);
+        })
+        .deactivateIncomeSourceFromDashboard({
+          groupKey: groupKey,
+          year: year,
+          sourceName: src.sourceName || ''
+        });
+    }
+  });
 }

@@ -1,5 +1,5 @@
 /**
- * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_update, bill_deactivate, house expense, house_add, house_value_update, house_deactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_update, bank_account_deactivate, investment_add, investment_update, investment_account_update, investment_deactivate, investment_reactivate, investment_planning_purpose_update, debt_add, debt_deactivate, debt_reactivate, debt_update, income_add, income_deactivate, planner_email_deferred, planner_email_sent, planner_email_invalid_recipient, …). Eligible Donations retain fingerprint-gated removal; newly recorded direct Quick Add operations can be corrected through their exact operation envelope. Other events remain audit evidence.
+ * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_update, bill_deactivate, bill_reactivate, house expense, house_add, house_value_update, house_deactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_update, bank_account_deactivate, investment_add, investment_update, investment_account_update, investment_deactivate, investment_reactivate, investment_planning_purpose_update, debt_add, debt_deactivate, debt_reactivate, debt_update, income_add, income_deactivate, planner_email_deferred, planner_email_sent, planner_email_invalid_recipient, …). Eligible Donations retain fingerprint-gated removal; newly recorded direct Quick Add operations can be corrected through their exact operation envelope. Other events remain audit evidence.
  * Complements OUT - History (planner-run snapshots). Tab: LOG - Activity.
  */
 
@@ -1821,6 +1821,7 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
   if (etEarly === 'bill_add') return 'Bill';
   if (etEarly === 'bill_update') return 'Bill';
   if (etEarly === 'bill_deactivate') return 'Bill';
+  if (etEarly === 'bill_reactivate') return 'Bill';
   if (etEarly === 'house_add') return 'House Expenses';
   if (etEarly === 'house_value_update') return 'House Expenses';
   if (etEarly === 'house_deactivate') return 'House Expenses';
@@ -1923,6 +1924,7 @@ function activityLogActionLabel_(eventType, detailsJson) {
     case 'bill_update':
       return billUpdateActionLabel_(detailsJson);
     case 'bill_deactivate': return 'Tracking stopped';
+    case 'bill_reactivate': return 'Bill reactivated';
     case 'bill_skip': return 'Bill skipped';
     case 'bill_autopay': return 'Bill autopay';
     // Per-occurrence "handled by manual pay" markers are intentionally hidden
@@ -2571,6 +2573,7 @@ function activityLogIsNonMonetaryEvent_(eventType) {
   // both as "—" prevents double-counting the payment dollars.
   return (
     et === 'bill_deactivate' ||
+    et === 'bill_reactivate' ||
     // bill_paid is the non-monetary partner of a quick_pay money-movement
     // row (Bills Due → Pay on a weekly/biweekly occurrence). The dollars are
     // recorded on the quick_pay row; this marker only flags the occurrence as
