@@ -236,7 +236,7 @@ Differentiators and expanded platform/operations maturity. Their **full implemen
 | **Monitoring / alerting** (proactive failure detection) | P4 | — | M |
 | **Analytics** (product / usage analytics) | P4 | — | M |
 | **Billing activation and paid-product expansion** (provider integration, subscription lifecycle, production webhooks, tax, failed payment, refunds, pricing launch) | P4 | 10/10 gate + monetization foundation | XL |
-| **Whole-Household Debt Freedom Planner** — continuous multi-year roadmap, target-date scenarios, confirmed-payment snowball, and guarded refinance/HELOC/investment tradeoffs | P4 | Authoritative cross-domain facts + frozen Planning invariants | XL |
+| **Strategic Capital Allocation / Portfolio Growth + Whole-Household Debt Freedom Planner** — continuous next-dollar optimization, multi-year debt/portfolio roadmap, target-date scenarios, confirmed-payment snowball, contribution redirects, in-kind transfers, and guarded tax/refinance/investment tradeoffs | P4 | Authoritative cross-domain facts + frozen Planning invariants | XL |
 | Broad Account Aggregation & Transaction Import (Plaid-style), beyond shadow account/statement facts | P4 | Paid tier + privacy/security review | XL |
 | Merge Debt Accounts · Debt Payee Aliases · Google Sheets refresh awareness | P4 | — | S–L each |
 | **Cash Flow Forward Projection** — explicit forward-only bill projection, separate from AutoPay actuals *(future product feature, not unfinished work — see `## Future Feature — Cash Flow Forward Projection` below)* | P4 | — | M–L |

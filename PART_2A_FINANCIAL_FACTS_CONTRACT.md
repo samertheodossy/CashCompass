@@ -312,3 +312,13 @@ Modeling, tax-aware brokerage optimization, portfolio/income optimization,
 retirement planning, property optimization, and authority migration remain
 deferred. Credit-card rewards are always subordinate to revolving-interest and
 debt risk.
+
+The future Strategic Capital Allocation/Portfolio Growth and Whole-Household
+Debt Freedom Planner require this same fact model to extend, in reviewed phases,
+through current cash; revolving and term-debt balances/rates/minimums/dates;
+investment account values and contributions; holdings; cost basis/tax lots;
+property and retirement facts; income, recurring obligations, and known future
+commitments. Missing or stale evidence limits specificity and actionability.
+Equivalent facts must preserve the same allocation hierarchy regardless of
+source. These future planners do not enter the current shadow Import / Refresh
+slice; see `ROLLING_FINANCIAL_PLAN_DECISION_CONTRACT.md → Future north star — Strategic Capital Allocation and Portfolio Growth`.

@@ -623,8 +623,23 @@ Performance under `8b`. Preserve Beta `@106` plus the user-controlled bounded de
 
 ### Priority 4 — Future features
 
+- **Strategic Capital Allocation and Portfolio Growth** *(overarching north-star
+  capability; after authoritative cross-domain facts)* — continuously answer
+  where the household's next available dollar should go across debt reduction,
+  liquidity, strategic contributions, brokerage accounts, mortgages/term debt,
+  property, retirement, taxes, and known commitments. Compare guaranteed
+  interest avoided with uncertain return, liquidity value, tax, risk, timing,
+  and optionality; pace only genuinely excess capital; and refresh the decision
+  as facts change. Samer Robinhood remains a current approved strategic
+  destination, not the ultimate objective: household portfolio allocation, tax
+  placement, fees, risk, liquidity, income generation, retirement constraints,
+  and financial independence control custodian choice. Confirmed released debt
+  payments become new allocation capacity, while contribution redirects,
+  in-kind transfers, and tax-aware sales remain distinct future paths.
+  Canonical contract:
+  `ROLLING_FINANCIAL_PLAN_DECISION_CONTRACT.md → Future north star — Strategic Capital Allocation and Portfolio Growth`.
 - **Whole-Household Debt Freedom Planner** *(north-star capability; after the
-  import/freshness foundation)* — continuously construct the safest
+  import/freshness foundation; integrated with Strategic Capital Allocation)* — continuously construct the safest
   high-confidence path from today's next dollar to debt freedom across credit
   cards, HELOCs, mortgages, auto/personal/credit-union loans, and other debt.
   Compare More Liquidity, Balanced, Faster Debt-Free, and Custom strategies;
@@ -634,8 +649,10 @@ Performance under `8b`. Preserve Beta `@106` plus the user-controlled bounded de
   reforecast a confidence-labeled date as authoritative facts change. It may
   never accelerate the date by violating required obligations, liquidity,
   30/90-day safety, taxes, retirement restrictions/match economics, or other
-  household protections. Canonical future contract:
-  `ROLLING_FINANCIAL_PLAN_DECISION_CONTRACT.md → Future north star`.
+  household protections. It is the liability/timeline view of the same
+  next-dollar optimization, allowing portfolio growth to accelerate as
+  expensive debt disappears. Canonical future contract:
+  `ROLLING_FINANCIAL_PLAN_DECISION_CONTRACT.md → Future north star — Whole-Household Debt Freedom Planner`.
 - **Credit Card Rewards & Spend Optimization** *(later phase, only after debt-data
   authority and debt optimization are complete)* — answer “Which credit card
   should I use for this purchase/category right now?” from reward multipliers,

@@ -2,7 +2,9 @@
 
 **Status:** RFP-1/RFP-2 decisions complete; RFP-3 Overview/Debt UX accepted at a stable checkpoint; post-decision 30/90-day financial safety certified 2026-08-21
 
-**Date:** 2026-08-14
+**Original decision date:** 2026-08-14
+
+**North-star reconciliation:** 2026-08-21
 
 **Runtime impact:** None. This document does not change a workbook, schema,
 writer, calculation, UI, feature flag, Apps Script deployment, or user data.
@@ -10,10 +12,14 @@ writer, calculation, UI, feature flag, Apps Script deployment, or user data.
 ## Objective
 
 Build a comprehensive household plan that accounts for current obligations,
-protected cash, and every active remaining debt while deliberately funding
-**Samer Robinhood** into the family's long-term income pipeline. Reuse
-CashCompass as the current household source of truth and preserve Rolling Debt
-Payoff as the detailed debt engine.
+protected cash, every active remaining debt, and approved strategic investing.
+Under current policy the plan deliberately funds **Samer Robinhood** into the
+family's long-term income pipeline; that account is a current destination, not
+the long-term optimization objective. The north star allocates each safely
+available next dollar to the highest-value household use and grows the optimal
+investable/income-producing portfolio across custodians as evidence and policy
+evolve. Reuse CashCompass as the current household source of truth and preserve
+Rolling Debt Payoff as the detailed debt engine.
 
 The base Rolling Financial Plan must work at account level. Security holdings
 and tax lots are later optional analysis layers, not prerequisites.
@@ -615,8 +621,119 @@ adds lot ID, acquisition date, quantity, cost basis, unrealized gain/loss, and
 short/long-term status. Missing fields lower confidence or force **Review**; they
 are never silently invented.
 
+## Future north star — Strategic Capital Allocation and Portfolio Growth
+
+CashCompass' governing long-range objective is broader than debt payoff and
+broader than growth of any one brokerage account:
+
+> Continuously allocate household capital and future cash flow to the
+> highest-value destination while preserving obligations, liquidity, risk
+> controls, tax considerations, and long-term financial-independence goals.
+
+The product-level question is: **Where should the household's next available
+dollar go now, and how should that answer change as debts, cash, investments,
+taxes, and future obligations change?** The whole balance sheet should evolve so
+debt falls, liquidity remains safe, investable assets grow, and sustainable
+household income increases.
+
+The canonical long-term allocation loop is:
+
+1. reconcile current financial facts;
+2. protect required obligations;
+3. protect account buffers and operating liquidity;
+4. apply standing approved commitments;
+5. determine genuinely excess capital;
+6. pace only the approved current-period amount;
+7. compare destinations for that staged capital;
+8. allocate to the highest-value use under current evidence and risk controls;
+9. refresh and repeat.
+
+Competing destinations include high-interest revolving debt, required debt
+payments, liquidity protection, strategic investment contributions, other
+brokerage accounts, mortgages/term debt, property needs, retirement, taxes, and
+known future commitments. Debt versus investing is an economic allocation
+decision comparing guaranteed interest avoided, uncertain expected return,
+liquidity value, taxes, risk, timing, and future optionality. High-APR revolving
+debt will often dominate incremental investing because a near-certain 20%+
+interest cost cannot be assumed to be beaten by uncertain market returns. This
+is compatible with preserving a separately approved core investment commitment
+while directing additional staged capital toward expensive debt.
+
+### Portfolio objective, not custodian objective
+
+Samer Robinhood is a current strategic destination under the approved policy;
+it is not the ultimate optimization objective. CashCompass optimizes the
+household's investable and income-producing portfolio. Account or custodian
+choice is subordinate to portfolio allocation, tax placement, risk, fees,
+liquidity, income generation, retirement restrictions, and financial-
+independence goals. Future evidence may support a different account structure
+without reclassifying a custodian transfer as income or investment gain.
+
+Strategic portfolio growth may use distinct future mechanisms:
+
+- **new contributions:** direct newly available cash flow when investing is the
+  highest-value safe destination;
+- **contribution redirects:** redirect future M1, Stash, or other contributions
+  without selling assets or fabricating a taxable event;
+- **in-kind transfers:** move compatible securities between custodians without
+  sale when economically and operationally appropriate;
+- **tax-aware sales/reallocation:** consider sales only after holdings, basis,
+  lots, acquisition dates, holding periods, gains/losses, wash-sale evidence,
+  and applicable tax assumptions are sufficiently current and authoritative.
+
+### Released-payment allocation capacity
+
+When an institution-authoritative refresh confirms a debt is paid off, its
+released required payment becomes a future allocation source, not generic
+spendable income. CashCompass reruns the allocation loop to choose the next best
+use. A released payment may first snowball into the next high-priority debt and
+later transition toward strategic portfolio growth as expensive debt
+disappears. Projected, recommended, manually recorded, or awaiting-confirmation
+payoff states do not release that capacity.
+
+### Future customer decision view
+
+Planning should eventually reconcile, from one canonical model:
+
+- current debt-free estimate and financial phase;
+- current investable portfolio value and income;
+- projected portfolio value at debt freedom and clearly sourced target income
+  when the customer explicitly configures one;
+- next major transition and recommended next-dollar allocation;
+- current core approved investment commitment, extra staged capital, and the
+  reason each dollar is assigned or held.
+
+A typical sequence is: eliminate high-interest revolving debt while preserving
+liquidity and core approved investing; direct confirmed released payments to
+remaining high/medium-cost debt; compare lower-rate payoff with tax-aware
+investment opportunities; accelerate strategic portfolio/income growth after
+expensive debt is gone; and continue comparing remaining low-cost debt with
+investment, retirement, tax, and property opportunities until the selected
+debt-free/financial-independence target is reached.
+
+This north star depends on the Part 2A Import / Refresh path supplying fresh,
+authoritative cash; revolving and term-debt balances/rates/minimums/dates;
+investment values, contributions, holdings, and later tax lots; property and
+retirement facts; income, recurring obligations, and known commitments. Better
+evidence permits more specific comparisons of debt versus investing,
+contribution redirects, in-kind transfers, taxable reallocation, portfolio
+consolidation, and long-term timing.
+
+**Non-negotiable:** strategic portfolio growth never overrides required
+obligations, account protections, post-decision 30/90-day safety, liquidity,
+tax consequences, retirement restrictions, known future commitments,
+debt/interest economics, or evidence freshness/authority. CashCompass never
+recommends growing an account merely because its balance is emotionally
+preferred.
+
+This is architecture only. Brokerage optimization, taxable-sale guidance,
+rewards optimization, HELOC/refinance execution, long-range simulation, and
+authority migration remain outside the current Import / Refresh slice.
+
 ## Future north star — Whole-Household Debt Freedom Planner
 
+The Debt Freedom Planner is the liability-and-timeline view of the Strategic
+Capital Allocation and Portfolio Growth north star, not a competing objective.
 The long-range extension of the frozen weekly/monthly plan is a continuously
 updated household capital-allocation roadmap that answers:
 
@@ -660,7 +777,10 @@ by violating required obligations, protected liquidity, post-decision 30/90-day
 safety, tax constraints, retirement restrictions/match economics, or other
 approved household protections.
 
-This capability is deferred until the Part 2A import/freshness model supplies
+Debt freedom and portfolio growth are sequenced together: the plan protects core
+approved investing while expensive debt dominates incremental capital, then
+increases portfolio growth as debt economics and confirmed released payments
+change. This capability is deferred until the Part 2A import/freshness model supplies
 reliable debt, cash, income/obligation, investment, property, term/rate, and
 known-event facts. It is not part of the current shadow Import / Refresh slice.
 
@@ -673,5 +793,6 @@ pipeline, and the plan includes **every active debt with a remaining balance
 with no APR threshold**; the plan produces one reconciled weekly action schedule
 and monthly rollup; and Samer Robinhood is tracked by its observed growth and
 income production with no artificial goal or deadline. Later data, portfolio,
-and Whole-Household Debt Freedom Planner decisions remain separately gated; they
+Strategic Capital Allocation/Portfolio Growth and Whole-Household Debt Freedom
+Planner decisions remain separately gated; they
 do not reopen the frozen Overview/Debt foundation.

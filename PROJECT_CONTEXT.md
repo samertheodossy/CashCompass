@@ -285,6 +285,19 @@ recalculation. Equivalent facts must produce the same financial semantics
 regardless of source. Initial slices prioritize account/statement facts; broad
 transaction ingestion remains out of scope.
 
+**Strategic Capital Allocation / Portfolio Growth north star:** CashCompass is
+not ultimately a debt-only tool or a Robinhood-growth tool. Its long-range
+objective is to allocate each safely available next dollar to the highest-value
+household use while protecting obligations, liquidity, taxes, retirement,
+known commitments, and 30/90-day solvency. Samer Robinhood remains a current
+approved destination, but custodian growth is subordinate to household
+portfolio allocation and financial independence. This north star and the
+Whole-Household Debt Freedom Planner are one sequenced strategy: expensive debt
+may dominate staged incremental capital now, confirmed released payments are
+reranked rather than treated as spending income, and strategic portfolio growth
+accelerates as debt economics change. Canonical contract:
+`ROLLING_FINANCIAL_PLAN_DECISION_CONTRACT.md → Future north star — Strategic Capital Allocation and Portfolio Growth`.
+
 Governing product rules remain: required obligations first and exactly once;
 Unknown never becomes zero; future income never becomes current cash; optional
 investing is not an operating obligation; buffers and Do Not Touch protections
@@ -512,9 +525,9 @@ High-level technical-status mirror. `ROADMAP.md` controls priority and sequence;
 - **Stage 3 — Beta Readiness** *(current)* — P0 Project Stabilization, P1 evidence engineering, House Financial Accuracy V1, the `@318` Planner percentile gate, `@319` cross-flow measurement, and the `@322` ordinary Save investigation are complete. Active work continues through finished-feeling UX and the other candidate-preparation gates. The Beta Gate still requires a complete final exact-candidate verdict, runtime regression evidence, and product-quality proof; rerun Planner percentiles if the frozen candidate differs. Goal: **10/10 Beta Release Candidate — provably correct, recoverable, responsive, understandable, private, and supportable.**
 - **Stage 4 — Supervised Family Validation Cohort** — limited, consented users on explicitly safe candidates; close support; recovery slices (6D.2b / 6E.2); feedback and workflow stabilization. This stage produces learning evidence and does not authorize broad or monetized release.
 - **Stage 5 — 10/10 Beta Release Candidate and External Beta** — the exact candidate passes the scorecard and all hard gates before broader invited use; support, privacy, invite flow, user-lifecycle handling, scalability, and monetization foundations are ready. **Money Plan Phase 2** and **Income Expected/Due Workflow** remain Version 1 differentiators.
-- **Stage 6 — Version 2 / Future Platform** — Chat / Assistant, Operations Dashboard, expanded operational metrics/monitoring/analytics, billing activation, broad provider-connected Account Aggregation & Transaction Import beyond the current shadow fact milestone, the Whole-Household Debt Freedom Planner, and other product expansion. Beta-critical foundations are established earlier even when full features remain future work.
+- **Stage 6 — Version 2 / Future Platform** — Chat / Assistant, Operations Dashboard, expanded operational metrics/monitoring/analytics, billing activation, broad provider-connected Account Aggregation & Transaction Import beyond the current shadow fact milestone, integrated Strategic Capital Allocation/Portfolio Growth plus the Whole-Household Debt Freedom Planner, and other product expansion. Beta-critical foundations are established earlier even when full features remain future work.
 
-**Current priority and sequence:** `ROADMAP.md` — preserve the frozen Planning foundation; complete shadow-only Cash + Credit Card Import / Refresh (revolving debt first, bank/cash second); resume `3o`; finish accessibility and deferred corrections; then complete exact-candidate Release Readiness and the 10/10 Beta gate. The future Whole-Household Debt Freedom Planner depends on the authoritative fact foundation and is not part of the current slice. A supervised cohort may run during hardening, but it does not replace the release gate.
+**Current priority and sequence:** `ROADMAP.md` — preserve the frozen Planning foundation; complete shadow-only Cash + Credit Card Import / Refresh (revolving debt first, bank/cash second); resume `3o`; finish accessibility and deferred corrections; then complete exact-candidate Release Readiness and the 10/10 Beta gate. The future Strategic Capital Allocation/Portfolio Growth and Whole-Household Debt Freedom Planner capabilities depend on the authoritative fact foundation and are not part of the current slice. A supervised cohort may run during hardening, but it does not replace the release gate.
 
 **Beta Gate:** Recovery Validation is complete. Golden Workbook Convergence, Financial Integrity, Validator/Test Harness/Release Readiness evidence, and the runtime regression checklist remain governed by `ROADMAP.md`.
 
