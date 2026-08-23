@@ -568,8 +568,8 @@ function getHarnessPart2aAuthoritativeDebtImportScenario_() {
   return {
     id: 'REGRESSION-PART-2A-AUTHORITATIVE-REVOLVING-DEBT',
     category: 'REGRESSION', executionLevel: 'INTEGRATION',
-    expectedAssertionCount: 33,
-    description: 'Import authoritative revolving-debt evidence with protected identity, partial safe apply, manual APR supplement, granular readiness, ambiguity refusal, privacy, duplicate no-op, and no Planning authority change.',
+    expectedAssertionCount: 36,
+    description: 'Import authoritative revolving-debt evidence with inactive-identity refusal, caller-independent APR applicability, protected identity, partial safe apply, manual APR supplement, granular readiness, privacy, duplicate no-op, and no Planning authority change.',
     requiresTrashCleanup: true,
     expectedSheets: [names.ACCOUNTS, names.DEBTS, names.FINANCIAL_ACCOUNTS,
       names.ACCOUNT_SOURCE_LINKS, names.FINANCIAL_FACTS, names.IMPORT_RUNS, 'SYS - Meta'],
@@ -622,14 +622,22 @@ function getHarnessPart2aAuthoritativeDebtImportScenario_() {
         '<CCACCTFROM><ACCTID>' + ctx.rawIdentifier + '</CCACCTFROM>',
         '<LEDGERBAL><BALAMT>9000.00<DTASOF>20260816090000[-5:EST]</LEDGERBAL>',
         '<MINPMTDUE>270.00<NEXTPMTAMT>500.00<DTPMTDUE>20260825000000[-5:EST]',
-        '<CREDITLIMIT>15000.00</CCSTMTRS></CCSTMTTRNRS>',
+        '<CREDITLIMIT>15000.00<APR>23.49</CCSTMTRS></CCSTMTTRNRS>',
         '<CCSTMTTRNRS><CCSTMTRS><CURDEF>USD',
         '<CCACCTFROM><ACCTID>UNLINKED-2222</CCACCTFROM>',
         '<LEDGERBAL><BALAMT>125.00<DTASOF>20260816090000[-5:EST]</LEDGERBAL>',
         '</CCSTMTRS></CCSTMTTRNRS></CREDITCARDMSGSRSV1></OFX>'
       ].join('\n');
       ctx.adapter = adaptOfxRevolvingDebtEvidence_(ctx.ofx, { institution: 'Fixture Card Bank',
-        ownerId: 'SAMER', registrationType: 'INDIVIDUAL', observedAt: ctx.asOf });
+        ownerId: 'SAMER', registrationType: 'INDIVIDUAL', observedAt: ctx.asOf,
+        planningAprApplicableToCarriedBalance: true });
+      var inactiveAccounts = financialIdentityReadRegistry_(ctx.ss).accounts.map(function(account) {
+        var copy = JSON.parse(JSON.stringify(account));
+        if (copy.stableAccountId === 'DEBT-FIXTURE-CITIAA') copy.active = 'No';
+        return copy;
+      });
+      ctx.inactiveMatch = debtImportMatchRecord_(ctx.adapter.accounts[0], inactiveAccounts,
+        cashImportReadSourceLinks_(ctx.ss), {});
       ctx.preview = previewAuthoritativeDebtImport_(ctx.ss, ctx.adapter, {}, ctx.asOf);
       ctx.assertWritable();
       ctx.first = applyAuthoritativeDebtImport_(ctx.ss, ctx.adapter, {},
@@ -698,14 +706,22 @@ function getHarnessPart2aAuthoritativeDebtImportScenario_() {
         { module: mod });
       ctx.assert.equals('Verified debt source link matches one account', ctx.preview.summary.matched, 1,
         { module: mod });
+      ctx.assert.equals('Inactive verified debt identity fails closed', ctx.inactiveMatch.reason,
+        'ACCOUNT_INACTIVE', { module: mod });
+      ctx.assert.equals('OFX caller option cannot manufacture planning APR',
+        ctx.adapter.accounts[0].facts.some(function(fact) { return fact.factType === 'APR'; }),
+        false, { module: mod });
+      ctx.assert.equals('OFX headline APR requires applicability review',
+        ctx.adapter.accounts[0].aprReviewStatus, 'APR_APPLICABILITY_REVIEW_REQUIRED',
+        { module: mod });
       ctx.assert.equals('Unlinked debt remains review required', ctx.preview.summary.reviewRequired, 1,
         { module: mod });
-      ctx.assert.equals('Balance-only source reports APR required',
-        ctx.preview.accounts[0].diagnostics.indexOf('APR_DATA_REQUIRED') !== -1, true,
+      ctx.assert.equals('OFX headline APR propagates applicability review',
+        ctx.preview.accounts[0].diagnostics.indexOf('APR_APPLICABILITY_REVIEW_REQUIRED') !== -1, true,
         { module: mod });
       ctx.assert.equals('Partial safe apply preserves review state', ctx.first.status,
         'PARTIAL_REVIEW_REQUIRED', { module: mod });
-      ctx.assert.equals('Matched QFX appends only supplied debt facts', ctx.first.appendedFacts, 5,
+      ctx.assert.equals('Matched QFX appends only supplied debt facts', ctx.first.appendedFacts, 6,
         { module: mod });
       ctx.assert.equals('Manual APR supplement appends separately', ctx.manualApply.appendedFacts, 1,
         { module: mod });

@@ -93,7 +93,7 @@ remain in `FULL_BETA_REMAINING_PLAN.md`.
 
 | Category | Item | Current status | Broad-Beta blocker? | Dependency / timing |
 |---|---|---|---|---|
-| A — current milestone | Credit Card Import Correctness Boundaries | Open: inactive Financial Account targets can still match, and OFX caller options can still declare APR applicability | Yes, for the customer import milestone | First: fail closed, add regressions, inspect one real institution export |
+| A — current milestone | Credit Card Import Correctness Boundaries | In progress: inactive-target refusal and caller-independent OFX APR applicability are implemented with permanent local/registered regressions; representative real-institution export inspection remains pending | Yes, for the customer import milestone | Inspect one approved real institution export before customer workflow work |
 | A — current milestone | Cash + Credit Card Import / Refresh customer slice | Foundation exists in Part 2A-1 through 2A-5; production-ready import does not | Yes | After correctness boundaries and real-export inspection; revolving debt first, bank/cash second, shadow-only |
 | B — Beta readiness | Responsive/accessibility closeout `3j` and final UI consistency audit `3q` | Open | Yes | After intended UI changes; before `8a` freeze |
 | B — Beta readiness | Safe correction families `5j`–`5m` | Direct Quick Add/Donation correction is complete; Bill, Upcoming, House Expense, and audit disposition remain | Yes | Return after the current import correctness milestone |

@@ -102,7 +102,11 @@ const adapter = context.adaptOfxRevolvingDebtEvidence_(ofx, {
 });
 assert.equal(adapter.contractVersion, 'DEBT_EVIDENCE_V1');
 assert.equal(adapter.accounts[0].facts.find((f) => f.factType === 'CURRENT_BALANCE').numericValue, 9000);
-assert.equal(adapter.accounts[0].facts.find((f) => f.factType === 'APR').numericValue, 23.49);
+assert.equal(adapter.accounts[0].facts.some((f) => f.factType === 'APR'), false,
+  'caller options must not manufacture canonical applicable APR from OFX');
+assert.equal(adapter.accounts[0].facts.find((f) => f.factType === 'DISCLOSED_APR').numericValue, 23.49,
+  'OFX headline APR must remain separately typed evidence');
+assert.equal(adapter.accounts[0].aprReviewStatus, 'APR_APPLICABILITY_REVIEW_REQUIRED');
 assert.equal(adapter.accounts[0].facts.find((f) => f.factType === 'MINIMUM_PAYMENT').numericValue, 270);
 assert.equal(adapter.accounts[0].facts.find((f) => f.factType === 'NEXT_PAYMENT_AMOUNT').numericValue, 500,
   'minimum and next payment must remain independent');
@@ -161,6 +165,12 @@ const link = { stableAccountId: account.stableAccountId, sourceSystem: adapter.s
   sourceAccountKey: adapter.accounts[0].sourceAccountKey, linkStatus: 'VERIFIED' };
 assert.equal(context.debtImportMatchRecord_(adapter.accounts[0], [account], [link], {}).outcome,
   'EXACT_LINK');
+const inactiveAccount = { ...account, active: 'No' };
+assert.equal(context.debtImportMatchRecord_(adapter.accounts[0], [inactiveAccount], [link], {}).reason,
+  'ACCOUNT_INACTIVE', 'a verified source link must not match an inactive Financial Account');
+assert.equal(context.debtImportMatchRecord_(adapter.accounts[0], [inactiveAccount], [], {
+  action: 'MATCH', stableAccountId: inactiveAccount.stableAccountId
+}).reason, 'ACCOUNT_INACTIVE', 'an explicit decision must not match an inactive Financial Account');
 assert.equal(context.debtImportMatchRecord_({ ...adapter.accounts[0], ownerId: 'LAITH' },
   [account], [link], {}).reason, 'OWNER_MISMATCH');
 const child = { ...account, stableAccountId: 'DEBT-LAITH', ownerId: 'LAITH',
@@ -199,9 +209,16 @@ assert.equal(preview.accounts[0].facts.CURRENT_BALANCE.materialityStatus, 'NOT_Y
 assert.equal(preview.accounts[0].facts.NEXT_PAYMENT_DATE.reconciliationStatus, 'UNAVAILABLE',
   'legacy due-day must not be falsely equated to a full authoritative date');
 const applied = context.applyAuthoritativeDebtImport_(fakeSs, adapter, {}, preview.previewDigest, asOf);
-assert.equal(applied.appendedFacts, 8);
+assert.equal(applied.appendedFacts, 7);
 assert.equal(JSON.stringify(fakeSs.getSheetByName(context.getSheetNames_().DEBTS).rows[1]), policyBefore,
   'import must not overwrite Part 1 debt configuration');
+const manualDecisions = { [manual.accounts[0].sourceAccountKey]: {
+  action: 'MATCH', stableAccountId: account.stableAccountId } };
+const manualPreview = context.previewAuthoritativeDebtImport_(fakeSs, manual, manualDecisions, asOf);
+const manualApplied = context.applyAuthoritativeDebtImport_(fakeSs, manual, manualDecisions,
+  manualPreview.previewDigest, asOf);
+assert.equal(manualApplied.appendedFacts, 1,
+  'verified manual evidence may establish applicable APR through its dedicated authority path');
 const replay = context.applyAuthoritativeDebtImport_(fakeSs, adapter, {}, preview.previewDigest, asOf);
 assert.equal(replay.status, 'DUPLICATE_NOOP');
 assert.equal(replay.appendedFacts, 0);

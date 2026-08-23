@@ -66,8 +66,9 @@ function adaptOfxRevolvingDebtEvidence_(rawText, options) {
     debtImportPushDateTagFact_(facts, block, 'DTPMTDUE', 'NEXT_PAYMENT_DATE', statementAsOf);
     debtImportPushNumericTagFact_(facts, block, 'CREDITLIMIT', 'CREDIT_LIMIT', currency, statementAsOf);
     debtImportPushNumericTagFact_(facts, block, 'AVAILCREDIT', 'AVAILABLE_CREDIT', currency, statementAsOf);
-    var rateFacts = debtImportOfxRateFacts_(block, statementAsOf,
-      !!opts.planningAprApplicableToCarriedBalance);
+    // OFX rate tags are component disclosures. Caller options cannot establish
+    // which rate is economically applicable to the carried balance.
+    var rateFacts = debtImportOfxRateFacts_(block, statementAsOf);
     facts = facts.concat(rateFacts.facts);
     debtImportPushDateTagFact_(facts, block, 'PROMOEXPDATE', 'PROMOTIONAL_APR_EXPIRATION', statementAsOf);
     var deferred = String(cashImportOfxTag_(block, 'DEFERREDINTEREST') || '').trim().toUpperCase();
@@ -665,6 +666,10 @@ function debtImportMatchRecord_(record, accounts, links, decision) {
 function debtImportValidateExplicitMatch_(record, stableId, accounts, verifiedLink) {
   var account = debtImportFindAccount_(accounts, stableId);
   if (!account) return { outcome: 'CONFLICT', reason: 'MATCH_TARGET_MISSING', candidates: [] };
+  if (!debtImportAccountActive_(account)) {
+    return { outcome: 'CONFLICT', reason: 'ACCOUNT_INACTIVE',
+      candidates: [account.stableAccountId] };
+  }
   if (String(account.domain || '').toUpperCase() !== 'DEBT') {
     return { outcome: 'CONFLICT', reason: 'DOMAIN_MISMATCH', candidates: [account.stableAccountId] };
   }
@@ -841,14 +846,13 @@ function debtImportStructuredRateFacts_(rates, effective) {
   return { facts: facts, reviewStatus: review };
 }
 
-function debtImportOfxRateFacts_(block, effective, carriedBalanceApplicable) {
+function debtImportOfxRateFacts_(block, effective) {
   var rates = [];
   [['APR', 'GENERAL'], ['PURCHASEAPR', 'PURCHASE'], ['CASHADVAPR', 'CASH_ADVANCE'],
     ['BALANCETRANSFERAPR', 'BALANCE_TRANSFER'], ['PROMOAPR', 'PROMOTIONAL']]
     .forEach(function(pair) {
       var value = cashImportStrictNumber_(cashImportOfxTag_(block, pair[0]));
       if (value !== null) rates.push({ type: pair[1], apr: value,
-        appliesToCarriedBalance: carriedBalanceApplicable && pair[1] === 'GENERAL',
         rateType: String(cashImportOfxTag_(block, pair[0] + 'TYPE') || 'PERCENT').toUpperCase() });
     });
   return debtImportStructuredRateFacts_(rates, effective);
