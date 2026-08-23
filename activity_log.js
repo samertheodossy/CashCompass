@@ -1,5 +1,5 @@
 /**
- * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_update, bill_deactivate, bill_reactivate, house expense, house_add, house_value_update, house_deactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_update, bank_account_deactivate, investment_add, investment_update, investment_account_update, investment_deactivate, investment_reactivate, investment_planning_purpose_update, debt_add, debt_deactivate, debt_reactivate, debt_update, income_add, income_deactivate, planner_email_deferred, planner_email_sent, planner_email_invalid_recipient, …). Eligible Donations retain fingerprint-gated removal; newly recorded direct Quick Add operations can be corrected through their exact operation envelope. Other events remain audit evidence.
+ * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_update, bill_deactivate, bill_reactivate, house expense, house_add, house_value_update, house_deactivate, house_reactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_update, bank_account_deactivate, investment_add, investment_update, investment_account_update, investment_deactivate, investment_reactivate, investment_planning_purpose_update, debt_add, debt_deactivate, debt_reactivate, debt_update, income_add, income_deactivate, planner_email_deferred, planner_email_sent, planner_email_invalid_recipient, …). Eligible Donations retain fingerprint-gated removal; newly recorded direct Quick Add operations can be corrected through their exact operation envelope. Other events remain audit evidence.
  * Complements OUT - History (planner-run snapshots). Tab: LOG - Activity.
  */
 
@@ -1825,6 +1825,7 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
   if (etEarly === 'house_add') return 'House Expenses';
   if (etEarly === 'house_value_update') return 'House Expenses';
   if (etEarly === 'house_deactivate') return 'House Expenses';
+  if (etEarly === 'house_reactivate') return 'House Expenses';
   if (etEarly === 'investment_add') return 'Investment';
   if (etEarly === 'investment_update') return 'Investment';
   if (etEarly === 'investment_account_update') return 'Investment';
@@ -1949,6 +1950,7 @@ function activityLogActionLabel_(eventType, detailsJson) {
     case 'house_value_update':
       return houseValueUpdateActionLabel_(detailsJson);
     case 'house_deactivate': return 'Tracking stopped';
+    case 'house_reactivate': return 'Tracking resumed';
     case 'investment_add': return 'Account added';
     // investment_update is non-monetary — see investmentUpdateActionLabel_.
     // Renders e.g. "Updated May-26 balance to $25,432.10".
@@ -2599,6 +2601,7 @@ function activityLogIsNonMonetaryEvent_(eventType) {
     et === 'investment_update' ||
     et === 'investment_account_update' ||
     et === 'house_deactivate' ||
+    et === 'house_reactivate' ||
     et === 'investment_deactivate' ||
     et === 'investment_reactivate' ||
     et === 'investment_planning_purpose_update' ||

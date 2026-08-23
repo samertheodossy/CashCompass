@@ -287,10 +287,10 @@
       <p>Maintain the current balances and terms behind your net worth.</p>
     </div>
     <div class="tabs assets-tabs">
-      <button class="tab-btn active" data-tab="houses" onclick="showTab('houses')">House values</button>
       <button class="tab-btn" data-tab="bank" onclick="showTab('bank')">Bank accounts</button>
+      <button class="tab-btn" data-tab="debts" onclick="showTab('debts')">Debts</button>
       <button class="tab-btn" data-tab="investments" onclick="showTab('investments')">Investments</button>
-      <button class="tab-btn" data-tab="debts" onclick="showTab('debts')">Debt accounts</button>
+      <button class="tab-btn active" data-tab="houses" onclick="showTab('houses')">Houses</button>
     </div>
 
     <div id="houses" class="panel active">
@@ -368,9 +368,17 @@
             <h3>Manage houses</h3>
             <p class="muted">Update a property’s value or stop tracking it while preserving its history and property expense sheet.</p>
           </div>
+          <div class="tracked-editor-actions">
+            <button type="button" id="house_show_inactive_btn" class="small-btn debt-inactive-toggle" aria-expanded="false" aria-controls="house_inactive_wrap" onclick="toggleInactiveHousesView_()"><span class="debt-caret" aria-hidden="true">&#9656;</span>Show inactive houses</button>
+          </div>
         </div>
         <div id="house_manage_list" class="tracked-editor-list">
           <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading houses…</span></div>
+        </div>
+        <div id="house_inactive_wrap" class="debt-inactive-section" style="display:none;">
+          <div class="card-title">Inactive houses</div>
+          <p class="muted" style="margin:0 0 12px 0;">These houses are excluded from current property selectors and calculations. Reactivate restores the existing house without changing its values, property details, expense history, or linked debt evidence.</p>
+          <div id="house_inactive_list" class="tracked-editor-list"></div>
         </div>
       </div>
 
@@ -1464,56 +1472,6 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       </section>
     </div>
 
-    <div
-      id="dashboard_confirm_backdrop"
-      class="bill-stop-dialog-backdrop"
-      hidden
-      onclick="onDashboardConfirmBackdropClick_(event)">
-      <section
-        id="dashboard_confirm_dialog"
-        class="bill-stop-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="dashboard_confirm_title"
-        aria-describedby="dashboard_confirm_message"
-        tabindex="-1">
-        <div class="bill-stop-dialog-head">
-          <div id="dashboard_confirm_icon" class="bill-stop-dialog-icon" aria-hidden="true">!</div>
-          <div>
-            <div id="dashboard_confirm_eyebrow" class="bill-pay-drawer-eyebrow">CashCompass</div>
-            <h2 id="dashboard_confirm_title">Confirm action</h2>
-          </div>
-          <button
-            type="button"
-            id="dashboard_confirm_close_btn"
-            class="bill-pay-drawer-close"
-            aria-label="Close confirmation"
-            onclick="closeDashboardConfirm_(false)">×</button>
-        </div>
-        <div class="bill-stop-dialog-body">
-          <div id="dashboard_confirm_subject_wrap" class="bill-stop-dialog-bill" hidden>
-            <span id="dashboard_confirm_subject_label">Item</span>
-            <strong id="dashboard_confirm_subject">—</strong>
-          </div>
-          <p id="dashboard_confirm_message"></p>
-          <ul id="dashboard_confirm_consequences" class="bill-stop-dialog-consequences"></ul>
-          <div id="dashboard_confirm_status" class="status" role="status" aria-live="polite"></div>
-        </div>
-        <div class="bill-stop-dialog-actions">
-          <button
-            type="button"
-            id="dashboard_confirm_cancel_btn"
-            class="small-btn"
-            onclick="closeDashboardConfirm_(false)">Cancel</button>
-          <button
-            type="button"
-            id="dashboard_confirm_submit_btn"
-            class="small-btn danger"
-            onclick="confirmDashboardAction_()">Confirm</button>
-        </div>
-      </section>
-    </div>
-
     <div id="income" class="panel">
       <div class="panel-head">
         <h2>Income sources</h2>
@@ -1558,6 +1516,59 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
            clean when nothing qualifies. -->
       <div id="income_other_detected" class="income-other-detected" style="margin-top:20px;"></div>
     </div>
+  </div>
+
+  <!-- Shared confirmation must remain outside every workspace page. A hidden
+       workspace ancestor would make cross-surface confirmations impossible to
+       see even though their click handlers ran. -->
+  <div
+    id="dashboard_confirm_backdrop"
+    class="bill-stop-dialog-backdrop"
+    hidden
+    onclick="onDashboardConfirmBackdropClick_(event)">
+    <section
+      id="dashboard_confirm_dialog"
+      class="bill-stop-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="dashboard_confirm_title"
+      aria-describedby="dashboard_confirm_message"
+      tabindex="-1">
+      <div class="bill-stop-dialog-head">
+        <div id="dashboard_confirm_icon" class="bill-stop-dialog-icon" aria-hidden="true">!</div>
+        <div>
+          <div id="dashboard_confirm_eyebrow" class="bill-pay-drawer-eyebrow">CashCompass</div>
+          <h2 id="dashboard_confirm_title">Confirm action</h2>
+        </div>
+        <button
+          type="button"
+          id="dashboard_confirm_close_btn"
+          class="bill-pay-drawer-close"
+          aria-label="Close confirmation"
+          onclick="closeDashboardConfirm_(false)">×</button>
+      </div>
+      <div class="bill-stop-dialog-body">
+        <div id="dashboard_confirm_subject_wrap" class="bill-stop-dialog-bill" hidden>
+          <span id="dashboard_confirm_subject_label">Item</span>
+          <strong id="dashboard_confirm_subject">—</strong>
+        </div>
+        <p id="dashboard_confirm_message"></p>
+        <ul id="dashboard_confirm_consequences" class="bill-stop-dialog-consequences"></ul>
+        <div id="dashboard_confirm_status" class="status" role="status" aria-live="polite"></div>
+      </div>
+      <div class="bill-stop-dialog-actions">
+        <button
+          type="button"
+          id="dashboard_confirm_cancel_btn"
+          class="small-btn"
+          onclick="closeDashboardConfirm_(false)">Cancel</button>
+        <button
+          type="button"
+          id="dashboard_confirm_submit_btn"
+          class="small-btn danger"
+          onclick="confirmDashboardAction_()">Confirm</button>
+      </div>
+    </section>
   </div>
 
   <div id="page_activity" class="workspace-page">

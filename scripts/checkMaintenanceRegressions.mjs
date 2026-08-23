@@ -6,18 +6,21 @@ const names = [
   'Dashboard_Body.html',
   'Dashboard_Script_BillsCategoryRaceFix.html',
   'Dashboard_Script_Donations.html',
+  'Dashboard_Script_AssetsHouseValues.html',
   'Dashboard_Styles.html',
   'PlannerDashboardWeb.html',
   'activity_log.js',
   'bills.js',
   'dashboard_data.js',
   'donations.js',
+  'house_values.js',
   'planner_helpers.js',
   'PROJECT_CONTEXT.md',
   'TODO.md',
   'agents/features/bills.md',
   'test_harness_scenarios.js',
   'test_harness_scenarios_maintenance.js',
+  'test_harness_scenarios_house_financial_accuracy.js',
   'test_harness_suites.js'
 ];
 const files = Object.fromEntries(await Promise.all(names.map(async (name) => [
@@ -330,8 +333,21 @@ for (const id of [
   assert.match(files['test_harness_suites.js'], new RegExp(id),
     `${id} must be registered on the single Validation console suite surface`);
 }
+assert.match(files['test_harness_scenarios_house_financial_accuracy.js'],
+  /REGRESSION-HOUSE-LIFECYCLE/,
+  'House lifecycle must have a focused disposable-workbook scenario');
+assert.match(files['test_harness_suites.js'], /REGRESSION-HOUSE-LIFECYCLE/,
+  'House lifecycle must be registered on the single Validation console suite surface');
 assert.match(files['test_harness_scenarios.js'], /getHarnessBillsEditIntegrityScenario_/,
   'Maintenance scenarios must be discoverable by the harness registry');
+assert.match(files['test_harness_scenarios.js'], /getHarnessHouseLifecycleScenario_/,
+  'House lifecycle must be discoverable by the harness registry');
+assert.match(files['test_harness_scenarios_house_financial_accuracy.js'],
+  /firstStop[\s\S]*afterStop[\s\S]*staleError[\s\S]*removedError[\s\S]*ambiguousError[\s\S]*reactivate[\s\S]*alreadyActive[\s\S]*duplicateAddError[\s\S]*secondStop[\s\S]*reactivateAuditCount/,
+  'House lifecycle evidence must prove Stop, discovery, stale/removed/ambiguous refusal, exact Reactivate, Add refusal, already-active safety, and Stop again');
+assert.match(files['test_harness_scenarios_house_financial_accuracy.js'],
+  /hvBefore[\s\S]*haBefore[\s\S]*houseSheetBefore[\s\S]*debtLinkBefore[\s\S]*House Values configuration and history survive Reactivate[\s\S]*House Assets configuration survives Reactivate[\s\S]*House expense history survives Reactivate[\s\S]*Linked debt relationship survives Reactivate/,
+  'House lifecycle evidence must preserve House Values, House Assets, expenses, and linked debt state');
 assert.match(files['test_harness_scenarios_maintenance.js'],
   /firstStop[\s\S]*inactiveBeforeReactivate[\s\S]*reactivateStaleError[\s\S]*reactivateDuplicateError[\s\S]*activeAfterReactivateCount[\s\S]*alreadyActiveReactivate[\s\S]*secondStop[\s\S]*inactiveAfterSecondStop[\s\S]*deactivateAuditCount/,
   'Bill maintenance evidence must prove the complete Stop, inactive discovery, stale/duplicate-safe Reactivate, and Stop-again lifecycle');

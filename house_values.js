@@ -265,6 +265,14 @@ function ensureSysHouseAssetsSheet_(optionalSs) {
 }
 
 function getHouseUiData() {
+  return getHouseUiDataForSpreadsheet_(getUserSpreadsheet_());
+}
+
+/**
+ * Spreadsheet-scoped House Values read model used by the production wrapper
+ * above and marker-verified disposable lifecycle regressions.
+ */
+function getHouseUiDataForSpreadsheet_(ss) {
   // Performance: previously this RPC made TWO full reads of
   // SYS - House Assets in a row — once for the distinct Type values
   // (getHouseAssetsDistinctColumnValues_) and once for the inactive
@@ -276,13 +284,19 @@ function getHouseUiData() {
   // not exist yet and getHousesFromHouseValues_() -> getSheet_() would
   // throw a red banner on the House Values page. Return the same shape
   // with empty lists so the page renders clean.
-  const ss = getUserSpreadsheet_();
-  if (!ss.getSheetByName(getSheetNames_().HOUSE_VALUES)) {
-    return { houses: [], propertyTypeOptions: [] };
+  if (!ss || !ss.getSheetByName(getSheetNames_().HOUSE_VALUES)) {
+    return {
+      houses: [],
+      managementHouses: [],
+      inactiveHouses: [],
+      propertyTypeOptions: []
+    };
   }
 
   var propertyTypeOpts = [];
   let inactive = Object.create(null);
+  var managementByName = Object.create(null);
+  var inactiveHouses = [];
 
   try {
     const haSheet = ss.getSheetByName(getSheetNames_().HOUSE_ASSETS);
@@ -304,12 +318,24 @@ function getHouseUiData() {
             if (t) typeSet[t] = true;
           }
 
-          if (houseIdx !== -1 && activeIdx !== -1) {
+          if (houseIdx !== -1) {
             const name = String(row[houseIdx] || '').trim();
             if (name) {
-              const raw = String(row[activeIdx] || '').trim().toLowerCase();
-              if (raw === 'no' || raw === 'n' || raw === 'false' || raw === 'inactive') {
+              const raw = activeIdx === -1 ? '' : String(row[activeIdx] || '').trim();
+              const rowInactive = isHouseInactiveActiveValue_(raw);
+              managementByName[name.toLowerCase()] = {
+                houseName: name,
+                propertyType: typeIdx === -1 ? '' : String(row[typeIdx] || '').trim(),
+                sysHouseAssetsRow: r + 1,
+                inactive: rowInactive
+              };
+              if (rowInactive) {
                 inactive[name.toLowerCase()] = true;
+                inactiveHouses.push({
+                  houseName: name,
+                  propertyType: typeIdx === -1 ? '' : String(row[typeIdx] || '').trim(),
+                  sysHouseAssetsRow: r + 1
+                });
               }
             }
           }
@@ -324,15 +350,42 @@ function getHouseUiData() {
 
   // Selectors only surface currently-active houses. History storage
   // (INPUT - House Values, SYS rows, HOUSES sheets) is untouched.
-  const allHouses = getHousesFromHouseValues_();
+  const allHouses = getHousesFromHouseValues_(ss);
   const activeHouses = allHouses.filter(function(name) {
     return !inactive[String(name || '').toLowerCase()];
+  });
+  const historyNames = Object.create(null);
+  allHouses.forEach(function(name) {
+    historyNames[String(name || '').toLowerCase()] = true;
+  });
+  inactiveHouses = inactiveHouses.filter(function(row) {
+    return !!historyNames[String(row.houseName || '').toLowerCase()];
+  });
+  inactiveHouses.sort(function(a, b) {
+    return String(a.houseName || '').localeCompare(String(b.houseName || ''), undefined, {
+      sensitivity: 'base'
+    });
+  });
+  const managementHouses = activeHouses.map(function(name) {
+    return managementByName[String(name || '').toLowerCase()] || {
+      houseName: name,
+      propertyType: '',
+      sysHouseAssetsRow: 0,
+      inactive: false
+    };
   });
 
   return {
     houses: activeHouses,
+    managementHouses: managementHouses,
+    inactiveHouses: inactiveHouses,
     propertyTypeOptions: propertyTypeOpts
   };
+}
+
+function isHouseInactiveActiveValue_(value) {
+  const raw = String(value == null ? '' : value).trim().toLowerCase();
+  return raw === 'no' || raw === 'n' || raw === 'false' || raw === 'inactive';
 }
 
 /**
@@ -431,8 +484,8 @@ function getHouseAssetsDistinctColumnValues_(headerLabel) {
   });
 }
 
-function getHousesFromHouseValues_() {
-  const ss = getUserSpreadsheet_();
+function getHousesFromHouseValues_(optionalSs) {
+  const ss = optionalSs || getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'HOUSE_VALUES');
 
   const values = sheet.getDataRange().getDisplayValues();
@@ -1145,7 +1198,7 @@ function getPriorMonthHouseValuesTotalFromHouseValuesInput_(optionalSs) {
  * @param {string} raw
  * @returns {string} trimmed name
  */
-function validateNewHouseName_(raw) {
+function validateNewHouseName_(raw, optionalSs) {
   const name = String(raw || '').trim();
   if (!name) throw new Error('House name is required.');
   if (name.length > 120) throw new Error('House name is too long (max 120 characters).');
@@ -1171,18 +1224,18 @@ function validateNewHouseName_(raw) {
     throw new Error('That house name is reserved; please pick a different name.');
   }
 
-  const existingHouses = getHousesFromHouseValues_();
+  const ss = optionalSs || getUserSpreadsheet_();
+  const existingHouses = getHousesFromHouseValues_(ss);
   for (let i = 0; i < existingHouses.length; i++) {
     if (existingHouses[i].toLowerCase() === name.toLowerCase()) {
       throw new Error('A house named "' + existingHouses[i] + '" already exists.');
     }
   }
 
-  if (houseExistsInHouseAssetsSheet_(name)) {
+  if (houseExistsInHouseAssetsSheet_(name, ss)) {
     throw new Error('A house with that name already exists.');
   }
 
-  const ss = getUserSpreadsheet_();
   if (ss.getSheetByName('HOUSES - ' + name)) {
     throw new Error('A sheet named "HOUSES - ' + name + '" already exists.');
   }
@@ -1190,11 +1243,11 @@ function validateNewHouseName_(raw) {
   return name;
 }
 
-function houseExistsInHouseAssetsSheet_(houseName) {
+function houseExistsInHouseAssetsSheet_(houseName, optionalSs) {
   const target = String(houseName || '').trim();
   if (!target) return false;
 
-  const ss = getUserSpreadsheet_();
+  const ss = optionalSs || getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'HOUSE_ASSETS');
   const display = sheet.getDataRange().getDisplayValues();
   if (display.length < 2) return false;
@@ -2018,12 +2071,12 @@ function addHouseFromDashboardLocked_(payload) {
  * @returns {{ ok: boolean, message: string, houseName: string,
  *             alreadyInactive: boolean, rowsUpdated: number }}
  */
-function deactivateHouseFromDashboard(payload) {
+function deactivateHouseFromDashboard(payload, optionalSs) {
   validateRequired_(payload, ['houseName']);
   const houseName = String(payload.houseName || '').trim();
   if (!houseName) throw new Error('House name is required.');
 
-  const ss = getUserSpreadsheet_();
+  const ss = optionalSs || getUserSpreadsheet_();
   const hvSheet = getSheet_(ss, 'HOUSE_VALUES');
   const haSheet = getSheet_(ss, 'HOUSE_ASSETS');
 
@@ -2086,6 +2139,214 @@ function deactivateHouseFromDashboard(payload) {
     alreadyInactive: alreadyInactive,
     rowsUpdated: hvUpdate.rowsUpdated + (haUpdate.changed ? 1 : 0)
   };
+}
+
+/**
+ * Resolves the exact House Values rows that belong to one logical House.
+ * A House may legitimately have one row in each year block, but duplicate
+ * matching rows inside the same block are ambiguous and fail closed.
+ */
+function getHouseValuesLifecycleTargets_(sheet, houseName) {
+  const target = String(houseName || '').trim().toLowerCase();
+  const display = sheet.getDataRange().getDisplayValues();
+  const targets = [];
+
+  for (let r = 0; r < display.length; r++) {
+    const colA = String((display[r] && display[r][0]) || '').trim();
+    const colB = String((display[r] && display[r][1]) || '').trim();
+    if (colA !== 'Year') continue;
+    const year = parseInt(colB, 10);
+    if (isNaN(year)) continue;
+
+    const block = getHouseValuesYearBlock_(sheet, year, display);
+    const headers = display[block.headerRow - 1] || [];
+    let activeColZero = -1;
+    for (let c = 0; c < headers.length; c++) {
+      if (String(headers[c] || '').trim().toLowerCase() === 'active') {
+        activeColZero = c;
+        break;
+      }
+    }
+
+    const blockTargets = [];
+    for (let row = block.dataStartRow; row <= block.dataEndRow; row++) {
+      const values = display[row - 1] || [];
+      const name = String(values[0] || '').trim();
+      const sub = String(values[1] || '').trim();
+      if (!isHouseDataRowName_(name, sub)) continue;
+      if (name.toLowerCase() !== target) continue;
+      blockTargets.push({
+        year: year,
+        row: row,
+        houseName: name,
+        activeCol: activeColZero === -1 ? -1 : activeColZero + 1,
+        activeValue: activeColZero === -1 ? '' : String(values[activeColZero] || '').trim()
+      });
+    }
+    if (blockTargets.length > 1) {
+      throw new Error('House identity is ambiguous in House Values. Resolve duplicate rows and try again.');
+    }
+    if (blockTargets.length === 1) targets.push(blockTargets[0]);
+  }
+
+  return targets;
+}
+
+/** Restore one preserved inactive House without recreating or renaming it. */
+function reactivateHouseFromDashboard(payload, optionalSs) {
+  validateRequired_(payload, ['sysHouseAssetsRow', 'expectedHouseName']);
+  const sysHouseAssetsRow = parseInt(String(payload.sysHouseAssetsRow), 10);
+  const expectedHouseName = String(payload.expectedHouseName || '').trim();
+  if (isNaN(sysHouseAssetsRow) || sysHouseAssetsRow < 2 || !expectedHouseName) {
+    throw new Error('Invalid inactive house. Please refresh and try again.');
+  }
+
+  const lock = LockService.getUserLock();
+  try {
+    if (!lock) throw new Error('No user lock is available.');
+    lock.waitLock(30000);
+  } catch (_lockErr) {
+    throw new Error('Another house change is in progress. Please try again in a moment.');
+  }
+
+  try {
+    const ss = optionalSs || getUserSpreadsheet_();
+    const hvSheet = getSheet_(ss, 'HOUSE_VALUES');
+    const haSheet = getSheet_(ss, 'HOUSE_ASSETS');
+    const headerMap = getHouseAssetsHeaderMap_(haSheet);
+    if (headerMap.activeCol === -1) {
+      throw new Error('House activation data is unavailable. Please refresh and try again.');
+    }
+
+    const haDisplay = haSheet.getDataRange().getDisplayValues();
+    if (sysHouseAssetsRow > haDisplay.length) {
+      throw new Error('House has moved. Please refresh and try again.');
+    }
+    const actualName = String(
+      (haDisplay[sysHouseAssetsRow - 1] || [])[headerMap.houseColZero] || ''
+    ).trim();
+    if (!actualName || actualName !== expectedHouseName) {
+      throw new Error('House has moved. Please refresh and try again.');
+    }
+
+    const identityMatches = [];
+    for (let r = 1; r < haDisplay.length; r++) {
+      const name = String((haDisplay[r] || [])[headerMap.houseColZero] || '').trim();
+      if (name && name.toLowerCase() === actualName.toLowerCase()) {
+        identityMatches.push(r + 1);
+      }
+    }
+    if (identityMatches.length !== 1 || identityMatches[0] !== sysHouseAssetsRow) {
+      throw new Error('House identity is ambiguous. Resolve duplicate House Assets rows and try again.');
+    }
+
+    const historyTargets = getHouseValuesLifecycleTargets_(hvSheet, actualName);
+    if (!historyTargets.length) {
+      throw new Error('No House Values history was found for this house.');
+    }
+    if (!ss.getSheetByName('HOUSES - ' + actualName)) {
+      throw new Error('The preserved house expense history is missing. Reactivation was not completed.');
+    }
+
+    const previousSysActive = String(
+      (haDisplay[sysHouseAssetsRow - 1] || [])[headerMap.activeColZero] || ''
+    ).trim();
+    const sysInactive = isHouseInactiveActiveValue_(previousSysActive);
+    const inactiveHistoryCount = historyTargets.filter(function(target) {
+      return target.activeCol !== -1 && isHouseInactiveActiveValue_(target.activeValue);
+    }).length;
+
+    if (!sysInactive) {
+      if (inactiveHistoryCount !== 0) {
+        throw new Error('House activation state is inconsistent. Please refresh and review the source rows.');
+      }
+      return {
+        ok: true,
+        message: '"' + actualName + '" is already active.',
+        houseName: actualName,
+        alreadyActive: true
+      };
+    }
+    if (inactiveHistoryCount !== historyTargets.length) {
+      throw new Error('House activation state changed. Please refresh and try again.');
+    }
+
+    let writesStarted = false;
+    try {
+      historyTargets.forEach(function(target) {
+        writesStarted = true;
+        writeActiveCellWithRowFormat_(hvSheet, target.row, target.activeCol, 'Yes');
+      });
+      writeActiveCellWithRowFormat_(haSheet, sysHouseAssetsRow, headerMap.activeCol, 'Yes');
+      SpreadsheetApp.flush();
+
+      historyTargets.forEach(function(target) {
+        const saved = String(
+          hvSheet.getRange(target.row, target.activeCol).getDisplayValue() || ''
+        ).trim().toLowerCase();
+        if (saved !== 'yes') throw new Error('House Values activation could not be verified.');
+      });
+      const savedSys = String(
+        haSheet.getRange(sysHouseAssetsRow, headerMap.activeCol).getDisplayValue() || ''
+      ).trim().toLowerCase();
+      if (savedSys !== 'yes') throw new Error('House Assets activation could not be verified.');
+    } catch (writeErr) {
+      if (writesStarted) {
+        historyTargets.forEach(function(target) {
+          try {
+            writeActiveCellWithRowFormat_(
+              hvSheet, target.row, target.activeCol, target.activeValue || 'No');
+          } catch (_historyRollbackErr) { /* best-effort */ }
+        });
+        try {
+          writeActiveCellWithRowFormat_(
+            haSheet, sysHouseAssetsRow, headerMap.activeCol, previousSysActive || 'No');
+        } catch (_sysRollbackErr) { /* best-effort */ }
+      }
+      throw new Error('House was not reactivated and changes were rolled back: ' +
+        (writeErr && writeErr.message || writeErr));
+    }
+
+    try { touchDashboardSourceUpdated_('house_values'); } catch (_touchErr) {}
+    try {
+      appendActivityLog_(ss, {
+        eventType: 'house_reactivate',
+        entryDate: Utilities.formatDate(
+          stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+        amount: 0,
+        direction: '',
+        payee: actualName,
+        category: headerMap.typeColZero === -1 ? '' : String(
+          (haDisplay[sysHouseAssetsRow - 1] || [])[headerMap.typeColZero] || '').trim(),
+        accountSource: '',
+        cashFlowSheet: '',
+        cashFlowMonth: '',
+        dedupeKey: '',
+        details: JSON.stringify({
+          detailsVersion: 1,
+          reason: 'reactivate',
+          previousActive: previousSysActive || 'No',
+          newActive: 'Yes',
+          houseValuesRowsUpdated: historyTargets.length,
+          houseValuesYears: historyTargets.map(function(target) { return target.year; }),
+          sysHouseAssetsRow: sysHouseAssetsRow,
+          houseExpenseHistoryPreserved: true
+        })
+      });
+    } catch (logErr) {
+      Logger.log('reactivateHouseFromDashboard activity log: ' + logErr);
+    }
+
+    return {
+      ok: true,
+      message: 'Reactivated "' + actualName + '". It is tracked again.',
+      houseName: actualName,
+      alreadyActive: false,
+      rowsUpdated: historyTargets.length + 1
+    };
+  } finally {
+    try { lock.releaseLock(); } catch (_releaseErr) {}
+  }
 }
 
 /**

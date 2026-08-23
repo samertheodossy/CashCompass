@@ -6,6 +6,7 @@
 // from writing, but this flag also spares the user a confusing second "already
 // exists" round-trip. Reset in BOTH the success and failure handlers.
 var houseCreateInFlight_ = false;
+var __houseInactiveRows = [];
 
 function fillHouseDropdownFromData_(data) {
   const sel = document.getElementById('house_house');
@@ -19,6 +20,8 @@ function fillHouseDropdownFromData_(data) {
     opt.textContent = h;
     sel.appendChild(opt);
   });
+  __houseInactiveRows = Array.isArray(data && data.inactiveHouses)
+    ? data.inactiveHouses.slice() : [];
   populateHouseAddDatalists_(data);
   updateHouseUpdateAvailability_();
   renderHouseManageList_();
@@ -32,7 +35,7 @@ function fillHouseDropdownFromData_(data) {
   // mode untouched: the HTML default (Update) stays for normal navigation, and
   // an intentional Add (e.g. adding a second house) is preserved.
   if (!(data.houses && data.houses.length) && typeof setHousePanelMode === 'function') {
-    setHousePanelMode('add');
+    setHousePanelMode(__houseInactiveRows.length ? 'manage' : 'add');
   }
 }
 
@@ -237,12 +240,112 @@ function renderHouseManageList_() {
       }, houseName);
     }
   });
+  renderInactiveHouses_();
+}
+
+function toggleInactiveHousesView_() {
+  var wrap = document.getElementById('house_inactive_wrap');
+  var button = document.getElementById('house_show_inactive_btn');
+  if (!wrap || !button) return;
+  var show = wrap.style.display === 'none';
+  wrap.style.display = show ? '' : 'none';
+  button.setAttribute('aria-expanded', show ? 'true' : 'false');
+  renderInactiveHouses_();
+}
+
+function renderInactiveHouses_() {
+  var host = document.getElementById('house_inactive_list');
+  var button = document.getElementById('house_show_inactive_btn');
+  if (!host || !button) return;
+  var count = __houseInactiveRows.length;
+  var expanded = button.getAttribute('aria-expanded') === 'true';
+  button.innerHTML = '<span class="debt-caret" aria-hidden="true">' +
+    (expanded ? '&#9662;' : '&#9656;') + '</span>' +
+    (expanded ? 'Hide inactive houses' : 'Show inactive houses') +
+    (count ? ' (' + count + ')' : '');
+  host.innerHTML = '';
+  if (!count) {
+    var empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'No inactive houses.';
+    host.appendChild(empty);
+    return;
+  }
+  __houseInactiveRows.forEach(function(row) {
+    var item = document.createElement('div');
+    item.className = 'tracked-editor-row';
+    var identity = document.createElement('div');
+    identity.className = 'tracked-editor-identity';
+    var title = document.createElement('strong');
+    title.className = 'tracked-editor-name';
+    title.textContent = row.houseName || 'House';
+    identity.appendChild(title);
+    var kind = document.createElement('span');
+    kind.className = 'tracked-editor-kind muted';
+    kind.textContent = row.propertyType
+      ? 'Inactive · ' + row.propertyType
+      : 'Inactive house';
+    identity.appendChild(kind);
+    item.appendChild(identity);
+    var actions = document.createElement('div');
+    actions.className = 'tracked-editor-actions';
+    var reactivate = document.createElement('button');
+    reactivate.type = 'button';
+    reactivate.className = 'small-btn';
+    reactivate.textContent = 'Reactivate';
+    reactivate.addEventListener('click', function() {
+      reactivateHouseFromManage_(row);
+    });
+    actions.appendChild(reactivate);
+    item.appendChild(actions);
+    host.appendChild(item);
+  });
+}
+
+function reactivateHouseFromManage_(row) {
+  var name = String(row && row.houseName || '').trim();
+  var sysHouseAssetsRow = parseInt(String(row && row.sysHouseAssetsRow || ''), 10);
+  if (!name || !isFinite(sysHouseAssetsRow) || sysHouseAssetsRow < 2) return;
+  openDashboardConfirm_({
+    eyebrow: 'Properties',
+    title: 'Reactivate this house?',
+    subjectLabel: 'House',
+    subject: name,
+    message: 'This house will return to active CashCompass tracking and property calculations.',
+    consequences: [
+      'Existing value history, property details, linked records, and expense history are preserved.',
+      'CashCompass restores the existing house; it does not create a duplicate.'
+    ],
+    cancelLabel: 'Keep inactive',
+    confirmLabel: 'Reactivate house',
+    danger: false,
+    onConfirm: function() {
+      setStatusLoading('house_status', 'Reactivating house…');
+      google.script.run
+        .withSuccessHandler(function(res) {
+          setStatus('house_status', (res && res.message) || 'House reactivated.', false);
+          loadHouseSection();
+          if (typeof loadHouseExpensesSection === 'function') {
+            try { loadHouseExpensesSection(); } catch (e) {}
+          }
+          if (typeof refreshSnapshot === 'function') refreshSnapshot();
+        })
+        .withFailureHandler(function(err) {
+          setStatus('house_status', (err.message || String(err)), true);
+        })
+        .reactivateHouseFromDashboard({
+          sysHouseAssetsRow: sysHouseAssetsRow,
+          expectedHouseName: name
+        });
+    }
+  });
 }
 
 function loadHouseSection() {
   const initialLoadTiming = startDashboardInitialLoadStage_('houses');
   document.getElementById('house_date').value = new Date().toISOString().slice(0, 10);
   setSelectLoading('house_house', 'Loading houses…');
+  __houseInactiveRows = [];
   updateHouseUpdateAvailability_();
   runReadOnlyRpcWithRetry_({
     invoke: function(onSuccess, onFailure) {
@@ -387,7 +490,8 @@ function stopTrackingHouse() {
     message: 'This house will leave current property selectors and calculations.',
     consequences: [
       'All past values and expenses remain available for reporting.',
-      'The underlying house sheet and history are preserved.'
+      'The underlying house sheet and history are preserved.',
+      'You can restore this same house later from Manage houses → Show inactive houses.'
     ],
     cancelLabel: 'Keep tracking',
     confirmLabel: 'Stop tracking',

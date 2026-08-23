@@ -822,6 +822,38 @@
           !manageHasStop('house_manage_list') || document.getElementById('house_stop_btn')) {
         trackedEditorFailures.push('House manage inventory');
       }
+      var houseLifecyclePass = false;
+      {
+        var houseManageHost = document.getElementById('house_manage_list');
+        var houseStopButton = Array.prototype.find.call(
+          houseManageHost ? houseManageHost.querySelectorAll('button') : [],
+          function(button) { return String(button.textContent || '').trim() === 'Stop tracking'; }
+        );
+        if (houseStopButton) houseStopButton.click();
+        await acceptCashCompassConfirmation_('House Stop tracking');
+        await waitFor(function() {
+          return !hasOption('house_house', expected.houseName) &&
+            (__houseInactiveRows || []).some(function(row) {
+              return String(row.houseName || '') === expected.houseName && row.sysHouseAssetsRow;
+            });
+        }, 90000, 'House Stop tracking lifecycle');
+        renderInactiveHouses_();
+        var inactiveHouseHost = document.getElementById('house_inactive_list');
+        var reactivateHouseButton = Array.prototype.find.call(
+          inactiveHouseHost ? inactiveHouseHost.querySelectorAll('button') : [],
+          function(button) { return String(button.textContent || '').trim() === 'Reactivate'; }
+        );
+        if (reactivateHouseButton) reactivateHouseButton.click();
+        await acceptCashCompassConfirmation_('House Reactivate');
+        await waitFor(function() {
+          return hasOption('house_house', expected.houseName) &&
+            !(__houseInactiveRows || []).some(function(row) {
+              return String(row.houseName || '') === expected.houseName;
+            });
+        }, 90000, 'House Reactivate lifecycle');
+        houseLifecyclePass = true;
+      }
+      if (!houseLifecyclePass) trackedEditorFailures.push('House Stop/Reactivate lifecycle');
 
       if (typeof showTab === 'function') showTab('investments');
       if (typeof loadInvestmentSectionThenSelect_ === 'function') loadInvestmentSectionThenSelect_(expected.investmentName);
@@ -924,7 +956,7 @@
       add('tracked_editor_convergence', trackedEditorFailures.length === 0,
         trackedEditorFailures.length
           ? ('Tracked-editor gaps: ' + trackedEditorFailures.join(', '))
-          : 'Bank Accounts and Investments proved one-save Edit/Rename plus Stop/Reactivate; Houses keep Update Save-only and Manage-owned lifecycle actions.');
+          : 'Bank Accounts and Investments proved one-save Edit/Rename plus Stop/Reactivate; Houses proved preserved-row Stop/Reactivate while Update stayed Save-only.');
 
       if (typeof showTab === 'function') showTab('debts');
       if (typeof loadDebtSectionThenSelect_ === 'function') loadDebtSectionThenSelect_(expected.debtName);

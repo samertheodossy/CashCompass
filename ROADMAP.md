@@ -8,7 +8,7 @@
 
 ---
 
-## Current status (2026-08-21)
+## Current status (2026-08-22)
 
 **Completed:**
 
@@ -32,6 +32,7 @@
 - ✅ **Shared dynamic changed-column fit `3p` / `REG-070` on isolated `@341`** — one best-effort helper now fits every text or numeric column changed by supported Debt, Bill, Bank, Investment, House, and Income add/edit/rename/value-save paths, including linked Cash Flow columns. It adds a 24 px rendering gutter, caps width at 1000 px, and never converts a presentation failure into a failed financial/entity write. Disposable Bills integrity run `20260807-154251-d5e9` passed 14/14 in 24 s, including linked Payee, large formatted currency, and exact-gutter assertions; the fixture was trashed and the runner returned OFF. Manual sheet edits and unrelated non-entity writers remain outside this app-triggered contract. Beta stayed `@106`; bounded was untouched.
 - ✅ **Investment Edit/Rename/lifecycle convergence `3o.3` / `REG-071` on isolated `@343`** — Manage now uses one Edit/Save for Account name and Type, guarded stable-row Stop/Reactivate, and a current-year-plus-active-SYS predicate so older-year-only names such as Lending Club appear under Inactive rather than masquerading as current editable accounts. Populated run `FR-ec5cf708-d20a-4bd2-a539-2a3cc139aefc` passed 26/26, including Investment rename/restore and Stop/Reactivate, with Restricted single-owner sharing, zero browser errors, verified Trash cleanup, and `active: null`. The user visually confirmed name propagation in `INPUT - Investments` and `SYS - Assets`. Beta stayed `@106`; bounded was untouched.
 - ✅ **Tracked-editor single-entry cleanup `REG-072` on isolated `@352`** — House, Bank Account, and Investment Manage views no longer repeat the primary **Add new** action already provided by their segmented mode control. Manage retains only lifecycle-specific controls such as Edit, Stop tracking, Show inactive, Reactivate, and guarded import tools. Permanent Dashboard UX coverage enforces one standard Add entry point, the full local suite passes, and the owner visually approved the common-source presentation on the bounded app. No writer, formula, financial rule, workbook schema, or workbook data changed. Central Beta stayed `@106`.
+- ✅ **Bills lifecycle convergence** — commit `bb20008` is on `origin/main`. Bills now use CashCompass-owned confirmations, counted inactive discovery, exact preserved-row Reactivate with stale/duplicate guards, Add refusal for active or inactive identities, and non-monetary `bill_reactivate` evidence. The Bills Regression suite passed on isolated Central `@387` with verified fixture cleanup and the runner OFF; the owner also completed bounded review. Central Beta stayed `@106`.
 
 **Now / next:**
 
@@ -41,32 +42,36 @@
   evidence corrections, independent reserve and Balanced-pacing protections,
   gross current-cash 30/90-day solvency checks, and the accepted Overview/Debt
   presentation. Do not reopen ordinary Overview or Debt UX work.
-- **Highest-priority accuracy milestone:** **Cash + Credit Card Import / Refresh**,
-  initially shadow-only. Implement revolving-debt/credit-card evidence first
-  because it controls debt-paydown safety, then bank/cash evidence. Ingest
-  balances, contractual minimums, due dates, applicable APRs, and supporting
-  statement/account facts with effective/observed timestamps, freshness, and
-  provenance; then compare them exactly with the manually maintained values
-  Planning currently consumes. The canonical cross-domain lifecycle and later
-  domain order live in `PART_2A_FINANCIAL_FACTS_CONTRACT.md → §§11–15`.
+- **Current product-consistency slice:** finish the House **Stop → inactive →
+  Reactivate** lifecycle on the preserved identity. The source candidate exposes
+  counted inactive Houses in Manage, restores only exact stale-checked House
+  Values/House Assets Active cells, preserves the `HOUSES - <name>` history and
+  linked debt evidence, blocks Add from bypassing recovery, and records
+  `house_reactivate`. This slice is runtime-complete on isolated Central `@391`:
+  House Financial Accuracy passed 2/2 scenarios and 50/50 assertions, both
+  Restricted fixtures were verified TRASHED, and the runner returned OFF. The
+  shared confirmation is also outside every workspace page so the initiating
+  House surface displays it immediately. House metadata Edit/Rename remains a
+  separate `3o` gap.
 - **Authority boundary:** the frozen checkpoint certifies calculation semantics,
   not institution-current balances. The existing manual facts are known stale.
   This next slice does not silently switch Planning authority, execute payments,
   or broadly import transactions. Any authority migration requires a later
   explicit checkpoint.
-- **Paused, not waived:** finish `3o` Houses and Income after the core
-  Import / Refresh accuracy slice. Debt, Bank Account, and Investment convergence are
-  runtime-complete through isolated `@343`; shared changed-column fit `3p` is
-  complete through `@341`. The remaining contract is explicit inactive
-  inventory plus Reactivate of the existing identity, with Edit/Rename where
-  applicable, history preservation, duplicate/stale guards, coordinated
-  rollback, and Activity evidence. Bills is source-complete in the current
-  candidate: Manage exposes counted inactive rows, Reactivate restores the
-  stale-guarded preserved row under lock, Add refuses active/inactive duplicate
-  identities, and `bill_reactivate` records lifecycle evidence. Isolated runtime
-  and owner bounded acceptance remain pending. Financial follow-up `5n` remains folded into the `RFP-1`
+- **Next after this House slice:** Income lifecycle parity remains separate and
+  open. Debt, Bank Account, and Investment convergence are runtime-complete
+  through isolated `@343`; Bills is complete through the `@387` suite and owner
+  bounded review; shared changed-column fit `3p` is
+  complete through `@341`. House metadata Edit/Rename and Income's inactive
+  inventory, guarded Reactivate, and lifecycle evidence remain explicit `3o`
+  gaps after House Stop/Reactivate closes. Financial follow-up `5n` remains folded into the `RFP-1`
   reporting-basis audit and closes only if its own reconciliation exit criteria
   pass.
+- **Deferred, not removed:** the shadow-only **Cash + Credit Card Import /
+  Refresh** milestone remains the next financial-facts program after the current
+  lifecycle sequence is explicitly reopened. Revolving-debt evidence still
+  precedes bank/cash evidence; no current lifecycle work switches Planning
+  authority or broadens into transaction ingestion.
 - Customer-facing operations/support/privacy work (`6a`–`6f`) and the broad
   `3j` responsive/accessibility closeout remain deferred, not waived. Beta
   remains `@106`; bounded deployment and workbook control remain with the user.
@@ -98,8 +103,8 @@ must be based on measured compound-operation evidence after its focused redesign
 | Completed Aug 1 | Closed `REG-041` styled Bill Skip and `REG-042` Bills Due source authority in `433bfed`; user-verified on isolated Central `@299`, while Beta and bounded remained unchanged. |
 | Completed Aug 5 | Closed `4a`–`4c`, `4e`, and `4f` for source `8aa4bf5` on isolated `@318`; exact-owner Performance passed 20/20 with ratified Planner p50/p95 budgets, Restricted fixtures, verified cleanup, Beta `@106`, and bounded untouched. |
 | Completed Aug 6 | Closed combined UX items `3e`–`3i` and `3m` on isolated `@325`; Populated 24/24 and First-Run 16/16 passed with Restricted fixtures and verified cleanup. |
-| Current | Execute `RFP-1`: read-only household funding reconciliation and decision contract. No schema, writer, calculation, UI, or deployment change. |
-| Next | Preserve the frozen Planning foundation, complete the current accuracy milestone, then resume `3o` Houses → Income and the pending Bills runtime proof. |
+| Completed Aug 22 | House Stop/Reactivate is runtime-complete on isolated `@391`: 2/2 scenarios, 50/50 assertions, both Restricted fixtures TRASHED, runner OFF, and the shared confirmation visible from every workspace. |
+| Next | Close House metadata Edit/Rename only as a separately scoped `3o` slice, then implement Income lifecycle parity. Cash + Credit Card Import / Refresh remains deferred until explicitly reopened. |
 | Candidate preparation | Close financial/workbook/recovery proof `5a`–`5f`, operations/support `6a`–`6f`, and monetization-ready architecture `7a`–`7f`. |
 | Frozen candidate | Complete `8a`–`8f`, the exact-candidate advocate rerun `3k`, and full Release Readiness; rerun Performance under `8b` if the frozen source/deployment differs from `8aa4bf5` / `@318`. |
 | Promotion | Complete `9a`–`9e`: five-to-seven-day supervised cohort, final scorecard, go/no-go, and separately approved Beta promotion. |
@@ -571,10 +576,11 @@ implementation.
   milestone; any future label change requires its own focused approval.
 - **Planning foundation checkpoint after 2A-5:** Overview and Debt are frozen,
   30/90-day safety is proven, and calculation semantics are stable. Manually
-  maintained cash/card facts are nevertheless known to be stale. The next
-  accuracy milestone is real customer Cash + Credit Card Import / Refresh,
-  initially shadow-only, with effective dates, freshness, provenance, and exact
-  comparison against current Planning values. The combined authority switch,
+  maintained cash/card facts are nevertheless known to be stale. Real customer
+  Cash + Credit Card Import / Refresh remains the next financial-facts accuracy
+  milestone when explicitly reopened, initially shadow-only, with effective
+  dates, freshness, provenance, and exact comparison against current Planning
+  values. The combined authority switch,
   persisted Current Facts, payment execution, broad transaction import, and
   authority migration remain stopped behind later explicit review.
 - **Canonical long-term import/data model:**
@@ -586,11 +592,12 @@ implementation.
   property/retirement/known commitments plus targeted transaction evidence;
   then a separately approved authority migration.
 
-**Remaining broad-Beta sequence:** preserve the frozen Planning foundation while
-the shadow-only Cash + Credit Card Import / Refresh accuracy milestone proceeds;
-retain residual `RFP-4`/`RFP-5` broader-experience and evidence work as separate
-future items rather than reopening Overview/Debt UX;
-resume and close `3o` Houses and Income plus the pending Bills runtime proof; close the separate `3j` task; return to
+**Remaining broad-Beta sequence:** preserve the frozen Planning foundation;
+finish the current `3o` House lifecycle slice, then the separately scoped House
+metadata and Income lifecycle work; keep Cash + Credit Card Import / Refresh
+deferred until explicitly reopened; retain residual `RFP-4`/`RFP-5`
+broader-experience and evidence work as separate future items rather than
+reopening Overview/Debt UX; close the separate `3j` task; return to
 the deferred `5j`–`5m` correction families; finish `5a`–`5f`
 financial/workbook/recovery proof; finish `6a`–`6f` operations and
 `7a`–`7f` product foundation; then complete frozen-candidate evidence `8a`–`8f`

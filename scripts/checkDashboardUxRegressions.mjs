@@ -50,6 +50,7 @@ const files = Object.fromEntries(await Promise.all([
   'rolling_debt_payoff.js',
   'upcoming_expenses.js',
   'test_harness_scenarios_bills.js',
+  'test_harness_scenarios_house_financial_accuracy.js',
   'test_harness_scenarios.js',
   'test_harness_scenarios_quick_add.js',
   'AdminDiagnostics.html'
@@ -83,6 +84,20 @@ for (const [name, source] of browserUiSources) {
 assert.match(files['Dashboard_Body.html'],
   /id="dashboard_confirm_dialog"[\s\S]*?role="dialog"[\s\S]*?aria-modal="true"[\s\S]*?id="dashboard_confirm_cancel_btn"[\s\S]*?id="dashboard_confirm_submit_btn"/,
   'The web dashboard must provide one accessible reusable CashCompass confirmation surface');
+assert.equal(
+  (files['Dashboard_Body.html'].match(/id=["']dashboard_confirm_backdrop["']/g) || []).length,
+  1,
+  'The web dashboard must render exactly one shared CashCompass confirmation surface'
+);
+const confirmationAncestors = openHtmlAncestorsAtId_(
+  files['Dashboard_Body.html'],
+  'dashboard_confirm_backdrop'
+);
+assert.equal(
+  confirmationAncestors.some((ancestor) => ancestor.classes.includes('workspace-page')),
+  false,
+  'The shared confirmation must live outside every workspace page so it is visible from every surface'
+);
 assert.match(render,
   /function openDashboardConfirm_\(options\)[\s\S]*?cancel\.focus\(\)[\s\S]*?function closeDashboardConfirm_\(confirmed\)/,
   'The shared confirmation must focus the safe action and own cancel/confirm behavior');
@@ -1509,8 +1524,8 @@ const assetsAndLiabilities = body.slice(
   body.indexOf('<div id="page_cashflow"')
 );
 assert.match(assetsAndLiabilities,
-  /<h2>Assets &amp; Liabilities<\/h2>[\s\S]*?data-tab="houses"[\s\S]*?data-tab="bank"[\s\S]*?data-tab="investments"[\s\S]*?data-tab="debts"/,
-  'Assets & Liabilities must present all four balance-maintenance editors');
+  /<h2>Assets &amp; Liabilities<\/h2>[\s\S]*?data-tab="bank"[^>]*>Bank accounts<\/button>[\s\S]*?data-tab="debts"[^>]*>Debts<\/button>[\s\S]*?data-tab="investments"[^>]*>Investments<\/button>[\s\S]*?data-tab="houses"[^>]*>Houses<\/button>/,
+  'Assets & Liabilities must present Bank accounts, Debts, Investments, and Houses in the approved order');
 assert.match(render,
   /function dashboardPageForTab_\(name\)[\s\S]*?name === 'investments' \|\| name === 'debts'\) return 'assets'/,
   'Debt accounts must belong to Assets & Liabilities navigation');
@@ -2817,6 +2832,27 @@ assert.match(files['activity_log.js'],
 assert.match(files['house_values.js'],
   /function updateHouseValueByDate\(payload\)[\s\S]*?changed-column fit[\s\S]*?function addHouseFromDashboardLocked_\(payload\)[\s\S]*?fitContentColumnsToContents_\(\[[\s\S]*?valueCol/,
   'House add and value update must fit INPUT and SYS text and currency columns');
+assert.match(body,
+  /id="house_mode_manage_wrap"[\s\S]*?class="tracked-editor-manage-head"[\s\S]*?class="tracked-editor-actions"[\s\S]*?id="house_show_inactive_btn" class="small-btn debt-inactive-toggle"[^>]*aria-controls="house_inactive_wrap"[\s\S]*?id="house_manage_list"[\s\S]*?id="house_inactive_wrap" class="debt-inactive-section"[\s\S]*?id="house_inactive_list"/,
+  'House Manage must place its counted inactive toggle in the same top-right action area as Bank, Investment, and Debt Manage');
+assert.match(files['Dashboard_Script_AssetsHouseValues.html'],
+  /function renderInactiveHouses_\([\s\S]*?Reactivate[\s\S]*?function reactivateHouseFromManage_\([\s\S]*?openDashboardConfirm_[\s\S]*?reactivateHouseFromDashboard/,
+  'House Manage must reactivate preserved rows through the CashCompass confirmation surface');
+assert.match(files['Dashboard_Script_AssetsHouseValues.html'],
+  /setHousePanelMode\(__houseInactiveRows\.length \? 'manage' : 'add'\)/,
+  'A workbook with only inactive Houses must route to recovery instead of Add');
+assert.match(files['house_values.js'],
+  /function getHouseUiDataForSpreadsheet_\(ss\)[\s\S]*?sysHouseAssetsRow:\s*r \+ 1[\s\S]*?inactiveHouses[\s\S]*?historyNames/,
+  'House UI data must return only preserved inactive identities backed by House Values history');
+assert.match(files['house_values.js'],
+  /function reactivateHouseFromDashboard\(payload, optionalSs\)[\s\S]*?LockService\.getUserLock\(\)[\s\S]*?sysHouseAssetsRow[\s\S]*?expectedHouseName[\s\S]*?House identity is ambiguous[\s\S]*?getHouseValuesLifecycleTargets_[\s\S]*?HOUSES - [\s\S]*?changes were rolled back[\s\S]*?house_reactivate/,
+  'House Reactivate must lock, stale-check, reconcile every preserved identity surface, roll back partial writes, and log lifecycle evidence');
+assert.match(files['house_values.js'],
+  /function validateNewHouseName_\(raw, optionalSs\)[\s\S]*?getHousesFromHouseValues_\(ss\)[\s\S]*?houseExistsInHouseAssetsSheet_\(name, ss\)[\s\S]*?HOUSES - /,
+  'House Add must continue reserving active and inactive identities across every House store');
+assert.match(files['activity_log.js'],
+  /house_reactivate[\s\S]*?Tracking resumed/,
+  'House Reactivate must render as non-monetary lifecycle evidence in Activity');
 assert.match(files['income_sources.js'],
   /function addIncomeSourceFromDashboard\(payload\)[\s\S]*?incomeFitTargets[\s\S]*?headerMap\.payeeCol[\s\S]*?monthCol[\s\S]*?fitContentColumnsToContents_/,
   'Income add/reactivation must fit Cash Flow text and amount columns');
@@ -3401,6 +3437,31 @@ for (const label of [
 ]) {
   assert.ok(files['AdminDiagnostics.html'].includes(label),
     `Admin Diagnostics must identify the ${label} state`);
+}
+
+function openHtmlAncestorsAtId_(source, targetId) {
+  const voidTags = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
+  const stack = [];
+  const html = source.replace(/<!--[\s\S]*?-->/g, '');
+  const tagPattern = /<\/?([A-Za-z][\w:-]*)(?:\s[^<>]*?)?>/g;
+  let match;
+  while ((match = tagPattern.exec(html))) {
+    const token = match[0];
+    const tag = match[1].toLowerCase();
+    if (/^<\//.test(token)) {
+      const openIndex = stack.map((node) => node.tag).lastIndexOf(tag);
+      if (openIndex >= 0) stack.splice(openIndex);
+      continue;
+    }
+
+    const id = token.match(/\bid\s*=\s*["']([^"']+)["']/i)?.[1] || '';
+    const classes = (token.match(/\bclass\s*=\s*["']([^"']*)["']/i)?.[1] || '')
+      .split(/\s+/)
+      .filter(Boolean);
+    if (id === targetId) return stack.slice();
+    if (!/\/>$/.test(token) && !voidTags.has(tag)) stack.push({ tag, id, classes });
+  }
+  assert.fail(`${targetId} must exist for HTML ancestor regression coverage`);
 }
 
 function functionSource_(source, name) {

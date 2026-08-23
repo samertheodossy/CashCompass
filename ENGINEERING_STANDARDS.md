@@ -68,6 +68,20 @@ Every newly created sheet should be **immediately readable** — users should ne
 - Prefer **canonical widths** over auto-resize where appropriate.
 - Use **widen-only** logic where applicable (never shrink a user's column).
 
+### 5.1 CashCompass Web UI Consistency
+
+Every web-app UI change must begin by inventorying the equivalent CashCompass
+surfaces and identifying the established product pattern. Reuse the existing
+component, placement, spacing, wording, interaction model, responsive behavior,
+focus behavior, and loading/empty/error states whenever the user intent is the
+same. A new or divergent pattern requires a documented product reason; local
+convenience or the absence of a nearby helper is not sufficient.
+
+Permanent regressions must protect the shared rule, including relative placement
+when placement communicates meaning. Review must compare the changed surface
+against its peers at default and narrow widths so CashCompass remains one uniform
+product rather than a collection of independently styled modules.
+
 ### 6. Safe Self-Heal
 
 Self-heal operations must be **additive**, **idempotent**, and **narrowly scoped** — never destructive, and never a rewrite of an entire populated sheet.

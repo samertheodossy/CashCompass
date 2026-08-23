@@ -211,8 +211,9 @@ function getHarnessSuites_() {
     {
       id: 'SUITE-HOUSE-FINANCIAL-ACCURACY',
       label: 'House Financial Accuracy',
-      description: 'Validate styled Debts-to-property schema evolution plus actual linked-loan payments and Property Performance reconciliation on Restricted disposable workbooks.',
+      description: 'Validate House Stop/Reactivate identity preservation plus styled Debts-to-property schema evolution, actual linked-loan payments, and Property Performance reconciliation on Restricted disposable workbooks.',
       scenarioIds: [
+        'REGRESSION-HOUSE-LIFECYCLE',
         'REGRESSION-HOUSE-DEBT-LINK-SCHEMA'
       ]
     },
