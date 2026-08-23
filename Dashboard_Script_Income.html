@@ -14,6 +14,7 @@
  *   stopTrackingIncomeSource()   — confirm + POST
  *                                  deactivateIncomeSourceFromDashboard
  *                                  (deactivates every matching Cash Flow row)
+ *   reactivateIncomeSource()     — confirm + restore tracking only
  *
  * No separate INPUT - Income Sources sheet is involved.
  */
@@ -24,6 +25,26 @@
 
 var __incomeStatusClearTimer = null;
 var INCOME_STATUS_AUTOCLEAR_MS_ = 4000;
+
+function setIncomePanelMode_(mode) {
+  var next = mode === 'add' || mode === 'manage' ? mode : 'current';
+  ['current', 'add', 'manage'].forEach(function(name) {
+    var btn = document.getElementById('income_mode_' + name + '_btn');
+    var wrap = document.getElementById('income_mode_' + name + '_wrap');
+    var active = name === next;
+    if (btn) {
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    }
+    if (wrap) wrap.classList.toggle('active', active);
+  });
+  if (next === 'add') {
+    var input = document.getElementById('income_add_name');
+    if (input && typeof input.focus === 'function') {
+      try { input.focus(); } catch (e) { /* ignore */ }
+    }
+  }
+}
 
 function setIncomeStatus_(msg, isError) {
   if (__incomeStatusClearTimer) {
@@ -47,19 +68,32 @@ function setIncomeStatus_(msg, isError) {
 
 function loadIncomeSourcesSection() {
   var el = document.getElementById('income_manage_list');
+  var overviewEl = document.getElementById('income_overview_list');
   if (!el) return;
   var initialLoadTiming = startDashboardInitialLoadStage_('income_sources');
   el.innerHTML = loadingBlockHtml('Loading income sources…');
+  if (overviewEl) overviewEl.innerHTML = loadingBlockHtml('Loading income sources…');
+  renderInactiveIncomeSources_(null);
 
   runReadOnlyRpcWithRetry_({
     invoke: function(onSuccess, onFailure) {
       google.script.run
         .withSuccessHandler(onSuccess)
         .withFailureHandler(onFailure)
-        .getActiveIncomeSourcesForManagementFromDashboard();
+        .getIncomeSourcesForManagementFromDashboard();
     },
-    onSuccess: function(rows) {
-      var list = Array.isArray(rows) ? rows : [];
+    onSuccess: function(payload) {
+      if (!payload || !Array.isArray(payload.activeSources) || !Array.isArray(payload.inactiveSources)) {
+        var invalidPayloadHtml =
+          '<div class="muted">Couldn&rsquo;t load income sources &mdash; ' +
+          'The income inventory response was incomplete. Please refresh and try again.</div>';
+        el.innerHTML = invalidPayloadHtml;
+        if (overviewEl) overviewEl.innerHTML = invalidPayloadHtml;
+        finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
+        return;
+      }
+      var active = payload.activeSources;
+      var inactive = payload.inactiveSources;
       var updatedEl = document.getElementById('income_updated');
       if (updatedEl) {
         try {
@@ -68,39 +102,83 @@ function loadIncomeSourcesSection() {
           updatedEl.textContent = '—';
         }
       }
-      renderIncomeSourcesList_(list);
+      renderIncomeOverviewList_(active);
+      renderIncomeSourcesList_(active, inactive);
+      loadIncomeOtherDetected_();
       finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
     },
     onRetry: function() {
       el.innerHTML = loadingBlockHtml('Connection interrupted. Retrying income sources…');
+      if (overviewEl) {
+        overviewEl.innerHTML = loadingBlockHtml('Connection interrupted. Retrying income sources…');
+      }
     },
     onFailure: function(err) {
-      el.innerHTML =
+      var errorHtml =
         '<div class="muted">Couldn&rsquo;t load income sources &mdash; ' +
         escapeHtml(customerSafeErrorMessage_(err && err.message ? err.message : String(err),
           'Could not load income sources. Please refresh and try again.')) +
         '</div>';
+      el.innerHTML = errorHtml;
+      if (overviewEl) overviewEl.innerHTML = errorHtml;
       finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
     }
   });
 }
 
-function renderIncomeSourcesList_(rows) {
+function renderIncomeOverviewList_(rows) {
+  var el = document.getElementById('income_overview_list');
+  if (!el) return;
+  if (!rows.length) {
+    el.innerHTML =
+      '<div class="income-empty-state">' +
+        '<div class="muted">No active recurring income sources. Use <strong>Add income</strong> to record one or <strong>Manage income</strong> to restore an inactive source.</div>' +
+      '</div>';
+    return;
+  }
+  var rowsHtml = rows.map(function(r) {
+    return (
+      '<tr>' +
+        '<td style="padding:8px;border-bottom:1px solid #f1f5f9;"><strong>' + escapeHtml(r.sourceName || 'Income source') + '</strong></td>' +
+        '<td class="income-manage-num" style="padding:8px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap;">' +
+          (Number(r.amount) > 0 ? fmtCurrency(Number(r.amount)) : '<span class="muted">—</span>') +
+        '</td>' +
+        '<td style="padding:8px;border-bottom:1px solid #f1f5f9;">' +
+          (r.frequency ? escapeHtml(r.frequency) : '<span class="muted">—</span>') +
+        '</td>' +
+      '</tr>'
+    );
+  }).join('');
+  el.innerHTML =
+    '<div class="income-overview-tablewrap" style="overflow-x:auto;">' +
+      '<table class="income-overview-table" style="width:100%;border-collapse:collapse;">' +
+        '<thead><tr>' +
+          '<th scope="col" style="text-align:left;padding:8px;border-bottom:1px solid #e5e7eb;">Source</th>' +
+          '<th scope="col" class="income-manage-num" style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Avg Amount</th>' +
+          '<th scope="col" style="text-align:left;padding:8px;border-bottom:1px solid #e5e7eb;">Frequency</th>' +
+        '</tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody>' +
+      '</table>' +
+    '</div>';
+}
+
+function renderIncomeSourcesList_(rows, inactiveRows) {
   var el = document.getElementById('income_manage_list');
   if (!el) return;
 
   window.__dashboardActiveIncomeSources = {};
-
-  // Fire the reference-only "Other detected income" probe on every
-  // render path so the section stays in sync with whatever is/isn't in
-  // the main table. Best-effort — the loader handles its own failures.
-  loadIncomeOtherDetected_();
+  window.__dashboardInactiveIncomeSources = {};
 
   if (!rows.length) {
     el.innerHTML =
       '<div class="income-empty-state">' +
-        '<div class="muted">No recurring income yet. Use <strong>+ Add income source</strong> above to log one on this year\'s Cash Flow.</div>' +
+        '<div class="muted">No active recurring income sources. ' +
+          ((inactiveRows && inactiveRows.length)
+            ? 'Use <strong>Show inactive income sources</strong> to restore a preserved source.'
+            : 'Use <strong>Add income</strong> to log one on this year\'s Cash Flow.') +
+        '</div>' +
       '</div>';
+    renderInactiveIncomeSources_(inactiveRows);
     return;
   }
 
@@ -146,6 +224,60 @@ function renderIncomeSourcesList_(rows) {
         '<tbody>' + rowsHtml + '</tbody>' +
       '</table>' +
     '</div>';
+  renderInactiveIncomeSources_(inactiveRows);
+}
+
+function renderInactiveIncomeSources_(rows) {
+  var toggle = document.getElementById('income_inactive_toggle');
+  var wrap = document.getElementById('income_inactive_wrap');
+  var list = document.getElementById('income_inactive_list');
+  if (!toggle || !wrap || !list) return;
+  window.__dashboardInactiveIncomeSources = {};
+  if (!Array.isArray(rows)) {
+    toggle.style.display = 'none';
+    toggle.setAttribute('aria-expanded', 'false');
+    wrap.style.display = 'none';
+    list.innerHTML = '';
+    return;
+  }
+  var count = rows.length;
+  if (!count) {
+    toggle.style.display = 'none';
+    toggle.setAttribute('aria-expanded', 'false');
+    wrap.style.display = 'none';
+    list.innerHTML = '';
+    return;
+  }
+  toggle.style.display = '';
+  toggle.setAttribute('aria-expanded', wrap.style.display !== 'none' ? 'true' : 'false');
+  toggle.textContent = (wrap.style.display === 'none' ? '▸ Show' : '▾ Hide') +
+    ' inactive income sources (' + count + ')';
+  list.innerHTML = rows.map(function(src, idx) {
+    var key = 'inactive-income::' + idx;
+    window.__dashboardInactiveIncomeSources[key] = src;
+    return (
+      '<div class="tracked-editor-row">' +
+        '<div><strong>' + escapeHtml(src.sourceName || 'Income source') + '</strong>' +
+          '<div class="muted">' + fmtCurrency(Number(src.amount) || 0) + ' average · History preserved</div>' +
+        '</div>' +
+        '<div class="tracked-editor-actions">' +
+          '<button type="button" class="small-btn" onclick="reactivateIncomeSource(\'' + escapeJs(key) + '\')">Reactivate</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+}
+
+function toggleInactiveIncomeSources_() {
+  var wrap = document.getElementById('income_inactive_wrap');
+  var toggle = document.getElementById('income_inactive_toggle');
+  if (!wrap || !toggle) return;
+  if (Object.keys(window.__dashboardInactiveIncomeSources || {}).length === 0) return;
+  wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
+  toggle.setAttribute('aria-expanded', wrap.style.display === 'none' ? 'false' : 'true');
+  var count = Object.keys(window.__dashboardInactiveIncomeSources || {}).length;
+  toggle.textContent = (wrap.style.display === 'none' ? '▸ Show' : '▾ Hide') +
+    ' inactive income sources (' + count + ')';
 }
 
 /* -------------------------------------------------------------------------- */
@@ -251,47 +383,20 @@ function renderIncomeOtherDetected_(payload) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Add form (show / hide / reset)                                            */
+/*  Add mode / form reset                                                     */
 /* -------------------------------------------------------------------------- */
 
 function toggleIncomeAddForm() {
-  var wrap = document.getElementById('income_add_wrap');
-  var btn = document.getElementById('income_add_toggle_btn');
-  if (!wrap || !btn) return;
-
-  var isOpen = wrap.style.display !== 'none';
-  if (isOpen) {
-    closeIncomeAddForm();
-  } else {
-    openIncomeAddForm_();
-  }
+  setIncomePanelMode_('add');
 }
 
 function openIncomeAddForm_() {
-  var wrap = document.getElementById('income_add_wrap');
-  var btn = document.getElementById('income_add_toggle_btn');
-  if (!wrap || !btn) return;
-
-  wrap.style.display = 'block';
-  btn.setAttribute('aria-expanded', 'true');
-  btn.textContent = 'Hide add income form';
-
-  var nameInput = document.getElementById('income_add_name');
-  if (nameInput) {
-    try { nameInput.focus(); } catch (e) { /* ignore */ }
-  }
+  setIncomePanelMode_('add');
 }
 
 function closeIncomeAddForm() {
-  var wrap = document.getElementById('income_add_wrap');
-  var btn = document.getElementById('income_add_toggle_btn');
-  if (wrap) wrap.style.display = 'none';
-  if (btn) {
-    btn.setAttribute('aria-expanded', 'false');
-    btn.textContent = '+ Add income source';
-  }
-  clearIncomeAddNameError_();
-  clearIncomeAddAmountError_();
+  resetIncomeAddForm_();
+  setIncomePanelMode_('current');
 }
 
 function resetIncomeAddForm_() {
@@ -387,7 +492,7 @@ function submitNewIncomeSource() {
       var msg = err && err.message ? String(err.message) : String(err);
       // Route duplicate-name errors to the name field so the fix path is
       // obvious; everything else falls back to the page-level status line.
-      if (/already tracked/i.test(msg)) {
+      if (/already (?:tracked|exists)/i.test(msg)) {
         setIncomeAddNameError_(msg);
         setIncomeStatus_('', false);
       } else {
@@ -439,7 +544,46 @@ function stopTrackingIncomeSource(key) {
         .deactivateIncomeSourceFromDashboard({
           groupKey: groupKey,
           year: year,
-          sourceName: src.sourceName || ''
+          sourceName: src.sourceName || '',
+          rows: Array.isArray(src.rows) ? src.rows : []
+        });
+    }
+  });
+}
+
+function reactivateIncomeSource(key) {
+  var src = (window.__dashboardInactiveIncomeSources || {})[key];
+  if (!src) {
+    setIncomeStatus_('Inactive income source not found.', true);
+    return;
+  }
+  openDashboardConfirm_({
+    eyebrow: 'Income',
+    title: 'Reactivate this income source?',
+    subjectLabel: 'Source',
+    subject: src.sourceName || 'Income source',
+    message: 'CashCompass will restore tracking for the preserved source.',
+    consequences: [
+      'No income amount will be recorded.',
+      'Existing Cash Flow history and monthly values will not change.'
+    ],
+    cancelLabel: 'Keep inactive',
+    confirmLabel: 'Reactivate',
+    onConfirm: function() {
+      setStatusLoading('income_status', 'Reactivating income source…');
+      google.script.run
+        .withSuccessHandler(function(res) {
+          setIncomeStatus_((res && res.message) || 'Income source reactivated.', false);
+          loadIncomeSourcesSection();
+        })
+        .withFailureHandler(function(err) {
+          setIncomeStatus_((err && err.message ? err.message : String(err)), true);
+        })
+        .reactivateIncomeSourceFromDashboard({
+          groupKey: src.groupKey || '',
+          year: src.year,
+          sourceName: src.sourceName || '',
+          rows: Array.isArray(src.rows) ? src.rows : []
         });
     }
   });

@@ -23,7 +23,9 @@ are known stale. Shadow-only Cash + Credit Card Import / Refresh remains the
 next financial-facts milestone when explicitly reopened. Bills lifecycle is
 complete. House Stop/Reactivate is runtime-complete on isolated `@391` with 2/2
 scenarios, 50/50 assertions, both fixtures TRASHED, and runner OFF; House
-metadata Edit/Rename and Income remain separate open `3o` work.
+metadata Edit/Rename remains separate open `3o` work. Income Stop/Reactivate is
+locally complete and awaits isolated disposable runtime validation; broader
+Income Edit/Rename remains unclaimed.
 
 `FULL_BETA_REMAINING_PLAN.md` is the authoritative numbered finish-line inventory
 for broad invited Beta. It assigns IDs `1a`–`9e`, focused-effort estimates,

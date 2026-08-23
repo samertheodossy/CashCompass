@@ -34,6 +34,12 @@ const requiredProductionPaths = {
     'ensureDebtsLinkedPropertyColumn_', 'buildCashFlowYearSheet_',
     'insertCashFlowRow_', 'getPropertyPerformanceDataForSpreadsheet_'
   ],
+  'test_harness_scenarios_income.js': [
+    'buildCashFlowYearSheet_', 'insertCashFlowRow_',
+    'getIncomeSourcesForManagementFromDashboard',
+    'deactivateIncomeSourceFromDashboard', 'reactivateIncomeSourceFromDashboard',
+    'addIncomeSourceFromDashboard'
+  ],
   'test_harness_scenarios_financial_integrity.js': [
     'ensureOnboardingBankAccountsSheetFromDashboard', 'ensureInputInvestmentsSheet_',
     'ensureInputHouseValuesSheet_', 'ensureOnboardingDebtsSheetFromDashboard',
@@ -99,6 +105,7 @@ const directWriteAllowlist = new Set([
   'test_harness_scenarios_quick_add.js',  // deliberate late-edit state simulation
   'test_harness_scenarios_maintenance.js', // deterministic Bill/Donation fixtures + forced audit rollback
   'test_harness_scenarios_house_financial_accuracy.js', // deliberate retired-schema fixture
+  'test_harness_scenarios_income.js',    // deterministic Income fixture + stale/ambiguous lifecycle challenges
   'test_harness_scenarios_financial_integrity.js' // deterministic Active/mirror discrepancy fixture
 ]);
 const entries = await readdir(root, { withFileTypes: true });

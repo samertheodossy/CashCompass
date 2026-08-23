@@ -1499,7 +1499,16 @@ function renderActiveBillsList_(rows) {
 
 function updateInactiveBillsToggleLabel_() {
   const btn = document.getElementById('bills_show_inactive_btn');
+  const wrap = document.getElementById('bills_inactive_wrap');
   if (!btn) return;
+  if (!__billsInactiveLoaded || __billsInactiveRows.length === 0) {
+    __billsInactiveVisible = false;
+    btn.style.display = 'none';
+    btn.setAttribute('aria-expanded', 'false');
+    if (wrap) wrap.style.display = 'none';
+    return;
+  }
+  btn.style.display = '';
   const caret = __billsInactiveVisible ? '\u25BE' : '\u25B8';
   const verb = __billsInactiveVisible ? 'Hide inactive bills' : 'Show inactive bills';
   const count = __billsInactiveLoaded ? ' (' + __billsInactiveRows.length + ')' : '';
@@ -1509,6 +1518,7 @@ function updateInactiveBillsToggleLabel_() {
 
 function toggleInactiveBillsView_() {
   const wrap = document.getElementById('bills_inactive_wrap');
+  if (!__billsInactiveLoaded || __billsInactiveRows.length === 0) return;
   __billsInactiveVisible = !__billsInactiveVisible;
   if (wrap) wrap.style.display = __billsInactiveVisible ? 'block' : 'none';
   updateInactiveBillsToggleLabel_();
@@ -1520,7 +1530,14 @@ function refreshInactiveBills_() {
   if (host) host.innerHTML = loadingBlockHtml('Loading inactive bills…');
   google.script.run
     .withSuccessHandler(function(rows) {
-      __billsInactiveRows = Array.isArray(rows) ? rows : [];
+      if (!Array.isArray(rows)) {
+        __billsInactiveLoaded = false;
+        if (host) host.innerHTML = '<p class="debt-inactive-empty">Couldn\u2019t load inactive bills — please try again.</p>';
+        setBillsStatus_('Could not load inactive bills. Please refresh and try again.', true);
+        updateInactiveBillsToggleLabel_();
+        return;
+      }
+      __billsInactiveRows = rows;
       __billsInactiveLoaded = true;
       renderInactiveBillsList_(__billsInactiveRows);
       updateInactiveBillsToggleLabel_();
@@ -1544,7 +1561,7 @@ function renderInactiveBillsList_(rows) {
   window.__dashboardInactiveBills = {};
 
   if (!__billsInactiveRows.length) {
-    host.innerHTML = '<p class="debt-inactive-empty">No inactive bills.</p>';
+    host.innerHTML = '';
     return;
   }
 

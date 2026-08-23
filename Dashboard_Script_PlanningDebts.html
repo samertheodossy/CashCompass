@@ -776,7 +776,16 @@ var __debtInactiveLoaded = false;
 // shown without a count so the control never flashes a misleading "(0)".
 function updateInactiveToggleLabel_() {
   const btn = document.getElementById('debt_show_inactive_btn');
+  const wrap = document.getElementById('debt_inactive_wrap');
   if (!btn) return;
+  if (!__debtInactiveLoaded || __debtInactiveRows.length === 0) {
+    __debtInactiveVisible = false;
+    btn.style.display = 'none';
+    btn.setAttribute('aria-expanded', 'false');
+    if (wrap) wrap.style.display = 'none';
+    return;
+  }
+  btn.style.display = '';
   const caret = __debtInactiveVisible ? '\u25BE' : '\u25B8'; // ▾ / ▸
   const verb = __debtInactiveVisible ? 'Hide inactive debts' : 'Show inactive debts';
   const count = __debtInactiveLoaded ? ' (' + __debtInactiveRows.length + ')' : '';
@@ -786,6 +795,7 @@ function updateInactiveToggleLabel_() {
 
 function toggleInactiveDebtsView_() {
   const wrap = document.getElementById('debt_inactive_wrap');
+  if (!__debtInactiveLoaded || __debtInactiveRows.length === 0) return;
   __debtInactiveVisible = !__debtInactiveVisible;
   if (wrap) wrap.style.display = __debtInactiveVisible ? 'block' : 'none';
   updateInactiveToggleLabel_();
@@ -810,8 +820,10 @@ function refreshInactiveDebts_() {
       updateInactiveToggleLabel_();
     })
     .withFailureHandler(function(err) {
+      __debtInactiveLoaded = false;
       if (host) host.innerHTML = '<p class="debt-inactive-empty">Couldn\u2019t load inactive debts — please try again.</p>';
       setStatus('debt_status', (err.message || String(err)), true);
+      updateInactiveToggleLabel_();
     })
     .getInactiveDebtsForManagementFromDashboard();
 }
@@ -824,7 +836,7 @@ function renderInactiveDebtsList_(rows) {
   window.__dashboardInactiveDebts = {};
 
   if (!__debtInactiveRows.length) {
-    host.innerHTML = '<p class="debt-inactive-empty">No inactive debts.</p>';
+    host.innerHTML = '';
     return;
   }
 

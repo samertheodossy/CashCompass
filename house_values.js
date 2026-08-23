@@ -346,6 +346,7 @@ function getHouseUiDataForSpreadsheet_(ss) {
     }
   } catch (e) {
     Logger.log('getHouseUiData house-assets read: ' + e);
+    throw new Error('Could not load the house lifecycle inventory. Please refresh and try again.');
   }
 
   // Selectors only surface currently-active houses. History storage

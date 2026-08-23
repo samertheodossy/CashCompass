@@ -5,12 +5,12 @@ var bankSectionRequestId_ = 0;
 var __bankUiData = null;
 var __bankManagementRows = [];
 var __bankManagementByName = Object.create(null);
-var __bankInactiveRows = [];
+var __bankInactiveRows = null;
 var __bankEditing = null;
 var __investmentUiData = null;
 var __investmentManagementRows = [];
 var __investmentManagementByName = Object.create(null);
-var __investmentInactiveRows = [];
+var __investmentInactiveRows = null;
 var __investmentEditing = null;
 var __investmentActivityImportState = {
   rawCsv: '',
@@ -43,7 +43,7 @@ function fillBankAccountDropdownFromData_(data) {
   __bankManagementRows = Array.isArray(data && data.managementAccounts)
     ? data.managementAccounts.slice() : [];
   __bankInactiveRows = Array.isArray(data && data.inactiveAccounts)
-    ? data.inactiveAccounts.slice() : [];
+    ? data.inactiveAccounts.slice() : null;
   __bankManagementByName = Object.create(null);
   __bankManagementRows.forEach(function(row) {
     var name = String(row && row.accountName || '').trim();
@@ -580,6 +580,7 @@ function toggleInactiveBankAccountsView_() {
   var wrap = document.getElementById('bank_inactive_wrap');
   var button = document.getElementById('bank_show_inactive_btn');
   if (!wrap || !button) return;
+  if (!Array.isArray(__bankInactiveRows) || __bankInactiveRows.length === 0) return;
   var show = wrap.style.display === 'none';
   wrap.style.display = show ? '' : 'none';
   button.setAttribute('aria-expanded', show ? 'true' : 'false');
@@ -593,19 +594,21 @@ function renderInactiveBankAccounts_() {
   var host = document.getElementById('bank_inactive_list');
   var button = document.getElementById('bank_show_inactive_btn');
   if (!host || !button) return;
+  var wrap = document.getElementById('bank_inactive_wrap');
+  if (!Array.isArray(__bankInactiveRows) || __bankInactiveRows.length === 0) {
+    button.style.display = 'none';
+    button.setAttribute('aria-expanded', 'false');
+    if (wrap) wrap.style.display = 'none';
+    host.innerHTML = '';
+    return;
+  }
   var count = __bankInactiveRows.length;
+  button.style.display = '';
   if (button.getAttribute('aria-expanded') !== 'true') {
     button.innerHTML = '<span class="debt-caret" aria-hidden="true">&#9656;</span>' +
       'Show inactive accounts' + (count ? ' (' + count + ')' : '');
   }
   host.innerHTML = '';
-  if (!count) {
-    var empty = document.createElement('p');
-    empty.className = 'muted';
-    empty.textContent = 'No inactive bank accounts.';
-    host.appendChild(empty);
-    return;
-  }
   __bankInactiveRows.forEach(function(row) {
     var item = document.createElement('div');
     item.className = 'tracked-editor-row';
@@ -673,6 +676,8 @@ function loadBankSection() {
   document.getElementById('bank_date').value = new Date().toISOString().slice(0, 10);
   bankUpdateDetailsReady_ = false;
   setSelectLoading('bank_account', 'Loading bank accounts…');
+  __bankInactiveRows = null;
+  renderInactiveBankAccounts_();
   updateBankUpdateAvailability_();
   // Reconcile Import segment-button visibility on every Bank tab
   // entry. Earlier reveals (in loadBankImportReviewSection) only fire
@@ -731,6 +736,8 @@ function loadBankSectionThenSelect_(accountName) {
     document.getElementById('bank_date').value || new Date().toISOString().slice(0, 10);
   bankUpdateDetailsReady_ = false;
   setSelectLoading('bank_account', 'Loading bank accounts…');
+  __bankInactiveRows = null;
+  renderInactiveBankAccounts_();
   updateBankUpdateAvailability_();
   runReadOnlyRpcWithRetry_({
     isCurrent: function() {
@@ -1147,7 +1154,7 @@ function fillInvestmentAccountDropdownFromData_(data) {
   __investmentManagementRows = Array.isArray(data && data.managementAccounts)
     ? data.managementAccounts.slice() : [];
   __investmentInactiveRows = Array.isArray(data && data.inactiveAccounts)
-    ? data.inactiveAccounts.slice() : [];
+    ? data.inactiveAccounts.slice() : null;
   __investmentManagementByName = Object.create(null);
   __investmentManagementRows.forEach(function(row) {
     var name = String(row && row.accountName || '').trim();
@@ -2054,6 +2061,7 @@ function toggleInactiveInvestmentAccountsView_() {
   var wrap = document.getElementById('inv_inactive_wrap');
   var button = document.getElementById('inv_show_inactive_btn');
   if (!wrap || !button) return;
+  if (!Array.isArray(__investmentInactiveRows) || __investmentInactiveRows.length === 0) return;
   var show = wrap.style.display === 'none';
   wrap.style.display = show ? '' : 'none';
   button.setAttribute('aria-expanded', show ? 'true' : 'false');
@@ -2067,19 +2075,21 @@ function renderInactiveInvestmentAccounts_() {
   var host = document.getElementById('inv_inactive_list');
   var button = document.getElementById('inv_show_inactive_btn');
   if (!host || !button) return;
+  var wrap = document.getElementById('inv_inactive_wrap');
+  if (!Array.isArray(__investmentInactiveRows) || __investmentInactiveRows.length === 0) {
+    button.style.display = 'none';
+    button.setAttribute('aria-expanded', 'false');
+    if (wrap) wrap.style.display = 'none';
+    host.innerHTML = '';
+    return;
+  }
   var count = __investmentInactiveRows.length;
+  button.style.display = '';
   if (button.getAttribute('aria-expanded') !== 'true') {
     button.innerHTML = '<span class="debt-caret" aria-hidden="true">&#9656;</span>' +
       'Show inactive investments' + (count ? ' (' + count + ')' : '');
   }
   host.innerHTML = '';
-  if (!count) {
-    var empty = document.createElement('p');
-    empty.className = 'muted';
-    empty.textContent = 'No inactive investments.';
-    host.appendChild(empty);
-    return;
-  }
   __investmentInactiveRows.forEach(function(row) {
     var item = document.createElement('div');
     item.className = 'tracked-editor-row';
@@ -2151,6 +2161,8 @@ function loadInvestmentSection() {
   const initialLoadTiming = startDashboardInitialLoadStage_('investments');
   document.getElementById('inv_date').value = new Date().toISOString().slice(0, 10);
   setSelectLoading('inv_account', 'Loading investment accounts…');
+  __investmentInactiveRows = null;
+  renderInactiveInvestmentAccounts_();
   updateInvestmentUpdateAvailability_();
   runReadOnlyRpcWithRetry_({
     invoke: function(onSuccess, onFailure) {
@@ -2190,6 +2202,8 @@ function loadInvestmentSectionThenSelect_(accountName) {
   document.getElementById('inv_date').value =
     document.getElementById('inv_date').value || new Date().toISOString().slice(0, 10);
   setSelectLoading('inv_account', 'Loading investment accounts…');
+  __investmentInactiveRows = null;
+  renderInactiveInvestmentAccounts_();
   updateInvestmentUpdateAvailability_();
   runReadOnlyRpcWithRetry_({
     invoke: function(onSuccess, onFailure) {

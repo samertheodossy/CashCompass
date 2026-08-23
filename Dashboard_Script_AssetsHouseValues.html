@@ -6,7 +6,9 @@
 // from writing, but this flag also spares the user a confusing second "already
 // exists" round-trip. Reset in BOTH the success and failure handlers.
 var houseCreateInFlight_ = false;
-var __houseInactiveRows = [];
+// null means the server-authoritative inactive inventory is still unknown.
+// An empty array is reserved for a successful response with exactly zero rows.
+var __houseInactiveRows = null;
 
 function fillHouseDropdownFromData_(data) {
   const sel = document.getElementById('house_house');
@@ -21,7 +23,7 @@ function fillHouseDropdownFromData_(data) {
     sel.appendChild(opt);
   });
   __houseInactiveRows = Array.isArray(data && data.inactiveHouses)
-    ? data.inactiveHouses.slice() : [];
+    ? data.inactiveHouses.slice() : null;
   populateHouseAddDatalists_(data);
   updateHouseUpdateAvailability_();
   renderHouseManageList_();
@@ -34,7 +36,11 @@ function fillHouseDropdownFromData_(data) {
   // async load timing. When houses exist we deliberately leave the current
   // mode untouched: the HTML default (Update) stays for normal navigation, and
   // an intentional Add (e.g. adding a second house) is preserved.
-  if (!(data.houses && data.houses.length) && typeof setHousePanelMode === 'function') {
+  if (
+    !(data.houses && data.houses.length) &&
+    Array.isArray(__houseInactiveRows) &&
+    typeof setHousePanelMode === 'function'
+  ) {
     setHousePanelMode(__houseInactiveRows.length ? 'manage' : 'add');
   }
 }
@@ -247,6 +253,7 @@ function toggleInactiveHousesView_() {
   var wrap = document.getElementById('house_inactive_wrap');
   var button = document.getElementById('house_show_inactive_btn');
   if (!wrap || !button) return;
+  if (!Array.isArray(__houseInactiveRows) || __houseInactiveRows.length === 0) return;
   var show = wrap.style.display === 'none';
   wrap.style.display = show ? '' : 'none';
   button.setAttribute('aria-expanded', show ? 'true' : 'false');
@@ -257,20 +264,30 @@ function renderInactiveHouses_() {
   var host = document.getElementById('house_inactive_list');
   var button = document.getElementById('house_show_inactive_btn');
   if (!host || !button) return;
+  if (!Array.isArray(__houseInactiveRows)) {
+    var unknownWrap = document.getElementById('house_inactive_wrap');
+    button.style.display = 'none';
+    button.setAttribute('aria-expanded', 'false');
+    if (unknownWrap) unknownWrap.style.display = 'none';
+    host.innerHTML = '';
+    return;
+  }
   var count = __houseInactiveRows.length;
+  var wrap = document.getElementById('house_inactive_wrap');
+  if (!count) {
+    button.style.display = 'none';
+    button.setAttribute('aria-expanded', 'false');
+    if (wrap) wrap.style.display = 'none';
+    host.innerHTML = '';
+    return;
+  }
+  button.style.display = '';
   var expanded = button.getAttribute('aria-expanded') === 'true';
   button.innerHTML = '<span class="debt-caret" aria-hidden="true">' +
     (expanded ? '&#9662;' : '&#9656;') + '</span>' +
     (expanded ? 'Hide inactive houses' : 'Show inactive houses') +
     (count ? ' (' + count + ')' : '');
   host.innerHTML = '';
-  if (!count) {
-    var empty = document.createElement('p');
-    empty.className = 'muted';
-    empty.textContent = 'No inactive houses.';
-    host.appendChild(empty);
-    return;
-  }
   __houseInactiveRows.forEach(function(row) {
     var item = document.createElement('div');
     item.className = 'tracked-editor-row';
@@ -345,7 +362,8 @@ function loadHouseSection() {
   const initialLoadTiming = startDashboardInitialLoadStage_('houses');
   document.getElementById('house_date').value = new Date().toISOString().slice(0, 10);
   setSelectLoading('house_house', 'Loading houses…');
-  __houseInactiveRows = [];
+  __houseInactiveRows = null;
+  renderInactiveHouses_();
   updateHouseUpdateAvailability_();
   runReadOnlyRpcWithRetry_({
     invoke: function(onSuccess, onFailure) {
@@ -378,6 +396,8 @@ function loadHouseSectionThenSelect_(houseName) {
   document.getElementById('house_date').value =
     document.getElementById('house_date').value || new Date().toISOString().slice(0, 10);
   setSelectLoading('house_house', 'Loading houses…');
+  __houseInactiveRows = null;
+  renderInactiveHouses_();
   updateHouseUpdateAvailability_();
   runReadOnlyRpcWithRetry_({
     invoke: function(onSuccess, onFailure) {

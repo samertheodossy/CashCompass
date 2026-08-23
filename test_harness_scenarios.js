@@ -156,6 +156,9 @@ function getHarnessScenarios_() {
   if (typeof getHarnessHouseLifecycleScenario_ === 'function') {
     list.push(getHarnessHouseLifecycleScenario_());
   }
+  if (typeof getHarnessIncomeLifecycleScenario_ === 'function') {
+    list.push(getHarnessIncomeLifecycleScenario_());
+  }
   if (typeof getHarnessFinancialIntegrityCanonicalScenario_ === 'function') {
     list.push(getHarnessFinancialIntegrityCanonicalScenario_());
   }

@@ -218,6 +218,14 @@ function getHarnessSuites_() {
       ]
     },
     {
+      id: 'SUITE-INCOME-LIFECYCLE',
+      label: 'Income Lifecycle',
+      description: 'Validate exact-row Income Stop/Reactivate preservation, counted inactive recovery, stale/ambiguous guards, and Add separation on a Restricted disposable workbook.',
+      scenarioIds: [
+        'REGRESSION-INCOME-LIFECYCLE'
+      ]
+    },
+    {
       id: 'SUITE-FINANCIAL-INTEGRITY-CANONICAL',
       label: 'Financial Integrity Canonical Snapshot',
       description: 'Validate the approved current-position read model, live consumers, read-only audits, canonical History capture/freshness, and fail-closed property financing on a Restricted disposable workbook.',

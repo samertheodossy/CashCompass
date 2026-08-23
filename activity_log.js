@@ -1838,13 +1838,14 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
   if (etEarly === 'debt_reactivate') return 'Debt';
   if (etEarly === 'debt_update') return 'Debt';
   if (etEarly === 'debt_rename') return 'Debt';
-  // income_add / income_deactivate are the canonical event names after
+  // income_add / income_deactivate / income_reactivate are canonical after
   // the refactor that made INPUT - Cash Flow <year> the source of truth
   // for income. Legacy rows written by the old INPUT - Income Sources
   // architecture (income_source_add / income_source_deactivate) still
   // need a clean label so historical activity stays readable.
   if (etEarly === 'income_add') return 'Income';
   if (etEarly === 'income_deactivate') return 'Income';
+  if (etEarly === 'income_reactivate') return 'Income';
   if (etEarly === 'income_source_add') return 'Income';
   if (etEarly === 'income_source_deactivate') return 'Income';
   // Planner email lifecycle events get their own kind so the user can
@@ -1978,6 +1979,7 @@ function activityLogActionLabel_(eventType, detailsJson) {
       return debtRenameActionLabel_(detailsJson);
     case 'income_add': return 'Income source added';
     case 'income_deactivate': return 'Tracking stopped';
+    case 'income_reactivate': return 'Tracking restarted';
     // Legacy rows from the old INPUT - Income Sources architecture.
     case 'income_source_add': return 'Income source added';
     case 'income_source_deactivate': return 'Tracking stopped';
@@ -2613,6 +2615,7 @@ function activityLogIsNonMonetaryEvent_(eventType) {
     // moved. See debtUpdateActionLabel_ for the rendered text.
     et === 'debt_update' ||
     et === 'income_deactivate' ||
+    et === 'income_reactivate' ||
     et === 'income_source_deactivate' ||
     et === 'upcoming_status' ||
     et === 'upcoming_payment' ||

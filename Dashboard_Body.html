@@ -369,7 +369,7 @@
             <p class="muted">Update a property’s value or stop tracking it while preserving its history and property expense sheet.</p>
           </div>
           <div class="tracked-editor-actions">
-            <button type="button" id="house_show_inactive_btn" class="small-btn debt-inactive-toggle" aria-expanded="false" aria-controls="house_inactive_wrap" onclick="toggleInactiveHousesView_()"><span class="debt-caret" aria-hidden="true">&#9656;</span>Show inactive houses</button>
+            <button type="button" id="house_show_inactive_btn" class="small-btn debt-inactive-toggle" style="display:none;" aria-expanded="false" aria-controls="house_inactive_wrap" onclick="toggleInactiveHousesView_()"><span class="debt-caret" aria-hidden="true">&#9656;</span>Show inactive houses</button>
           </div>
         </div>
         <div id="house_manage_list" class="tracked-editor-list">
@@ -503,7 +503,7 @@
               <p class="muted">Edit account details or stop tracking an account while preserving its history.</p>
             </div>
             <div class="tracked-editor-actions">
-              <button type="button" id="bank_show_inactive_btn" class="small-btn debt-inactive-toggle" onclick="toggleInactiveBankAccountsView_()" aria-expanded="false" aria-controls="bank_inactive_wrap"><span class="debt-caret" aria-hidden="true">&#9656;</span>Show inactive accounts</button>
+              <button type="button" id="bank_show_inactive_btn" class="small-btn debt-inactive-toggle" style="display:none;" onclick="toggleInactiveBankAccountsView_()" aria-expanded="false" aria-controls="bank_inactive_wrap"><span class="debt-caret" aria-hidden="true">&#9656;</span>Show inactive accounts</button>
             </div>
           </div>
 
@@ -696,7 +696,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           </div>
           <div class="tracked-editor-actions">
             <button type="button" id="inv_portfolio_activity_btn" class="small-btn" onclick="openInvestmentPortfolioDrawer_()">Portfolio activity</button>
-            <button type="button" id="inv_show_inactive_btn" class="small-btn debt-inactive-toggle" onclick="toggleInactiveInvestmentAccountsView_()" aria-expanded="false" aria-controls="inv_inactive_wrap"><span class="debt-caret" aria-hidden="true">&#9656;</span>Show inactive investments</button>
+            <button type="button" id="inv_show_inactive_btn" class="small-btn debt-inactive-toggle" style="display:none;" onclick="toggleInactiveInvestmentAccountsView_()" aria-expanded="false" aria-controls="inv_inactive_wrap"><span class="debt-caret" aria-hidden="true">&#9656;</span>Show inactive investments</button>
           </div>
         </div>
 
@@ -1225,7 +1225,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <p class="bills-view-purpose">Every recurring bill you currently track. Use Edit to update details or Stop tracking to deactivate it while preserving history.</p>
           </div>
           <div>
-            <button type="button" id="bills_show_inactive_btn" class="small-btn debt-inactive-toggle" onclick="toggleInactiveBillsView_()" aria-expanded="false" aria-controls="bills_inactive_wrap"><span class="debt-caret" aria-hidden="true">&#9656;</span>Show inactive bills</button>
+            <button type="button" id="bills_show_inactive_btn" class="small-btn debt-inactive-toggle" style="display:none;" onclick="toggleInactiveBillsView_()" aria-expanded="false" aria-controls="bills_inactive_wrap"><span class="debt-caret" aria-hidden="true">&#9656;</span>Show inactive bills</button>
           </div>
         </div>
         <div id="bills_manage_list" class="bills-manage-list">
@@ -1477,44 +1477,69 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         <h2>Income sources</h2>
         <div class="updated">Last updated: <span id="income_updated">—</span></div>
       </div>
-      <p class="panel-purpose">Add and maintain the recurring income sources used in Cash Flow.</p>
+      <p class="panel-purpose">Review recurring income and manage which sources CashCompass tracks.</p>
+
+      <div class="segmented" role="tablist" aria-label="Income source mode">
+        <button type="button" id="income_mode_current_btn" class="segment-btn active" role="tab" aria-selected="true" aria-controls="income_mode_current_wrap" onclick="setIncomePanelMode_('current')">Current income</button>
+        <button type="button" id="income_mode_add_btn" class="segment-btn" role="tab" aria-selected="false" aria-controls="income_mode_add_wrap" onclick="setIncomePanelMode_('add')">Add income</button>
+        <button type="button" id="income_mode_manage_btn" class="segment-btn" role="tab" aria-selected="false" aria-controls="income_mode_manage_wrap" onclick="setIncomePanelMode_('manage')">Manage income</button>
+      </div>
 
       <div id="income_status" class="status"></div>
 
-      <div class="income-management-head" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between;margin:0 0 12px 0;">
-        <div>
-          <p class="muted" style="margin:0;">Current recurring income sources.</p>
+      <div id="income_mode_current_wrap" class="bank-mode-wrap active" role="tabpanel" aria-labelledby="income_mode_current_btn">
+        <p class="muted" style="margin:0 0 12px 0;">Current recurring income sources.</p>
+        <div id="income_overview_list" class="income-manage-list">
+          <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading income sources…</span></div>
         </div>
-        <button type="button" id="income_add_toggle_btn" class="small-btn primary" onclick="toggleIncomeAddForm()" aria-expanded="false" aria-controls="income_add_wrap">+ Add income source</button>
+
+        <!-- Reference-only: non-recurring / excluded candidates spotted in the
+             latest Cash Flow year. Populated by the Income Sources script;
+             empty-by-default so the panel stays clean when none qualify. -->
+        <div id="income_other_detected" class="income-other-detected" style="margin-top:20px;"></div>
       </div>
 
-      <div id="income_add_wrap" class="income-add-wrap" style="display:none;margin:0 0 20px 0;padding:14px 16px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;">
-        <div class="card-title" style="margin-top:0;">Add an income source</div>
-        <p class="muted" style="margin:0 0 10px 0;">Adds a recurring income source and records its amount for the current month. Required fields are marked with <span aria-label="required" style="color:#b91c1c;">*</span>.</p>
+      <div id="income_mode_add_wrap" class="bank-mode-wrap" role="tabpanel" aria-labelledby="income_mode_add_btn">
+        <div id="income_add_wrap" class="income-add-wrap" style="margin:0;padding:14px 16px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;">
+          <div class="card-title" style="margin-top:0;">Add an income source</div>
+          <p class="muted" style="margin:0 0 10px 0;">Adds a recurring income source and records its amount for the current month. Required fields are marked with <span aria-label="required" style="color:#b91c1c;">*</span>.</p>
 
-        <label>Source name <span aria-label="required" style="color:#b91c1c;">*</span></label>
-        <input type="text" id="income_add_name" maxlength="160" autocomplete="off" oninput="if (typeof clearIncomeAddNameError_==='function') clearIncomeAddNameError_();">
-        <div id="income_add_name_error" class="field-error" role="alert" aria-live="polite"></div>
+          <label>Source name <span aria-label="required" style="color:#b91c1c;">*</span></label>
+          <input type="text" id="income_add_name" maxlength="160" autocomplete="off" oninput="if (typeof clearIncomeAddNameError_==='function') clearIncomeAddNameError_();">
+          <div id="income_add_name_error" class="field-error" role="alert" aria-live="polite"></div>
 
-        <label>Amount (this month) <span aria-label="required" style="color:#b91c1c;">*</span></label>
-        <input type="text" id="income_add_amount" inputmode="decimal" onfocus="currencyFocus('income_add_amount')" onblur="currencyBlur('income_add_amount')" placeholder="e.g. 5000">
-        <div id="income_add_amount_error" class="field-error" role="alert" aria-live="polite"></div>
+          <label>Amount (this month) <span aria-label="required" style="color:#b91c1c;">*</span></label>
+          <input type="text" id="income_add_amount" inputmode="decimal" onfocus="currencyFocus('income_add_amount')" onblur="currencyBlur('income_add_amount')" placeholder="e.g. 5000">
+          <div id="income_add_amount_error" class="field-error" role="alert" aria-live="polite"></div>
 
-        <div style="display:flex;gap:8px;margin-top:12px;">
-          <button type="button" class="small-btn primary" onclick="submitNewIncomeSource()">Save income source</button>
-          <button type="button" class="small-btn" onclick="closeIncomeAddForm()">Cancel</button>
+          <div style="display:flex;gap:8px;margin-top:12px;">
+            <button type="button" class="small-btn primary" onclick="submitNewIncomeSource()">Save income source</button>
+            <button type="button" class="small-btn" onclick="closeIncomeAddForm()">Cancel</button>
+          </div>
         </div>
       </div>
 
-      <div id="income_manage_list" class="income-manage-list">
-        <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading income sources…</span></div>
-      </div>
+      <div id="income_mode_manage_wrap" class="bank-mode-wrap" role="tabpanel" aria-labelledby="income_mode_manage_btn">
 
-      <!-- Reference-only: non-recurring / excluded candidates spotted in the
-           latest Cash Flow year. Populated by the Income Sources script
-           after the main list renders; empty-by-default so the panel stays
-           clean when nothing qualifies. -->
-      <div id="income_other_detected" class="income-other-detected" style="margin-top:20px;"></div>
+        <div class="income-management-head" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between;margin:0 0 12px 0;">
+          <div>
+            <p class="muted" style="margin:0;">Add, stop, or restore recurring income sources.</p>
+          </div>
+          <div class="tracked-editor-actions">
+            <button type="button" id="income_inactive_toggle" class="small-btn debt-inactive-toggle" style="display:none;" onclick="toggleInactiveIncomeSources_()" aria-expanded="false" aria-controls="income_inactive_wrap">▸ Show inactive income sources</button>
+          </div>
+        </div>
+
+        <div id="income_manage_list" class="income-manage-list">
+          <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading income sources…</span></div>
+        </div>
+
+        <section id="income_inactive_wrap" class="debt-inactive-section" style="display:none;margin-top:16px;" aria-label="Inactive income sources">
+          <div class="card-title" style="margin-top:0;">Inactive income sources</div>
+          <p class="muted" style="margin:0 0 10px 0;">Reactivate restores tracking only. It does not record income or change preserved monthly values.</p>
+          <div id="income_inactive_list"></div>
+        </section>
+      </div>
     </div>
   </div>
 
@@ -2085,7 +2110,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <p class="muted" style="margin:0;">Every debt account you currently track. Use <strong>Edit</strong> to update details, or <strong>Stop tracking</strong> to deactivate (history is preserved).</p>
           </div>
           <div>
-            <button type="button" id="debt_show_inactive_btn" class="small-btn debt-inactive-toggle" onclick="toggleInactiveDebtsView_()" aria-expanded="false" aria-controls="debt_inactive_wrap"><span class="debt-caret" aria-hidden="true">&#9656;</span>Show inactive debts</button>
+            <button type="button" id="debt_show_inactive_btn" class="small-btn debt-inactive-toggle" style="display:none;" onclick="toggleInactiveDebtsView_()" aria-expanded="false" aria-controls="debt_inactive_wrap"><span class="debt-caret" aria-hidden="true">&#9656;</span>Show inactive debts</button>
           </div>
         </div>
 

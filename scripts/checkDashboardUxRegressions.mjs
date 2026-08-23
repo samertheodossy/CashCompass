@@ -51,7 +51,9 @@ const files = Object.fromEntries(await Promise.all([
   'upcoming_expenses.js',
   'test_harness_scenarios_bills.js',
   'test_harness_scenarios_house_financial_accuracy.js',
+  'test_harness_scenarios_income.js',
   'test_harness_scenarios.js',
+  'test_harness_suites.js',
   'test_harness_scenarios_quick_add.js',
   'AdminDiagnostics.html'
 ].map(async (name) => [name, await readFile(new URL(`../${name}`, import.meta.url), 'utf8')])));
@@ -109,6 +111,7 @@ for (const [name, action, writer] of [
   ['Dashboard_Script_AssetsBankInvestments.html', 'reactivateInvestmentFromManage_', 'reactivateInvestmentAccountFromDashboard'],
   ['Dashboard_Script_Activity.html', 'activityDeleteClick_', 'deleteActivityLogRow'],
   ['Dashboard_Script_Income.html', 'stopTrackingIncomeSource', 'deactivateIncomeSourceFromDashboard'],
+  ['Dashboard_Script_Income.html', 'reactivateIncomeSource', 'reactivateIncomeSourceFromDashboard'],
   ['Dashboard_Script_BillsDue.html', 'reactivateBillFromManage_', 'reactivateBillFromDashboard'],
   ['Dashboard_Script_PlanningDebts.html', 'stopTrackingDebtFromManage_', 'deactivateDebtFromDashboard'],
   ['Dashboard_Script_PlanningDebts.html', 'reactivateDebtFromManage_', 'reactivateDebtFromDashboard'],
@@ -2839,11 +2842,14 @@ assert.match(files['Dashboard_Script_AssetsHouseValues.html'],
   /function renderInactiveHouses_\([\s\S]*?Reactivate[\s\S]*?function reactivateHouseFromManage_\([\s\S]*?openDashboardConfirm_[\s\S]*?reactivateHouseFromDashboard/,
   'House Manage must reactivate preserved rows through the CashCompass confirmation surface');
 assert.match(files['Dashboard_Script_AssetsHouseValues.html'],
-  /setHousePanelMode\(__houseInactiveRows\.length \? 'manage' : 'add'\)/,
+  /Array\.isArray\(__houseInactiveRows\)[\s\S]*?setHousePanelMode\(__houseInactiveRows\.length \? 'manage' : 'add'\)/,
   'A workbook with only inactive Houses must route to recovery instead of Add');
 assert.match(files['house_values.js'],
   /function getHouseUiDataForSpreadsheet_\(ss\)[\s\S]*?sysHouseAssetsRow:\s*r \+ 1[\s\S]*?inactiveHouses[\s\S]*?historyNames/,
   'House UI data must return only preserved inactive identities backed by House Values history');
+assert.match(files['house_values.js'],
+  /catch \(e\) \{[\s\S]*?getHouseUiData house-assets read:[\s\S]*?throw new Error\('Could not load the house lifecycle inventory/,
+  'House lifecycle inventory read failures must remain unknown instead of becoming zero inactive houses');
 assert.match(files['house_values.js'],
   /function reactivateHouseFromDashboard\(payload, optionalSs\)[\s\S]*?LockService\.getUserLock\(\)[\s\S]*?sysHouseAssetsRow[\s\S]*?expectedHouseName[\s\S]*?House identity is ambiguous[\s\S]*?getHouseValuesLifecycleTargets_[\s\S]*?HOUSES - [\s\S]*?changes were rolled back[\s\S]*?house_reactivate/,
   'House Reactivate must lock, stale-check, reconcile every preserved identity surface, roll back partial writes, and log lifecycle evidence');
@@ -2854,8 +2860,257 @@ assert.match(files['activity_log.js'],
   /house_reactivate[\s\S]*?Tracking resumed/,
   'House Reactivate must render as non-monetary lifecycle evidence in Activity');
 assert.match(files['income_sources.js'],
-  /function addIncomeSourceFromDashboard\(payload\)[\s\S]*?incomeFitTargets[\s\S]*?headerMap\.payeeCol[\s\S]*?monthCol[\s\S]*?fitContentColumnsToContents_/,
-  'Income add/reactivation must fit Cash Flow text and amount columns');
+  /function addIncomeSourceFromDashboard\(payload, optionalSpreadsheet\)[\s\S]*?incomeFitTargets[\s\S]*?headerMap\.payeeCol[\s\S]*?monthCol[\s\S]*?fitContentColumnsToContents_/,
+  'Income Add must fit Cash Flow text and amount columns');
+assert.match(body,
+  /aria-label="Income source mode"[\s\S]*?id="income_mode_current_btn"[^>]*>Current income<[\s\S]*?id="income_mode_add_btn"[^>]*>Add income<[\s\S]*?id="income_mode_manage_btn"[^>]*>Manage income<[\s\S]*?id="income_mode_current_wrap" class="bank-mode-wrap active"[\s\S]*?id="income_mode_add_wrap" class="bank-mode-wrap"[\s\S]*?id="income_mode_manage_wrap" class="bank-mode-wrap"/,
+  'Income must follow the shared Current / Add / Manage segmented lifecycle pattern');
+assert.match(files['Dashboard_Script_Income.html'],
+  /function setIncomePanelMode_\(mode\)[\s\S]*?\['current', 'add', 'manage'\][\s\S]*?aria-selected[\s\S]*?classList\.toggle\('active', active\)/,
+  'Income mode navigation must keep tab selection and panel visibility synchronized');
+const incomeOverviewRenderer = functionSource_(files['Dashboard_Script_Income.html'], 'renderIncomeOverviewList_');
+assert.doesNotMatch(incomeOverviewRenderer, /Stop tracking|Reactivate|income_inactive|addIncomeSourceFromDashboard/,
+  'Current income must remain a read-only review surface without lifecycle writers');
+assert.match(files['Dashboard_Script_Income.html'],
+  /function renderIncomeSourcesList_\([\s\S]*?Stop tracking[\s\S]*?renderInactiveIncomeSources_/,
+  'Manage income must own Stop tracking and inactive lifecycle presentation');
+assert.match(body,
+  /id="income_inactive_toggle"[\s\S]*?Show inactive income sources[\s\S]*?id="income_inactive_wrap" class="debt-inactive-section"[\s\S]*?id="income_inactive_list"/,
+  'Income must provide a counted inactive inventory in the shared top-right management action area');
+assert.match(files['Dashboard_Script_Income.html'],
+  /function renderInactiveIncomeSources_\([\s\S]*?Reactivate[\s\S]*?function reactivateIncomeSource\([\s\S]*?openDashboardConfirm_[\s\S]*?reactivateIncomeSourceFromDashboard/,
+  'Inactive Income must reactivate through the CashCompass confirmation surface');
+assert.match(files['Dashboard_Script_Income.html'],
+  /function renderInactiveIncomeSources_\(rows\)[\s\S]*?if \(!Array\.isArray\(rows\)\)[\s\S]*?toggle\.style\.display = 'none'[\s\S]*?if \(!count\)[\s\S]*?toggle\.style\.display = 'none'[\s\S]*?toggle\.style\.display = ''/,
+  'Manage income must hide loading and zero inventory and show recovery only for positive counts');
+assert.match(files['Dashboard_Script_Income.html'],
+  /onSuccess: function\(payload\)[\s\S]*?!Array\.isArray\(payload\.activeSources\)[\s\S]*?!Array\.isArray\(payload\.inactiveSources\)[\s\S]*?finishDashboardInitialLoadStage_\(initialLoadTiming, 'error'\)[\s\S]*?var active = payload\.activeSources;[\s\S]*?var inactive = payload\.inactiveSources;/,
+  'Income must fail visibly rather than converting an incomplete management response to zero inactive sources');
+
+for (const inactiveControlId of [
+  'house_show_inactive_btn',
+  'bank_show_inactive_btn',
+  'inv_show_inactive_btn',
+  'bills_show_inactive_btn',
+  'income_inactive_toggle',
+  'debt_show_inactive_btn'
+]) {
+  assert.match(body, new RegExp(`id="${inactiveControlId}"[^>]*style="display:none;"`),
+    `${inactiveControlId} must start hidden so an empty recovery action cannot flash before data loads`);
+}
+
+const inactiveBillsElements = {
+  bills_show_inactive_btn: {
+    style: { display: 'sentinel' }, innerHTML: '', attrs: {},
+    setAttribute(name, value) { this.attrs[name] = value; }
+  },
+  bills_inactive_wrap: { style: { display: 'block' } }
+};
+const inactiveBillsContext = vm.createContext({
+  document: { getElementById: (id) => inactiveBillsElements[id] || null }
+});
+vm.runInContext(
+  'var __billsInactiveRows = []; var __billsInactiveVisible = false; var __billsInactiveLoaded = false;' +
+    functionSource_(files['Dashboard_Script_BillsDue.html'], 'updateInactiveBillsToggleLabel_'),
+  inactiveBillsContext
+);
+vm.runInContext('updateInactiveBillsToggleLabel_()', inactiveBillsContext);
+assert.equal(inactiveBillsElements.bills_show_inactive_btn.style.display, 'none',
+  'Bills must remain hidden until a positive inactive inventory is authoritative');
+vm.runInContext('__billsInactiveLoaded = true; __billsInactiveRows = []; __billsInactiveVisible = true; updateInactiveBillsToggleLabel_()', inactiveBillsContext);
+assert.equal(inactiveBillsElements.bills_show_inactive_btn.style.display, 'none',
+  'Bills must hide inactive recovery at authoritative zero');
+assert.equal(inactiveBillsElements.bills_inactive_wrap.style.display, 'none',
+  'Bills must collapse the inactive section at authoritative zero');
+vm.runInContext('__billsInactiveRows = [{}, {}]; updateInactiveBillsToggleLabel_()', inactiveBillsContext);
+assert.match(inactiveBillsElements.bills_show_inactive_btn.innerHTML, /Show inactive bills \(2\)/,
+  'Bills must show the authoritative positive inactive count');
+vm.runInContext('__billsInactiveRows = [{}]; updateInactiveBillsToggleLabel_()', inactiveBillsContext);
+assert.match(inactiveBillsElements.bills_show_inactive_btn.innerHTML, /Show inactive bills \(1\)/,
+  'Bills must remain visible and update from two inactive items to one');
+
+function inactiveHouseElement_() {
+  return {
+    style: { display: 'sentinel' }, innerHTML: '', textContent: '', className: '', attrs: {},
+    setAttribute(name, value) { this.attrs[name] = value; },
+    getAttribute(name) { return this.attrs[name] || 'false'; },
+    appendChild() {}, addEventListener() {}
+  };
+}
+
+function assertAssetInactiveVisibility_(functionName, rowsVariable, buttonId, wrapId, listId, label) {
+  const elements = {
+    [buttonId]: inactiveHouseElement_(),
+    [wrapId]: inactiveHouseElement_(),
+    [listId]: inactiveHouseElement_()
+  };
+  elements[buttonId].style.display = 'none';
+  elements[wrapId].style.display = 'none';
+  const context = vm.createContext({
+    document: {
+      getElementById: (id) => elements[id] || null,
+      createElement: () => inactiveHouseElement_()
+    }
+  });
+  vm.runInContext(
+    `var ${rowsVariable} = null;` +
+      functionSource_(files['Dashboard_Script_AssetsBankInvestments.html'], functionName),
+    context
+  );
+  vm.runInContext(`${functionName}()`, context);
+  assert.equal(elements[buttonId].style.display, 'none',
+    `${label} must remain hidden while inactive inventory is loading or unavailable`);
+  vm.runInContext(`${rowsVariable} = []; ${functionName}()`, context);
+  assert.equal(elements[buttonId].style.display, 'none',
+    `${label} must remain hidden at authoritative zero`);
+  vm.runInContext(`${rowsVariable} = [{accountName:'One'}, {accountName:'Two'}]; ${functionName}()`, context);
+  assert.equal(elements[buttonId].style.display, '',
+    `${label} must appear only after a positive authoritative count`);
+  assert.match(elements[buttonId].innerHTML, /\(2\)/,
+    `${label} must show the authoritative positive count`);
+  vm.runInContext(`${rowsVariable} = [{accountName:'One'}]; ${functionName}()`, context);
+  assert.match(elements[buttonId].innerHTML, /\(1\)/,
+    `${label} must remain visible and update from two inactive items to one`);
+}
+
+assertAssetInactiveVisibility_(
+  'renderInactiveBankAccounts_', '__bankInactiveRows',
+  'bank_show_inactive_btn', 'bank_inactive_wrap', 'bank_inactive_list',
+  'Bank inactive recovery'
+);
+assertAssetInactiveVisibility_(
+  'renderInactiveInvestmentAccounts_', '__investmentInactiveRows',
+  'inv_show_inactive_btn', 'inv_inactive_wrap', 'inv_inactive_list',
+  'Investment inactive recovery'
+);
+
+const inactiveHouseElements = {
+  house_inactive_list: inactiveHouseElement_(),
+  house_show_inactive_btn: inactiveHouseElement_(),
+  house_inactive_wrap: inactiveHouseElement_()
+};
+inactiveHouseElements.house_inactive_wrap.style.display = 'block';
+const inactiveHouseContext = vm.createContext({
+  document: {
+    getElementById: (id) => inactiveHouseElements[id] || null,
+    createElement: () => inactiveHouseElement_()
+  }
+});
+vm.runInContext(
+  'var __houseInactiveRows = null;' +
+    functionSource_(files['Dashboard_Script_AssetsHouseValues.html'], 'renderInactiveHouses_'),
+  inactiveHouseContext
+);
+vm.runInContext('renderInactiveHouses_()', inactiveHouseContext);
+assert.equal(inactiveHouseElements.house_show_inactive_btn.style.display, 'none',
+  'Houses must remain hidden until a positive inactive inventory is authoritative');
+vm.runInContext('__houseInactiveRows = []; renderInactiveHouses_()', inactiveHouseContext);
+assert.equal(inactiveHouseElements.house_show_inactive_btn.style.display, 'none',
+  'Houses must hide inactive recovery at authoritative zero');
+assert.equal(inactiveHouseElements.house_inactive_wrap.style.display, 'none',
+  'Houses must collapse the inactive section at authoritative zero');
+vm.runInContext("__houseInactiveRows = [{houseName:'One'}, {houseName:'Two'}]; renderInactiveHouses_()", inactiveHouseContext);
+assert.match(inactiveHouseElements.house_show_inactive_btn.innerHTML, /Show inactive houses \(2\)/,
+  'Houses must show the authoritative positive inactive count');
+vm.runInContext("__houseInactiveRows = [{houseName:'One'}]; renderInactiveHouses_()", inactiveHouseContext);
+assert.match(inactiveHouseElements.house_show_inactive_btn.innerHTML, /Show inactive houses \(1\)/,
+  'Houses must remain visible and update from two inactive items to one');
+
+const inactiveIncomeElements = {
+  income_inactive_toggle: {
+    style: { display: 'sentinel' }, textContent: '', attrs: {},
+    setAttribute(name, value) { this.attrs[name] = value; }
+  },
+  income_inactive_wrap: { style: { display: 'block' } },
+  income_inactive_list: { innerHTML: 'sentinel' }
+};
+const inactiveIncomeContext = vm.createContext({
+  window: {},
+  document: { getElementById: (id) => inactiveIncomeElements[id] || null },
+  escapeHtml: (value) => String(value),
+  escapeJs: (value) => String(value),
+  fmtCurrency: (value) => '$' + Number(value).toFixed(2)
+});
+vm.runInContext(
+  functionSource_(files['Dashboard_Script_Income.html'], 'renderInactiveIncomeSources_'),
+  inactiveIncomeContext
+);
+vm.runInContext('renderInactiveIncomeSources_(null)', inactiveIncomeContext);
+assert.equal(inactiveIncomeElements.income_inactive_toggle.style.display, 'none',
+  'Income must remain hidden until a positive inactive inventory is authoritative');
+vm.runInContext('renderInactiveIncomeSources_([])', inactiveIncomeContext);
+assert.equal(inactiveIncomeElements.income_inactive_toggle.style.display, 'none',
+  'Income must hide inactive recovery at authoritative zero');
+assert.equal(inactiveIncomeElements.income_inactive_wrap.style.display, 'none',
+  'Income must collapse the inactive section at authoritative zero');
+vm.runInContext("renderInactiveIncomeSources_([{sourceName:'One', amount:1}, {sourceName:'Two', amount:2}])", inactiveIncomeContext);
+assert.equal(inactiveIncomeElements.income_inactive_toggle.textContent, '▸ Show inactive income sources (2)',
+  'Income must show the authoritative positive inactive count');
+vm.runInContext("renderInactiveIncomeSources_([{sourceName:'One', amount:1}])", inactiveIncomeContext);
+assert.equal(inactiveIncomeElements.income_inactive_toggle.textContent, '▸ Show inactive income sources (1)',
+  'Income must remain visible and update from two inactive items to one');
+
+const inactiveDebtElements = {
+  debt_show_inactive_btn: {
+    style: { display: 'none' }, innerHTML: '', attrs: {},
+    setAttribute(name, value) { this.attrs[name] = value; }
+  },
+  debt_inactive_wrap: { style: { display: 'none' } }
+};
+const inactiveDebtContext = vm.createContext({
+  document: { getElementById: (id) => inactiveDebtElements[id] || null }
+});
+vm.runInContext(
+  'var __debtInactiveRows = []; var __debtInactiveVisible = false; var __debtInactiveLoaded = false;' +
+    functionSource_(files['Dashboard_Script_PlanningDebts.html'], 'updateInactiveToggleLabel_'),
+  inactiveDebtContext
+);
+vm.runInContext('updateInactiveToggleLabel_()', inactiveDebtContext);
+assert.equal(inactiveDebtElements.debt_show_inactive_btn.style.display, 'none',
+  'Debt inactive recovery must remain hidden while inventory is loading or unavailable');
+vm.runInContext('__debtInactiveLoaded = true; __debtInactiveRows = []; updateInactiveToggleLabel_()', inactiveDebtContext);
+assert.equal(inactiveDebtElements.debt_show_inactive_btn.style.display, 'none',
+  'Debt inactive recovery must remain hidden at authoritative zero');
+vm.runInContext('__debtInactiveRows = [{}, {}]; updateInactiveToggleLabel_()', inactiveDebtContext);
+assert.match(inactiveDebtElements.debt_show_inactive_btn.innerHTML, /Show inactive debts \(2\)/,
+  'Debt inactive recovery must appear with the authoritative positive count');
+
+assert.match(functionSource_(files['Dashboard_Script_BillsDue.html'], 'confirmStopTrackingBill_'),
+  /refreshInactiveBills_\(\)/,
+  'Stopping a Bill must refresh inactive visibility after a zero-to-one transition');
+assert.match(functionSource_(files['Dashboard_Script_BillsDue.html'], 'reactivateBillFromManage_'),
+  /refreshInactiveBills_\(\)/,
+  'Reactivating a Bill must refresh inactive visibility after a one-to-zero transition');
+assert.match(functionSource_(files['Dashboard_Script_AssetsHouseValues.html'], 'stopTrackingHouse'),
+  /loadHouseSection\(\)/,
+  'Stopping a House must reload the authoritative inactive inventory');
+assert.match(functionSource_(files['Dashboard_Script_AssetsHouseValues.html'], 'reactivateHouseFromManage_'),
+  /loadHouseSection\(\)/,
+  'Reactivating a House must reload the authoritative inactive inventory');
+assert.match(functionSource_(files['Dashboard_Script_Income.html'], 'stopTrackingIncomeSource'),
+  /loadIncomeSourcesSection\(\)/,
+  'Stopping Income must reload the authoritative inactive inventory');
+assert.match(functionSource_(files['Dashboard_Script_Income.html'], 'reactivateIncomeSource'),
+  /loadIncomeSourcesSection\(\)/,
+  'Reactivating Income must reload the authoritative inactive inventory');
+assert.match(files['income_sources.js'],
+  /function reactivateIncomeSourceFromDashboard\(payload, optionalSpreadsheet\)[\s\S]*?validateIncomeLifecycleReference_[\s\S]*?setIncomeLifecycleActiveState_\(sheet, headerMap\.activeCol, identity\.rows, 'YES'\)[\s\S]*?income_reactivate/,
+  'Income Reactivate must stale-check exact rows, change only Active, and log lifecycle evidence');
+assert.doesNotMatch(files['income_sources.js'],
+  /catch \(e\) \{\s*return \{ year: year, activeSources: \[\], inactiveSources: \[\] \};\s*\}/,
+  'Income lifecycle inventory read failures must remain unknown instead of becoming zero inactive sources');
+assert.doesNotMatch(files['income_sources.js'],
+  /function addIncomeSourceFromDashboard\(payload, optionalSpreadsheet\)[\s\S]*?rowReactivated\s*=\s*true/,
+  'Income Add must never silently reactivate an inactive source');
+assert.match(files['test_harness_scenarios_income.js'],
+  /REGRESSION-INCOME-LIFECYCLE[\s\S]*?Stopping the final active source keeps the same management year[\s\S]*?Reactivate preserves every non-lifecycle value[\s\S]*?Add refuses an inactive normalized identity/,
+  'Disposable Income lifecycle regression must cover last-active recovery, preservation, and Add separation');
+assert.match(files['test_harness_scenarios.js'],
+  /getHarnessIncomeLifecycleScenario_[\s\S]*?list\.push\(getHarnessIncomeLifecycleScenario_\(\)\)/,
+  'Income lifecycle scenario must be registered for disposable execution');
+assert.match(files['test_harness_suites.js'],
+  /id: 'SUITE-INCOME-LIFECYCLE'[\s\S]*?'REGRESSION-INCOME-LIFECYCLE'/,
+  'Income lifecycle must have a focused disposable runtime suite');
 assert.match(files['Dashboard_Script_AssetsBankInvestments.html'],
   /Not set \(legacy account\)[\s\S]*?typeExact:\s*row\.type[\s\S]*?usePolicyExact:\s*row\.usePolicy/,
   'Bank Edit must visibly preserve legacy blank metadata in the one-save form');
@@ -3087,8 +3342,8 @@ assert.match(incomeServer,
   /function classifyIncomeGroupsInSheet_\(sheet, optionalDisplay, optionalHeaderMap\)[\s\S]*?incomeGroupQualifiesAsRecurring_\(groups\[i\]\)/,
   'Income must expose one shared recurring/other classifier');
 assert.match(incomeServer,
-  /getActiveIncomeSourcesForManagementFromDashboard\(\)[\s\S]*?classifyIncomeGroupsInSheet_\(sheet\)\.recurring/,
-  'Income management must use the shared recurring bucket');
+  /function getIncomeSourcesForManagementFromDashboard\(optionalSpreadsheet\)[\s\S]*?findLatestCashFlowYearWithAnyIncome_[\s\S]*?analyzeIncomeLifecycleGroupsInSheet_[\s\S]*?activeSources:[\s\S]*?inactiveSources:/,
+  'Income management must retain active and inactive recurring groups in the latest year with any Income identity');
 assert.match(incomeServer,
   /getOtherDetectedIncomeFromLatestCashFlowFromDashboard\(\)[\s\S]*?classifyIncomeGroupsInSheet_\(sheet\)\.other/,
   'Other detected income must use the complementary shared bucket');
@@ -3612,6 +3867,7 @@ const bankContext = vm.createContext({
   setSelectLoadFailure: (...args) => bankFailureEvents.push(['picker', ...args]),
   updateBankUpdateAvailability_() {},
   renderBankManageList_() {},
+  renderInactiveBankAccounts_() {},
   applyBankImportCsvPasteVisibility_() {},
   runReadOnlyRpcWithRetry_: (request) => bankRequests.push(request),
   setStatusLoading: (...args) => bankFailureEvents.push(['retry', ...args]),

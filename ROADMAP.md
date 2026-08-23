@@ -58,13 +58,15 @@
   This next slice does not silently switch Planning authority, execute payments,
   or broadly import transactions. Any authority migration requires a later
   explicit checkpoint.
-- **Next after this House slice:** Income lifecycle parity remains separate and
-  open. Debt, Bank Account, and Investment convergence are runtime-complete
+- **Current Income slice:** Income Stop/Reactivate lifecycle parity is locally
+  complete and awaits isolated disposable runtime proof. Debt, Bank Account,
+  and Investment convergence are runtime-complete
   through isolated `@343`; Bills is complete through the `@387` suite and owner
   bounded review; shared changed-column fit `3p` is
-  complete through `@341`. House metadata Edit/Rename and Income's inactive
-  inventory, guarded Reactivate, and lifecycle evidence remain explicit `3o`
-  gaps after House Stop/Reactivate closes. Financial follow-up `5n` remains folded into the `RFP-1`
+  complete through `@341`. Income now has counted inactive inventory, exact-row
+  guarded Reactivate, Add separation, and lifecycle evidence; Edit/Rename is not
+  claimed. House metadata Edit/Rename remains a separate `3o` gap. Financial
+  follow-up `5n` remains folded into the `RFP-1`
   reporting-basis audit and closes only if its own reconciliation exit criteria
   pass.
 - **Deferred, not removed:** the shadow-only **Cash + Credit Card Import /
@@ -104,7 +106,7 @@ must be based on measured compound-operation evidence after its focused redesign
 | Completed Aug 5 | Closed `4a`–`4c`, `4e`, and `4f` for source `8aa4bf5` on isolated `@318`; exact-owner Performance passed 20/20 with ratified Planner p50/p95 budgets, Restricted fixtures, verified cleanup, Beta `@106`, and bounded untouched. |
 | Completed Aug 6 | Closed combined UX items `3e`–`3i` and `3m` on isolated `@325`; Populated 24/24 and First-Run 16/16 passed with Restricted fixtures and verified cleanup. |
 | Completed Aug 22 | House Stop/Reactivate is runtime-complete on isolated `@391`: 2/2 scenarios, 50/50 assertions, both Restricted fixtures TRASHED, runner OFF, and the shared confirmation visible from every workspace. |
-| Next | Close House metadata Edit/Rename only as a separately scoped `3o` slice, then implement Income lifecycle parity. Cash + Credit Card Import / Refresh remains deferred until explicitly reopened. |
+| Current local candidate | Income Stop/Reactivate lifecycle parity is implemented locally; run its isolated disposable suite before commit review. House metadata Edit/Rename remains separate. Cash + Credit Card Import / Refresh remains deferred until explicitly reopened. |
 | Candidate preparation | Close financial/workbook/recovery proof `5a`–`5f`, operations/support `6a`–`6f`, and monetization-ready architecture `7a`–`7f`. |
 | Frozen candidate | Complete `8a`–`8f`, the exact-candidate advocate rerun `3k`, and full Release Readiness; rerun Performance under `8b` if the frozen source/deployment differs from `8aa4bf5` / `@318`. |
 | Promotion | Complete `9a`–`9e`: five-to-seven-day supervised cohort, final scorecard, go/no-go, and separately approved Beta promotion. |
@@ -227,6 +229,11 @@ Complete in this order:
 9. `3m` — form readiness and remaining customer language.
 10. `3j` — programmatic labels, keyboard/focus, target sizes, contrast,
     reduced motion, and desktop/medium/390px evidence.
+11. `3q` — final cross-surface UI consistency audit after intended UI changes
+    are complete and before candidate freeze. Compare equivalent pages for
+    Current/Add/Manage structure, action placement, lifecycle terminology,
+    CashCompass confirmations, loading/empty/error states, focus, and responsive
+    behavior; resolve or explicitly document every divergence.
 
 **Exit:** no unresolved Severity 1/2 UX defect and every advocate category has a
 documented path to at least 9/10. The final score remains deferred until the
@@ -626,6 +633,7 @@ Performance under `8b`. Preserve Beta `@106` plus the user-controlled bounded de
   original Activity event and append a correction event with before/after state.
 - **Web Dashboard page-by-page polish** — execute the ordered `UX-01` through `UX-10` passes in `TODO.md → UX Backlog (Version 1)`, beginning with the Overview information architecture and balanced-grid pass. Each ID is a separate reviewable/validatable change; preserve calculations, schemas, and write behavior.
 - **Tracked-editor navigation consistency — runtime-validated through isolated `@195`.** Long-lived financial items now use one recognizable hierarchy: Bills **Due · Add · Manage**; Houses / Bank Accounts / Investments / Debts **Update · Add · Manage**. Setup deep-links preserve whether the customer chose Add or Manage. Update is Save-only; Manage owns active-item inventories and guarded Stop tracking actions with confirmation. Bank import workflows are secondary Manage tools. Shared UI primitives prevent each asset editor from reimplementing mode, focus, list, and empty-state behavior; writers remain feature-specific. First-Run V4 passed 10/10 and Populated V3 passed 13/13 with zero browser errors, Restricted ownership, and verified Trash cleanup.
+- **Final cross-surface UI consistency audit (`3q`) — required before `8a` freeze.** Re-inventory every equivalent app surface after all intended UI changes and verify shared navigation structure, action location, lifecycle wording, confirmation treatment, loading/empty/error states, focus/keyboard behavior, and desktop/medium/390px composition. Any divergence must be corrected or documented with a product reason and regression evidence; prior surface-by-surface passes do not waive this final sweep.
 - **Independent advocate trust gate** — close the confirmed P1 Bank money-editor, Income/Setup truth, Bills Pay/occurrence feedback, and customer-language findings before claiming Core Experience or 10/10 UX readiness. Preserve the advocate as an independent evidence role and retest every writer fix only on a newly guarded disposable workbook.
 - **Financial Plan refresh latency — Planner gate closed for `@318`; cross-flow measurement closed on `@319`; ordinary Save investigation closed on `@322`.** Isolated blank/fresh `@114` took 143 seconds; profiling and focused optimization through `@317` retired generated charts, reduced repeat `format_dashboard` from 18.303 s to 0.378 s, and reduced snapshot construction from 13.026 s to 4.867 s. Exact-owner `@318` campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` then passed 20/20 pairs against ratified 30/60 s budgets. V10 `@322` reduced ordinary Save completion p50/p95 from 11.060/17.568 s to 6.520/9.418 s and passed 24/24 functional assertions; the strict 6 s budget remains a documented near-miss. All fixtures were Restricted and cleanup-verified. `8b` reruns Performance if the final source/deployment differs.
 - **10/10 Beta Release Candidate gate** — after P1 evidence, P2 financial truth, and P3 experience/performance work, run the exact candidate through the full scorecard and release gates in `BETA_10_OUT_OF_10_PLAN.md`. A supervised cohort may run earlier; broad or monetized beta does not.
@@ -706,6 +714,31 @@ Performance under `8b`. Preserve Beta `@106` plus the user-controlled bounded de
   transaction-ingestion milestone, not part of account-facts Credit Card Import /
   Refresh Phase 1. Current import architecture should avoid unnecessarily blocking
   the later capability, but account-level facts alone are not sufficient.
+- **Property Value Import / AVM Refresh** *(future House/Property data capability;
+  after lifecycle cleanup and core Financial Facts/import foundations)* — obtain
+  current residential valuation evidence through a supported, licensed
+  property-data API; normalize it as explicit `AVM_ESTIMATE` evidence; match it
+  to one stable CashCompass House identity; show a shadow comparison against the
+  customer-maintained value; and allow the customer to Keep current value,
+  Accept imported estimate, or Enter another reviewed value. External evidence
+  must preserve provider, provider property identity, estimate, valuation/effective
+  date, observed/import timestamp, provenance, freshness, and genuine confidence
+  range when supplied. It must remain distinct from customer-entered value,
+  tax-assessed value, recent sale price, and appraisal. No estimate may silently
+  overwrite the authoritative House value; a large difference triggers review,
+  and an accepted value should reuse the existing House Values update/history
+  path rather than create a parallel authority. Matching must use reviewed stable
+  evidence such as normalized address, provider property ID, APN/parcel identity,
+  and CashCompass House identity—never display name alone—and ambiguity fails
+  closed. When implementation is explicitly opened, assess ATTOM and other
+  supported providers without committing a vendor in advance, comparing API and
+  licensing terms, U.S. coverage, property identity quality, AVM/range/comps,
+  freshness/history, stability, low-volume pricing, and retention restrictions.
+  Do not build production automation on Zillow/Redfin scraping. Start with
+  customer-triggered or low-frequency refresh to avoid unnecessary provider
+  calls, and keep raw AVM observations/provenance separate from accepted
+  authoritative House history. This does not block Income lifecycle work,
+  Credit Card Import hardening, or real-source card-import proof.
 - **AutoPay Pending Confirmation UX** *(future product enhancement — after Test Harness / Release Readiness)* — visually distinguish AutoPay bills that are **awaiting payment confirmation** from bills that **require manual action**, without hiding them or inferring payment from the due date. Keeps current behavior; adds an "AutoPay Pending" state/badge and a future auto-transition **Pending → Confirmed → Completed** once a matching payment is detected via manual entry / bank import / future bank sync (then removed from the Bills Due attention queue). Never auto-complete AutoPay bills without payment evidence. Full spec: `ENHANCEMENTS.md → Future — AutoPay Pending Confirmation UX`.
 - Money Plan Phase 2; broad provider-connected Account Aggregation & Transaction
   Import beyond the current shadow fact milestone; Chat / Assistant; Paid

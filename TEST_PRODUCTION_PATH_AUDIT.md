@@ -51,6 +51,10 @@ canonical workbook for a write.
   `Linked Property` column from a production-styled disposable Debts sheet to
   recreate the retired schema, then proves migration, presentation, and actual
   Cash Flow financing reconciliation through production helpers.
+- `test_harness_scenarios_income.js`: creates one deterministic two-row Income
+  identity on its guarded disposable Cash Flow sheet, then uses production
+  Stop/Reactivate/Add seams. Its only direct mutations create fixture values
+  and temporary stale/ambiguity challenges that are removed before assertions.
 - `test_harness_scenarios_financial_integrity.js`: creates deterministic active,
   blank-Active, inactive, linked, and unlinked rows only after re-verifying the
   disposable target; it then deliberately changes one mirror value and one
