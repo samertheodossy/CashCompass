@@ -242,6 +242,67 @@ function renderRecentDonations(rows) {
     '</div>';
 }
 
+function managedDonationPaymentState_(rawPaymentType) {
+  var raw = String(rawPaymentType || '').trim();
+  var checkMatch = raw.match(/^check(?:\s*#\s*(.*))?$/i);
+  if (checkMatch) {
+    return {
+      choice: DONATION_PAYMENT_CHECK,
+      checkNumber: String(checkMatch[1] || '').trim(),
+      other: ''
+    };
+  }
+  var suggestions = ((window.__donationFormData || {}).paymentTypeSuggestions || []).slice();
+  if (!raw || suggestions.indexOf(raw) !== -1) {
+    return { choice: raw, checkNumber: '', other: '' };
+  }
+  return { choice: DONATION_SELECT_OTHER, checkNumber: '', other: raw };
+}
+
+function managedDonationPaymentOptions_(selectedValue) {
+  var suggestions = ((window.__donationFormData || {}).paymentTypeSuggestions || []).slice();
+  if (suggestions.indexOf(DONATION_PAYMENT_CHECK) === -1) {
+    suggestions.push(DONATION_PAYMENT_CHECK);
+  }
+  suggestions.sort(function(a, b) { return String(a).localeCompare(String(b)); });
+  var options = ['<option value="">— Select payment type —</option>'];
+  suggestions.forEach(function(value) {
+    options.push(
+      '<option value="' + escapeHtml(value) + '"' +
+      (value === selectedValue ? ' selected' : '') + '>' + escapeHtml(value) + '</option>'
+    );
+  });
+  options.push(
+    '<option value="' + DONATION_SELECT_OTHER + '"' +
+    (selectedValue === DONATION_SELECT_OTHER ? ' selected' : '') + '>Other…</option>'
+  );
+  return options.join('');
+}
+
+function onManagedDonationPaymentChange_(key) {
+  var payment = document.getElementById(key + '-payment');
+  var checkWrap = document.getElementById(key + '-check-wrap');
+  var otherWrap = document.getElementById(key + '-payment-other-wrap');
+  if (!payment) return;
+  if (checkWrap) checkWrap.style.display = payment.value === DONATION_PAYMENT_CHECK ? 'block' : 'none';
+  if (otherWrap) otherWrap.style.display = payment.value === DONATION_SELECT_OTHER ? 'block' : 'none';
+}
+
+function managedDonationPaymentValue_(key) {
+  var payment = document.getElementById(key + '-payment');
+  if (!payment) return '';
+  if (payment.value === DONATION_PAYMENT_CHECK) {
+    var checkNumber = document.getElementById(key + '-check-number');
+    var number = String(checkNumber && checkNumber.value || '').trim().replace(/^#+\s*/, '');
+    return number ? 'Check #' + number : '';
+  }
+  if (payment.value === DONATION_SELECT_OTHER) {
+    var other = document.getElementById(key + '-payment-other');
+    return String(other && other.value || '').trim();
+  }
+  return String(payment.value || '').trim();
+}
+
 function editManagedDonation_(key) {
   var row = (window.__recentDonationRows || {})[key];
   var item = document.getElementById(key);
@@ -258,6 +319,8 @@ function editManagedDonation_(key) {
       (Number(year) === Number(row.taxYear) ? ' selected' : '') + '>' +
       escapeHtml(value) + '</option>';
   }).join('');
+  var paymentState = managedDonationPaymentState_(row.paymentType);
+  var paymentOptions = managedDonationPaymentOptions_(paymentState.choice);
   item.innerHTML =
     '<td colspan="7">' +
       '<div class="donation-manage-editor">' +
@@ -265,7 +328,15 @@ function editManagedDonation_(key) {
         '<div><label>Date</label><input type="date" id="' + escapeHtml(key) + '-date" value="' + escapeHtml(row.entryDate || '') + '"></div>' +
         '<div><label>Amount</label><input type="text" inputmode="decimal" id="' + escapeHtml(key) + '-amount" value="' + escapeHtml(String(row.amount == null ? '' : row.amount)) + '"></div>' +
         '<div><label>Tax year</label><select id="' + escapeHtml(key) + '-taxyear">' + yearOptions + '</select></div>' +
-        '<div><label>Payment type</label><input id="' + escapeHtml(key) + '-payment" maxlength="200" value="' + escapeHtml(row.paymentType || '') + '"></div>' +
+        '<div><label>Payment type</label>' +
+          '<select id="' + escapeHtml(key) + '-payment" onchange="onManagedDonationPaymentChange_(\'' + escapeJs(key) + '\')">' + paymentOptions + '</select>' +
+          '<div id="' + escapeHtml(key) + '-check-wrap" class="donations-other-wrap" style="display:' + (paymentState.choice === DONATION_PAYMENT_CHECK ? 'block' : 'none') + ';">' +
+            '<label>Check #</label><input id="' + escapeHtml(key) + '-check-number" inputmode="numeric" maxlength="190" value="' + escapeHtml(paymentState.checkNumber) + '" placeholder="e.g. 4783" autocomplete="off">' +
+          '</div>' +
+          '<div id="' + escapeHtml(key) + '-payment-other-wrap" class="donations-other-wrap" style="display:' + (paymentState.choice === DONATION_SELECT_OTHER ? 'block' : 'none') + ';">' +
+            '<label>Other — payment type</label><input id="' + escapeHtml(key) + '-payment-other" maxlength="200" value="' + escapeHtml(paymentState.other) + '" placeholder="e.g. Zelle" autocomplete="off">' +
+          '</div>' +
+        '</div>' +
         '<div class="donation-manage-editor-comments"><label>Comments</label><input id="' + escapeHtml(key) + '-comments" maxlength="500" value="' + escapeHtml(row.comments || '') + '" placeholder="Optional comment"></div>' +
       '</div>' +
       '<div class="donation-manage-editor-actions">' +
@@ -304,6 +375,14 @@ function saveManagedDonation_(key) {
     setStatus('donations_status', 'Donation not found — please refresh.', true);
     return;
   }
+  var nextPaymentType = managedDonationPaymentValue_(key);
+  if (!nextPaymentType) {
+    var paymentMessage = payment.value === DONATION_PAYMENT_CHECK
+      ? 'Enter the check number (or pick a different payment type).'
+      : 'Payment type is required — pick one from the list or Other… and type it.';
+    setStatus('donations_status', paymentMessage, true);
+    return;
+  }
   var item = document.getElementById(key);
   var buttons = item ? item.querySelectorAll('button') : [];
   Array.prototype.forEach.call(buttons, function(button) { button.disabled = true; });
@@ -329,7 +408,7 @@ function saveManagedDonation_(key) {
       newDonationDate: String(date.value || '').trim(),
       newAmount: String(amount.value || '').trim(),
       newTaxYear: String(taxYear.value || '').trim(),
-      newPaymentType: String(payment.value || '').trim(),
+      newPaymentType: nextPaymentType,
       newComments: String(comments.value || '').trim()
     });
 }

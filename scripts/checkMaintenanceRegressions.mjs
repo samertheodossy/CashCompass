@@ -180,8 +180,14 @@ assert.match(donationScript,
   /function editManagedDonation_\(key\)[\s\S]*newCharityName[\s\S]*newDonationDate[\s\S]*newAmount[\s\S]*newTaxYear[\s\S]*newPaymentType[\s\S]*newComments/,
   'Manage donations must submit every editable donation field');
 assert.match(donationScript,
-  /paymentType:\s*row\.paymentType[\s\S]*newPaymentType:\s*String\(payment\.value/,
+  /paymentType:\s*row\.paymentType[\s\S]*newPaymentType:\s*nextPaymentType/,
   'Manage donations must submit the old Payment type snapshot and the edited replacement');
+assert.match(donationScript,
+  /function managedDonationPaymentState_\(rawPaymentType\)[\s\S]*?\^check[\s\S]*?checkNumber/,
+  'Manage donations must split an existing canonical Check payment into its editable number');
+assert.match(donationScript,
+  /function managedDonationPaymentValue_\(key\)[\s\S]*?'Check #' \+ number/,
+  'Manage donations must rebuild the canonical Check #number payment value');
 assert.match(donationScript,
   /var amountInputId = key \+ '-amount';[\s\S]*amountInput\.onfocus = function\(\) \{ currencyFocus\(amountInputId\); \};[\s\S]*amountInput\.onblur = function\(\) \{ currencyBlur\(amountInputId\); \};[\s\S]*currencyBlur\(amountInputId\);/,
   'Manage donations must open and leave the Amount editor in canonical currency format');
@@ -253,7 +259,7 @@ assert.equal(donationViewElements.donations_view_manage.style.display, 'none',
 const managedDonationKey = 'donation-2025-12';
 const managedDonationAmountId = `${managedDonationKey}-amount`;
 const managedDonationElements = {
-  [managedDonationKey]: { innerHTML: '' },
+  [managedDonationKey]: { innerHTML: '', querySelectorAll() { return []; } },
   [`${managedDonationKey}-charity`]: { focus() {}, select() {} },
   [managedDonationAmountId]: { value: '800', onfocus: null, onblur: null }
 };
@@ -286,6 +292,57 @@ assert.equal(donationViewElements[managedDonationAmountId].value, '800',
 donationViewElements[managedDonationAmountId].onblur();
 assert.equal(donationViewElements[managedDonationAmountId].value, '$800.00',
   'Manage donations must restore canonical currency when the editor loses focus');
+
+const parsedManagedCheck = donationViewContext.managedDonationPaymentState_('Check #9021');
+assert.equal(parsedManagedCheck.choice, 'Check',
+  'Manage donations must select Check for an existing canonical check payment');
+assert.equal(parsedManagedCheck.checkNumber, '9021',
+  'Manage donations must prefill the existing check number');
+const parsedManagedLegacy = donationViewContext.managedDonationPaymentState_('Wire transfer');
+assert.equal(parsedManagedLegacy.choice, '__other__',
+  'Manage donations must preserve an uncommon legacy payment through Other');
+assert.equal(parsedManagedLegacy.other, 'Wire transfer',
+  'Manage donations must prefill the uncommon legacy payment value');
+
+Object.assign(donationViewElements, {
+  [`${managedDonationKey}-date`]: { value: '2025-12-13' },
+  [`${managedDonationKey}-taxyear`]: { value: '2025' },
+  [`${managedDonationKey}-payment`]: { value: 'Check' },
+  [`${managedDonationKey}-check-number`]: { value: '' },
+  [`${managedDonationKey}-payment-other`]: { value: '' },
+  [`${managedDonationKey}-comments`]: { value: 'Bags' }
+});
+let managedDonationPayload = null;
+let managedDonationStatus = null;
+donationViewContext.setStatus = (_id, message, isError) => {
+  managedDonationStatus = { message, isError };
+};
+donationViewContext.google = {
+  script: {
+    run: {
+      withSuccessHandler() {
+        return {
+          withFailureHandler() {
+            return {
+              updateDonationFromDashboard(payload) { managedDonationPayload = payload; }
+            };
+          }
+        };
+      }
+    }
+  }
+};
+donationViewContext.saveManagedDonation_(managedDonationKey);
+assert.equal(managedDonationPayload, null,
+  'Manage donations must not call the writer when Check has no number');
+assert.match(managedDonationStatus.message, /Enter the check number/,
+  'Manage donations must explain that Check requires a number');
+donationViewElements[`${managedDonationKey}-check-number`].value = '#9021';
+donationViewContext.saveManagedDonation_(managedDonationKey);
+assert.equal(managedDonationPayload.newPaymentType, 'Check #9021',
+  'Manage donations must send the canonical Check #number replacement');
+assert.equal(managedDonationPayload.paymentType, '',
+  'Manage donations must retain the old blank Payment type as its stable-row snapshot');
 assert.match(files['activity_log.js'], /donation_comment_update[\s\S]*Donation comments updated/,
   'Donation comment edits must render as immutable Donation audit history');
 assert.match(files['activity_log.js'], /donation_update[\s\S]*Donation updated/,

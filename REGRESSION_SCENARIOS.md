@@ -1561,6 +1561,25 @@ Whenever a production bug is fixed:
   The user visually confirmed name propagation in `INPUT - Investments` and
   `SYS - Assets`. Beta remains `@106`; bounded is untouched by Codex.
 
+### REG-072 — Manage Donations could not capture a check number
+
+- Category: REGRESSION / UI CORRECTNESS / DONATION EDITING
+- Date discovered: 2026-08-23
+- Status: fixed locally; focused/full local regressions passed
+- Root cause: Add donation treated Check as a structured choice and revealed a
+  Check # field, but the Manage donations editor rendered Payment type as one
+  plain text input. A customer changing an existing donation to Check therefore
+  had no supported way to provide the number or produce the canonical
+  `Check #number` value.
+- Expected result: Manage donations uses the same controlled payment choices,
+  reveals and requires Check # when Check is selected, preloads the number from
+  an existing canonical Check value, and preserves uncommon legacy payment
+  labels through Other. The existing locked full-row writer, stable snapshot,
+  immutable audit, and rollback behavior remain unchanged.
+- Permanent coverage: `scripts/checkMaintenanceRegressions.mjs` dynamically
+  proves existing Check parsing, legacy Other preservation, missing-number
+  refusal before the writer call, and canonical Check replacement submission.
+
 ---
 
 ## 3a loading-state consistency coverage
@@ -1704,4 +1723,5 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-069 | Bank lifecycle split rename/details and lacked guarded Reactivate behavior | REGRESSION / ENTITY LIFECYCLE / CROSS-SHEET CONSISTENCY / ROLLBACK | fixed; focused/full regressions + isolated `@335` exact lifecycle assertion PASS; marker-verified cleanup after unrelated HTTP 0 |
 | REG-070 | App-written text and formatted numeric values could remain clipped after entity changes | REGRESSION / WORKBOOK PRESENTATION / APP-WRITE CONSISTENCY | fixed; focused/full regressions + isolated `@341` Bills integrity 14/14 PASS in 24 s; linked text, large currency, exact 24 px gutter, TRASHED disposition, runner OFF |
 | REG-071 | Historical-only Investment names appeared as current editable accounts | REGRESSION / ENTITY LIFECYCLE / CROSS-SHEET CONSISTENCY / UI TRUTH | fixed; full regressions + isolated `@343` Populated 26/26 PASS with exact Investment lifecycle assertion, Restricted sharing, zero browser errors, verified Trash, and `active: null` |
+| REG-072 | Manage Donations could not capture a check number | REGRESSION / UI CORRECTNESS / DONATION EDITING | fixed locally; focused/full local regressions passed |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |
