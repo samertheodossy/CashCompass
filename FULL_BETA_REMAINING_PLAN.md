@@ -2,10 +2,12 @@
 
 **Status:** Active execution inventory
 
-**Reconciled:** 2026-08-22
+**Reconciled:** 2026-08-23
 
-**Current isolated deployment:** `@353`. The Activity-correction evidence
-baseline remains isolated Central `@240`; clean Populated Dashboard run
+**Latest lifecycle-validated isolated deployment:** `@391`. The final source at
+`cdbef99` has local/full regression and owner evidence but no post-change
+isolated Income writer run. The Activity-correction evidence baseline remains
+isolated Central `@240`; clean Populated Dashboard run
 `FR-d75843e0-486e-4faa-8967-05ee40b73e25` passed **21/21** in 383.006 s. It
 includes the complete `REG-030`–`REG-039` direct Quick Add matrix plus
 change-amount/remove correction for cash, credit-card, created-row, and Donation
@@ -50,10 +52,15 @@ Accuracy passed 2/2 scenarios and 50/50 assertions, including the 23/23 House
 Stop/Reactivate lifecycle scenario; both Restricted fixtures were verified
 TRASHED and the runner returned OFF. The shared CashCompass confirmation now
 lives outside every workspace page, so House actions cannot remain hidden until
-Cash Flow is opened. House metadata Edit/Rename remains open. The Income
-Stop/Reactivate lifecycle candidate is locally complete with counted inactive
-discovery, exact-row guards, Add separation, value-preserving Reactivate, and
-non-monetary Activity evidence; isolated runtime proof remains.
+Cash Flow is opened. House metadata Edit/Rename remains open. Income
+Stop/Reactivate is complete in `cdbef99` with Current/Add/Manage separation,
+counted inactive discovery, exact-row stale/ambiguity guards, Add separation,
+value-preserving Reactivate, non-monetary Activity evidence, and permanent local
+regressions. No final isolated Income writer run is claimed. Across Bank, Debt,
+Investment, House, Bill, and Income, inactive recovery controls start hidden and
+reveal only after an authoritative positive count; zero and unknown/error do not
+show a false recovery affordance. Customer-facing web actions use the shared
+CashCompass confirmation rather than browser-native dialogs.
 Beta is still `@106` and bounded remains user-controlled.
 
 The exact-owner Performance Planner campaign is complete for source
@@ -138,6 +145,9 @@ closed. They are retained here so the work map does not lose history.
 | 4e | Exact-candidate 20-pair campaign | Exact-owner `@318` campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` passed 20/20 pairs, 40 Planner executions, Restricted sharing, and verified cleanup |
 | 4f | Ratify Planner budgets and close ordinary Save investigation | Planner evidence recorded `PASS` / `ACCEPT` / `budgetRatified: true` on `@318`. On `@322`, V10 run `FR-afc35e3b-77ff-4c91-88cb-88f28c55fa0f` passed 24/24 with five Saves, Restricted sharing, verified cleanup, and zero errors; completion p50/p95 improved from 11.060/17.568 s to 6.520/9.418 s. The directional investigation is closed as a substantial near-miss; the strict 6 s Save budget is not claimed passed. |
 | 4d | Measure remaining release flows | Isolated `@319` diagnostic run `FR-47ef0c44-68c8-4cff-a745-828677acf353` passed with Restricted sharing and verified cleanup; Save 1 ms acknowledgement / 8.332 s completion, navigation 17/18 ms p50/p95, and populated Overview 11.776 s completion |
+| 3o recovery lifecycle | Bills, House tracking/recovery, and Income tracking/recovery | Bills closed in `bb20008` with isolated `@387` plus owner review; House closed in `0bf7610` with isolated `@391`; Income closed in `cdbef99` with permanent local regressions and owner acceptance. All preserve the existing identity/history, refuse Add-as-recovery, and use explicit Reactivate. House metadata Edit/Rename and Income Edit/Rename remain separate. |
+| Confirmation consistency | CashCompass-owned customer confirmation | Permanent Dashboard UX regression rejects browser-native customer dialogs; reviewed Stop/Reactivate/Skip actions use the shared surface. Administrative `SpreadsheetApp.getUi()` utilities are excluded. |
+| Inactive recovery visibility | Authoritative positive-count behavior | Bank, Debt, Investment, House, Bill, and Income controls start hidden; positive count reveals; zero/error/unknown stays hidden; final Reactivate collapses the control. Permanent Dashboard UX regressions cover 0/1/2 transitions. |
 
 The at-a-glance inventory below is **open-only**. Detailed group tables retain
 recently completed `5h` and `5i` as implementation history.
@@ -301,9 +311,15 @@ optional deployment does not rely on unreceived future income.
 
 **Next open product milestone — customer Import / Refresh:** checkpoint
 `9a6cb96` is committed and pushed. Under the combined Cash + Credit Card label,
-implement revolving-debt/credit-card evidence first, then bank/cash evidence,
-with balances, minimums, due dates, applicable APRs, timestamps/freshness,
-provenance, and shadow comparison before any Planning-authority migration. The
+start with **Credit Card Import Correctness Boundaries**: inactive Financial
+Account identities must fail closed during matching; caller/client options must
+not be able to manufacture canonical APR applicability; permanent regressions
+must cover both; and one representative real institution OFX/QFX export must be
+inspected before customer workflow design. Then implement revolving-debt/
+credit-card evidence first and bank/cash evidence second, with balances,
+minimums, due dates, applicable APRs, timestamps/freshness, provenance, and
+shadow comparison before any Planning-authority migration. Existing Part 2A-1
+through 2A-5 are enabling foundation, not production-ready customer import. The
 canonical later order is loans/mortgages; investment accounts; holdings and
 tax-aware data; Bills/income/property/retirement/known commitments plus targeted
 transaction evidence; then an explicit authority checkpoint. See
@@ -363,29 +379,30 @@ boundary at a time; no broad sheet rewrite or migration; missing new metadata
 means current behavior; no automatic cash transfer, security sale, or debt
 payment; bounded is never a test target; and every writer test creates and
 continuously verifies its own disposable workbook. `5n` is reconciled inside
-the completed `RFP-1` foundation. House Stop/Reactivate is complete. Income
-Stop/Reactivate is locally complete and runtime-pending as its own `3o` slice;
-House metadata Edit/Rename remains a separate follow-up. Bills lifecycle is
-complete. Shadow-only Cash + Credit Card Import / Refresh is
-deferred until explicitly reopened, not removed. Residual `RFP-4`/`RFP-5` experience/evidence
+the completed `RFP-1` foundation. Bills, House tracking/recovery, and Income
+tracking/recovery are complete. House metadata Edit/Rename remains a separate
+follow-up; Income Edit/Rename/Frequency must be explicitly scoped or deferred.
+The current milestone is Cash + Credit Card Import / Refresh, beginning with
+its correctness boundaries and real-export gate before any shadow-only customer
+slice. Residual `RFP-4`/`RFP-5` experience/evidence
 work remains separately tracked and does not reopen frozen Overview/Debt UX.
 
 ## Open list at a glance
 
 | Order | Open IDs | Workstream | Focused estimate |
 |---:|---|---|---:|
-| 1 | `3o` House metadata | House Stop/Reactivate is complete; scope Edit/Rename separately without reopening the proven lifecycle | 0.5–1 d plus fixes |
-| 2 | `3o` Income lifecycle | Stop/Reactivate locally complete: counted inactive discovery, exact-row guarded Reactivate, Add separation, financial noninterference, and Activity evidence. Edit/Rename remains separately unclaimed | Isolated runtime validation pending |
-| Deferred | Next Import / Refresh slice | Revolving-debt/credit-card facts first, shadow comparison/review only; then bank/cash, when explicitly reopened | Estimate only in the separately approved implementation plan |
-| 3 | `3j`, `3q`, `3k` | Accessibility closeout, final cross-surface UI consistency audit, and frozen-candidate advocate score | 5–9 d plus audit fixes |
-| 4 | `5j`–`5m` | Deferred safe correction families and audit disposition | 4.5–8 d including integrated disposable-workbook validation |
-| 5 | `5a`–`5f`, `5n` | Remaining financial/workbook proof; preserve the completed RFP-1 reconciliation | 5–12.5 d before credited overlap |
-| 6 | `6a`–`6f` | Release operations, support, privacy, and known limitations | 3.5–6.5 d |
-| 7 | `7a`–`7f` | Monetization-ready policy and architecture foundation; no billing activation | 5–10 d |
-| 8 | `8a`–`8f` | Freeze, complete exact-candidate evidence, score, and READY verdict | 3.5–7 d plus fixes |
-| 9 | `9a`–`9e` | Supervised cohort, go/no-go, and separately approved Central Beta promotion | 2–3 active d plus 5–7 calendar d and fixes |
+| 1 | Credit Card Import Correctness Boundaries | Make inactive Financial Account identities fail closed; prevent caller-controlled APR applicability from creating canonical applicable APR; add permanent regressions; inspect one representative real institution OFX/QFX export | Estimate in the separately reviewed implementation plan |
+| 2 | Cash + Credit Card Import / Refresh customer slice | Existing Part 2A foundation is not production-ready import. Implement revolving debt first and bank/cash second, shadow comparison/review only, after correctness/real-export gates | Estimate in the separately reviewed implementation plan |
+| 3 | `3o` House metadata and Income metadata disposition | House and Income Stop/Reactivate are complete. Scope House Edit/Rename separately; explicitly implement or defer Income Edit/Rename without reopening recovery | 0.5–1 d plus fixes/decision |
+| 4 | `3j`, `3q`, `3k` | Accessibility closeout, final cross-surface UI consistency audit, and frozen-candidate advocate score | 5–9 d plus audit fixes |
+| 5 | `5j`–`5m` | Deferred safe correction families and audit disposition | 4.5–8 d including integrated disposable-workbook validation |
+| 6 | `5a`–`5f`, `5n` | Remaining financial/workbook proof; preserve the completed RFP-1 reconciliation | 5–12.5 d before credited overlap |
+| 7 | `6a`–`6f` | Release operations, support, privacy, and known limitations | 3.5–6.5 d |
+| 8 | `7a`–`7f` | Monetization-ready policy and architecture foundation; no billing activation | 5–10 d |
+| 9 | `8a`–`8f` | Freeze, complete exact-candidate evidence, score, and READY verdict | 3.5–7 d plus fixes |
+| 10 | `9a`–`9e` | Supervised cohort, go/no-go, and separately approved Central Beta promotion | 2–3 active d plus 5–7 calendar d and fixes |
 
-**Current execution decision (2026-08-14):** `RFP-1`, `RFP-2`, and `RFP-6a` are
+**Current execution decision (reconciled 2026-08-23):** `RFP-1`, `RFP-2`, and `RFP-6a` are
 complete. Granular Robinhood data was supplied, so the contained activity and
 holdings foundation was prioritized and proven on isolated Central `@351`
 before commit. It is an input foundation, not yet a Hold/Add/Reduce/Sell
@@ -406,8 +423,12 @@ Retirement scenario-load work (`4g`), and money-format consistency (`3n`) are
 complete; `3n` source commit `d1278ef` is on `origin/main`. Hold customer-facing
 release work. Debt, Bank Account, and Investment convergence are complete through
 isolated `@343`; Bills is complete through isolated `@387`; `3p` is complete on
-isolated `@341`; finish the House candidate, then Income. Execute `3j`
-afterward. Compound Activity correction
+isolated `@341`; House and Income tracking/recovery are complete in `0bf7610`
+and `cdbef99`. The current milestone is Credit Card Import Correctness
+Boundaries, representative real-export inspection, and only then the shadow-only
+customer Import / Refresh slice. House metadata Edit/Rename remains separate;
+Income Edit/Rename must be explicitly scoped or deferred. Execute `3j` and final
+`3q` before freeze. Compound Activity correction
 `5j`–`5m` remains a broad-Beta requirement but is deliberately deferred until
 after these focused follow-ups. The exact-candidate advocate rerun `3k` occurs
 only after freeze; Groups 6–7 may advance during runtime/review waits.
@@ -479,11 +500,13 @@ acceptance contract, close it with evidence rather than manufacturing a redesign
 | 3k | Exact-candidate task-based advocate rerun | All eight criteria are rescored from interactive evidence; every category reaches the release path to ≥9 | 1–2 d |
 | 3m | Form readiness and residual customer language — **✅ complete** | Primary actions fail closed until minimum input is valid; customer labels replace stored tokens; duplicate/obsolete guidance is removed without changing stored values or server validation | Complete on isolated `@325`; Populated 24/24 and First-Run 16/16 |
 | 3n | Customer-visible money-format consistency — **✅ complete** | Normal-path finite money uses grouped `$x.xx` with signs before `$`; percentages, counts, ages, stored values, schemas, writers, and numeric-entry behavior remain unchanged | Commit `d1278ef` on `origin/main`; isolated `@331`; Populated V12 26/26 PASS under `REG-067` |
-| 3o | Pre-publish product consistency and shared lifecycle | Converge Edit/Rename/Stop/Reactivate behavior and customer language across long-lived entities without partial cross-sheet migrations. One user intent gets one obvious action; internal linked-reference, rollback, and audit mechanics stay behind it. Debt is the reference implementation; Bank, Investments, Houses, Income, and Bills migrate one at a time with duplicate/stale guards, rollback, audit evidence, and guarded disposable-workbook proof. Every Stop path must expose a counted inactive inventory and Reactivate the existing preserved identity; Add must never be the recovery mechanism | Debt complete on isolated `@334`; Bank through `@338`; Investments through `@343`; Bills complete in `bb20008` with isolated `@387` and owner bounded evidence. House Stop/Reactivate is runtime-complete on isolated `@391`. House metadata Edit/Rename remains separate. Income Stop/Reactivate is locally complete with Current/Add/Manage separation, counted inactive inventory, exact-row guards, Add refusal, and distinct Activity evidence; isolated runtime validation remains. Income Edit/Rename is not claimed. |
+| 3o | Pre-publish product consistency and shared lifecycle | Tracking/recovery convergence is complete across Debt, Bank, Investments, Bills, Houses, and Income: every Stop path preserves the identity/history, exposes counted inactive recovery, Reactivates the exact guarded record, refuses Add-as-recovery, uses CashCompass confirmation, and hides recovery for zero/unknown/error. Metadata editing remains a separate capability. | Debt complete on isolated `@334`; Bank through `@338`; Investments through `@343`; Bills in `bb20008` with isolated `@387` and owner evidence; House tracking/recovery in `0bf7610` with isolated `@391`; Income tracking/recovery in `cdbef99` with permanent local regressions and owner acceptance. House metadata Edit/Rename remains open. Income Edit/Rename is not claimed and must be explicitly scoped or deferred. |
 | 3p | Shared dynamic changed-column fit — **✅ complete** | Every supported CashCompass entity add/edit/rename/value-save fits the authoritative and linked text or numeric columns it actually changes, with a 24 px rendering gutter and a 1000 px cap so current values remain readable. Covers Debt/Cash Flow, Bills/Cash Flow, Bank, Investments, Houses, and Income; manual sheet edits and unrelated non-entity writers remain outside the app-triggered contract | Complete on isolated `@341` under `REG-070`. Disposable run `20260807-154251-d5e9` passed 14/14 in 24 s, including linked text, large formatted currency, and exact-gutter assertions; fixture disposition was `TRASHED` and the runner returned OFF |
 | 3q | Final cross-surface UI consistency audit | After intended UI work is complete and before `8a`, compare every equivalent CashCompass surface for Current/Update/Add/Manage structure, action placement, lifecycle terminology, CashCompass confirmation treatment, loading/empty/error states, focus/keyboard behavior, and desktop/medium/390px layout. Correct each slip or document a product reason with permanent regression evidence | Required pre-freeze audit; prior page sweeps and local consistency checks do not waive it. Estimate 1–2 d plus fixes |
 
-**Group 3 open estimate: 10–18 focused days, with remaining `3o` sequenced before `3j` and final `3q` completed before `8a`.**
+**Group 3 open estimate:** rebaseline after the Import / Refresh correctness
+slice. House metadata and the Income Edit/Rename disposition remain under `3o`;
+`3j` and final `3q` must complete before `8a`.
 
 ### Isolated `@196` advocate finding reconciliation
 
@@ -721,7 +744,7 @@ family. The strictest failed gate controls the actual decision date.
 
 The remaining work that directly controls the finish date is:
 
-`3j → 5j–5m → 5a–5f → 8a–8f/3k → 9a–9e`
+`Credit Card Import correctness/real-source proof → reviewed shadow Import / Refresh slice → House metadata and Income Edit/Rename disposition → 3j/3q → 5j–5m → 5a–5f/5n → 8a–8f/3k → 9a–9e`
 
 Financial/workbook proof in Group 5 must finish before `8b`. Operations and
 monetization foundations in Groups 6–7 must finish before `8d`, but they should
@@ -769,8 +792,8 @@ not block early engineering.
 | Completed Aug 6 UX closeout | `3e`–`3i` and `3m` runtime-complete on isolated `@325` | Populated `FR-51e0f9a0-0d1b-4049-9eea-36b1107a0976` passed 24/24; First-Run `FR-78d9e3b6-a907-4959-bbca-db0966f623f1` passed 16/16; Restricted sharing and cleanup verified | Beta stayed `@106`; bounded stayed untouched; source commit `993720c` is on `origin/main` | Context, filters, Setup progress, Help, composition, readiness, and customer language close together; `3j` remains separate |
 | Completed Aug 6 money-format closeout | `3n` / `REG-067` runtime-complete on isolated `@331` | Populated V12 run `FR-f7719f23-9248-41fa-9f5c-7327db963ce3` passed 26/26 with clean console, Restricted sharing, and verified cleanup | Source commit `d1278ef` is on `origin/main`; Beta stayed `@106`; bounded stayed untouched | Normal-path money is grouped `$x.xx` with signs before `$`; stored values and writers are unchanged |
 | Completed Aug 22 House lifecycle | `3o` House Stop/Reactivate runtime-complete on isolated `@391`; House metadata Edit/Rename remains separate | House Financial Accuracy passed 2/2 scenarios and 50/50 assertions; both Restricted fixtures TRASHED; runner OFF | Beta stayed `@106`; bounded stayed user-controlled | One preserved House returns active without duplicate or history/configuration loss; Add never substitutes for Reactivate; confirmation is visible from its originating surface |
-| Current local candidate | Income Stop/Reactivate lifecycle parity | Counted inactive inventory, exact-row stale/ambiguity-safe Reactivate, Add duplicate refusal, unchanged monthly values, and non-monetary Activity evidence | Local regressions complete; isolated disposable runtime validation pending; Beta stays `@106`; bounded stays user-controlled | Income reaches explicit tracking recovery without treating Reactivate as Add or creating income dollars |
-| Deferred financial-facts milestone | Cash + Credit Card Import / Refresh: revolving debt first, bank/cash second, all shadow-only, only when explicitly reopened | Preserve metadata, stable identity, exact legacy comparison, customer review, fail-closed freshness, privacy, and byte/value equivalence before any authority change | No authority switch, broad transaction import, payment execution, Beta change, or bounded writer test | Reviewed slice proves current account/statement facts without switching Planning authority |
+| Completed Aug 23 Income/confirmation/recovery consistency | Income Stop/Reactivate plus Current/Add/Manage separation; CashCompass confirmation and zero-count recovery rules across lifecycle surfaces | Exact-row stale/ambiguity-safe Reactivate, Add refusal, unchanged monthly values, non-monetary Activity, no browser-native customer dialogs, and hidden-until-positive recovery controls | Commit `cdbef99`; permanent local/full regressions pass; owner accepted. No final isolated Income writer run is claimed. Beta stays `@106`; bounded stays user-controlled | Bills, House tracking/recovery, and Income tracking/recovery are closed; metadata gaps remain separate |
+| Current financial-facts milestone | Credit Card Import Correctness Boundaries, then one representative real OFX/QFX export, then the reviewed shadow-only Cash + Credit Card Import / Refresh slice | Inactive identity matching fails closed; APR applicability cannot be manufactured by caller options; permanent regressions pass; real export is understood before customer UI | No authority switch, broad transaction import, payment execution, Beta change, or bounded writer test | Production-ready customer import is distinguished from the existing Part 2A foundation |
 | Separate accessibility closeout | Complete `3j` alone | Keyboard, focus, names, target size, contrast, reduced motion, and supported-width evidence | Continue operations foundations during browser waits | Accessibility reaches its release gate without broadening the prior UX patch |
 | Deferred correction return | Implement and prove `5j`–`5m` on guarded disposable workbooks | Advance `5a`–`5f` candidate matrix/recovery proof | Continue known limitations and support posture | Supported correction families are atomic; unsupported audit rows remain honest |
 | Candidate preparation | Finish every remaining `5a`–`5f` prerequisite | Complete fixture, visual, accessibility, and operations evidence | Finish Groups 6–7 | Candidate prerequisites are complete before one freeze |

@@ -188,7 +188,12 @@ calculation semantics, not institution-current inputs: existing manually
 maintained cash and revolving-debt facts are known to be stale.
 
 The next milestone is real customer Cash + Credit Card Import / Refresh using
-this fact model. It begins shadow-only with current balances, contractual
+this fact model. Before customer workflow implementation, its Credit Card Import
+Correctness Boundaries must close: inactive Financial Account identities fail
+closed during revolving-debt matching; caller/client options cannot manufacture
+canonical APR applicability; permanent regressions cover both; and one
+representative real institution OFX/QFX export is inspected. It then begins
+shadow-only with current balances, contractual
 minimums, exact due dates, applicable APRs, Effective As Of, Observed At,
 freshness, provenance, and exact legacy comparison. It does not silently switch
 Planning authority, execute payments, or broadly import transactions. Any
@@ -233,6 +238,12 @@ implementation order is intentionally debt-risk-first:
 | 4C | Tax-aware investment data | Cost basis, acquisition dates, lots, realized/unrealized gains, and wash-sale evidence. No tax-sensitive Sell/Trim recommendation is actionable before required tax evidence is current and reconciled. |
 | 5 | Household domains and targeted evidence | Bills/recurring obligations, income, property, retirement, known future commitments/events, and only the targeted transaction/payment evidence needed for reconciliation. |
 | 6 | Authority migration | A later explicit, domain-by-domain approval may promote qualified imported facts to Planning authority. It is not part of the first Import/Refresh implementation. |
+
+Phase 1 starts with correctness, not UI: inactive identity targets are
+ineligible for matching, and APR applicability must come from authoritative
+source semantics or explicit reviewed customer verification—not a caller-owned
+adapter flag. The existing Part 2A-4 adapter/test foundation predates those two
+hardening gates and must not be described as production-ready customer import.
 
 Within Phase 5, preserve these domain rules:
 

@@ -9,10 +9,10 @@
 | Template revision | `1.1` |
 | Template completeness | `COMPLETE` |
 | Knowledge status | `DRAFT` |
-| Product status | Shipped / Beta; Recurrence Engine V2 is shipped, while natural runtime validation of the expanded-occurrence Pay bridge remains recorded as pending |
+| Product status | Shipped / Beta; Stop/Reactivate recovery lifecycle and CashCompass confirmation are complete; Recurrence Engine V2 is shipped, while separate payment/correction coverage gaps remain tracked |
 | Feature expert | Bills feature expert |
-| Last verified date | `2026-08-03` |
-| Last verified Git reference | `456c988` (`Harden Bill maintenance and donation management`) and `faae64a` (`Harden weekly Bill AutoPay scheduling`) |
+| Last verified date | `2026-08-23` |
+| Last verified Git reference | `bb20008` (`unify confirmations and complete bill lifecycle`) and `cdbef99` (`complete income lifecycle and uniform recovery controls`) |
 | Applies to | Central App and bounded app |
 | Primary user surfaces | Cash Flow → Bills → Due this period; Cash Flow → Bills → Manage bills; Overview Bills cards; Quick add; `INPUT - Bills`; `INPUT - Cash Flow <year>`; `LOG - Activity` |
 | Canonical source documents | [`PROJECT_CONTEXT.md`](../../PROJECT_CONTEXT.md) → “Weekly/Biweekly Weekday Recurrence Support” and “Cash Flow Semantics”; [`ENGINEERING_STANDARDS.md`](../../ENGINEERING_STANDARDS.md) → “Cash Flow Data Semantics — Actuals vs Projection”; [`Dashboard_Help.html`](../../Dashboard_Help.html) → Bills; [`REGRESSION_SUITE_PLAN.md`](../../REGRESSION_SUITE_PLAN.md) → Bills recurrence |
@@ -24,7 +24,7 @@
 - `STALE`: A material implementation or product decision changed after the last verification.
 - `DEPRECATED`: The feature is no longer active; the document remains only for historical or migration context.
 
-Current DRAFT rationale: focused and full local source gates pass, but the marked-disposable maintenance scenarios were not runtime-executed during this reconciliation pass, natural runtime validation of the expanded-occurrence Pay bridge is still listed as pending, and Validator/test coverage gaps remain.
+Current DRAFT rationale: the Bills lifecycle and confirmation claims are verified by source, permanent regressions, isolated `@387`, and owner evidence, but separate natural expanded-occurrence Pay, Validator, and correction coverage gaps remain.
 
 ## 2. Feature Summary
 
@@ -346,6 +346,8 @@ Retryable failures include transient reads, lock contention, and stale UI after 
 | Regression | `REG-007` | Bills Due performance regression is permanently registered | Fixed per documentation; stress reproduction remains planned |
 | Regression | `REG-008` | AutoPay concurrency double-post race is permanently registered | Fixed per documentation; overlapping-run harness reproduction remains planned |
 | Harness | `REGRESSION-BILLS-EDIT-INTEGRITY` | Exact linked rename, changed text/currency-column sizing, exact 24 px gutter, collisions, category omission fallback, immutable audit, and audit-failure rollback on a disposable workbook | PASS 14/14 on isolated `@341`, run `20260807-154251-d5e9`; fixture `TRASHED`, runner OFF |
+| Harness | `SUITE-BILLS-REGRESSION` / `REGRESSION-BILLS-STOP-REACTIVATE` | Stop preserves the row/history, counted inactive discovery, exact stale/duplicate-safe Reactivate, Add refusal for inactive identity, lifecycle Activity, and no false prior-month occurrence after Add | PASS 15/15 scenarios and 123/123 assertions on isolated `@387`; Restricted fixtures TRASHED, runner OFF |
+| Regression | `scripts/checkDashboardUxRegressions.mjs` | Shared CashCompass confirmation, no browser-native customer dialog, positive-only inactive count, zero/error hidden state, and final-item collapse | PASS in the `cdbef99` exact local/full candidate |
 | Harness | `REGRESSION-BILLS-AUTOPAY-FORMAT` | Real monthly AutoPay writes `-75` with canonical red negative-currency format | Implemented; runtime not yet run |
 | Harness | `REGRESSION-BILLS-WEEKDAY-AUTOPAY-GUARD` | Due Day 1 cannot override Sunday/Monday; calendar identity stays stable; missing Weekday fails closed | Implemented; runtime not yet run |
 | Harness | `REGRESSION-BILLS-AUTOPAY-ROLLBACK` | Forced Activity failure restores prior Cash Flow value/format and leaves occurrence visible | Implemented; runtime not yet run |
@@ -370,7 +372,7 @@ Retryable failures include transient reads, lock contention, and stale UI after 
 ### Known coverage gaps
 
 - No implemented Bills suite scenario was found for manual Pay, overdue bucketing, per-occurrence paid suppression, per-occurrence Skip, or lock contention. Monthly AutoPay value/format, Weekly weekday authority, stable calendar identity, and audit-failure rollback now have focused coverage.
-- No implemented Bills suite scenario was found for Add validation, Deactivate, optional-column self-heal, or broad preservation of existing populated Bills workbooks. Payee rename and category-race fallback now have focused Edit coverage.
+- Add validation, Deactivate/Reactivate, inactive duplicate refusal, preserved-row recovery, and creation-month floor now have permanent suite coverage and isolated `@387` proof. Optional-column self-heal and broad preservation of every legacy populated Bills variant remain separate coverage gaps.
 - No implemented Bills suite scenario was found for the no-due-date fallback/exclusion path, Bimonthly, Quarterly, Semi-annual, or first-run lazy-provisioning and partial-failure behavior.
 - No current Central-versus-bounded Bills execution matrix result was found; the same workflows remain to be exercised against explicitly selected safe targets in both modes.
 - No implemented stress scenario was found for REG-007 or REG-008 despite their planned reproductions.
@@ -421,7 +423,7 @@ Do not treat readiness as approval. Report commit, push, and deployment readines
 
 - `DRAFT`: Recurrence Engine V2 runtime results recorded in `PROJECT_CONTEXT.md` still reflect the current deployed build.
 - `DRAFT`: The current Bills Due performance remains near the documented ~5.6 seconds on representative mature workbooks.
-- `FIXED LOCALLY`: Inactive recovery uses Show inactive bills → Reactivate on the guarded preserved row; Add refuses re-add-as-recovery. Runtime proof remains pending.
+- `VERIFIED`: Inactive recovery uses Show inactive bills → Reactivate on the guarded preserved row; Add refuses re-add-as-recovery. Isolated `@387` and owner evidence close this lifecycle claim.
 - `UNKNOWN`: The full Golden parity runner currently compares a representative `INPUT - Bills` in both configured workbooks and has a known latest result.
 - `FIXED LOCALLY`: AutoPay Activity failure restores and verifies the prior Cash Flow cell; Skip remains a separate non-atomic path requiring its existing reconciliation guidance.
 
@@ -440,7 +442,6 @@ Do not treat readiness as approval. Report commit, push, and deployment readines
 - **Blocking verification:** Has the weekly/biweekly Bills → Pay bridge now passed the natural runtime validation still marked pending in `PROJECT_CONTEXT.md`?
 - **Resolved 2026-07-30:** Monthly Due Day 29/30/31 clamps to month end; JavaScript overflow is not supported product behavior.
 - **Coverage ownership:** When will Bills be added to `VALIDATOR_SCOPE_OPERATIONAL_` and `getValidatorCanonicalModel_` with a shared header constant?
-- **Lifecycle runtime:** Run the disposable Stop → inactive discovery → Reactivate → Stop proof and bounded owner visual acceptance for the current source candidate.
 - **Failure atomicity:** Should expanded-occurrence Pay marker creation be moved into the same server transaction/path as the Cash Flow write to reduce partial-success risk?
 - **Frequency semantics:** Is the label “Bimonthly” unambiguously intended to mean every two months, as `billAppliesInMonth_` implements?
 

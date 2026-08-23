@@ -11,7 +11,7 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ## Current stage — Stage 3: Beta Readiness
 
-**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The last formal independent advocate score is **8.3/10** from isolated Central `@180`; later evidence does not replace that full writer-inclusive score. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, P1 Release Readiness engineering, House Financial Accuracy V1, Financial Integrity Phase 3, and Recurrence Engine V2 are complete.** The Planning foundation is now frozen at `9a6cb96`: **Overview FROZEN · Debt FROZEN · 30/90-day post-decision safety PROVEN · Planning foundation STABLE**. Isolated Central `@391` passed House Financial Accuracy 2/2 scenarios and 50/50 assertions with both Restricted fixtures TRASHED and the runner OFF; the prior `@387` Capital Allocation and Bills evidence remains accepted, and Bills lifecycle is complete in `bb20008`. Current ordering authority is `ROADMAP.md`: **keep House metadata Edit/Rename separate → Income lifecycle parity → separate accessibility closeout `3j` → deferred correction `5j`–`5m` → remaining candidate preparation → exact frozen-candidate evidence → supervised cohort proof → 10/10 Beta Release Candidate**. Shadow-only Cash + Credit Card Import / Refresh remains deferred until explicitly reopened and must not silently switch authority, execute payments, or broadly import transactions. Customer-facing operations/support/privacy work remains deferred. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
+**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The last formal independent advocate score is **8.3/10** from isolated Central `@180`; later evidence does not replace that full writer-inclusive score. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, P1 Release Readiness engineering, House Financial Accuracy V1, Financial Integrity Phase 3, and Recurrence Engine V2 are complete.** The Planning foundation is frozen at `9a6cb96`: **Overview FROZEN · Debt FROZEN · 30/90-day post-decision safety PROVEN · Planning foundation STABLE**. Bills lifecycle is complete in `bb20008`; House tracking/recovery is complete in `0bf7610` with isolated `@391`; and Income tracking/recovery plus uniform confirmation/zero-count behavior are complete in `cdbef99` with permanent local regressions and owner acceptance. Current ordering authority is `ROADMAP.md`: **Credit Card Import Correctness Boundaries → representative real export → reviewed shadow-only Cash + Credit Card Import / Refresh slice → House metadata and Income Edit/Rename disposition → accessibility/UI consistency → deferred corrections → remaining candidate preparation → exact frozen-candidate evidence → supervised cohort proof → 10/10 Beta Release Candidate**. No import work may silently switch authority, execute payments, or broadly ingest transactions. Customer-facing operations/support/privacy work remains open. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
 
 **2026-08-21 status update:** the accepted Planning checkpoint is committed as
 `9a6cb96`; Overview and Debt are frozen and the post-decision 30/90-day safety
@@ -19,13 +19,16 @@ proof is complete. This certifies the semantics of required-first/exact-once
 obligations, recurrence, payment-evidence lifecycle, reserve protection,
 Balanced pacing, and gross current-cash solvency. It does not certify the
 currency of manually maintained balances, minimums, due dates, or APRs, which
-are known stale. Shadow-only Cash + Credit Card Import / Refresh remains the
-next financial-facts milestone when explicitly reopened. Bills lifecycle is
+are known stale. Shadow-only Cash + Credit Card Import / Refresh is now the
+current financial-facts milestone, beginning with its correctness boundaries
+and real-export gate. Bills lifecycle is
 complete. House Stop/Reactivate is runtime-complete on isolated `@391` with 2/2
 scenarios, 50/50 assertions, both fixtures TRASHED, and runner OFF; House
 metadata Edit/Rename remains separate open `3o` work. Income Stop/Reactivate is
-locally complete and awaits isolated disposable runtime validation; broader
-Income Edit/Rename remains unclaimed.
+complete in `cdbef99`; explicit Reactivate, not Add, is the recovery path.
+Permanent local lifecycle/UI regressions and owner acceptance are recorded, but
+no final isolated Income writer run is claimed. Broader Income Edit/Rename
+remains unclaimed.
 
 `FULL_BETA_REMAINING_PLAN.md` is the authoritative numbered finish-line inventory
 for broad invited Beta. It assigns IDs `1a`–`9e`, focused-effort estimates,
@@ -33,15 +36,16 @@ dependencies, a critical path, three parallel work lanes, time-saving rules, and
 the reconciled execution waves. Use those IDs in new plans, handoffs, and
 status updates instead of creating another competing pre-Beta checklist.
 
-**Execution forecast (reconciled 2026-08-22):** controlled Family Beta can
+**Execution forecast (reconciled 2026-08-23):** controlled Family Beta can
 continue now. The former September 24 target and October 2 contingency boundary
 require rebaselining because compound Bill correction (`5j`) is deliberately
 deferred. Retirement load (`4g`), money-format consistency (`3n`), and the
-frozen Planning foundation are closed. The gate order is: finish House
-Stop/Reactivate proof, then separately close House metadata and Income
-lifecycle work (`3o`); keep shadow-only Cash + Credit Card Import / Refresh
-deferred until explicitly reopened; separate
-accessibility closeout (`3j`); deferred `5j`–`5m`; final
+frozen Planning foundation are closed. The gate order is: start Cash + Credit
+Card Import / Refresh with inactive-identity and APR-applicability correctness
+boundaries, permanent regressions, and one representative real OFX/QFX export;
+then implement the reviewed shadow-only customer slice. Separately close House
+metadata Edit/Rename and explicitly scope or defer Income Edit/Rename (`3o`);
+complete accessibility `3j` and final UI consistency `3q`; deferred `5j`–`5m`; final
 financial/workbook/recovery proof; operations/support and monetization-ready
 architecture; exact-candidate freeze/evidence; then the supervised cohort and
 go/no-go. No calendar date waives a release gate. See `PROJECT_CONTEXT.md →
@@ -218,11 +222,11 @@ Broader invited audience only after the full `BETA_10_OUT_OF_10_PLAN.md` gate pa
 | Beta-user management at scale (add/remove, status, mapping health) | P3 | Admin tooling | M |
 | User Lifecycle Handling (onboarding/offboarding, ownership changes, re-provision) | P3 | — | L |
 | Scalability review (provisioning, locks, quotas) | P3 | — | M |
-| Shared Lifecycle rollout — **House metadata · Income Sources** after completed House Stop/Reactivate proof | P3 | Debt, Bank Accounts, Investments, Bills, and House Stop/Reactivate complete; House passed isolated `@391` | M each |
+| Shared Lifecycle follow-up — **House metadata Edit/Rename · Income Edit/Rename disposition** | P3 | Tracking/recovery is complete across Debt, Bank, Investments, Bills, Houses, and Income; House passed isolated `@391`; Income closed in `cdbef99` | M each or explicit defer decision |
 | Shared Sheet Write Utilities | P3 | — | L |
 | Admin tooling: `adminAdoptWorkbook`, `adminTrashOrphan` (soft-delete only) | P3 | 6E.2 | M |
 | Tier-2 `getActiveSpreadsheet()` user-facing sweep | P3 | — | ✅ Closed by source inspection 2026-07-20 — residual calls are resolver fallback, bound/dev utilities, or harness safety only |
-| Bound deployment cleanup / manifest revert once central is primary | P3 | Central primary | S |
+| ✅ Bounded deployment inventory cleanup | P3 | Owner-approved cleanup completed 2026-08-23; three retained deployments remained, with no workbook mutation or Central Beta change | Complete |
 | **10/10 Beta Release Candidate gate** — score ≥95/100, no dimension below 9/10, automated READY, no Sev-1/Sev-2, financial/performance/UX/privacy/operations/cohort gates PASS | P1–P3 | Stages 3–4 evidence | M |
 | **Monetization foundation** — customer/value proposition, packaging hypotheses, entitlement seams, owned-data guarantees, privacy/terms/support/refunds, unit-cost metrics, billing/tax architecture decision | P3 | Trust + cohort evidence | L |
 
@@ -278,7 +282,7 @@ This queue records the July 9 plan and is **not the current ordering authority**
 
 **Numbered follow-on after the core Rolling Financial Plan:**
 
-- **Shared Lifecycle Framework rollout** — Debt is the reference implementation; Bank Accounts, Investments, and Bills are complete. Finish the isolated proof for House Stop/Reactivate, then keep House metadata Edit/Rename and Income Sources as separate slices (see `## Shared Lifecycle Framework` below).
+- **Shared Lifecycle Framework rollout** — tracking/recovery is complete across Debt, Bank Accounts, Investments, Bills, Houses, and Income. Keep House metadata Edit/Rename and Income Edit/Rename/Frequency disposition as separate slices (see `## Shared Lifecycle Framework` below).
 - **Product differentiators (Version 1, External Beta)** — **Money Plan Phase 2** (long-term/goal planning, recommendations, forecasting, retirement integration) and the **Income Expected/Due Workflow** (income symmetry with Bills Due).
 
 ---
@@ -293,7 +297,12 @@ The **Debt Lifecycle is now the reference implementation** (shipped 2026-06-29, 
 Create → Edit → Rename → Stop Tracking → Inactive → Reactivate
 ```
 
-**Rollout order (remaining implementation):** House metadata Edit/Rename separately → Income Sources. Debt, Bank Accounts, Investments, Bills, and House Stop/Reactivate are complete; the House lifecycle passed isolated `@391` with 2/2 scenarios and 50/50 assertions, both fixtures TRASHED, and runner OFF.
+**Remaining metadata work:** House Edit/Rename and an explicit implement-or-defer
+decision for Income Edit/Rename/Frequency. Tracking/recovery is complete across
+Debt, Bank Accounts, Investments, Bills, Houses, and Income; the House lifecycle
+passed isolated `@391`, while final Income closure has permanent local
+regressions and owner acceptance without a claimed post-change isolated writer
+run.
 
 This is active numbered work under `FULL_BETA_REMAINING_PLAN.md → 3o`, sequenced
 after the core Rolling Financial Plan increment and before broader external beta.
@@ -725,7 +734,7 @@ This section preserves the July 9 handoff and is not the current starting-point 
 
 **Historical phase detail (Phase 1–7) — superseded by the current P0–P4 ordering in `ROADMAP.md`.** This section is retained for the per-phase rationale (objective, why it matters, deliverables, dependencies) that shaped the current state. Where historical ordering conflicts with current priority, `ROADMAP.md` wins. Every phase runs under `WORKING_RULES.md → Current phase` and, for central-mode work, `→ Central App Transition Rules` (active).
 
-**Stage ↔ Phase mapping:** **Stage 1 — Core Platform** *(✅ complete)* = Phase 1 (Documentation Cleanup) + Phase 3 (Workbook Totals) + shipped core/Manage/lifecycle + Bills Due performance. **Stage 2 — Product Hardening** *(✅ complete)* = Phase 2 (Family Beta Hardening incl. the recovery stack + destructive/admin validation) + the Financial Integrity foundation (Audit Framework + Debt Audit + shared Active helper + `NOT_INITIALIZED`). **Stage 3 — Beta Readiness** *(current)* = the Beta Gate (Golden Workbook Convergence · Financial Integrity Phase 3 · Validation Agent · completed Recovery Validation · Workbook/UX polish · runtime regression checklist) + release-readiness review. **Stage 4 — Family Beta** = go/no-go + Phase 5 (Web App UX) + recovery slices 6D.2b / 6E.2; Bank lifecycle is already complete. **Stage 5 — External Beta** = Phase 6 (External Beta Readiness) + user-lifecycle + remaining House metadata and Income Sources rollout after House Stop/Reactivate proof; Bills lifecycle is complete. **Stage 6 — Version 2 / Future Platform** = Phase 4 (Chat Assistant) + Phase 7 (Paid Product) + Operations Dashboard / metrics / monitoring / analytics.
+**Stage ↔ Phase mapping:** **Stage 1 — Core Platform** *(✅ complete)* = Phase 1 (Documentation Cleanup) + Phase 3 (Workbook Totals) + shipped core/Manage/lifecycle + Bills Due performance. **Stage 2 — Product Hardening** *(✅ complete)* = Phase 2 (Family Beta Hardening incl. the recovery stack + destructive/admin validation) + the Financial Integrity foundation (Audit Framework + Debt Audit + shared Active helper + `NOT_INITIALIZED`). **Stage 3 — Beta Readiness** *(current)* = the Beta Gate (Golden Workbook Convergence · Financial Integrity Phase 3 · Validation Agent · completed Recovery Validation · Workbook/UX polish · runtime regression checklist) + release-readiness review. **Stage 4 — Family Beta** = go/no-go + Phase 5 (Web App UX) + recovery slices 6D.2b / 6E.2; entity tracking/recovery is complete. **Stage 5 — External Beta** = Phase 6 (External Beta Readiness) + user-lifecycle + the separate House metadata and Income Edit/Rename/Frequency disposition; completed Bills/House/Income recovery is not reopened. **Stage 6 — Version 2 / Future Platform** = Phase 4 (Chat Assistant) + Phase 7 (Paid Product) + Operations Dashboard / metrics / monitoring / analytics.
 
 **Priority scale:** P0 = now / in progress · P1 = next, gates family beta · P2 = high, needed before external beta · P3 = gates external beta · P4 = post-beta / longest horizon. Phases are roughly sequential; where noted, some can overlap.
 
@@ -1214,7 +1223,7 @@ Authoritative copy lives here; `PROJECT_CONTEXT.md` and `ENHANCEMENTS.md` mirror
 
 ## Future UI Standardization — Manage Pattern Rollout
 
-**Status:** management-surface rollout complete; lifecycle convergence remains active. **Bills, Debts, Bank Accounts, Investments, and Houses have Manage surfaces; the shared presentation layer and Save-only Update / Manage-owned Stop contract passed isolated Central `@195` on 2026-07-24.** Debt, Bank Accounts, Investments, Bills, and Houses have runtime-complete inactive inventory and Reactivate behavior. House Stop/Reactivate passed isolated `@391` with 2/2 scenarios and 50/50 assertions, both fixtures TRASHED, and runner OFF; House metadata Edit/Rename and Income Sources remain under `3o`.
+**Status:** management-surface and tracking/recovery rollout complete. **Bills, Debts, Bank Accounts, Investments, Houses, and Income have the established Current/Update/Add/Manage structure appropriate to their domain.** Debt, Bank Accounts, Investments, Bills, and Houses have isolated runtime evidence; House Stop/Reactivate passed isolated `@391` with 2/2 scenarios and 50/50 assertions. Income tracking/recovery is complete in `cdbef99` with permanent local regressions and owner acceptance; no final isolated Income writer run is claimed. House metadata Edit/Rename remains open, and Income Edit/Rename is not claimed.
 
 **Background.** Bills and Debts now have dedicated management workflows — **Manage Bills** and **Manage Debts** — which have proven significantly more user-friendly than direct sheet editing. They establish the **preferred long-term UI pattern** for module maintenance, and each major module should eventually adopt it.
 
@@ -1230,11 +1239,12 @@ Authoritative copy lives here; `PROJECT_CONTEXT.md` and `ENHANCEMENTS.md` mirror
 - ✅ **Bank Accounts** — Update / Add new / Manage accounts inventory; import tools are secondary under Manage.
 - ✅ **Investments** — Update / Add new / Manage investments inventory.
 - ✅ **Houses** — Update / Add new / Manage houses inventory.
+- ✅ **Income Sources** — Current income / Add income / Manage income, explicit Stop/Reactivate, and Add refusal for inactive identities.
 
 **Remaining candidates:**
 
-1. **Income Sources — Priority: Medium.** Future: Manage Income, Edit Source, Rename Source, Frequency Changes, Stop Tracking.
-2. **Deeper metadata/lifecycle editing — Priority: Medium.** Rename/reactivate and metadata changes remain separate from the new active-item routing inventories.
+1. **House metadata Edit/Rename — Priority: Medium.** Tracking/recovery is complete; metadata work remains separate.
+2. **Income Edit/Rename/Frequency changes — Priority: Medium.** Tracking/recovery is complete; metadata changes remain separately unclaimed.
 
 **Shared framework boundary.** The asset-editor wave extracts common client-side mode selection, active-list rendering, Update focus, Stop routing, and empty states. Feature-specific writers, schemas, confirmations, stale-row protection, and activity logging remain separate; a deeper server lifecycle framework still requires its own review.
 
@@ -1244,7 +1254,7 @@ Authoritative copy lives here; `PROJECT_CONTEXT.md` and `ENHANCEMENTS.md` mirror
 
 ## Future Feature — Shared Entity Lifecycle Framework
 
-**Status:** active phased rollout (authoritative copy; high-level mirror in `PROJECT_CONTEXT.md`, numbered scope in `FULL_BETA_REMAINING_PLAN.md → 3o`). **Reference implementation: the Debt lifecycle** (`Active → Stop Tracking → Inactive → Reactivate`), shipped in commit `893d50d`. Bank Accounts, Investments, Bills, and House Stop/Reactivate are complete. House passed isolated `@391` with 2/2 scenarios and 50/50 assertions, both fixtures TRASHED, and runner OFF; House metadata Edit/Rename and Income Sources remain.
+**Status:** tracking/recovery rollout complete; shared-framework extraction remains deferred. **Reference implementation: the Debt lifecycle** (`Active → Stop Tracking → Inactive → Reactivate`), shipped in commit `893d50d`. Bank Accounts, Investments, Bills, House tracking/recovery, and Income tracking/recovery now follow the same preserved-identity contract. House passed isolated `@391`; Income closed in `cdbef99` with permanent local regressions and owner acceptance. House metadata Edit/Rename and Income Edit/Rename remain separate.
 
 **Related (do not duplicate):** this is the **lifecycle** companion to `## Future UI Standardization — Manage Pattern Rollout` (the *Manage view* pattern) and its "Future framework opportunity" note. Manage Pattern Rollout covers the management surface (table + edit form); this item covers the **active/inactive lifecycle** (Stop tracking from Manage, Reactivate, inactive section, lifecycle activity events, server guardrails). They should be extracted together once enough consumers exist.
 
@@ -1269,9 +1279,10 @@ Authoritative copy lives here; `PROJECT_CONTEXT.md` and `ENHANCEMENTS.md` mirror
 - **Phase 4** — Extract common server helper patterns where safe.
 - **Phase 5** — Migrate one module at a time, each with runtime validation.
 
-**Priority:** active numbered scope under `FULL_BETA_REMAINING_PLAN.md → 3o`.
-Keep House metadata and Income Sources as separate increments before broader
-external beta; House Stop/Reactivate proof is complete.
+**Priority:** lifecycle behavior is closed under `FULL_BETA_REMAINING_PLAN.md →
+3o`; any common server-helper extraction is deferred until it can be done
+without broad migration. Keep House and Income metadata work separate from the
+completed tracking/recovery contract.
 
 ---
 
@@ -1459,7 +1470,14 @@ Captured for future product conversations; not committed work and not slotted in
 
 ## Bank Import — status & resume plan
 
-Captured so work can resume cleanly from a pause. This section is deliberately self-contained — read it first when returning to Bank Import work.
+**Historical / superseded.** This V1.2 sequence is retained for implementation
+history only. Step 2a and its review UI later shipped, and Part 2A-1 through
+2A-5 now provide the canonical identity/facts/shadow-readiness foundation. Do
+not resume from the “Next Step — Step 2a” instructions below. Current authority
+is `ROADMAP.md → Reconciled remaining-work inventory` and
+`FULL_BETA_REMAINING_PLAN.md → Next open product milestone`: begin with Credit
+Card Import Correctness Boundaries, permanent regressions, and one representative
+real OFX/QFX export before customer Import / Refresh work.
 
 ### Bank Import — Step 1 Complete
 
@@ -1475,7 +1493,7 @@ What Step 1 explicitly **did not** ship:
 - No UI.
 - No planner impact — the new sheets are inert and no existing module calls the helpers.
 
-### Next Step — Step 2a (not started)
+### Historical next step — Step 2a (subsequently shipped)
 
 Ingestion pipeline only. Scope is intentionally narrow:
 
@@ -1504,7 +1522,7 @@ Apply to every Bank Import step from 2a onward. These are the V1.2 working rules
 
 ### How to resume
 
-When the next session starts:
+Historical sequence (do not use as the current resume plan):
 
 1. *(Optional)* Run the scaffold ensure helpers from the Apps Script editor on the target workbook to confirm the schema is in place:
    - `ensureImportStagingBankAccountsSheet_()`
@@ -1949,11 +1967,12 @@ opening cash plus inflows through ending cash. A $0 Samer Robinhood action remai
 visible with the reason it is paused. Current recorded data and future forecasts
 must be labeled separately.
 
-**Remaining RFP-1 decisions:** net rental income basis;
-reserve and minimum-buffer basis; recurring contribution rule;
-target balance/income; reinvest-versus-distribute rule; tax assumptions; and
-actual-versus-forecast labeling. Reconcile latest-known Dashboard values against
-exact-month ledgers as required by `5n`.
+**RFP-1 decision status:** the household funding basis, required-first/exact-once
+ownership, net-rental treatment, reserve/minimum-buffer protections, Balanced
+pacing, and actual-versus-forecast separation are closed in the frozen Planning
+contract and `9a6cb96`. Security-level target allocation, tax-lot decisions, and
+reinvest/distribute optimization remain future RFP-6/RFP-7 work. Latest-known
+Dashboard values versus exact-month ledgers remains the separate `5n` audit.
 
 **Non-regression contract:** no automatic transfers, trades, sales, or debt
 payments; no broad sheet rewrite or migration; existing behavior when optional

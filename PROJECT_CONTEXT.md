@@ -5,7 +5,7 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
 ## Current Product Status (August 2026)
 
 - **Stage:** **Stage 3 — Beta Readiness (current).** **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** The capability estimate remains **Family Beta Readiness ~97–98% · External / Public Beta Readiness ~92%**. The last formal independent advocate score is **8.3/10** on isolated Central `@180`; it remains official because the isolated `@196` **7.2/10** run was read-only and evidence-limited, not a comparable writer-inclusive rescore. The latest validated isolated source is `@391`: House Financial Accuracy passed 2/2 scenarios and 50/50 assertions with Restricted Provisioning and Drift PASS, both marker-verified fixtures TRASHED, and the runner OFF; it includes the globally visible CashCompass confirmation correction. The prior `@387` Capital Allocation and Bills evidence remains the accepted financial checkpoint. This completes the deterministic post-decision 30/90-day financial-safety certification for the accepted Overview/Debt checkpoint and corrects the legacy blank-floor AutoPay recurrence defect. Part 2A-1 stable financial identity passed at `@356`, Part 2A-2 Financial Facts at `@357`, Part 2A-3 authoritative cash import at `@358`, Part 2A-4 authoritative revolving-debt import at `@363`, and Part 2A-5 shadow-only Data Refresh / Plan Readiness at `@369`. RFP-2 provides optional multi-account **Income-Producing Accounts** designations with stable investment identity and no `INPUT - Investments` schema change. `RFP-6a` remains runtime-proven: preview-first Robinhood activity import writes only normalized, deduplicated system activity and derived holdings, while `INPUT - Investments` remains the balance authority and raw CSV is not retained. The owner-controlled bounded import saved 104 Samer Robinhood activities and reconciled JEPQ/QQQ/QQQI/SPYI holdings; later duplicate-safe acceptance confirmed shared content fitting. Central Beta remains `@106`. The owner controls the bounded deployment and visually accepted the 2026-08-18 Overview/Debt checkpoint; Codex did not mutate the bounded workbook. Customer-facing operations and the broad `3j` audit are deferred, not waived. `BETA_10_OUT_OF_10_PLAN.md` defines the ≥95/100 release standard and monetization foundations; `FULL_BETA_REMAINING_PLAN.md` is the authoritative numbered open inventory with estimates, regression homes, and the optimized execution model.
-- **Architecture:** Central App operational — **stable, family-beta capable**. The production / bound workbook remains protected (bound mode unchanged); the central architecture is operational and runtime-validated. Read-only inventory on 2026-08-21 identified the defect-screenshot endpoint as `AKfycbycMA…KM44L` at `@626`; post-validation inventory contains 74 bounded entries, including a newly created owner-controlled `AKfycbwf66…RlvA` at `@627`, so the prior singleton-inventory statement is stale. The owner validated the reviewed source and confirmed Anthropic Claude - Laith appears once as `$20` in August and the false July overdue card is gone. Codex did not deploy bounded source or write to the bounded workbook, and deployment cleanup remains a separate approval-gated operation.
+- **Architecture:** Central App operational — **stable, family-beta capable**. The production / bound workbook remains protected (bound mode unchanged); the central architecture is operational and runtime-validated. Owner-approved bounded deployment inventory cleanup completed 2026-08-23 and retained three deployments; it did not mutate workbook data or Central Beta. The owner previously validated the reviewed source and confirmed Anthropic Claude - Laith appears once as `$20` in August and the false July overdue card is gone. Bounded source/deployment control remains with the owner.
 - **Completed (working in central mode):** Provisioning, Workbook Mapping, Dashboard, Planner, Assets, Properties, Cash Flow, Bills, Debts, Income, Activity, Email.
 - **Current Debt navigation (2026-07-31):** Debt maintenance lives under **Assets & Liabilities → Debt accounts**. **Planning → Debt Overview** is read-only comparison, and **Planning → Rolling Debt Payoff** is the actionable month-by-month plan. Older historical notes that say `Planning → Debts` describe the former navigation label only.
 - **Recently completed (this initiative):**
@@ -24,7 +24,7 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
 - **P0 Project Stabilization — ✅ complete 2026-07-20:** ProductDecision inventory, documentation synchronization, static Tier-2 Central resolver verification, Recovery Validation 6F, and the two-track isolated Central UX/runtime pass are closed. The source fixes were pushed to the Central project and only the isolated deployment was updated to `@114`; Beta remains `@106` and no bound deployment or owner/bounded workbook was touched. The representative populated fixture verified real Bank, Investment, House, and Debt rendering; selection/action gating; property equity; Setup/Help language; subtab retention; and broad navigation with a clean console. The Central-owned fixture was returned to Drive Trash after testing.
 - **Status snapshot (2026-08-07):** Central Architecture ~96%+; the major platform, recovery, financial-integrity, workbook, Validator, Harness, and Release Readiness foundations are shipped. The shared correction foundation `5h` and direct Quick Add/Donation correction `5i` remain committed foundations in `d040a34` and `16b6a8f`, with clean guarded isolated Central `@240` evidence. Bill occurrence correction (`5j`) is deferred for a later focused redesign. The completed page-UX slices are `3c` in `7c0e2ac` at isolated `@293`, `3a` in `be76bdb` at `@294`, and `3b` in `3e2db4f` at `@298`. Follow-up Bill reliability commit `433bfed` is user-verified at `@299`. Exact-owner Performance Planner evidence is ratified for `8aa4bf5` / isolated `@318`; `4d` cross-flow measurement is complete on `@319`; ordinary Save `4f` is closed on `@322` as a 41.0% p50 improvement with a documented strict-budget near-miss; Retirement `4g` is closed on `@328`; and money-format consistency `3n` / `REG-067` is committed and pushed as `d1278ef` after a 26/26 Populated V12 PASS on `@331`. Beta remains `@106`; bounded deployment and workbook control remain with the user.
 
-**Current implementation priority (2026-08-22):** preserve the frozen Planning foundation. House **Stop tracking → inactive discovery → Reactivate** is runtime-complete under `3o` on isolated Central `@391`: House Financial Accuracy passed 2/2 scenarios and 50/50 assertions, both Restricted fixtures were verified TRASHED, and the runner returned OFF. It restores only exact row/name-guarded House Values and House Assets Active cells, preserving values, property metadata, the `HOUSES - <name>` expense sheet, linked Debt evidence, and Activity history; the shared confirmation is now globally visible from the originating workspace. House metadata Edit/Rename remains separate. Bills lifecycle is complete in `bb20008` with isolated `@387` and owner bounded evidence. Income remains the next separate lifecycle module after House metadata. Real customer **Cash + Credit Card Import / Refresh** remains deferred until explicitly reopened; its reviewed shadow-only, revolving-debt-first authority boundary remains unchanged. `3j` accessibility, `5j`–`5m` corrections, operations/privacy, rewards, bill-gap modeling, broader portfolio optimization, and retirement/property optimization remain deferred; none reopens frozen Overview/Debt UX.
+**Current implementation priority (2026-08-23):** preserve the frozen Planning foundation and begin **Cash + Credit Card Import / Refresh** with **Credit Card Import Correctness Boundaries**. Before customer import work, inactive Financial Account identities must fail closed during revolving-debt matching, caller/client options must not be able to manufacture canonical applicable APR, permanent regressions must cover both, and one representative real institution OFX/QFX export must be inspected. Existing Part 2A-1 through 2A-5 are an enabling shadow foundation, not production-ready import or Planning authority. Bills lifecycle is complete in `bb20008`; House tracking/recovery is complete in `0bf7610` with isolated `@391`; Income tracking/recovery plus uniform CashCompass confirmation and zero-count recovery behavior are complete in `cdbef99` with permanent local regressions and owner acceptance. House metadata Edit/Rename remains open; Income Edit/Rename remains unclaimed. `3j` accessibility, final `3q` consistency, `5j`–`5m` corrections, operations/privacy, rewards, bill-gap modeling, broader portfolio optimization, and retirement/property optimization remain separate; none reopens frozen Overview/Debt UX.
 
 **Part 2A normalized-data foundation (2026-08-15):** 2A-0 contracts and 2A-1
 stable financial identity are committed in `9dc7c5a` and validated on isolated
@@ -73,6 +73,16 @@ with restricted sharing, Provisioning, Drift, and verified Trash cleanup all
 PASS; the disposable runner returned OFF. A runtime-only Sheets coercion of the
 exact due-date fact was corrected at the read boundary so date facts remain
 canonical `YYYY-MM-DD`. No bounded workbook or Central Beta deployment was used.
+
+**Production-readiness boundary:** the `@363` proof establishes the Part 2A-4
+foundation, not a customer-ready importer. Current source still permits an
+inactive `SYS - Financial Accounts` debt identity to pass explicit/exact-link
+matching, and the OFX adapter still accepts a caller option that can mark a
+general APR as applicable to the carried balance. The next implementation must
+fail closed on inactive targets, move APR applicability authority behind
+reviewed source semantics/customer verification rather than caller control, add
+permanent regressions, and inspect one representative real institution OFX/QFX
+export before designing the customer vertical slice.
 
 **Part 2A-5 runtime-proven candidate (2026-08-17):** Planning gains a compact Data Status
 summary and a dedicated **This Week → Data** review surface. The view reads stable
@@ -348,8 +358,8 @@ and new-bill recurrence fix for commit/push on 2026-08-21. No
 | Completed Aug 5 | Exact-owner Financial Plan refresh percentile gate | Source `8aa4bf5`; isolated `@318`; 20/20 pairs and 40 executions; combined p50/p95 12.600/16.773 s; PASS/ACCEPT and budget ratified; Restricted + cleanup verified |
 | Completed Aug 6 | Combined UX `3e`–`3i` and `3m` | Isolated `@325`; Populated 24/24 and First-Run 16/16; Restricted fixtures and verified cleanup; `3j` remains separate |
 | Completed Aug 6 | Customer-visible money-format audit `3n` / `REG-067` | Isolated `@331`; Populated V12 26/26 PASS, clean console, Restricted sharing, verified cleanup; Beta and bounded untouched |
-| Current | Frozen Planning foundation plus focused House product-consistency lifecycle | House Stop/Reactivate is runtime-complete on isolated `@391` with 2/2 scenarios, 50/50 assertions, verified Trash cleanup, and runner OFF; Debt, Bank, Investments, and Bills are complete; House metadata and Income remain separate |
-| Next | Deferred correction | `5j`–`5m` pass fail-closed client/server and guarded disposable-workbook evidence |
+| Current | Credit Card Import Correctness Boundaries | Inactive Financial Account identities fail closed; caller-controlled APR applicability is removed; permanent regressions pass; one representative real institution OFX/QFX export is inspected before customer workflow work |
+| Next | Reviewed shadow-only Cash + Credit Card Import / Refresh slice | Revolving-debt evidence first, bank/cash second; compare current facts without a Planning-authority switch, payment execution, or broad transaction ingestion |
 | Candidate preparation | Final financial/workbook/recovery proof, operations/support, and monetization-ready architecture | Complete remaining `5a`–`5f`, `6a`–`6f`, and `7a`–`7f` |
 | Frozen candidate | Exact-candidate evidence, conditional Performance replay, advocate rerun, and complete Release Readiness | `8a`–`8f`, `3k`, all automated READY prerequisites, and a fresh 20-pair replay if the candidate differs from `8aa4bf5` / `@318` |
 | Promotion | Five-to-seven-day supervised cohort, final fixes if narrow, final scorecard, go/no-go | `9a`–`9e`; no Sev-1/Sev-2, score ≥95/100 with no dimension below 9/10, final READY, and separately approved promotion |
@@ -527,7 +537,7 @@ High-level technical-status mirror. `ROADMAP.md` controls priority and sequence;
 - **Stage 5 — 10/10 Beta Release Candidate and External Beta** — the exact candidate passes the scorecard and all hard gates before broader invited use; support, privacy, invite flow, user-lifecycle handling, scalability, and monetization foundations are ready. **Money Plan Phase 2** and **Income Expected/Due Workflow** remain Version 1 differentiators.
 - **Stage 6 — Version 2 / Future Platform** — Chat / Assistant, Operations Dashboard, expanded operational metrics/monitoring/analytics, billing activation, broad provider-connected Account Aggregation & Transaction Import beyond the current shadow fact milestone, integrated Strategic Capital Allocation/Portfolio Growth plus the Whole-Household Debt Freedom Planner, and other product expansion. Beta-critical foundations are established earlier even when full features remain future work.
 
-**Current priority and sequence:** `ROADMAP.md` — preserve the frozen Planning foundation; keep House metadata Edit/Rename separate; finish isolated proof for the locally complete Income Stop/Reactivate lifecycle. House Stop/Reactivate proof is complete on isolated `@391`. Shadow-only Cash + Credit Card Import / Refresh remains deferred until explicitly reopened. Accessibility and deferred corrections follow before exact-candidate Release Readiness and the 10/10 Beta gate. The future Strategic Capital Allocation/Portfolio Growth and Whole-Household Debt Freedom Planner capabilities depend on the authoritative fact foundation and are not part of the current slice. A supervised cohort may run during hardening, but it does not replace the release gate.
+**Current priority and sequence:** `ROADMAP.md` — preserve the frozen Planning foundation; begin Cash + Credit Card Import / Refresh with the two credit-card correctness boundaries, permanent regressions, and one representative real OFX/QFX export before a customer slice. Keep House metadata Edit/Rename separate and explicitly scope or defer Income Edit/Rename; their tracking/recovery lifecycles are complete. Accessibility, final UI consistency, and deferred corrections follow before exact-candidate Release Readiness and the 10/10 Beta gate. The future Strategic Capital Allocation/Portfolio Growth and Whole-Household Debt Freedom Planner capabilities depend on the authoritative fact foundation and are not part of the current slice. A supervised cohort may run during hardening, but it does not replace the release gate.
 
 **Beta Gate:** Recovery Validation is complete. Golden Workbook Convergence, Financial Integrity, Validator/Test Harness/Release Readiness evidence, and the runtime regression checklist remain governed by `ROADMAP.md`.
 
@@ -627,25 +637,26 @@ frozen Planning foundation or recovery evidence.
 
 ## Future UI Standardization — Manage Pattern Rollout
 
-High-level mirror; **authoritative copy lives in `TODO.md → Future UI Standardization — Manage Pattern Rollout`** (backlog entry in `ENHANCEMENTS.md`). **Status: Bills, Debts, Bank Accounts, Investments, and Houses have the active-item Manage surface. The 2026-07-24 asset-editor base wave passed isolated Central `@194`; the Save-only Update refinement passed First-Run V4 10/10 and Populated V3 13/13 on isolated `@195`, with zero browser errors, Restricted ownership, and verified Trash cleanup.**
+High-level mirror; **authoritative copy lives in `TODO.md → Future UI Standardization — Manage Pattern Rollout`** (backlog entry in `ENHANCEMENTS.md`). **Status: Bills, Debts, Bank Accounts, Investments, Houses, and Income have their domain-appropriate active-item Manage surface. The 2026-07-24 asset-editor base wave passed isolated Central `@194`; the Save-only Update refinement passed First-Run V4 10/10 and Populated V3 13/13 on isolated `@195`; Income Current/Add/Manage and tracking recovery closed in `cdbef99` with permanent local regressions and owner acceptance.**
 
 **Pattern:** each major module exposes `[Primary View] [Manage]` — Primary View for daily usage / dashboard actions / Save-only updates / monitoring; Manage View for edit / rename / stop tracking / archive / maintenance / configuration. Destructive actions do not appear in Update panels; Stop tracking is initiated from Manage and confirmed before execution. Manage Bills and Manage Debts proved this is far more user-friendly than direct sheet editing, so it is the preferred long-term UI pattern for module maintenance.
 
-- **Completed/source-complete:** ✅ Bills · ✅ Debts · ✅ Bank Accounts · ✅ Investments · ✅ Houses. Bank/Investment/House Manage inventories reuse shared client-side mode, focus, rendering, and empty-state primitives while retaining their existing feature-specific writers.
-- **Planned candidates:** Income Sources (Medium) and any later long-lived entity that needs a real active/inactive inventory. Upcoming, Donations, and Profile remain intentionally outside this pattern because they are transaction/append or singleton workflows.
+- **Completed/source-complete:** ✅ Bills · ✅ Debts · ✅ Bank Accounts · ✅ Investments · ✅ Houses · ✅ Income Sources. Income uses **Current income · Add income · Manage income** rather than an Update balance workflow. Upcoming, Donations, and Profile remain intentionally outside this pattern because they are transaction/append or singleton workflows.
+- **Remaining metadata candidates:** House Edit/Rename and Income Edit/Rename/Frequency changes. These do not reopen tracking/recovery.
 - **Framework boundary:** shared client presentation primitives are extracted. Server lifecycle writers, schemas, stale-row rules, and activity logging remain feature-specific until a separately reviewed lifecycle migration is justified.
 
 **Priority:** sequenced after 6F Recovery Validation closes; Bank Accounts first. UX enhancement, not a blocker.
 
 ## Future Feature — Shared Entity Lifecycle Framework
 
-High-level mirror; **authoritative copy lives in `TODO.md → Future Feature — Shared Entity Lifecycle Framework`** and numbered delivery scope lives in `FULL_BETA_REMAINING_PLAN.md → 3o`. **Status: active phased rollout. Debt, Bank Accounts, Investments, Bills, and House Stop/Reactivate are complete. House passed isolated `@391` with 2/2 scenarios, 50/50 assertions, both fixtures TRASHED, and runner OFF; House metadata Edit/Rename and Income Sources remain. Reference implementation: the Debt lifecycle (`Active → Stop Tracking → Inactive → Reactivate`, commit `893d50d`).**
+High-level mirror; **authoritative copy lives in `TODO.md → Future Feature — Shared Entity Lifecycle Framework`** and numbered delivery scope lives in `FULL_BETA_REMAINING_PLAN.md → 3o`. **Status: tracking/recovery rollout complete. Debt, Bank Accounts, Investments, Bills, Houses, and Income preserve the same logical identity through Stop → counted inactive discovery → explicit Reactivate, with Add refusing recovery. House passed isolated `@391`; Income closed in `cdbef99` with permanent local regressions and owner acceptance. House metadata Edit/Rename and Income Edit/Rename remain separate. Reference implementation: the Debt lifecycle (`Active → Stop Tracking → Inactive → Reactivate`, commit `893d50d`).**
 
 The **lifecycle** companion to Manage Pattern Rollout above. Make the active/inactive lifecycle consistent across long-lived entities (Debts, Bank Accounts, Investments, Houses, Bills, Income Sources, Properties) by extracting shared pieces: UI language (Active/Inactive sections, "Show inactive" toggle with count, Stop Tracking in Manage, common empty state), button styles (Edit/Rename neutral, Reactivate positive, Stop Tracking destructive), confirmation copy, server lifecycle helpers (deactivate/reactivate existing row, block duplicate active names, preserve history, allow-list guard on generic update endpoints), activity events (`<entity>_deactivate` / `<entity>_reactivate` → "Tracking stopped" / "Tracking resumed"), and lifecycle diagnostics. Update panels stay Save-only; no separate Danger Zone is required. Phased: document Debt as the behavioral reference → inventory other modules → extract CSS/copy → extract server helpers → migrate one module at a time with validation.
 
-**Priority:** active numbered scope under `FULL_BETA_REMAINING_PLAN.md → 3o`.
-Keep House metadata and Income Sources as separate increments before broader
-external beta; the House Stop/Reactivate proof is complete.
+**Priority:** tracking/recovery behavior is closed under
+`FULL_BETA_REMAINING_PLAN.md → 3o`; common server-helper extraction remains
+deferred. Keep House and Income metadata decisions separate from the completed
+lifecycle contract.
 
 ## Future Feature — Shared Sheet Write Utilities
 
@@ -1152,13 +1163,22 @@ Missing optional columns (Payment Source, Category, Frequency, Start Month, Note
 - Fallback recurring bills should show overdue or upcoming correctly
 
 ## Current UI state
-- Bills Due is rendering
-- Labels exist: category, autopay, varies, source
-- Some fallback recurring bills are missing and need fixing
+- Bills Due is rendering with the reviewed recurrence, Pay/Skip, and tracked-Bill
+  authority behavior.
+- Bills lifecycle recovery is complete: Stop preserves the row/history; counted
+  inactive discovery and explicit Reactivate restore the same identity; Add is
+  not a recovery mechanism.
+- Customer-facing Bills confirmations use the CashCompass surface. Native
+  browser dialogs are prohibited by permanent Dashboard UX regression.
+- Inactive recovery is hidden at authoritative count zero and for unknown/error;
+  it appears only for a positive count.
 
 ## Important files most likely to edit next
-- dashboard_data.js
-- Dashboard_Script_BillsDue.html
+- `debt_import.js`
+- `financial_identity.js`
+- `scripts/checkDebtImportRegressions.mjs`
+- the reviewed customer Import / Refresh UI files only after the correctness and
+  real-export gates pass
 
 ## Next task
 See **`TODO.md`** for current priorities (there is no separate next-task file).
