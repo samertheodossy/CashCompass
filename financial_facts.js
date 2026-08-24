@@ -26,6 +26,7 @@ var FINANCIAL_FACT_CANONICAL_WIDTHS_ = {
 
 var FINANCIAL_FACT_TYPES_ = {
   CURRENT_BALANCE: true, AVAILABLE_BALANCE: true, ACCOUNT_VALUE: true,
+  STATEMENT_BALANCE: true,
   APR: true, APY: true, CREDIT_LIMIT: true, MINIMUM_PAYMENT: true,
   NEXT_PAYMENT_AMOUNT: true, NEXT_PAYMENT_DATE: true,
   AVAILABLE_CREDIT: true, DISCLOSED_APR: true, PURCHASE_APR: true, CASH_ADVANCE_APR: true,
@@ -43,6 +44,11 @@ var FINANCIAL_FACT_TYPE_METADATA_ = {
     freshnessCategory: 'HIGHLY_TIME_SENSITIVE', selectionPolicy: 'BALANCE_VALUE' },
   ACCOUNT_VALUE: { valueKind: 'NUMERIC', unitKind: 'CURRENCY',
     freshnessCategory: 'LOWER_CHANGE_FREQUENCY', selectionPolicy: 'BALANCE_VALUE' },
+  // Historical closed-cycle evidence. Freshness describes how recent the
+  // latest statement is; it never changes the truth of the recorded cycle and
+  // no V1 Planning decision requires this fact.
+  STATEMENT_BALANCE: { valueKind: 'NUMERIC', unitKind: 'CURRENCY',
+    freshnessCategory: 'MODERATELY_TIME_SENSITIVE', selectionPolicy: 'DEFAULT' },
   APR: { valueKind: 'NUMERIC', unitKind: 'PERCENT',
     freshnessCategory: 'MODERATELY_TIME_SENSITIVE', selectionPolicy: 'DEFAULT' },
   APY: { valueKind: 'NUMERIC', unitKind: 'PERCENT',
@@ -129,7 +135,8 @@ var DATA_QUALITY_POLICY_V1_ = {
   },
   factTypePolicies: {
     CURRENT_BALANCE: 'BALANCE_VALUE', AVAILABLE_BALANCE: 'BALANCE_VALUE',
-    ACCOUNT_VALUE: 'BALANCE_VALUE', APR: 'DEFAULT', APY: 'DEFAULT',
+    ACCOUNT_VALUE: 'BALANCE_VALUE', STATEMENT_BALANCE: 'DEFAULT',
+    APR: 'DEFAULT', APY: 'DEFAULT',
     CREDIT_LIMIT: 'DEFAULT', MINIMUM_PAYMENT: 'DEFAULT',
     NEXT_PAYMENT_AMOUNT: 'DEFAULT', NEXT_PAYMENT_DATE: 'DEFAULT',
     AVAILABLE_CREDIT: 'BALANCE_VALUE', DISCLOSED_APR: 'DEFAULT', PURCHASE_APR: 'DEFAULT',
@@ -428,6 +435,71 @@ function financialFactDigest_(value) {
     hex += part.length === 1 ? '0' + part : part;
   }
   return hex;
+}
+
+function financialFactProtectedDigest_(parts) {
+  return 'sha256:' + financialFactDigest_((parts || []).map(function(value) {
+    return String(value === null || typeof value === 'undefined' ? '' : value);
+  }).join('\n'));
+}
+
+function financialFactRequireProtectedKey_(value, label) {
+  var key = String(value || '').trim().toLowerCase();
+  if (!/^sha256:[a-f0-9]{64}$/.test(key)) {
+    throw new Error(String(label || 'source key') + ' must be a protected sha256 key.');
+  }
+  return key;
+}
+
+/**
+ * Semantic identity for one logical statement. Raw bytes, a file digest, and
+ * Observed At are deliberately excluded so a differently rendered copy of the
+ * same statement remains a replay.
+ */
+function financialFactStatementReplayKey_(raw) {
+  var input = raw || {};
+  var profileVersion = String(input.profileVersion || '').trim();
+  if (!profileVersion) throw new Error('statement profileVersion is required.');
+  var sourceKey = financialFactRequireProtectedKey_(input.protectedStatementSourceKey,
+    'protectedStatementSourceKey');
+  var opening = financialFactCanonicalDateValue_(input.statementOpeningDate);
+  var closing = financialFactCanonicalDateValue_(input.statementClosingDate);
+  if (opening > closing) throw new Error('Statement opening date cannot follow closing date.');
+  var currency = String(input.currency || '').trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) throw new Error('Statement currency must be an ISO currency.');
+  return financialFactProtectedDigest_([
+    'STATEMENT_REPLAY_V1', profileVersion, sourceKey, opening, closing, currency
+  ]);
+}
+
+function financialFactStatementSourceRecordKey_(statementReplayKey, factType) {
+  var statementKey = financialFactRequireProtectedKey_(statementReplayKey,
+    'statementReplayKey');
+  var type = financialFactEnum_(factType, FINANCIAL_FACT_TYPES_, 'financial fact type');
+  return financialFactProtectedDigest_(['STATEMENT_FACT_V1', statementKey, type]);
+}
+
+/**
+ * Semantic identity for a QFX account-fact observation. Observed At is not an
+ * input: receiving identical source value/as-of evidence later is a replay.
+ */
+function financialFactQfxObservationKey_(raw) {
+  var input = raw || {};
+  var profileVersion = String(input.profileVersion || '').trim();
+  if (!profileVersion) throw new Error('QFX profileVersion is required.');
+  var sourceKey = financialFactRequireProtectedKey_(input.protectedQfxAccountKey,
+    'protectedQfxAccountKey');
+  var type = financialFactEnum_(input.factType, FINANCIAL_FACT_TYPES_, 'financial fact type');
+  var numeric = financialFactNumber_(input.numericValue);
+  var text = String(input.textValue === null || typeof input.textValue === 'undefined'
+    ? '' : input.textValue).trim();
+  var value = financialFactValidateValueContract_(type, numeric, text, input.currencyOrUnit);
+  var effective = financialFactIso_(input.sourceEffectiveAsOf, 'sourceEffectiveAsOf');
+  if (!effective) throw new Error('QFX sourceEffectiveAsOf is required.');
+  return financialFactProtectedDigest_([
+    'QFX_OBSERVATION_V1', profileVersion, sourceKey, type,
+    value.numericValue, value.textValue, value.currencyOrUnit, effective
+  ]);
 }
 
 function financialFactCategory_(fact) {

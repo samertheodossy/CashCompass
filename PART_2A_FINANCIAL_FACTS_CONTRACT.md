@@ -45,6 +45,7 @@ The projection contains no policy and is not an independent authority.
 | CURRENT_BALANCE | Numeric | ISO currency | Highly time-sensitive |
 | AVAILABLE_BALANCE | Numeric | ISO currency | Highly time-sensitive |
 | ACCOUNT_VALUE | Numeric | ISO currency | Lower change frequency |
+| STATEMENT_BALANCE | Numeric | ISO currency | Moderate; historical closed-cycle evidence |
 | APR | Numeric | PERCENT, PERCENT_FIXED, or PERCENT_VARIABLE | Moderate; fixed uses lower-frequency policy |
 | APY | Numeric | PERCENT | Moderate |
 | CREDIT_LIMIT | Numeric | ISO currency | Lower change frequency |
@@ -333,3 +334,47 @@ commitments. Missing or stale evidence limits specificity and actionability.
 Equivalent facts must preserve the same allocation hierarchy regardless of
 source. These future planners do not enter the current shadow Import / Refresh
 slice; see `ROLLING_FINANCIAL_PLAN_DECISION_CONTRACT.md → Future north star — Strategic Capital Allocation and Portfolio Growth`.
+
+## 16. Chase Shadow Import V1 Phase A — contract foundation
+
+`STATEMENT_BALANCE` is the institution-stated balance for a closed statement
+cycle, effective as of the statement closing date. It accepts explicit numeric
+zero in an ISO currency; missing evidence remains unknown. It is permanently
+distinct from `CURRENT_BALANCE`, remaining statement balance, carried balance,
+balance subject to interest, optimization-relevant balance, and available
+credit. Its moderate freshness describes how recent the latest statement is;
+it does not invalidate the historical truth of that cycle. It has no V1
+Planning consumer, does not substitute for `CURRENT_BALANCE`, and is not a
+weekly-plan readiness requirement.
+
+Chase V1 uses existing facts as follows: QFX `LEDGERBAL/BALAMT` supplies
+`CURRENT_BALANCE` effective at `LEDGERBAL/DTASOF`; reviewed Chase/FID QFX
+`AVAILBAL/BALAMT` supplies `AVAILABLE_CREDIT` effective at `AVAILBAL/DTASOF`;
+statement available credit supplies the same fact type at statement close;
+statement minimum, exact due date, and `Credit Access Line` supply
+`MINIMUM_PAYMENT`, `NEXT_PAYMENT_DATE`, and `CREDIT_LIMIT`. Explicit zero
+minimum remains evidence and never establishes payment status. An expired due
+date requires refreshed obligation evidence but proves neither paid, unpaid,
+overdue, nor confirmed status.
+
+Statement Purchase, Cash Advance, and Balance Transfer APRs remain separately
+typed `PURCHASE_APR`, `CASH_ADVANCE_APR`, and `BALANCE_TRANSFER_APR` evidence.
+Chase V1 may not create canonical `APR` from any component, interest bucket,
+lowest/highest/first-rate selection, QFX current balance, PDF statement balance,
+or caller/client flag. Canonical `APR` remains available only through the
+existing approved reviewed/manual authority path.
+
+Statement opening/closing dates are source metadata, not Financial Fact types;
+closing supplies Effective As Of for statement facts. Past-due amount is
+deferred: explicit zero is evidence, but V1 has no contracted consumer and it
+does not imply current, paid, or confirmed status; missing is never zero.
+Remaining statement balance, carried/optimization balance, current-cycle
+payment status, AutoPay status, balance subject to interest, per-category
+interest charge, My Chase Loan rate, and absent promotional/deferred-interest
+evidence remain unsupported and unknown.
+
+QFX facts use `INSTITUTION_AUTHORITATIVE`; parsed PDF facts use
+`STATEMENT_DERIVED`. Both remain append-only shadow evidence. Raw files,
+identifiers, PDF text/tokens, transactions/FITIDs, merchants, and transient raw
+file digests are not retained. Protected semantic source-record keys exclude
+Observed At so later receipt of identical source evidence remains a replay.

@@ -148,6 +148,25 @@ assert.equal(multiple.accounts[0].facts.some((f) => f.factType === 'APR'), false
 assert.equal(multiple.accounts[0].facts.some((f) => f.factType === 'PURCHASE_APR'), true);
 assert.equal(multiple.accounts[0].facts.some((f) => f.factType === 'CASH_ADVANCE_APR'), true);
 
+assert.equal(context.CHASE_SHADOW_IMPORT_V1_CONTRACT_.qfxProfile.fid, '10898');
+assert.equal(context.CHASE_SHADOW_IMPORT_V1_CONTRACT_.qfxProfile.org, 'B1');
+assert.deepEqual(Array.from(context.CHASE_SHADOW_IMPORT_V1_CONTRACT_.qfxProfile.availableCreditStructure),
+  ['AVAILBAL/BALAMT', 'AVAILBAL/DTASOF']);
+const chaseComponents = [
+  { factType: 'PURCHASE_APR' }, { factType: 'CASH_ADVANCE_APR' },
+  { factType: 'BALANCE_TRANSFER_APR' }
+];
+assert.equal(context.validateChaseShadowImportV1FactSet_('STATEMENT', chaseComponents).length, 3);
+assert.throws(() => context.validateChaseShadowImportV1FactSet_('STATEMENT', [
+  { factType: 'APR', appliesToCarriedBalance: true }
+]), /cannot create canonical APR/,
+  'Chase client/caller flags must never manufacture canonical APR');
+for (const manufactured of ['PURCHASE_APR', 'CURRENT_BALANCE', 'STATEMENT_BALANCE']) {
+  assert.throws(() => context.validateChaseShadowImportV1FactSet_('STATEMENT', [
+    { factType: 'APR', derivedFrom: manufactured, selectionRule: 'FIRST_OR_ONLY' }
+  ]), /cannot create canonical APR/);
+}
+
 const manual = context.adaptVerifiedManualDebtEvidence_({ stableAccountId: 'DEBT-CITIAA',
   apr: 23.49, rateType: 'PERCENT_VARIABLE', effectiveAsOf: asOf }, { observedAt: asOf });
 assert.equal(manual.accounts[0].facts.length, 1,

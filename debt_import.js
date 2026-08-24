@@ -33,6 +33,42 @@ var DEBT_IMPORT_CORE_SHADOW_FACT_TYPES_ = [
   'CURRENT_BALANCE', 'APR', 'MINIMUM_PAYMENT', 'NEXT_PAYMENT_DATE'
 ];
 
+var CHASE_SHADOW_IMPORT_V1_CONTRACT_ = {
+  contractVersion: 'CHASE_SHADOW_IMPORT_V1_PHASE_A',
+  qfxProfile: {
+    profileVersion: 'CHASE_QFX_FID_10898_V1', fid: '10898', org: 'B1',
+    requiredStructure: ['CCSTMTRS', 'CCACCTFROM/ACCTID', 'CURDEF',
+      'LEDGERBAL/BALAMT', 'LEDGERBAL/DTASOF'],
+    availableCreditStructure: ['AVAILBAL/BALAMT', 'AVAILBAL/DTASOF']
+  },
+  pdfProfile: {
+    profileVersion: 'CHASE_STATEMENT_V1', requiresUsableTextLayer: true,
+    requiresExplicitAccountConfirmation: true, failClosedOnProfileMismatch: true
+  },
+  qfxFactTypes: { CURRENT_BALANCE: true, AVAILABLE_CREDIT: true },
+  statementFactTypes: {
+    STATEMENT_BALANCE: true, MINIMUM_PAYMENT: true, NEXT_PAYMENT_DATE: true,
+    CREDIT_LIMIT: true, AVAILABLE_CREDIT: true, PURCHASE_APR: true,
+    CASH_ADVANCE_APR: true, BALANCE_TRANSFER_APR: true
+  }
+};
+
+/** Contract gate only; Chase parsing is deliberately deferred beyond Phase A. */
+function validateChaseShadowImportV1FactSet_(sourceKind, facts) {
+  var kind = String(sourceKind || '').trim().toUpperCase();
+  var allowed = kind === 'QFX' ? CHASE_SHADOW_IMPORT_V1_CONTRACT_.qfxFactTypes
+    : kind === 'STATEMENT' ? CHASE_SHADOW_IMPORT_V1_CONTRACT_.statementFactTypes : null;
+  if (!allowed) throw new Error('Unsupported Chase V1 source kind.');
+  return (facts || []).map(function(fact) {
+    var type = String(fact && fact.factType || '').trim().toUpperCase();
+    if (type === 'APR') {
+      throw new Error('Chase Shadow Import V1 cannot create canonical APR.');
+    }
+    if (!allowed[type]) throw new Error('Unsupported Chase V1 fact type: ' + (type || 'MISSING'));
+    return fact;
+  });
+}
+
 /** Parse explicit account-level aggregates from OFX/QFX credit-card statements. */
 function adaptOfxRevolvingDebtEvidence_(rawText, options) {
   var opts = options || {};

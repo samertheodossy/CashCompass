@@ -110,3 +110,31 @@ This is Phase 1 of the canonical long-term import order in
 `PART_2A_FINANCIAL_FACTS_CONTRACT.md → §§11–15`. Future statement/payment-status,
 promotional, and deferred-interest facts use the same shadow review lifecycle;
 they do not create a second debt authority path.
+
+## Chase Shadow Import V1 Phase A — contract foundation
+
+The reviewed Chase QFX profile is exact, not issuer-name based: `FID=10898`,
+reviewed `ORG=B1` when present, `CCSTMTRS`, `CCACCTFROM/ACCTID`, `CURDEF`, and
+explicit `LEDGERBAL/BALAMT` plus `LEDGERBAL/DTASOF`. Chase-specific available
+credit additionally requires `AVAILBAL/BALAMT` and `AVAILBAL/DTASOF`.
+`AVAILBAL → AVAILABLE_CREDIT` is prohibited outside that reviewed profile.
+
+The future Chase PDF profile requires a usable text layer, exact Chase statement
+signature, masked account/product context, statement cycle, validated summary
+labels/value shapes, and validated APR table labels/layout. Profile mismatch
+fails closed. Parsing, upload, preview, Apply, and UI remain outside Phase A.
+
+QFX observation identity includes profile/version, protected QFX account key,
+fact type, canonical value/unit, and source `DTASOF`; Observed At is excluded.
+Statement replay identity includes profile/version, protected statement source
+key, opening date, closing date, and currency. Per-fact record keys derive from
+the statement key plus fact type. Thus a differently rendered copy of the same
+logical statement remains a replay, while a corrected same-cycle value appends
+as conflict rather than overwriting history. Raw-file digest is not required as
+persisted identity, and transactions/FITIDs remain outside V1.
+
+The Chase V1 fact-set contract categorically rejects canonical `APR`. Purchase,
+cash-advance, and balance-transfer components remain component facts; only the
+existing verified-manual path can establish applicable canonical `APR`.
+`STATEMENT_BALANCE` is additive historical evidence and is not a substitute for
+current balance or a V1 Planning/readiness input.

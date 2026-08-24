@@ -63,6 +63,61 @@ assert.equal(context.matchFinancialIdentityAdapterRecord_(ownerMismatch, [baseAc
 assert.equal(context.matchFinancialIdentityAdapterRecord_(raw, [baseAccount], [exactLink, exactLink]).outcome,
   'AMBIGUOUS', 'multiple verified links for the same source key must fail closed');
 
+const statementAccount = {
+  stableAccountId: 'DEBT-CHASE', domain: 'DEBT', institution: 'Chase',
+  accountType: 'Credit Card', active: 'Yes', identityStatus: 'VERIFIED',
+  last4: '2468', ownerId: 'SAMER', registrationType: 'INDIVIDUAL'
+};
+const unconfirmedStatement = context.resolveConfirmedStatementSourceAssociation_({
+  profileVersion: 'CHASE_STATEMENT_V1', confirmed: false, last4: '2468'
+}, [statementAccount], []);
+assert.equal(unconfirmedStatement.outcome, 'REVIEW_REQUIRED',
+  'last four alone must never authorize a statement source link');
+assert.throws(() => context.resolveConfirmedStatementSourceAssociation_({
+  profileVersion: 'OTHER_STATEMENT_V1', confirmed: true,
+  stableAccountId: statementAccount.stableAccountId
+}, [statementAccount], []), /Unsupported Chase V1 statement profile/,
+  'the Chase V1 association helper must fail closed for other statement profiles');
+const confirmedStatement = context.resolveConfirmedStatementSourceAssociation_({
+  profileVersion: 'CHASE_STATEMENT_V1', confirmed: true,
+  stableAccountId: statementAccount.stableAccountId, last4: '2468', institution: 'Chase',
+  protectedQfxAccountKey: `sha256:${'a'.repeat(64)}`
+}, [statementAccount], [{
+  sourceType: 'QFX', sourceSystem: 'CHASE_QFX_FID_10898_V1',
+  sourceAccountKey: `sha256:${'a'.repeat(64)}`,
+  stableAccountId: statementAccount.stableAccountId, linkStatus: 'VERIFIED'
+}]);
+assert.equal(confirmedStatement.outcome, 'EXPLICIT_CONFIRMED');
+assert.equal(confirmedStatement.sourceLink.sourceType, 'STATEMENT');
+assert.match(confirmedStatement.sourceLink.sourceAccountKey, /^sha256:[a-f0-9]{64}$/);
+assert.equal(JSON.stringify(confirmedStatement).includes('4111111111112468'), false,
+  'statement association output must not expose a raw account identifier');
+assert.equal(context.resolveConfirmedStatementSourceAssociation_({
+  profileVersion: 'CHASE_STATEMENT_V1', confirmed: true,
+  stableAccountId: statementAccount.stableAccountId,
+  protectedQfxAccountKey: `sha256:${'b'.repeat(64)}`
+}, [statementAccount], []).reason, 'QFX_LINK_NOT_VERIFIED',
+  'a caller-supplied protected QFX key must not authorize statement association');
+assert.equal(context.resolveConfirmedStatementSourceAssociation_({
+  profileVersion: 'CHASE_STATEMENT_V1', confirmed: true,
+  stableAccountId: statementAccount.stableAccountId
+}, [{ ...statementAccount, active: 'No' }], []).reason, 'ACCOUNT_INACTIVE');
+assert.equal(context.resolveConfirmedStatementSourceAssociation_({
+  profileVersion: 'CHASE_STATEMENT_V1', confirmed: true,
+  stableAccountId: statementAccount.stableAccountId
+}, [{ ...statementAccount, active: '' }], []).reason, 'ACCOUNT_INACTIVE',
+  'a missing or unknown Active value must fail closed');
+assert.equal(context.resolveConfirmedStatementSourceAssociation_({
+  profileVersion: 'CHASE_STATEMENT_V1', confirmed: true,
+  stableAccountId: statementAccount.stableAccountId
+}, [statementAccount, { ...statementAccount }], []).outcome, 'AMBIGUOUS',
+  'an ambiguous explicit statement target must fail closed');
+assert.equal(context.resolveConfirmedStatementSourceAssociation_({
+  profileVersion: 'CHASE_STATEMENT_V1', confirmed: true,
+  stableAccountId: statementAccount.stableAccountId
+}, [{ ...statementAccount, identityStatus: 'REVIEW_REQUIRED' }], []).reason,
+  'IDENTITY_NOT_VERIFIED', 'a stale or review-required statement target must fail closed');
+
 assert.match(context.financialIdentityGenerateStableAccountId_('CASH'), /^CASH-/);
 assert.match(context.financialIdentityGenerateStableAccountId_('DEBT'), /^DEBT-/);
 assert.match(context.financialIdentityGenerateStableAccountId_('INVESTMENT'), /^INV-/);
@@ -111,5 +166,7 @@ for (const phrase of [
   'Authority and freshness are fact-level', 'Effective As Of', 'Observed At',
   'never overwrite user-controlled policy', 'Planning remains on its existing readers'
 ]) assert.ok(contractSource.includes(phrase), `contract missing: ${phrase}`);
+assert.match(contractSource, /Chase V1[\s\S]*explicit customer confirmation/,
+  'identity contract must pin explicit Chase V1 statement association');
 
 console.log('Financial identity regressions passed.');

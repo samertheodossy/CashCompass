@@ -127,3 +127,22 @@ Part 2A-1 provides read-only preview plus explicit digest-guarded apply. It crea
 
 Part 2A-2 financial-fact semantics are defined separately in
 `PART_2A_FINANCIAL_FACTS_CONTRACT.md`; this identity contract remains frozen.
+
+## 11. Chase V1 statement-source association
+
+`STATEMENT` remains an ordinary source-link class in the existing registry; it
+does not create a second identity system. Chase V1 PDF identity is weaker than
+QFX identity, so every PDF association requires explicit customer confirmation
+to one existing active, VERIFIED, revolving-DEBT Financial Account. Last four,
+institution, and product context may support a sanitized candidate display but
+never authorize the link. Missing, inactive, review-required, wrong-domain,
+wrong-type, stale, or ambiguous targets fail closed.
+
+When a protected QFX source identity exists, the protected statement
+association key may be derived from that already-protected key and the exact
+statement-profile version. Otherwise the server creates a protected random
+statement association only after explicit confirmation. Neither path hashes
+last four as if it were strong identity, and neither persists a raw account
+number. This explicit-confirmation rule is Chase V1 policy; a future statement
+source with independently reviewed stronger identity may define a different
+contract.

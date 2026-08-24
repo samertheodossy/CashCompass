@@ -57,7 +57,7 @@ function fact(overrides = {}) {
 }
 
 const expectedTypes = [
-  'CURRENT_BALANCE', 'AVAILABLE_BALANCE', 'ACCOUNT_VALUE', 'APR', 'APY',
+  'CURRENT_BALANCE', 'AVAILABLE_BALANCE', 'ACCOUNT_VALUE', 'STATEMENT_BALANCE', 'APR', 'APY',
   'CREDIT_LIMIT', 'MINIMUM_PAYMENT', 'NEXT_PAYMENT_AMOUNT', 'NEXT_PAYMENT_DATE',
   'POSITION_QUANTITY', 'POSITION_MARKET_VALUE', 'SECURITY_PRICE', 'COST_BASIS',
   'CASH_SWEEP_YIELD', 'AVAILABLE_CREDIT', 'DISCLOSED_APR', 'PURCHASE_APR',
@@ -67,8 +67,23 @@ const expectedTypes = [
 ];
 assert.deepEqual(Object.keys(context.FINANCIAL_FACT_TYPES_).sort(), expectedTypes.sort(),
   'the Financial Facts contract must contain all approved foundation and debt types');
-assert.equal(Object.keys(context.FINANCIAL_FACT_TYPE_METADATA_).length, 23,
+assert.equal(Object.keys(context.FINANCIAL_FACT_TYPE_METADATA_).length, 24,
   'every fact type must have value metadata');
+
+const zeroStatementBalance = fact({ factType: 'STATEMENT_BALANCE', numericValue: 0,
+  currencyOrUnit: 'USD', sourceType: 'STATEMENT', sourceSystem: 'CHASE_STATEMENT_V1',
+  authorityClass: 'STATEMENT_DERIVED' });
+assert.equal(zeroStatementBalance.numericValue, 0,
+  'an explicit zero statement balance must remain valid evidence');
+assert.equal(context.FINANCIAL_FACT_TYPE_METADATA_.STATEMENT_BALANCE.valueKind, 'NUMERIC');
+assert.equal(context.FINANCIAL_FACT_TYPE_METADATA_.STATEMENT_BALANCE.unitKind, 'CURRENCY');
+assert.notEqual(context.FINANCIAL_FACT_TYPE_METADATA_.STATEMENT_BALANCE,
+  context.FINANCIAL_FACT_TYPE_METADATA_.CURRENT_BALANCE,
+  'statement balance must remain a distinct typed contract from current balance');
+assert.throws(() => fact({ factType: 'STATEMENT_BALANCE', numericValue: 'not-money' }),
+  /numericValue must be finite/);
+assert.throws(() => fact({ factType: 'STATEMENT_BALANCE', currencyOrUnit: 'PERCENT' }),
+  /three-letter currency/);
 
 const unknownLegacy = context.financialFactFromLegacyValue_({
   stableInternalAccountId: 'DEBT-LEGACY', factType: 'CURRENT_BALANCE',
@@ -152,6 +167,53 @@ const duplicate = context.prepareFinancialFactAppend_([laterFact], [{ ...laterFa
 assert.equal(duplicate.appended.length, 0);
 assert.equal(duplicate.duplicates.length, 1, 'identical evidence must be idempotent');
 
+const protectedStatementSource = `sha256:${'e'.repeat(64)}`;
+const statementReplayA = context.financialFactStatementReplayKey_({
+  profileVersion: 'CHASE_STATEMENT_V1', protectedStatementSourceKey: protectedStatementSource,
+  statementOpeningDate: '2026-07-01', statementClosingDate: '2026-07-31', currency: 'USD',
+  observedAt: '2026-08-01T00:00:00.000Z', rawFileDigest: 'not-persisted-a'
+});
+const statementReplayB = context.financialFactStatementReplayKey_({
+  profileVersion: 'CHASE_STATEMENT_V1', protectedStatementSourceKey: protectedStatementSource,
+  statementOpeningDate: '2026-07-01', statementClosingDate: '2026-07-31', currency: 'USD',
+  observedAt: '2026-08-20T00:00:00.000Z', rawFileDigest: 'different-pdf-bytes'
+});
+assert.equal(statementReplayA, statementReplayB,
+  'Observed At and PDF bytes must not change logical statement replay identity');
+assert.match(statementReplayA, /^sha256:[a-f0-9]{64}$/);
+const statementFactKey = context.financialFactStatementSourceRecordKey_(
+  statementReplayA, 'STATEMENT_BALANCE');
+const originalStatement = fact({ factType: 'STATEMENT_BALANCE', numericValue: 400,
+  sourceType: 'STATEMENT', sourceSystem: 'CHASE_STATEMENT_V1',
+  authorityClass: 'STATEMENT_DERIVED', sourceRecordKey: statementFactKey,
+  effectiveAsOf: '2026-07-31T00:00:00.000Z' });
+const correctedStatementRaw = rawFact({ factType: 'STATEMENT_BALANCE', numericValue: 425,
+  sourceType: 'STATEMENT', sourceSystem: 'CHASE_STATEMENT_V1',
+  authorityClass: 'STATEMENT_DERIVED', sourceRecordKey: statementFactKey,
+  effectiveAsOf: '2026-07-31T00:00:00.000Z' });
+const correctedStatement = context.prepareFinancialFactAppend_([originalStatement],
+  [correctedStatementRaw], { asOf });
+assert.equal(correctedStatement.appended.length, 1);
+assert.equal(correctedStatement.appended[0].reconciliationStatus, 'CONFLICT',
+  'a corrected value for the same statement cycle must append as conflict, not overwrite');
+
+const qfxKeyA = context.financialFactQfxObservationKey_({
+  profileVersion: 'CHASE_QFX_FID_10898_V1',
+  protectedQfxAccountKey: `sha256:${'d'.repeat(64)}`,
+  factType: 'AVAILABLE_CREDIT', numericValue: 500, currencyOrUnit: 'USD',
+  sourceEffectiveAsOf: '2026-08-15T10:00:00.000Z', observedAt: '2026-08-15T10:05:00.000Z'
+});
+const qfxKeyB = context.financialFactQfxObservationKey_({
+  profileVersion: 'CHASE_QFX_FID_10898_V1',
+  protectedQfxAccountKey: `sha256:${'d'.repeat(64)}`,
+  factType: 'AVAILABLE_CREDIT', numericValue: 500, currencyOrUnit: 'USD',
+  sourceEffectiveAsOf: '2026-08-15T10:00:00.000Z', observedAt: '2026-08-16T10:05:00.000Z'
+});
+assert.equal(qfxKeyA, qfxKeyB,
+  'Observed At must not change QFX account-fact replay identity');
+assert.equal(JSON.stringify({ statementReplayA, statementFactKey, qfxKeyA })
+  .includes('4111111111111111'), false, 'protected replay keys must expose no raw account identifier');
+
 const deterministicA = context.selectCurrentFinancialFact_([currentEstimate, recentInstitution],
   'DEBT-AMEX', 'CURRENT_BALANCE', asOf).fact.factId;
 const deterministicB = context.selectCurrentFinancialFact_([recentInstitution, currentEstimate],
@@ -211,6 +273,9 @@ assert.ok(staleDiagnostics.some((row) => row.code === 'SAFE_TO_MODEL_NOT_ACT'));
 assert.doesNotMatch(planningSource,
   /FINANCIAL_FACTS|SYS - Financial Facts|readPlanningFinancialFacts_/,
   'Part 2A-2 must not switch Planning to the shadow fact reader');
+assert.equal(context.DATA_QUALITY_POLICY_V1_.decisionRequirements.PAY_DEBT
+  .includes('STATEMENT_BALANCE'), false,
+  'statement balance must not become a Planning decision requirement in V1');
 assert.doesNotMatch(identitySource, /CURRENT_BALANCE|MINIMUM_PAYMENT|COST_BASIS/,
   'the frozen identity module must not absorb financial-fact behavior');
 assert.doesNotMatch(factsSource, /OAuth|accessToken|refreshToken|rawPayload/,

@@ -313,7 +313,7 @@ function getHarnessPart2aFinancialFactsScenario_() {
     expectedOutcome: function(ctx) {
       var mod = 'Part 2A Financial Facts';
       ctx.assert.equals('All approved foundation and debt fact types are present',
-        Object.keys(FINANCIAL_FACT_TYPES_).length, 23, { module: mod });
+        Object.keys(FINANCIAL_FACT_TYPES_).length, 24, { module: mod });
       ctx.assert.equals('Missing legacy timestamp remains UNKNOWN',
         evaluateFinancialFactFreshness_(ctx.unknown, ctx.asOf).status, 'UNKNOWN', { module: mod });
       ctx.assert.equals('Observed today does not refresh old evidence',

@@ -483,6 +483,12 @@ function financialIdentityInactive_(value) {
   return ['no', 'n', 'false', 'inactive'].indexOf(String(value || '').trim().toLowerCase()) !== -1;
 }
 
+function financialIdentityExplicitlyActive_(value) {
+  if (value === true) return true;
+  return ['yes', 'y', 'true', 'active', '1'].indexOf(
+    String(value === null || typeof value === 'undefined' ? '' : value).trim().toLowerCase()) !== -1;
+}
+
 function financialIdentityDigest_(value) {
   var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
     String(value || ''), Utilities.Charset.UTF_8);
@@ -493,4 +499,109 @@ function financialIdentityDigest_(value) {
     hex += part.length === 1 ? '0' + part : part;
   }
   return hex;
+}
+
+function financialIdentityProtectedKey_(parts) {
+  return 'sha256:' + financialIdentityDigest_((parts || []).map(function(value) {
+    return String(value === null || typeof value === 'undefined' ? '' : value);
+  }).join('\n'));
+}
+
+function financialIdentityIsProtectedKey_(value) {
+  return /^sha256:[a-f0-9]{64}$/i.test(String(value || '').trim());
+}
+
+/**
+ * Chase V1 policy for associating a weakly identified statement source with an
+ * existing Financial Account. Last four may be displayed by a future preview,
+ * but it is never an input to authorization or protected-key construction.
+ */
+function resolveConfirmedStatementSourceAssociation_(request, accounts, existingLinks) {
+  var input = request || {};
+  var profileVersion = String(input.profileVersion || '').trim();
+  if (!profileVersion) throw new Error('statement profileVersion is required.');
+  if (profileVersion !== 'CHASE_STATEMENT_V1') {
+    throw new Error('Unsupported Chase V1 statement profile.');
+  }
+  if (input.confirmed !== true) {
+    return { outcome: 'REVIEW_REQUIRED', reason: 'EXPLICIT_CONFIRMATION_REQUIRED', candidates: [] };
+  }
+  var stableId = String(input.stableAccountId || '').trim();
+  if (!stableId) return { outcome: 'CONFLICT', reason: 'MATCH_TARGET_REQUIRED', candidates: [] };
+  var matches = (accounts || []).filter(function(account) {
+    return String(account.stableAccountId || '').trim() === stableId;
+  });
+  if (matches.length > 1) return { outcome: 'AMBIGUOUS', reason: 'MATCH_TARGET_AMBIGUOUS', candidates: [] };
+  if (!matches.length) return { outcome: 'CONFLICT', reason: 'MATCH_TARGET_MISSING', candidates: [] };
+  var account = matches[0];
+  if (!financialIdentityExplicitlyActive_(account.active)) {
+    return { outcome: 'CONFLICT', reason: 'ACCOUNT_INACTIVE', candidates: [stableId] };
+  }
+  if (String(account.identityStatus || '').trim().toUpperCase() !== 'VERIFIED') {
+    return { outcome: 'CONFLICT', reason: 'IDENTITY_NOT_VERIFIED', candidates: [stableId] };
+  }
+  if (String(account.domain || '').trim().toUpperCase() !== 'DEBT') {
+    return { outcome: 'CONFLICT', reason: 'DOMAIN_MISMATCH', candidates: [stableId] };
+  }
+  if (!/credit card|credit_card|creditcard|charge card|revolving|line of credit/i.test(
+      String(account.accountType || '')) ||
+      /mortgage|auto|student|property|heloc|margin/i.test(String(account.accountType || ''))) {
+    return { outcome: 'CONFLICT', reason: 'ACCOUNT_TYPE_MISMATCH', candidates: [stableId] };
+  }
+
+  var links = existingLinks || [];
+  var existingStatements = links.filter(function(link) {
+    return String(link.sourceSystem || '').trim() === profileVersion &&
+      String(link.stableAccountId || '').trim() === stableId &&
+      String(link.linkStatus || '').trim().toUpperCase() === 'VERIFIED';
+  });
+  if (existingStatements.length > 1) {
+    return { outcome: 'AMBIGUOUS', reason: 'STATEMENT_LINK_AMBIGUOUS', candidates: [] };
+  }
+  var existingStatementKey = existingStatements.length
+    ? String(existingStatements[0].sourceAccountKey || '').trim().toLowerCase() : '';
+  if (existingStatementKey && !financialIdentityIsProtectedKey_(existingStatementKey)) {
+    return { outcome: 'CONFLICT', reason: 'STATEMENT_LINK_KEY_INVALID', candidates: [stableId] };
+  }
+  var qfxKey = String(input.protectedQfxAccountKey || '').trim().toLowerCase();
+  if (qfxKey && !financialIdentityIsProtectedKey_(qfxKey)) {
+    throw new Error('protectedQfxAccountKey must be a protected sha256 key.');
+  }
+  if (qfxKey) {
+    var verifiedQfxLinks = links.filter(function(link) {
+      return String(link.sourceAccountKey || '').trim().toLowerCase() === qfxKey &&
+        String(link.stableAccountId || '').trim() === stableId &&
+        String(link.linkStatus || '').trim().toUpperCase() === 'VERIFIED' &&
+        String(link.sourceSystem || '').trim() !== profileVersion;
+    });
+    if (verifiedQfxLinks.length > 1) {
+      return { outcome: 'AMBIGUOUS', reason: 'QFX_LINK_AMBIGUOUS', candidates: [] };
+    }
+    if (!verifiedQfxLinks.length) {
+      return { outcome: 'CONFLICT', reason: 'QFX_LINK_NOT_VERIFIED', candidates: [stableId] };
+    }
+  }
+  var sourceKey = existingStatementKey || (qfxKey
+    ? financialIdentityProtectedKey_(['STATEMENT_ASSOCIATION_V1', profileVersion, qfxKey])
+    : financialIdentityProtectedKey_(['STATEMENT_ASSOCIATION_V1', profileVersion,
+        Utilities.getUuid()]));
+  var linked = links.filter(function(link) {
+    return String(link.sourceSystem || '').trim() === profileVersion &&
+      String(link.sourceAccountKey || '').trim().toLowerCase() === sourceKey;
+  });
+  if (linked.length > 1) return { outcome: 'AMBIGUOUS', reason: 'STATEMENT_LINK_AMBIGUOUS', candidates: [] };
+  if (linked.length === 1 && String(linked[0].stableAccountId || '').trim() !== stableId) {
+    return { outcome: 'CONFLICT', reason: 'STATEMENT_LINK_TARGET_CONFLICT', candidates: [stableId] };
+  }
+  return {
+    outcome: 'EXPLICIT_CONFIRMED', stableAccountId: stableId,
+    sourceLink: {
+      sourceType: 'STATEMENT', sourceSystem: profileVersion,
+      sourceAccountKey: sourceKey,
+      maskedIdentifier: financialIdentityMaskIdentifier_('', input.last4),
+      institution: String(input.institution || '').trim(),
+      sourceAccountType: String(account.accountType || '').trim(),
+      linkStatus: 'VERIFIED'
+    }
+  };
 }

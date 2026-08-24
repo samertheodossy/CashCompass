@@ -25,6 +25,10 @@ assert.match(serverSource, /planningUsesNormalizedData:\s*false/);
 assert.match(serverSource, /SHADOW_ONLY/);
 assert.doesNotMatch(planningSource, /buildPlanningDataReadinessModel_|DATA_READINESS_VIEW_V1/,
   'Part 1 Planning math must not consume the shadow readiness model');
+assert.doesNotMatch(serverSource.slice(serverSource.indexOf('var DATA_READINESS_DEBT_FACTS_'),
+  serverSource.indexOf('function getPlanningDataReadinessFromDashboard')),
+  /STATEMENT_BALANCE/,
+  'statement balance must not become a required debt-readiness fact in V1');
 
 const serverContext = {};
 vm.createContext(serverContext);

@@ -57,14 +57,14 @@
   This next slice does not silently switch Planning authority, execute payments,
   or broadly import transactions. Any authority migration requires a later
   explicit checkpoint.
-- **Current milestone:** **Cash + Credit Card Import / Refresh**, beginning with
-  **Credit Card Import Correctness Boundaries**. First make inactive Financial
-  Account identities fail closed during revolving-debt matching and remove the
-  ability for caller/client options to manufacture canonical applicable APR;
-  add permanent regressions, then inspect one representative real institution
-  OFX/QFX export. Only after those gates pass should the shadow-only customer
-  vertical slice be designed/implemented. Revolving-debt evidence precedes
-  bank/cash evidence. Existing Part 2A-1 through 2A-5 are enabling foundation,
+- **Current milestone:** **Cash + Credit Card Import / Refresh**. The credit-card
+  correctness boundaries and representative real Chase source proof are closed,
+  and **Chase Shadow Import V1 Phase A — contract foundation** is complete
+  locally: additive `STATEMENT_BALANCE`, exact Chase fact/APR boundaries,
+  explicit statement association, and semantic QFX/PDF replay contracts have
+  permanent regressions. The next phase is provider-profile parser
+  implementation; no parser, upload UI, customer Apply, or authority switch is
+  part of Phase A. Existing Part 2A-1 through 2A-5 remain enabling foundation,
   not production-ready customer import or Planning authority.
 - **Open lifecycle-adjacent gaps:** House metadata Edit/Rename remains required
   before broad Beta. Income Edit/Rename is a known unclaimed capability and must
@@ -561,7 +561,8 @@ implementation.
   source-scoped protected identifiers, and no Planning authority switch. Isolated
   Central `@356` run `20260815-115249-7301` passed 7/7 with verified cleanup.
 - **2A-2 — Financial Facts Foundation:** complete on isolated Central `@357`. Adds
-  lazy append-only `SYS - Financial Facts`, 14 typed value contracts, versioned
+  lazy append-only `SYS - Financial Facts`; the original foundation/debt set is
+  now 24 typed value contracts after Chase Phase A added `STATEMENT_BALANCE`; versioned
   provenance/freshness/selection policy, conflict-preserving current selection,
   decision-specific model/action confidence, legacy UNKNOWN-date representation,
   idempotent supersession, and an in-memory rebuildable projection. Part 1

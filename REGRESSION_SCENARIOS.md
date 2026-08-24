@@ -1580,6 +1580,22 @@ Whenever a production bug is fixed:
   proves existing Check parsing, legacy Other preservation, missing-number
   refusal before the writer call, and canonical Check replacement submission.
 
+### REG-073 — Chase statement facts could blur source and Planning semantics
+
+- Category: REGRESSION / FINANCIAL FACTS / IDENTITY / REPLAY / PRIVACY
+- Date added: 2026-08-23
+- Status: Phase A implemented locally; focused/full local regressions passed
+- Contract: `STATEMENT_BALANCE` is closed-cycle evidence, not current or
+  optimization balance. Chase statement association requires explicit
+  confirmation to an active verified revolving account, never last four alone.
+  QFX/PDF replay uses protected semantic keys that exclude Observed At and raw
+  file bytes. Chase component APRs can never manufacture canonical `APR`.
+- Permanent coverage: Financial Facts proves typed/zero/currency behavior,
+  semantic replay, corrected-cycle conflict, and no Planning requirement;
+  Identity proves confirmation, active/type/status, ambiguity, and protected
+  keys; Debt Import pins exact Chase profile metadata and rejects canonical APR;
+  Data readiness proves statement balance is nonblocking in V1.
+
 ---
 
 ## 3a loading-state consistency coverage
@@ -1724,4 +1740,5 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-070 | App-written text and formatted numeric values could remain clipped after entity changes | REGRESSION / WORKBOOK PRESENTATION / APP-WRITE CONSISTENCY | fixed; focused/full regressions + isolated `@341` Bills integrity 14/14 PASS in 24 s; linked text, large currency, exact 24 px gutter, TRASHED disposition, runner OFF |
 | REG-071 | Historical-only Investment names appeared as current editable accounts | REGRESSION / ENTITY LIFECYCLE / CROSS-SHEET CONSISTENCY / UI TRUTH | fixed; full regressions + isolated `@343` Populated 26/26 PASS with exact Investment lifecycle assertion, Restricted sharing, zero browser errors, verified Trash, and `active: null` |
 | REG-072 | Manage Donations could not capture a check number | REGRESSION / UI CORRECTNESS / DONATION EDITING | fixed locally; focused/full local regressions passed |
+| REG-073 | Chase statement facts could blur source and Planning semantics | REGRESSION / FINANCIAL FACTS / IDENTITY / REPLAY / PRIVACY | Phase A implemented locally; focused/full local regressions passed |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |
