@@ -52,8 +52,13 @@ Overall Architecture
 
 - PROJECT_CONTEXT.md
 - SystemArch.md
+- PLAID_CONNECTIVITY.md
 - PART_2A_IDENTITY_CONTRACT.md
 - PART_2A_FINANCIAL_FACTS_CONTRACT.md
+
+**External connectivity / Plaid work:** read `PLAID_CONNECTIVITY.md` before
+investigation, implementation, infrastructure modification, deployment, or a
+provider-environment change.
 
 Functional Assertions
 
