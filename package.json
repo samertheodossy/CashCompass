@@ -3,7 +3,12 @@
   "private": true,
   "scripts": {
     "build:rolling-dashboard": "vite build --config vite.rolling-dashboard.config.ts && node scripts/emitRollingDashboardBundleHtml.mjs",
-    "test": "npm run test:maintenance && npm run test:dashboard-ux && npm run test:rfp-metadata && npm run test:rfp-capital-allocation && npm run test:financial-identity && npm run test:financial-facts && npm run test:cash-import && npm run test:debt-import && npm run test:data-readiness && npm run test:performance-timing && npm run test:populated-harness && npm run test:p1-evidence && npm run test:production-paths",
+    "test": "npm run test:plaid-backend && npm run test:plaid-bridge && npm run test:plaid-import && npm run test:plaid-main-app && npm run test:plaid-provisioning && npm run test:maintenance && npm run test:dashboard-ux && npm run test:rfp-metadata && npm run test:rfp-capital-allocation && npm run test:financial-identity && npm run test:financial-facts && npm run test:cash-import && npm run test:debt-import && npm run test:data-readiness && npm run test:performance-timing && npm run test:populated-harness && npm run test:p1-evidence && npm run test:production-paths",
+    "test:plaid-backend": "npm --prefix services/plaid-backend test",
+    "test:plaid-bridge": "node scripts/checkPlaidBridgeRegressions.mjs",
+    "test:plaid-import": "node scripts/checkPlaidImportRegressions.mjs",
+    "test:plaid-main-app": "node scripts/checkPlaidMainAppRegressions.mjs",
+    "test:plaid-provisioning": "node scripts/checkPlaidProvisioningRegressions.mjs",
     "test:maintenance": "node scripts/checkMaintenanceRegressions.mjs",
     "test:dashboard-ux": "node scripts/checkDashboardUxRegressions.mjs",
     "test:rfp-metadata": "node scripts/checkRfpMetadataRegressions.mjs",

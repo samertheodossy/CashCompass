@@ -70,6 +70,8 @@ Higher-priority instructions control when requirements conflict. When requiremen
 - No commits unless explicitly approved.
 - No pushes unless explicitly approved.
 - No deploys unless explicitly approved.
+- **The bounded Apps Script project is owner-operated only.** Codex must never run `clasp push`, `clasp deploy`, `clasp undeploy`, or any other source/deployment mutation against the bounded project. The owner alone performs every bounded push and deployment, even when Codex is asked to prepare or validate bounded-compatible source. Codex stops after local validation and gives the owner the exact next step.
+- **One product design is mandatory.** Central and bounded must expose the same customer UI, navigation, workflow, terminology, and functional behavior from the same reviewed source. Environment-specific configuration, credentials, and infrastructure may differ, but they must not create a second product design or a different user journey. If a platform or authorization constraint appears to require divergent designs, stop and present the constraint to the owner for a decision before implementing it.
 - No destructive workbook changes unless explicitly approved.
 - No schema rewrites, formatting washes, or broad migrations unless explicitly approved.
 - **Administrator identity is immutable.** `samertheodossy@gmail.com` is the sole CashCompass administrator. Never add, substitute, temporarily elevate, or infer another administrator; never modify `ADMIN_EMAILS` or its fallback to enable testing. `cashcompass2026@gmail.com` is a non-admin disposable test identity. If a test requires admin execution, authenticate as the sole administrator or stop and request that access path.

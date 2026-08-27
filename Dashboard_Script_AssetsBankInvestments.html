@@ -54,9 +54,11 @@ function fillBankAccountDropdownFromData_(data) {
   renderBankManageList_();
   clearSurfaceState_('bank_status', 'status');
 
-  // A successful empty response is authoritative. Route directly to the
-  // usable Add form, but preserve the user's current mode when records exist.
-  if (data && Array.isArray(data.accounts) && data.accounts.length === 0) {
+  // A successful empty response is authoritative. Route an untouched initial
+  // Update view to Add, but never override a mode the user selected while the
+  // asynchronous Bank Accounts request was still in flight.
+  if (data && Array.isArray(data.accounts) && data.accounts.length === 0 &&
+      currentTrackedEditorMode_('bank', ['update', 'add', 'manage', 'connected']) === 'update') {
     setBankPanelMode('add');
   }
 }
@@ -328,11 +330,12 @@ function isBankNameRelatedError_(msg) {
 
 function setBankPanelMode(mode) {
   const requested = String(mode || 'update');
+  const connectedMode = requested === 'connected';
   const secondaryMode = requested === 'review' || requested === 'import'
     ? requested
     : '';
   const m = setTrackedEditorMode_(
-    { prefix: 'bank' },
+    { prefix: 'bank', modes: ['update', 'add', 'manage', 'connected'] },
     secondaryMode ? 'manage' : requested
   );
   const manageHome = document.getElementById('bank_manage_home');
@@ -356,6 +359,9 @@ function setBankPanelMode(mode) {
     if (typeof loadBankImportReviewSection === 'function') loadBankImportReviewSection();
   }
   if (showImport) setStatus('bank_status', '', false);
+  if (connectedMode && typeof loadPlaidConnectedAccounts_ === 'function') {
+    loadPlaidConnectedAccounts_(false, 'CASH');
+  }
 }
 
 function renderBankManageList_() {
@@ -1167,7 +1173,8 @@ function fillInvestmentAccountDropdownFromData_(data) {
   updateInvestmentUpdateAvailability_();
   renderInvestmentManageList_();
   clearSurfaceState_('inv_status', 'status');
-  if (data && Array.isArray(data.accounts) && data.accounts.length === 0) {
+  if (data && Array.isArray(data.accounts) && data.accounts.length === 0 &&
+      currentTrackedEditorMode_('inv', ['update', 'add', 'manage', 'connected']) === 'update') {
     setInvestmentPanelMode('add');
   }
 }
@@ -1300,11 +1307,14 @@ function isInvestmentNameRelatedError_(msg) {
 }
 
 function setInvestmentPanelMode(mode) {
-  const m = setTrackedEditorMode_({ prefix: 'inv' }, mode);
+  const m = setTrackedEditorMode_({ prefix: 'inv', modes: ['update', 'add', 'manage', 'connected'] }, mode);
   if (m !== 'manage') closeInvestmentEdit_();
   if (m !== 'manage') closeInvestmentPortfolioDrawer_();
   if (m === 'update') setStatus('inv_status', '', false);
   if (m === 'manage') renderInvestmentManageList_();
+  if (m === 'connected' && typeof loadPlaidConnectedAccounts_ === 'function') {
+    loadPlaidConnectedAccounts_(false, 'INVESTMENT');
+  }
 }
 
 function installInvestmentPortfolioDrawerKeyHandler_() {

@@ -39,7 +39,8 @@ function fillHouseDropdownFromData_(data) {
   if (
     !(data.houses && data.houses.length) &&
     Array.isArray(__houseInactiveRows) &&
-    typeof setHousePanelMode === 'function'
+    typeof setHousePanelMode === 'function' &&
+    currentTrackedEditorMode_('house', ['update', 'add', 'manage']) === 'update'
   ) {
     setHousePanelMode(__houseInactiveRows.length ? 'manage' : 'add');
   }

@@ -52,6 +52,7 @@ Overall Architecture
 
 - PROJECT_CONTEXT.md
 - SystemArch.md
+- CASHCOMPASS_APPLICATION_GCP.md
 - PLAID_CONNECTIVITY.md
 - PART_2A_IDENTITY_CONTRACT.md
 - PART_2A_FINANCIAL_FACTS_CONTRACT.md
@@ -59,6 +60,11 @@ Overall Architecture
 **External connectivity / Plaid work:** read `PLAID_CONNECTIVITY.md` before
 investigation, implementation, infrastructure modification, deployment, or a
 provider-environment change.
+
+**Central application Google Cloud work:** read
+`CASHCOMPASS_APPLICATION_GCP.md` before changing or reviewing the Central GCP
+association, OAuth, Apps Script API, API-executable administration, or any
+application-level Google Cloud resource.
 
 Functional Assertions
 

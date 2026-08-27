@@ -35,6 +35,7 @@ These rules apply to every AI agent working in this repository.
 - Do not hide failures with silent fallbacks.
 - Prefer clear diagnostics over masking errors.
 - Maintain one convergent codebase: Central and bounded deployments must ultimately run the same reviewed source. Optional explicit-spreadsheet test seams must preserve the production no-argument resolver path exactly.
+- Maintain one product design across that codebase: Central and bounded use the same customer-visible layout, navigation, controls, wording, and workflow. Environment-specific plumbing may vary behind the shared interface only. Never solve an environment constraint by creating a second customer experience; escalate that constraint to the owner before implementation.
 
 ## Single Test Console
 
@@ -49,6 +50,7 @@ These rules apply to every AI agent working in this repository.
 - Do not commit unless explicitly approved.
 - Do not push unless explicitly approved.
 - Do not deploy unless explicitly approved.
+- Never push, deploy, undeploy, or otherwise mutate the bounded Apps Script project. Bounded `clasp` operations are permanently owner-operated; Codex may prepare and locally validate convergent source, then hand the exact bounded step to the owner.
 - Never switch `.clasp` project identity casually.
 - Central push uses `./push-central.sh`.
 

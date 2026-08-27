@@ -1,0 +1,1141 @@
+/**
+ * Connected Accounts inline client.
+ *
+ * Import Data = read-only provider retrieval and comparison (plaidImportPreviewMapped).
+ * Apply Selected Updates = future explicit financial mutation via reviewed canonical
+ * writers only (updateDebtField / existing domain writers); must not write in this
+ * client. Future Apply records Activity Log entries with source PLAID and sanitized
+ * before/after values. Import alone must not log financial updates.
+ */
+var plaidMainState_ = {
+  data: null,
+  loading: {},
+  previews: {},
+  lastImported: {},
+  associationEditing: {},
+  manageConnectionOpen: {},
+  aprSourceEditing: {},
+  pendingDisconnectKey: '',
+  pendingDisconnectDomain: 'CASH'
+};
+
+var PLAID_MAIN_UNAVAILABLE_ = 'Connected data is temporarily unavailable.';
+var PLAID_MAIN_MISSING_ = '—';
+var PLAID_MAIN_MISSING_NOTE_ = '— Not currently tracked in CashCompass';
+
+var PLAID_MAIN_APR_FACT_TYPES_ = {
+  PURCHASE_APR: true, DISCLOSED_APR: true, CASH_ADVANCE_APR: true,
+  BALANCE_TRANSFER_APR: true, PROMOTIONAL_APR: true, APR_COMPONENT_EVIDENCE: true
+};
+
+/**
+ * Canonical Debt comparison contract — maps Plaid factType to CashCompass field.
+ * Future Apply must use writerField via existing Debt update paths only.
+ */
+var PLAID_MAIN_DEBT_CANONICAL_ = {
+  CURRENT_BALANCE: { label: 'Current Balance', writerField: 'Account Balance', section: 'ready', kind: 'currency' },
+  CREDIT_LIMIT: { label: 'Credit Limit', writerField: 'Credit Limit', section: 'ready', kind: 'currency' },
+  MINIMUM_PAYMENT: { label: 'Minimum Payment', writerField: 'Minimum Payment', section: 'ready', kind: 'currency' },
+  NEXT_PAYMENT_DATE: { label: 'Due Date', writerField: 'Due Date', section: 'ready', kind: 'dueDate' },
+  STATEMENT_BALANCE: { label: 'Statement Balance', section: 'additional', kind: 'currency' },
+  STATEMENT_DATE: { label: 'Statement Date', section: 'additional', kind: 'date' }
+};
+
+var PLAID_MAIN_CASH_CANONICAL_ = {
+  CURRENT_BALANCE: { label: 'Current Balance', writerField: 'Account Balance', section: 'ready', kind: 'currency' },
+  AVAILABLE_BALANCE: { label: 'Available Balance', section: 'additional', kind: 'currency' }
+};
+
+var PLAID_MAIN_INVESTMENT_CANONICAL_ = {
+  CURRENT_BALANCE: { label: 'Current Balance', writerField: 'Account Value', section: 'ready', kind: 'currency' }
+};
+
+var PLAID_MAIN_FACT_LABELS_ = {
+  CURRENT_BALANCE: 'Current Balance',
+  AVAILABLE_BALANCE: 'Available Balance',
+  AVAILABLE_CREDIT: 'Available Credit',
+  CREDIT_LIMIT: 'Credit Limit',
+  STATEMENT_BALANCE: 'Statement Balance',
+  STATEMENT_DATE: 'Statement Date',
+  MINIMUM_PAYMENT: 'Minimum Payment',
+  NEXT_PAYMENT_DATE: 'Next Payment Date',
+  PURCHASE_APR: 'Purchase APR',
+  CASH_ADVANCE_APR: 'Cash Advance APR',
+  BALANCE_TRANSFER_APR: 'Balance Transfer APR',
+  PROMOTIONAL_APR: 'Promotional APR',
+  DISCLOSED_APR: 'Disclosed APR',
+  INT_RATE: 'Int Rate'
+};
+
+var PLAID_MAIN_MONTH_NAMES_ = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+];
+
+function plaidMainUserMessage_(err) {
+  return (err && err.message) || PLAID_MAIN_UNAVAILABLE_;
+}
+
+function plaidMainDomain_(domain) {
+  var normalized = String(domain || '').toUpperCase();
+  return normalized === 'DEBT' || normalized === 'INVESTMENT' ? normalized : 'CASH';
+}
+
+function plaidMainDomainLabel_(domain) {
+  var normalized = plaidMainDomain_(domain);
+  return normalized === 'DEBT' ? 'debts' : normalized === 'INVESTMENT' ? 'investments' : 'bank accounts';
+}
+
+function plaidMainAccountDomain_(account) {
+  var type = String(account && account.type || '').toLowerCase();
+  var subtype = String(account && account.subtype || '').toLowerCase();
+  if (type === 'depository') return 'CASH';
+  if (type === 'credit' || type === 'loan' || subtype === 'mortgage') return 'DEBT';
+  if (type === 'investment' || type === 'brokerage') return 'INVESTMENT';
+  return '';
+}
+
+function plaidMainIds_(domain) {
+  var key = plaidMainDomain_(domain).toLowerCase();
+  return {
+    status: 'plaid_main_' + key + '_status',
+    connections: 'plaid_main_' + key + '_connections',
+    connect: 'plaid_main_' + key + '_connect_btn',
+    reload: 'plaid_main_' + key + '_reload_btn'
+  };
+}
+
+function plaidMainEnsureStyles_() {
+  if (document.getElementById('plaid-main-styles')) return;
+  var style = document.createElement('style');
+  style.id = 'plaid-main-styles';
+  style.textContent = [
+    '.plaid-main-review-panel{max-width:920px;margin:14px auto 0;padding:14px 16px;border-top:1px solid #ddd;background:#fafafa;border-radius:6px}',
+    '.plaid-main-review{margin-top:0}',
+    '.plaid-main-review-title{margin:0 0 10px;font-size:15px;font-weight:600}',
+    '.plaid-main-review-heading{margin:14px 0 8px;font-size:16px;font-weight:600}',
+    '.plaid-main-comparison-table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.45}',
+    '.plaid-main-comparison-table th,.plaid-main-comparison-table td{padding:9px 10px;border-bottom:1px solid #e6e6e6;vertical-align:top}',
+    '.plaid-main-comparison-table th{font-weight:600;text-align:left;color:#444}',
+    '.plaid-main-comparison-table .plaid-main-num{text-align:right;white-space:nowrap}',
+    '.plaid-main-comparison-table .plaid-main-change-cell{font-weight:500}',
+    '.plaid-main-row-changed{background:#f6f9fc}',
+    '.plaid-main-row-changed .plaid-main-change-cell{font-weight:600;color:#1a5276}',
+    '.plaid-main-row-needs .plaid-main-change-cell{color:#7d6608;font-weight:600}',
+    '.plaid-main-row-new .plaid-main-change-cell{color:#196f3d;font-weight:600}',
+    '.plaid-main-row-info .plaid-main-change-cell{color:#555}',
+    '.plaid-main-row-same{opacity:.78}',
+    '.plaid-main-footnote{margin-top:6px;font-size:13px}',
+    '.plaid-main-inline-apr{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}',
+    '.plaid-main-inline-apr .small-btn{font-size:12px;padding:2px 8px}',
+    '.plaid-main-apr-source-toggle{margin-top:4px;font-size:12px}',
+    '.plaid-main-review-note{margin-top:12px;font-size:13px}',
+    '@media (max-width:640px){',
+    '.plaid-main-review-panel{max-width:none;margin:12px 0 0;padding:12px}',
+    '.plaid-main-comparison-table thead{display:none}',
+    '.plaid-main-comparison-table tr{display:block;margin-bottom:10px;border-bottom:1px solid #e6e6e6}',
+    '.plaid-main-comparison-table td{display:flex;justify-content:space-between;gap:12px;border:none;padding:5px 0}',
+    '.plaid-main-comparison-table td::before{content:attr(data-label);font-weight:600;color:#666}',
+    '.plaid-main-comparison-table .plaid-main-num{text-align:right}',
+    '.plaid-main-inline-apr{justify-content:flex-start}',
+    '}'
+  ].join('');
+  document.head.appendChild(style);
+}
+
+function plaidMainSetStatus_(domain, message, isError) {
+  var el = document.getElementById(plaidMainIds_(domain).status);
+  if (!el) return;
+  el.textContent = String(message || '');
+  el.className = isError ? 'status error' : 'status';
+}
+
+function plaidMainCall_(name, payload, success, failure) {
+  var reject = failure || function() {};
+  var failClosed = function(result) {
+    reject({ message: (result && result.error) || PLAID_MAIN_UNAVAILABLE_ });
+  };
+  var runner = google.script.run
+    .withSuccessHandler(function(result) {
+      if (!result || result.ok !== true) {
+        failClosed(result);
+        return;
+      }
+      success(result);
+    })
+    .withFailureHandler(function() { failClosed(null); });
+  if (payload === undefined) runner[name]();
+  else runner[name](payload);
+}
+
+function plaidMainSetBusy_(domain, busy) {
+  var ids = plaidMainIds_(domain);
+  [ids.connect, ids.reload].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.disabled = !!busy;
+  });
+}
+
+function loadPlaidConnectedAccounts_(force, domain) {
+  plaidMainEnsureStyles_();
+  var targetDomain = plaidMainDomain_(domain);
+  var root = document.getElementById(plaidMainIds_(targetDomain).connections);
+  if (!root) return;
+  if (!force && plaidMainState_.data) {
+    plaidMainRenderDomain_(targetDomain);
+    return;
+  }
+  if (plaidMainState_.loading[targetDomain]) return;
+  plaidMainState_.loading[targetDomain] = true;
+  plaidMainSetBusy_(targetDomain, true);
+  plaidMainSetStatus_(targetDomain, 'Loading connected ' + plaidMainDomainLabel_(targetDomain) + '…', false);
+  root.textContent = '';
+  plaidMainCall_('plaidImportConnectedAccountsState', undefined, function(result) {
+    plaidMainState_.data = result;
+    plaidMainState_.loading[targetDomain] = false;
+    plaidMainSetBusy_(targetDomain, false);
+    plaidMainSetStatus_(targetDomain, '', false);
+    plaidMainRenderDomain_(targetDomain);
+  }, function(err) {
+    plaidMainState_.loading[targetDomain] = false;
+    plaidMainSetBusy_(targetDomain, false);
+    plaidMainSetStatus_(targetDomain, plaidMainUserMessage_(err), true);
+  });
+}
+
+function plaidMainConnectionsForDomain_(domain) {
+  var targetDomain = plaidMainDomain_(domain);
+  var data = plaidMainState_.data || {};
+  return (data.connections || []).map(function(connection) {
+    return {
+      connection: connection,
+      accounts: (connection.accounts || []).filter(function(account) {
+        return plaidMainAccountDomain_(account) === targetDomain;
+      })
+    };
+  }).filter(function(entry) { return entry.accounts.length > 0; });
+}
+
+function plaidMainElement_(tag, className, textValue) {
+  var el = document.createElement(tag);
+  if (className) el.className = className;
+  if (textValue !== undefined && textValue !== null) el.textContent = String(textValue);
+  return el;
+}
+
+function plaidMainButton_(label, className, handler, options) {
+  options = options || {};
+  var button = plaidMainElement_('button', className || 'small-btn', label);
+  button.type = 'button';
+  if (options.disabled) button.disabled = true;
+  if (options.title) button.title = String(options.title);
+  if (handler) button.addEventListener('click', handler);
+  return button;
+}
+
+function plaidMainTargetMatchesDomain_(target, domain) {
+  var targetDomain = String(target && target.domain || '').toUpperCase();
+  var wanted = String(domain || '').toUpperCase();
+  if (wanted === 'INVESTMENT') return targetDomain === 'INVESTMENT' || targetDomain === 'RETIREMENT';
+  return targetDomain === wanted;
+}
+
+function plaidMainTargetsForAccount_(account) {
+  var domain = plaidMainAccountDomain_(account);
+  return ((plaidMainState_.data && plaidMainState_.data.targets) || []).filter(function(target) {
+    return plaidMainTargetMatchesDomain_(target, domain);
+  });
+}
+
+function plaidMainTargetLabel_(stableAccountId, account) {
+  var wanted = String(stableAccountId || '');
+  if (!wanted) return '';
+  var match = plaidMainTargetsForAccount_(account).filter(function(target) {
+    return String(target.stableAccountId || '') === wanted;
+  })[0];
+  return match ? String(match.accountName || match.displayName || 'CashCompass account') : 'CashCompass account';
+}
+
+function plaidMainAssociationKey_(connection, account) {
+  return String(connection.protectedConnectionKey || '') + '::' + String(account.protectedAccountKey || '');
+}
+
+function plaidMainApplyMappingLocally_(connectionKey, accountKey, mapping, stableAccountId, status) {
+  var data = plaidMainState_.data;
+  if (!data) return;
+  (data.connections || []).forEach(function(connection) {
+    if (String(connection.protectedConnectionKey || '') !== String(connectionKey || '')) return;
+    (connection.accounts || []).forEach(function(account) {
+      if (String(account.protectedAccountKey || '') !== String(accountKey || '')) return;
+      account.mapping = mapping || {
+        status: status,
+        stableAccountId: status === 'CONFIRMED' ? String(stableAccountId || '') : '',
+        revision: Number(mapping && mapping.revision || 0)
+      };
+    });
+  });
+}
+
+function plaidMainFormatImportedAt_(iso) {
+  if (!iso) return '';
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  var datePart = d.toLocaleString(undefined, {
+    month: 'short', day: 'numeric', year: 'numeric'
+  });
+  var timePart = d.toLocaleString(undefined, {
+    hour: 'numeric', minute: '2-digit'
+  });
+  return datePart + ' at ' + timePart;
+}
+
+function plaidMainFormatMoney_(value, currency) {
+  var number = Number(value);
+  if (!Number.isFinite(number)) return PLAID_MAIN_MISSING_;
+  return number.toLocaleString(undefined, {
+    style: 'currency',
+    currency: String(currency || 'USD')
+  });
+}
+
+function plaidMainFormatPercent_(value) {
+  var number = Number(value);
+  if (!Number.isFinite(number)) return PLAID_MAIN_MISSING_;
+  return number.toFixed(2) + '%';
+}
+
+function plaidMainParseIsoDateParts_(value) {
+  var match = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
+}
+
+function plaidMainFormatCalendarParts_(parts) {
+  if (!parts || !parts.month || !parts.day || !parts.year) return PLAID_MAIN_MISSING_;
+  var monthName = PLAID_MAIN_MONTH_NAMES_[parts.month - 1] || String(parts.month);
+  return monthName + ' ' + parts.day + ', ' + parts.year;
+}
+
+function plaidMainFormatShortDate_(value) {
+  var parts = plaidMainParseIsoDateParts_(value);
+  if (parts) return plaidMainFormatCalendarParts_(parts);
+  if (value === null || value === undefined || value === '') return PLAID_MAIN_MISSING_;
+  return String(value).trim();
+}
+
+function plaidMainReviewAnchorParts_(preview) {
+  var anchor = preview && preview.reviewAnchorDate
+    ? preview.reviewAnchorDate
+    : (plaidMainState_.data && plaidMainState_.data.reviewAnchorDate) || '';
+  return plaidMainParseIsoDateParts_(anchor);
+}
+
+function plaidMainGetNextDueDateParts_(anchorParts, dueDay) {
+  if (!anchorParts || !dueDay) return null;
+  var due = { year: anchorParts.year, month: anchorParts.month, day: dueDay };
+  var anchorMs = new Date(anchorParts.year, anchorParts.month - 1, anchorParts.day).getTime();
+  var dueMs = new Date(due.year, due.month - 1, due.day).getTime();
+  if (dueMs < anchorMs) {
+    var nextMonth = anchorParts.month === 12 ? 1 : anchorParts.month + 1;
+    var nextYear = anchorParts.month === 12 ? anchorParts.year + 1 : anchorParts.year;
+    return { year: nextYear, month: nextMonth, day: dueDay };
+  }
+  return due;
+}
+
+function plaidMainSameCalendarParts_(left, right) {
+  return !!left && !!right &&
+    left.year === right.year && left.month === right.month && left.day === right.day;
+}
+
+function plaidMainParseDueDay_(value) {
+  if (value === null || value === undefined || value === '') return null;
+  var str = String(value).trim();
+  var plain = str.match(/^(\d{1,2})(?:st|nd|rd|th)?$/i);
+  if (plain) {
+    var day = parseInt(plain[1], 10);
+    if (day >= 1 && day <= 31) return day;
+  }
+  var asNum = parseInt(str, 10);
+  if (!isNaN(asNum) && asNum >= 1 && asNum <= 31 && String(asNum) === str) return asNum;
+  var iso = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return parseInt(iso[3], 10);
+  var parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) return parsed.getDate();
+  return null;
+}
+
+function plaidMainFormatDueDayDisplay_(day) {
+  if (day === null || day === undefined) return PLAID_MAIN_MISSING_;
+  var suffix = 'th';
+  if (day % 10 === 1 && day !== 11) suffix = 'st';
+  else if (day % 10 === 2 && day !== 12) suffix = 'nd';
+  else if (day % 10 === 3 && day !== 13) suffix = 'rd';
+  return String(day) + suffix;
+}
+
+function plaidMainLegacyValue_(legacy, key) {
+  if (!legacy || !legacy[key]) return null;
+  return legacy[key].value;
+}
+
+function plaidMainFactLabel_(factType) {
+  return PLAID_MAIN_FACT_LABELS_[String(factType || '')] ||
+    String(factType || 'Update').replace(/_/g, ' ').replace(/\b\w/g, function(ch) { return ch.toUpperCase(); });
+}
+
+function plaidMainRowByFactType_(rows) {
+  var map = {};
+  (rows || []).forEach(function(row) {
+    if (!row || !row.candidate) return;
+    var ft = String(row.factType || '');
+    if (!map[ft]) map[ft] = row;
+  });
+  return map;
+}
+
+function plaidMainIsAprFactType_(factType) {
+  return !!PLAID_MAIN_APR_FACT_TYPES_[String(factType || '')] ||
+    /_APR$/i.test(String(factType || ''));
+}
+
+function plaidMainCollectAprRows_(rows) {
+  return (rows || []).filter(function(row) {
+    return row && row.candidate && plaidMainIsAprFactType_(row.factType);
+  });
+}
+
+function plaidMainFormatCurrencyChange_(existingNum, importedNum, currency) {
+  if (!Number.isFinite(existingNum)) return 'New';
+  if (!Number.isFinite(importedNum)) return PLAID_MAIN_MISSING_;
+  var diff = Math.round((importedNum - existingNum) * 100) / 100;
+  if (diff === 0) return 'Same';
+  var formatted = plaidMainFormatMoney_(Math.abs(diff), currency || 'USD');
+  return (diff > 0 ? '+' : '−') + formatted;
+}
+
+function plaidMainChangeRowClass_(row) {
+  var change = String(row && row.change || '');
+  if (/Needs selection|Needs review/i.test(change)) return 'plaid-main-row-needs';
+  if (change === 'New') return 'plaid-main-row-new';
+  if (change === 'Same') return 'plaid-main-row-same';
+  if (change === 'Changed' || change.indexOf('→') >= 0 || /^[+\-−]/.test(change)) {
+    return 'plaid-main-row-changed';
+  }
+  if (row && row.informational) return 'plaid-main-row-info';
+  return '';
+}
+
+function plaidMainDerivedCreditLeft_(limit, balance) {
+  if (!Number.isFinite(limit) || !Number.isFinite(balance)) return NaN;
+  return Math.round((limit - balance) * 100) / 100;
+}
+
+function plaidMainExistingCreditLeft_(legacy) {
+  var stored = plaidMainLegacyValue_(legacy, 'AVAILABLE_CREDIT');
+  if (stored !== null && stored !== '') return Number(stored);
+  return plaidMainDerivedCreditLeft_(
+    Number(plaidMainLegacyValue_(legacy, 'CREDIT_LIMIT')),
+    Number(plaidMainLegacyValue_(legacy, 'CURRENT_BALANCE'))
+  );
+}
+
+function plaidMainBuildCurrencyRow_(config, previewRow, legacyKey, legacy) {
+  if (!previewRow || !previewRow.candidate) return null;
+  var existingRaw = plaidMainLegacyValue_(legacy, legacyKey);
+  var existingNum = existingRaw === null || existingRaw === '' ? NaN : Number(existingRaw);
+  var importedNum = Number(previewRow.candidate.numericValue);
+  var currency = previewRow.candidate.currencyOrUnit || previewRow.candidate.currency || 'USD';
+  var cashCompassDisplay = Number.isFinite(existingNum)
+    ? plaidMainFormatMoney_(existingNum, currency)
+    : PLAID_MAIN_MISSING_;
+  var importedDisplay = plaidMainFormatMoney_(importedNum, currency);
+  return {
+    item: config.label,
+    cashCompass: cashCompassDisplay,
+    imported: importedDisplay,
+    change: plaidMainFormatCurrencyChange_(existingNum, importedNum, currency),
+    writerField: config.writerField || '',
+    factType: previewRow.factType,
+    technical: previewRow
+  };
+}
+
+function plaidMainBuildDueDateRow_(previewRow, legacy, preview) {
+  if (!previewRow || !previewRow.candidate) return null;
+  var existingRaw = plaidMainLegacyValue_(legacy, 'NEXT_PAYMENT_DATE');
+  var existingDay = plaidMainParseDueDay_(existingRaw);
+  var importedIso = String(previewRow.candidate.textValue || previewRow.candidate.value || '').trim();
+  var importedParts = plaidMainParseIsoDateParts_(importedIso);
+  var anchorParts = plaidMainReviewAnchorParts_(preview);
+  var cashCompassParts = existingDay !== null && anchorParts
+    ? plaidMainGetNextDueDateParts_(anchorParts, existingDay) : null;
+  var cashCompassDisplay = cashCompassParts
+    ? plaidMainFormatCalendarParts_(cashCompassParts) : PLAID_MAIN_MISSING_;
+  var importedDisplay = importedParts
+    ? plaidMainFormatCalendarParts_(importedParts) : PLAID_MAIN_MISSING_;
+  var importedDay = importedParts ? importedParts.day : null;
+  var change;
+  if (existingDay === null && importedDay !== null) change = 'New';
+  else if (cashCompassParts && importedParts && plaidMainSameCalendarParts_(cashCompassParts, importedParts)) {
+    change = 'Same';
+  } else if (cashCompassParts && importedParts) {
+    change = plaidMainFormatCalendarParts_(cashCompassParts) + ' → ' +
+      plaidMainFormatCalendarParts_(importedParts);
+  } else change = 'Changed';
+  return {
+    item: 'Due Date',
+    cashCompass: cashCompassDisplay,
+    imported: importedDisplay,
+    change: change,
+    writerField: 'Due Date',
+    proposedCanonical: importedDay !== null ? String(importedDay) : '',
+    factType: 'NEXT_PAYMENT_DATE',
+    technical: previewRow
+  };
+}
+
+function plaidMainBuildDerivedCreditLeftRow_(byType, legacy) {
+  var balanceRow = byType.CURRENT_BALANCE;
+  var limitRow = byType.CREDIT_LIMIT;
+  if (!balanceRow || !limitRow || !balanceRow.candidate || !limitRow.candidate) return null;
+  var importedBalance = Number(balanceRow.candidate.numericValue);
+  var importedLimit = Number(limitRow.candidate.numericValue);
+  var importedDerived = plaidMainDerivedCreditLeft_(importedLimit, importedBalance);
+  if (!Number.isFinite(importedDerived)) return null;
+  var existingNum = plaidMainExistingCreditLeft_(legacy);
+  var currency = balanceRow.candidate.currencyOrUnit || balanceRow.candidate.currency || 'USD';
+  return {
+    item: 'Credit Left',
+    cashCompass: Number.isFinite(existingNum)
+      ? plaidMainFormatMoney_(existingNum, currency) : PLAID_MAIN_MISSING_,
+    imported: plaidMainFormatMoney_(importedDerived, currency),
+    change: plaidMainFormatCurrencyChange_(existingNum, importedDerived, currency),
+    derivedOnly: true,
+    factType: 'CREDIT_LEFT_DERIVED'
+  };
+}
+
+function plaidMainBuildProviderAvailableCreditRow_(previewRow, legacy) {
+  if (!previewRow || !previewRow.candidate) return null;
+  var existingRaw = plaidMainLegacyValue_(legacy, 'AVAILABLE_CREDIT');
+  var existingNum = existingRaw === null || existingRaw === '' ? NaN : Number(existingRaw);
+  var importedNum = Number(previewRow.candidate.numericValue);
+  var currency = previewRow.candidate.currencyOrUnit || previewRow.candidate.currency || 'USD';
+  var change = 'New';
+  if (Number.isFinite(existingNum)) {
+    change = importedNum === existingNum ? 'Same' : 'Changed';
+  }
+  return {
+    item: 'Provider Available Credit',
+    cashCompass: PLAID_MAIN_MISSING_,
+    imported: plaidMainFormatMoney_(importedNum, currency),
+    change: change,
+    informational: true,
+    factType: 'AVAILABLE_CREDIT',
+    technical: previewRow
+  };
+}
+
+function plaidMainBuildDateRow_(config, previewRow, legacyKey, legacy) {
+  if (!previewRow || !previewRow.candidate) return null;
+  var existingRaw = plaidMainLegacyValue_(legacy, legacyKey);
+  var importedRaw = previewRow.candidate.textValue || previewRow.candidate.value || '';
+  var cashCompassDisplay = existingRaw ? String(existingRaw) : PLAID_MAIN_MISSING_;
+  var importedDisplay = importedRaw ? plaidMainFormatShortDate_(importedRaw) : PLAID_MAIN_MISSING_;
+  var change = 'New';
+  if (existingRaw) {
+    change = String(existingRaw).trim() === String(importedRaw).trim() ? 'Same' : 'Changed';
+  }
+  return {
+    item: config.label,
+    cashCompass: cashCompassDisplay === PLAID_MAIN_MISSING_ ? PLAID_MAIN_MISSING_ : cashCompassDisplay,
+    imported: importedDisplay,
+    change: change,
+    factType: previewRow.factType,
+    technical: previewRow
+  };
+}
+
+function plaidMainBuildIntRateReview_(aprRows, legacy, preference) {
+  var candidates = aprRows.filter(function(row) {
+    return row.candidate && Number.isFinite(Number(row.candidate.numericValue));
+  });
+  if (!candidates.length) return null;
+  var existingNum = Number(plaidMainLegacyValue_(legacy, 'APR'));
+  var cashCompassDisplay = Number.isFinite(existingNum)
+    ? plaidMainFormatPercent_(existingNum) : PLAID_MAIN_MISSING_;
+  var importedSummary = candidates.map(function(row) {
+    return plaidMainFactLabel_(row.factType).replace(/ APR/i, '') + ' ' +
+      plaidMainFormatPercent_(row.candidate.numericValue);
+  }).join(' / ');
+  if (preference && preference.sourceSemantic) {
+    var selected = candidates.filter(function(row) {
+      return String(row.factType || '') === String(preference.sourceSemantic || '');
+    })[0];
+    if (selected) {
+      var importedNum = Number(selected.candidate.numericValue);
+      var diff = Number.isFinite(existingNum)
+        ? Math.round((importedNum - existingNum) * 100) / 100 : null;
+      var change = !Number.isFinite(existingNum) ? 'New'
+        : diff === 0 ? 'Same'
+        : (diff > 0 ? '+' : '−') + Math.abs(diff).toFixed(2) + '%';
+      return {
+        ready: {
+          item: 'Int Rate',
+          cashCompass: cashCompassDisplay,
+          imported: plaidMainFormatPercent_(importedNum) + ' (' + plaidMainFactLabel_(preference.sourceSemantic) + ')',
+          change: change,
+          writerField: 'Int Rate',
+          factType: 'INT_RATE',
+          sourceSemantic: preference.sourceSemantic,
+          aprRows: candidates,
+          canChangeAprSource: true,
+          technical: selected
+        }
+      };
+    }
+    return {
+      review: [{
+        item: 'Int Rate',
+        imported: importedSummary,
+        status: 'Needs review',
+        note: 'Previously selected APR source is unavailable from the provider.'
+      }]
+    };
+  }
+  return {
+    ready: {
+      item: 'Int Rate',
+      cashCompass: cashCompassDisplay,
+      imported: importedSummary,
+      change: 'Needs selection',
+      needsAprSelection: true,
+      aprRows: candidates,
+      writerField: 'Int Rate',
+      factType: 'INT_RATE',
+      technical: candidates[0]
+    }
+  };
+}
+
+function plaidMainCanonicalMapForDomain_(domain) {
+  if (domain === 'DEBT') return PLAID_MAIN_DEBT_CANONICAL_;
+  if (domain === 'INVESTMENT') return PLAID_MAIN_INVESTMENT_CANONICAL_;
+  return PLAID_MAIN_CASH_CANONICAL_;
+}
+
+function plaidMainLegacyKeyForFact_(factType) {
+  if (factType === 'NEXT_PAYMENT_DATE') return 'NEXT_PAYMENT_DATE';
+  if (factType === 'AVAILABLE_CREDIT') return 'AVAILABLE_CREDIT';
+  if (factType === 'INT_RATE') return 'APR';
+  return factType;
+}
+
+function plaidMainBuildDomainReview_(accountPreview, domain, preview) {
+  var rows = accountPreview.rows || [];
+  var byType = plaidMainRowByFactType_(rows);
+  var legacy = accountPreview.cashCompassLegacy || {};
+  var canonical = plaidMainCanonicalMapForDomain_(domain);
+  var ready = [];
+  var additional = [];
+  var review = [];
+  var technical = [];
+  var hasMissing = false;
+
+  Object.keys(canonical).forEach(function(factType) {
+    var config = canonical[factType];
+    var previewRow = byType[factType];
+    if (!previewRow) return;
+    var built;
+    if (config.kind === 'dueDate') built = plaidMainBuildDueDateRow_(previewRow, legacy, preview);
+    else if (config.kind === 'date') {
+      built = plaidMainBuildDateRow_(config, previewRow, factType, legacy);
+    } else {
+      built = plaidMainBuildCurrencyRow_(config, previewRow,
+        plaidMainLegacyKeyForFact_(factType), legacy);
+    }
+    if (!built) return;
+    if (built.cashCompass === PLAID_MAIN_MISSING_) hasMissing = true;
+    if (built.technical) technical.push(built.technical);
+    if (config.section === 'ready') ready.push(built);
+    else additional.push(built);
+  });
+
+  if (domain === 'DEBT') {
+    var creditLeftRow = plaidMainBuildDerivedCreditLeftRow_(byType, legacy);
+    if (creditLeftRow) {
+      if (creditLeftRow.cashCompass === PLAID_MAIN_MISSING_) hasMissing = true;
+      ready.push(creditLeftRow);
+    }
+    var providerAvailable = plaidMainBuildProviderAvailableCreditRow_(byType.AVAILABLE_CREDIT, legacy);
+    if (providerAvailable) {
+      additional.push(providerAvailable);
+      if (providerAvailable.technical) technical.push(providerAvailable.technical);
+    }
+    var aprResult = plaidMainBuildIntRateReview_(
+      plaidMainCollectAprRows_(rows), legacy, accountPreview.aprSourcePreference || null);
+    if (aprResult && aprResult.ready) {
+      ready.push(aprResult.ready);
+      if (aprResult.ready.technical) technical.push(aprResult.ready.technical);
+    } else if (aprResult && aprResult.review) {
+      review = review.concat(aprResult.review);
+    }
+  }
+
+  return { ready: ready, additional: additional, review: review, technical: technical, hasMissing: hasMissing };
+}
+
+function plaidMainRenderInlineAprControls_(domain, connection, account, row, container) {
+  if (!row || !row.aprRows || !row.aprRows.length) return;
+  var mapping = account.mapping || {};
+  var editKey = plaidMainAssociationKey_(connection, account);
+  var wrap = plaidMainElement_('div', 'plaid-main-inline-apr');
+  if (row.canChangeAprSource && !plaidMainState_.aprSourceEditing[editKey]) {
+    var toggle = plaidMainElement_('button', 'small-btn plaid-main-apr-source-toggle', 'Change APR source');
+    toggle.type = 'button';
+    toggle.addEventListener('click', function() {
+      plaidMainState_.aprSourceEditing[editKey] = true;
+      plaidMainRenderDomain_(domain);
+    });
+    container.appendChild(toggle);
+    return;
+  }
+  row.aprRows.forEach(function(aprRow) {
+    var shortLabel = plaidMainFactLabel_(aprRow.factType).replace(/ APR/i, '');
+    wrap.appendChild(plaidMainButton_('Use ' + shortLabel, 'small-btn', function() {
+      plaidMainSaveAprPreference_(domain, connection, account, mapping.stableAccountId, aprRow.factType);
+      plaidMainState_.aprSourceEditing[editKey] = false;
+    }, { title: 'Sets Int Rate source for review — Apply not enabled yet' }));
+  });
+  container.appendChild(wrap);
+}
+
+function plaidMainRenderComparisonTable_(title, rows, options) {
+  if (!rows.length) return null;
+  options = options || {};
+  var wrap = plaidMainElement_('div', 'plaid-main-review-section');
+  wrap.appendChild(plaidMainElement_('div', 'plaid-main-review-heading', title));
+  var table = plaidMainElement_('table', 'plaid-main-comparison-table');
+  var thead = document.createElement('thead');
+  var headerRow = document.createElement('tr');
+  (options.columns || ['Item', 'CashCompass', 'Imported', 'Change']).forEach(function(label, index) {
+    var th = document.createElement('th');
+    th.textContent = label;
+    if (index > 0) th.className = 'plaid-main-num';
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+  var tbody = document.createElement('tbody');
+  rows.forEach(function(row) {
+    var tr = document.createElement('tr');
+    tr.className = plaidMainChangeRowClass_(row);
+    var cells = options.needsReview
+      ? [{ key: 'item', label: 'Item' }, { key: 'imported', label: 'Imported' }, { key: 'status', label: 'Status' }]
+      : [{ key: 'item', label: 'Item' }, { key: 'cashCompass', label: 'CashCompass' },
+        { key: 'imported', label: 'Imported' }, { key: 'change', label: 'Change' }];
+    cells.forEach(function(cell) {
+      var td = document.createElement('td');
+      td.setAttribute('data-label', cell.label);
+      if (cell.key !== 'item') td.className = 'plaid-main-num';
+      if (cell.key === 'change') {
+        td.className = (td.className ? td.className + ' ' : '') + 'plaid-main-change-cell';
+      }
+      if (cell.key === 'change' && (row.needsAprSelection || row.canChangeAprSource)) {
+        td.appendChild(plaidMainElement_('span', '', String(row[cell.key] || PLAID_MAIN_MISSING_)));
+        if (options.renderAprControls) {
+          plaidMainRenderInlineAprControls_(options.domain, options.connection, options.account, row, td);
+        }
+      } else {
+        td.textContent = String(row[cell.key] || PLAID_MAIN_MISSING_);
+      }
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  if (options.footnote) {
+    wrap.appendChild(plaidMainElement_('div', 'plaid-main-footnote muted', options.footnote));
+  }
+  return wrap;
+}
+
+function plaidMainSaveAprPreference_(domain, connection, account, stableAccountId, sourceSemantic) {
+  plaidMainSetStatus_(domain, 'Saving APR source preference…', false);
+  plaidMainCall_('plaidImportSaveAprSourcePreference', {
+    protectedConnectionKey: connection.protectedConnectionKey,
+    protectedAccountKey: account.protectedAccountKey,
+    stableAccountId: stableAccountId,
+    sourceSemantic: sourceSemantic
+  }, function(result) {
+    var previewKey = String(connection.protectedConnectionKey || '');
+    var preview = plaidMainState_.previews[previewKey];
+    if (preview && preview.accounts) {
+      preview.accounts.forEach(function(accountPreview) {
+        if (String(accountPreview.protectedAccountKey || '') !== String(account.protectedAccountKey || '')) return;
+        accountPreview.aprSourcePreference = result.preference || { sourceSemantic: sourceSemantic };
+      });
+    }
+    plaidMainSetStatus_(domain, 'APR source preference saved for review.', false);
+    plaidMainRenderDomain_(domain);
+  }, function(err) {
+    plaidMainSetStatus_(domain, plaidMainUserMessage_(err), true);
+  });
+}
+
+function plaidMainRenderTechnicalDetails_(technicalRows, observedAt) {
+  if (!technicalRows.length && !observedAt) return null;
+  var details = plaidMainElement_('details', 'plaid-main-technical');
+  details.style.marginTop = '10px';
+  var summary = document.createElement('summary');
+  summary.textContent = 'Technical details';
+  details.appendChild(summary);
+  if (observedAt) {
+    details.appendChild(plaidMainElement_('div', 'muted',
+      'Observed: ' + plaidMainFormatImportedAt_(observedAt)));
+  }
+  technicalRows.forEach(function(row) {
+    if (!row) return;
+    var parts = [];
+    if (row.factType) parts.push(String(row.factType));
+    if (row.candidate && row.candidate.sourceSemantic) parts.push(row.candidate.sourceSemantic);
+    if (row.effectiveAsOf) parts.push('effective ' + row.effectiveAsOf);
+    if (row.reason) parts.push(row.reason);
+    if (parts.length) {
+      details.appendChild(plaidMainElement_('div', 'muted', parts.join(' · ')));
+    }
+  });
+  return details;
+}
+
+function plaidMainRenderPreviewAccount_(domain, connection, account, accountCard, preview) {
+  var accountPreview = (preview.accounts || []).filter(function(row) {
+    return String(row.protectedAccountKey || '') === String(account.protectedAccountKey || '');
+  })[0];
+  if (!accountPreview) return;
+
+  var accountDomain = plaidMainAccountDomain_(account);
+  var panel = plaidMainElement_('div', 'plaid-main-review-panel');
+  var reviewWrap = plaidMainElement_('div', 'plaid-main-review');
+  reviewWrap.appendChild(plaidMainElement_('div', 'plaid-main-review-title', 'Review imported changes'));
+
+  if (!(accountPreview.rows || []).length) {
+    reviewWrap.appendChild(plaidMainElement_('div', 'muted',
+      accountDomain === 'INVESTMENT'
+        ? 'Investment import comparison is not yet supported for this account.'
+        : 'No imported fields are available to review.'));
+    panel.appendChild(reviewWrap);
+    accountCard.appendChild(panel);
+    return;
+  }
+
+  var groups = plaidMainBuildDomainReview_(accountPreview, accountDomain, preview);
+  var footnote = groups.hasMissing ? PLAID_MAIN_MISSING_NOTE_ : '';
+  var tableOptions = {
+    footnote: footnote,
+    domain: domain,
+    connection: connection,
+    account: account,
+    renderAprControls: true
+  };
+
+  var changesTable = plaidMainRenderComparisonTable_('Changes to review', groups.ready, tableOptions);
+  var additionalTable = plaidMainRenderComparisonTable_('Additional information', groups.additional, tableOptions);
+  var reviewTable = plaidMainRenderComparisonTable_('Needs review', groups.review, {
+    needsReview: true,
+    columns: ['Item', 'Imported', 'Status']
+  });
+
+  if (changesTable) reviewWrap.appendChild(changesTable);
+  if (additionalTable) reviewWrap.appendChild(additionalTable);
+  if (reviewTable) reviewWrap.appendChild(reviewTable);
+
+  var technical = plaidMainRenderTechnicalDetails_(groups.technical, preview.observedAt);
+  if (technical) reviewWrap.appendChild(technical);
+
+  reviewWrap.appendChild(plaidMainElement_('div', 'plaid-main-review-note muted',
+    'Review only — no CashCompass values have been changed.'));
+  panel.appendChild(reviewWrap);
+  accountCard.appendChild(panel);
+}
+
+function plaidMainRenderAssociationSelect_(domain, connection, account, container) {
+  var mapping = account.mapping || { status: 'UNMATCHED', stableAccountId: '' };
+  var row = plaidMainElement_('div', 'tracked-editor-actions');
+  row.style.marginTop = '8px';
+  row.style.alignItems = 'flex-end';
+  var field = plaidMainElement_('div', '');
+  field.style.flex = '1 1 320px';
+  field.appendChild(plaidMainElement_('label', 'muted', 'CashCompass account'));
+  var select = document.createElement('select');
+  select.setAttribute('aria-label', 'CashCompass account');
+  select.style.width = '100%';
+  select.style.marginTop = '4px';
+  var placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Select CashCompass account';
+  select.appendChild(placeholder);
+  plaidMainTargetsForAccount_(account).forEach(function(target) {
+    var option = document.createElement('option');
+    option.value = String(target.stableAccountId || '');
+    option.textContent = String(target.accountName || target.displayName || 'CashCompass account');
+    if (option.value && option.value === String(mapping.stableAccountId || '')) option.selected = true;
+    select.appendChild(option);
+  });
+  field.appendChild(select);
+  row.appendChild(field);
+  row.appendChild(plaidMainButton_('Confirm', 'small-btn', function() {
+    if (!select.value) {
+      plaidMainSetStatus_(domain, 'Select a CashCompass account first.', true);
+      return;
+    }
+    plaidMainSaveMapping_(domain, connection.protectedConnectionKey,
+      account.protectedAccountKey, select.value, 'CONFIRMED');
+  }));
+  container.appendChild(row);
+}
+
+function plaidMainRenderAssociation_(domain, connection, account, accountCard) {
+  var mapping = account.mapping || { status: 'UNMATCHED', stableAccountId: '' };
+  var assocKey = plaidMainAssociationKey_(connection, account);
+  var editing = !!plaidMainState_.associationEditing[assocKey];
+  var section = plaidMainElement_('div', '');
+  section.style.marginTop = '8px';
+
+  if (mapping.status === 'CONFIRMED' && !editing) {
+    var associated = plaidMainElement_('div', 'tracked-editor-actions');
+    associated.style.marginTop = '0';
+    associated.style.alignItems = 'center';
+    var label = plaidMainElement_('div', '',
+      'CashCompass account: ' + plaidMainTargetLabel_(mapping.stableAccountId, account) + ' ✓');
+    label.style.flex = '1 1 auto';
+    associated.appendChild(label);
+    associated.appendChild(plaidMainButton_('Change', 'small-btn', function() {
+      plaidMainState_.associationEditing[assocKey] = true;
+      plaidMainRenderDomain_(domain);
+    }));
+    section.appendChild(associated);
+  } else if (mapping.status === 'IGNORED' && !editing) {
+    section.appendChild(plaidMainElement_('div', 'muted', 'This provider account is ignored.'));
+    section.appendChild(plaidMainButton_('Choose CashCompass account', 'small-btn', function() {
+      plaidMainState_.associationEditing[assocKey] = true;
+      plaidMainRenderDomain_(domain);
+    }));
+  } else {
+    plaidMainRenderAssociationSelect_(domain, connection, account, section);
+  }
+  accountCard.appendChild(section);
+}
+
+function plaidMainRenderAccountActions_(domain, connection, account, accountCard) {
+  var mapping = account.mapping || { status: 'UNMATCHED', stableAccountId: '' };
+  var assocKey = plaidMainAssociationKey_(connection, account);
+  var actions = plaidMainElement_('div', 'tracked-editor-actions');
+  actions.style.marginTop = '12px';
+  actions.style.alignItems = 'center';
+
+  if (mapping.status === 'CONFIRMED' &&
+      String(connection.lifecycleStatus || '') === 'ACTIVE') {
+    actions.appendChild(plaidMainButton_('Import Data', 'small-btn primary', function() {
+      plaidMainImportData_(domain, connection.protectedConnectionKey, account.protectedAccountKey);
+    }));
+  }
+
+  var manageKey = assocKey;
+  actions.appendChild(plaidMainButton_('Manage connection', 'small-btn', function() {
+    plaidMainState_.manageConnectionOpen[manageKey] = !plaidMainState_.manageConnectionOpen[manageKey];
+    plaidMainRenderDomain_(domain);
+  }));
+  accountCard.appendChild(actions);
+
+  if (plaidMainState_.manageConnectionOpen[manageKey]) {
+    var manage = plaidMainElement_('div', 'tracked-editor-actions');
+    manage.style.marginTop = '8px';
+    manage.appendChild(plaidMainButton_('Reconnect', 'small-btn', function() {
+      plaidMainReconnect_(domain, connection.protectedConnectionKey);
+    }));
+    manage.appendChild(plaidMainButton_('Disconnect', 'small-btn', function() {
+      plaidMainAskDisconnect_(domain, connection);
+    }));
+    accountCard.appendChild(manage);
+  }
+}
+
+function plaidMainRenderDomain_(domain) {
+  var targetDomain = plaidMainDomain_(domain);
+  var root = document.getElementById(plaidMainIds_(targetDomain).connections);
+  if (!root) return;
+  root.textContent = '';
+  var entries = plaidMainConnectionsForDomain_(targetDomain);
+  if (!entries.length) {
+    root.appendChild(plaidMainElement_('p', 'muted',
+      'No connected ' + plaidMainDomainLabel_(targetDomain) + '.'));
+    return;
+  }
+  entries.forEach(function(entry) {
+    var connection = entry.connection;
+    var card = plaidMainElement_('section', 'card');
+    card.style.marginTop = '12px';
+    var heading = plaidMainElement_('div', 'card-title', connection.institutionName || 'Institution');
+    var connected = String(connection.lifecycleStatus || '') === 'ACTIVE';
+    var badge = plaidMainElement_('span', 'muted', connected ? 'Connected ✓' : 'Reconnect required');
+    badge.style.marginLeft = '8px';
+    heading.appendChild(badge);
+    card.appendChild(heading);
+
+    entry.accounts.forEach(function(account) {
+      var accountCard = plaidMainElement_('div', 'info');
+      accountCard.style.marginTop = '10px';
+      var title = (account.displayName || account.officialName || 'Financial account') +
+        (account.mask ? ' ••••' + account.mask : '');
+      accountCard.appendChild(plaidMainElement_('strong', '', title));
+      accountCard.appendChild(plaidMainElement_('span', 'muted',
+        '  ' + String(account.type || 'unknown').toUpperCase() +
+        (account.subtype ? ' · ' + account.subtype : '')));
+      plaidMainRenderAssociation_(targetDomain, connection, account, accountCard);
+
+      var importedAt = plaidMainState_.lastImported[String(account.protectedAccountKey || '')] || '';
+      accountCard.appendChild(plaidMainElement_('div', 'muted',
+        'Last imported: ' + (importedAt ? plaidMainFormatImportedAt_(importedAt) : 'Not yet imported')));
+
+      var preview = plaidMainState_.previews[String(connection.protectedConnectionKey || '')];
+      if (preview && (account.mapping || {}).status === 'CONFIRMED') {
+        plaidMainRenderPreviewAccount_(targetDomain, connection, account, accountCard, preview);
+      }
+      plaidMainRenderAccountActions_(targetDomain, connection, account, accountCard);
+      card.appendChild(accountCard);
+    });
+    root.appendChild(card);
+  });
+}
+
+function plaidMainSaveMapping_(domain, connectionKey, accountKey, stableAccountId, status) {
+  plaidMainSetStatus_(domain, 'Saving association…', false);
+  plaidMainCall_('plaidImportSaveMapping', {
+    protectedConnectionKey: connectionKey,
+    protectedAccountKey: accountKey,
+    stableAccountId: stableAccountId,
+    status: status
+  }, function(result) {
+    plaidMainApplyMappingLocally_(connectionKey, accountKey, result.mapping, stableAccountId, status);
+    plaidMainState_.associationEditing[connectionKey + '::' + accountKey] = false;
+    plaidMainSetStatus_(domain,
+      status === 'IGNORED' ? 'Provider account ignored.' : 'CashCompass account associated.', false);
+    plaidMainRenderDomain_(domain);
+  }, function(err) {
+    plaidMainSetStatus_(domain, plaidMainUserMessage_(err), true);
+  });
+}
+
+function plaidMainImportData_(domain, connectionKey, accountKey) {
+  plaidMainSetStatus_(domain, 'Importing provider data…', false);
+  plaidMainCall_('plaidImportPreviewMapped', { protectedConnectionKey: connectionKey }, function(result) {
+    plaidMainState_.previews[String(connectionKey)] = result;
+    if (accountKey) {
+      plaidMainState_.lastImported[String(accountKey)] =
+        result.observedAt || new Date().toISOString();
+    }
+    plaidMainSetStatus_(domain,
+      '✓ Data imported. Review changes below. No CashCompass values have been changed.', false);
+    plaidMainRenderDomain_(domain);
+  }, function(err) {
+    plaidMainSetStatus_(domain, plaidMainUserMessage_(err), true);
+  });
+}
+
+function plaidMainConnect_(domain) {
+  var targetDomain = plaidMainDomain_(domain);
+  if (!window.Plaid || typeof window.Plaid.create !== 'function') {
+    plaidMainSetStatus_(targetDomain, 'Secure Plaid Link is unavailable. Refresh and try again.', true);
+    return;
+  }
+  plaidMainSetBusy_(targetDomain, true);
+  plaidMainSetStatus_(targetDomain, 'Creating secure Link session…', false);
+  plaidMainCall_('plaidImportInitializeConnection', undefined, function(result) {
+    var authorizationCompleted = false;
+    var handler = window.Plaid.create({
+      token: result.linkToken,
+      onSuccess: function(publicToken, metadata) {
+        authorizationCompleted = true;
+        plaidMainCall_('plaidImportExchangePublicToken', {
+          publicToken: publicToken,
+          correlationId: result.correlationId,
+          institutionId: String(metadata && metadata.institution && metadata.institution.institution_id || '')
+        }, function() {
+          plaidMainState_.data = null;
+          plaidMainSetBusy_(targetDomain, false);
+          plaidMainSetStatus_(targetDomain, 'Institution connected.', false);
+          loadPlaidConnectedAccounts_(true, targetDomain);
+        }, function() {
+          plaidMainSetBusy_(targetDomain, false);
+          plaidMainSetStatus_(targetDomain, PLAID_MAIN_UNAVAILABLE_, true);
+        });
+      },
+      onExit: function(error) {
+        if (!authorizationCompleted) plaidMainSetBusy_(targetDomain, false);
+        if (error) plaidMainSetStatus_(targetDomain, 'Link ended before connection.', true);
+      }
+    });
+    handler.open();
+  }, function() {
+    plaidMainSetBusy_(targetDomain, false);
+    plaidMainSetStatus_(targetDomain, PLAID_MAIN_UNAVAILABLE_, true);
+  });
+}
+
+function plaidMainReconnect_(domain, connectionKey) {
+  var targetDomain = plaidMainDomain_(domain);
+  plaidMainSetStatus_(targetDomain, 'Opening secure reconnect…', false);
+  plaidMainCall_('plaidImportReconnect', { protectedConnectionKey: connectionKey }, function(result) {
+    window.Plaid.create({
+      token: result.linkToken,
+      onSuccess: function() {
+        plaidMainCall_('plaidImportCompleteReconnect', {
+          protectedConnectionKey: connectionKey,
+          correlationId: result.correlationId
+        }, function() {
+          plaidMainState_.data = null;
+          plaidMainSetStatus_(targetDomain, 'Connection restored.', false);
+          loadPlaidConnectedAccounts_(true, targetDomain);
+        });
+      },
+      onExit: function(error) {
+        if (error) plaidMainSetStatus_(targetDomain, 'Reconnect ended before completion.', true);
+      }
+    }).open();
+  }, function(err) {
+    plaidMainSetStatus_(targetDomain, plaidMainUserMessage_(err), true);
+  });
+}
+
+function plaidMainAskDisconnect_(domain, connection) {
+  plaidMainState_.pendingDisconnectKey = String(connection.protectedConnectionKey || '');
+  plaidMainState_.pendingDisconnectDomain = plaidMainDomain_(domain);
+  var summary = document.getElementById('plaid_main_disconnect_summary');
+  if (summary) summary.textContent = 'Disconnect ' + String(connection.institutionName || 'this institution') + '?';
+  var dialog = document.getElementById('plaid_main_disconnect_confirm');
+  if (dialog) dialog.style.display = 'block';
+}
+
+function plaidMainCancelDisconnect_() {
+  plaidMainState_.pendingDisconnectKey = '';
+  var dialog = document.getElementById('plaid_main_disconnect_confirm');
+  if (dialog) dialog.style.display = 'none';
+}
+
+function plaidMainConfirmDisconnect_() {
+  var key = plaidMainState_.pendingDisconnectKey;
+  var domain = plaidMainState_.pendingDisconnectDomain || 'CASH';
+  if (!key) return;
+  plaidMainCancelDisconnect_();
+  plaidMainSetStatus_(domain, 'Disconnecting institution…', false);
+  plaidMainCall_('plaidImportDisconnect', { protectedConnectionKey: key }, function() {
+    plaidMainState_.data = null;
+    delete plaidMainState_.previews[key];
+    plaidMainSetStatus_(domain, 'Institution disconnected.', false);
+    loadPlaidConnectedAccounts_(true, domain);
+  }, function(err) {
+    plaidMainSetStatus_(domain, plaidMainUserMessage_(err), true);
+  });
+}

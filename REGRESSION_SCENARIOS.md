@@ -1596,6 +1596,67 @@ Whenever a production bug is fixed:
   keys; Debt Import pins exact Chase profile metadata and rejects canonical APR;
   Data readiness proves statement balance is nonblocking in V1.
 
+### REG-074 — A completed institution authorization could expire locally and consume a duplicate Trial Item
+
+- Category: REGRESSION / PLAID LINK / DUPLICATE PREVENTION / TRIAL CAPACITY
+- Date discovered: 2026-08-24
+- Status: fixed and deployed; focused/full validation passed; the next BofA
+  connection consumed exactly one Trial Item
+- Root cause: CashCompass reduced every provider-returned Link expiration to 15
+  minutes. A longer Chase OAuth flow could therefore finish within Plaid's valid
+  initial-Link window but fail CashCompass correlation, inviting a second normal
+  Link that represented the same institution/account.
+- Expected result: New Link sessions honor the provider-returned expiration up
+  to the documented four-hour maximum; Update Mode uses its separate 30-minute
+  maximum. Missing, elapsed, or invalid provider expiration fails closed. An
+  expired new-Link success callback becomes `COMPLETION_REVIEW_REQUIRED`, and a
+  later normal Link is blocked until that unresolved completion is reviewed.
+  An exchange still marked `EXCHANGING` also blocks a new Link across reloads
+  or tabs. The browser prevents re-entrant Connect and keeps retry disabled
+  after an ambiguous post-authorization exchange failure.
+- Permanent coverage: Plaid backend tests prove a 31-minute OAuth completion is
+  accepted, invalid expiration creates no session, expired CREATE completion is
+  quarantined, unresolved exchange state blocks retry across reloads/tabs, and
+  a second provider Link call is refused. Plaid import source regression pins
+  the browser's in-flight and ambiguous-failure guards.
+
+### REG-075 — Central and bounded could diverge into separate Plaid experiences
+
+- Risk: an iframe, redirect, standalone Plaid page, bounded-only UI, or
+  browser-trusted workbook/user identity could create two product designs,
+  expose an OAuth error, or route connected evidence to the wrong authority.
+- Required behavior: Bank Accounts, Debts, and Investments render the same
+  native inline Connected client in Central and bounded. Runtime mode,
+  authenticated user, environment, protected backend subject, and workbook are
+  server-derived; bounded active and resolved workbook IDs must match.
+  Browser-supplied authority fields fail closed. Unknown runtime modes fail
+  closed. A Connected failure leaves the dashboard usable and shows exactly
+  `Connected data is temporarily unavailable.` inside the affected panel.
+- Safety boundary: no iframe, redirect, second tab, separate Plaid page,
+  duplicated provider infrastructure, Apply control, canonical financial
+  writer, workbook write, or new/reconnected Item is permitted by this
+  regression.
+- Permanent coverage: `checkPlaidImportRegressions.mjs`,
+  `checkPlaidMainAppRegressions.mjs`, and `checkPlaidBridgeRegressions.mjs`
+  pin the bounded scope, explicit modes, bounded workbook equality, browser
+  authority rejection, shared native client, domain filtering, failure
+  isolation, and no-Apply boundary.
+
+### REG-076 — A future Plaid Apply could omit or leak audit evidence
+
+- Risk: a later approved canonical mutation could be unauditable or could place
+  provider secrets/raw identifiers in Activity Log.
+- Required behavior: there is no Apply writer at this checkpoint. Any later
+  separately approved successful mutation must log the sanitized canonical
+  entity/field, prior/new values, timestamp, source `PLAID`, explicit user
+  approval, observed time, and effective time when supplied. Refreshes,
+  ignored/rejected candidates, failed previews, and comparison-only mappings
+  are not financial updates.
+- Prohibited evidence: credentials, access tokens, Item IDs, raw account IDs,
+  raw payloads, and secrets never enter Activity Log.
+- Permanent coverage: the Plaid import regression pins this documentation
+  contract and continues to reject any current Apply or financial writer.
+
 ---
 
 ## 3a loading-state consistency coverage
@@ -1741,4 +1802,7 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-071 | Historical-only Investment names appeared as current editable accounts | REGRESSION / ENTITY LIFECYCLE / CROSS-SHEET CONSISTENCY / UI TRUTH | fixed; full regressions + isolated `@343` Populated 26/26 PASS with exact Investment lifecycle assertion, Restricted sharing, zero browser errors, verified Trash, and `active: null` |
 | REG-072 | Manage Donations could not capture a check number | REGRESSION / UI CORRECTNESS / DONATION EDITING | fixed locally; focused/full local regressions passed |
 | REG-073 | Chase statement facts could blur source and Planning semantics | REGRESSION / FINANCIAL FACTS / IDENTITY / REPLAY / PRIVACY | Phase A implemented locally; focused/full local regressions passed |
+| REG-074 | Completed institution authorization expired locally and allowed duplicate Trial consumption | REGRESSION / PLAID LINK / DUPLICATE PREVENTION / TRIAL CAPACITY | fixed and deployed; focused/full validation passed; next BofA connection consumed exactly one Trial Item |
+| REG-075 | Central and bounded could diverge into separate Plaid experiences | REGRESSION / PLAID UX / AUTHORITY / FAILURE ISOLATION | fixed locally; focused/full local validation passed; bounded owner push/authorization pending |
+| REG-076 | A future Plaid Apply could omit or leak audit evidence | REGRESSION / PLAID APPLY / ACTIVITY LOG / SENSITIVE DATA | contract pinned locally; no Apply writer exists; future implementation remains separately approval-gated |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

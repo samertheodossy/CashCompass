@@ -234,6 +234,17 @@ function getHarnessSuites_() {
       ]
     },
     {
+      id: 'SUITE-PLAID-SANDBOX-CONNECTIVITY',
+      label: 'Plaid Sandbox Connectivity',
+      description: 'Guarded non-admin Sandbox Link, one-time exchange, encrypted connection discovery, runtime secret-access status, and Disconnect lifecycle. No workbook or Financial Facts writes.',
+      implemented: true,
+      runner: 'browser',
+      browserRoute: 'plaid-sandbox',
+      evidenceKey: 'PLAID_SANDBOX_LATEST_EVIDENCE_V1',
+      blocker: 'Requires separately approved Cloud Run deployment and synthetic Plaid Sandbox lifecycle proof.',
+      scenarioIds: []
+    },
+    {
       id: 'SUITE-FIRST-RUN-UX-E2E',
       label: 'First-Run UX E2E',
       description: 'Browser-driven fresh Central provisioning, Setup, navigation, gating, Retirement prerequisite guidance, Help, real Refresh state, clean-console checks, and verified Trash cleanup.',

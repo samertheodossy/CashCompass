@@ -50,7 +50,8 @@ function loadDebtSection() {
       populateDebtAddDatalists_(data);
       populateDebtPropertyOptions_(data && data.propertyOptions);
       filterDebtAccounts();
-      if (data && Array.isArray(data.debts) && data.debts.length === 0) {
+      if (data && Array.isArray(data.debts) && data.debts.length === 0 &&
+          currentTrackedEditorMode_('debt', ['update', 'add', 'manage', 'connected']) === 'update') {
         setDebtPanelMode('add');
       }
 
@@ -276,18 +277,20 @@ function updateDebtLinkedPropertyVisibility_(mode) {
 }
 
 function setDebtPanelMode(mode) {
-  const modes = ['update', 'add', 'manage'];
+  const modes = ['update', 'add', 'manage', 'connected'];
   if (modes.indexOf(mode) === -1) mode = 'update';
 
   const wraps = {
     update: document.getElementById('debt_mode_update_wrap'),
     add: document.getElementById('debt_mode_add_wrap'),
-    manage: document.getElementById('debt_mode_manage_wrap')
+    manage: document.getElementById('debt_mode_manage_wrap'),
+    connected: document.getElementById('debt_mode_connected_wrap')
   };
   const btns = {
     update: document.getElementById('debt_mode_update_btn'),
     add: document.getElementById('debt_mode_add_btn'),
-    manage: document.getElementById('debt_mode_manage_btn')
+    manage: document.getElementById('debt_mode_manage_btn'),
+    connected: document.getElementById('debt_mode_connected_btn')
   };
 
   modes.forEach(function(m) {
@@ -316,6 +319,9 @@ function setDebtPanelMode(mode) {
     // Eager-load the inactive list (kept collapsed) so the toggle can show the
     // count, e.g. "Show inactive debts (2)".
     if (typeof refreshInactiveDebts_ === 'function') refreshInactiveDebts_();
+  }
+  if (mode === 'connected' && typeof loadPlaidConnectedAccounts_ === 'function') {
+    loadPlaidConnectedAccounts_(false, 'DEBT');
   }
 }
 

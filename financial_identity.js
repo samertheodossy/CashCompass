@@ -33,22 +33,65 @@ var FINANCIAL_IDENTITY_REGISTRATION_TYPES_ = {
   PROPERTY_TITLE: true, UNKNOWN: true
 };
 
+var FINANCIAL_ACCOUNT_CANONICAL_WIDTHS_ = {
+  'Stable Account Id': 180,
+  'Domain': 100,
+  'Display Name': 240,
+  'Institution': 180,
+  'Account Type': 150,
+  'Account Subtype': 140,
+  'Owner Id': 120,
+  'Registration Type': 150,
+  'Currency': 90,
+  'Last 4': 80,
+  'Active': 90,
+  'Identity Status': 150,
+  'Legacy Domain': 140,
+  'Legacy Key': 200,
+  'Created At': 170,
+  'Updated At': 170
+};
+
+var ACCOUNT_SOURCE_LINK_CANONICAL_WIDTHS_ = {
+  'Source Link Id': 180,
+  'Stable Account Id': 180,
+  'Source Type': 120,
+  'Source System': 180,
+  'Source Account Key': 260,
+  'Masked Identifier': 140,
+  'Institution': 180,
+  'Source Account Type': 150,
+  'Link Status': 130,
+  'Linked At': 170,
+  'Verified At': 170
+};
+
 function ensureFinancialAccountsSheet_(optionalSs) {
   var ss = optionalSs || getUserSpreadsheet_();
   return ensureFinancialIdentitySheet_(ss, getSheetNames_().FINANCIAL_ACCOUNTS,
-    FINANCIAL_ACCOUNT_HEADERS_);
+    FINANCIAL_ACCOUNT_HEADERS_, FINANCIAL_ACCOUNT_CANONICAL_WIDTHS_);
 }
 
 function ensureAccountSourceLinksSheet_(optionalSs) {
   var ss = optionalSs || getUserSpreadsheet_();
   return ensureFinancialIdentitySheet_(ss, getSheetNames_().ACCOUNT_SOURCE_LINKS,
-    ACCOUNT_SOURCE_LINK_HEADERS_);
+    ACCOUNT_SOURCE_LINK_HEADERS_, ACCOUNT_SOURCE_LINK_CANONICAL_WIDTHS_);
 }
 
-function ensureFinancialIdentitySheet_(ss, sheetName, headers) {
+function financialIdentityApplyFirstCreateStyle_(sheet, widthByHeader) {
+  if (typeof applySysSheetBaseStyle_ !== 'function' || !sheet) return;
+  try { applySysSheetBaseStyle_(sheet, widthByHeader); } catch (_formatErr) { /* cosmetic only */ }
+}
+
+function ensureFinancialIdentitySheet_(ss, sheetName, headers, widthByHeader) {
   var existing = ss.getSheetByName(sheetName);
   if (existing) {
-    financialIdentityAssertHeaders_(existing, headers);
+    if (existing.getLastRow() >= 2) {
+      financialIdentityAssertHeaders_(existing, headers);
+      return existing;
+    }
+    existing.getRange(1, 1, 1, headers.length).setValues([headers]);
+    financialIdentityApplyFirstCreateStyle_(existing, widthByHeader);
     return existing;
   }
   var sheet;
@@ -57,16 +100,16 @@ function ensureFinancialIdentitySheet_(ss, sheetName, headers) {
   } catch (e) {
     sheet = ss.getSheetByName(sheetName);
     if (!sheet) throw e;
-    financialIdentityAssertHeaders_(sheet, headers);
+    if (sheet.getLastRow() >= 2) {
+      financialIdentityAssertHeaders_(sheet, headers);
+      return sheet;
+    }
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    financialIdentityApplyFirstCreateStyle_(sheet, widthByHeader);
     return sheet;
   }
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  try {
-    sheet.getRange(1, 1, 1, headers.length)
-      .setFontWeight('bold').setBackground('#ffe599')
-      .setHorizontalAlignment('center');
-    sheet.setFrozenRows(1);
-  } catch (_formatErr) { /* first-create presentation only */ }
+  financialIdentityApplyFirstCreateStyle_(sheet, widthByHeader);
   return sheet;
 }
 
@@ -337,41 +380,65 @@ function applyFinancialIdentityFoundationFromDashboard(payload) {
   }
 }
 
+function financialIdentityRollbackPartialApply_(ss, headerOnlyAccountSheet, rowsWritten) {
+  if (rowsWritten > 0 || !headerOnlyAccountSheet) return;
+  var sheet = ss.getSheetByName(getSheetNames_().FINANCIAL_ACCOUNTS);
+  if (!sheet || sheet.getLastRow() >= 2) return;
+  try { ss.deleteSheet(sheet); } catch (_deleteErr) { /* best effort */ }
+}
+
 function applyFinancialIdentityFoundation_(ss, expectedDigest) {
   var preview = buildFinancialIdentityFoundationPreview_(ss);
   if (!expectedDigest || expectedDigest !== preview.digest) {
     throw new Error('Identity preview changed. Review the latest preview before applying.');
   }
-  var accountSheet = ensureFinancialAccountsSheet_(ss);
-  var linkSheet = ensureAccountSourceLinksSheet_(ss);
-  var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  var pendingRows = preview.accounts.filter(function(row) {
+    return row.action !== 'EXISTING' && row.action !== 'CONFLICT';
+  });
+  if (!pendingRows.length) {
+    return { ok: true, created: 0, adopted: 0,
+      conflicts: preview.summary.conflicts, linksCreated: 0 };
+  }
+  var priorAccountSheet = ss.getSheetByName(getSheetNames_().FINANCIAL_ACCOUNTS);
+  var headerOnlyAccountSheet = !priorAccountSheet || priorAccountSheet.getLastRow() < 2;
+  var accountSheet = null;
+  var linkSheet = null;
+  var rowsWritten = 0;
   var created = 0;
   var adopted = 0;
   var linksCreated = 0;
-  preview.accounts.forEach(function(row) {
-    if (row.action === 'EXISTING' || row.action === 'CONFLICT') return;
-    var stableId = row.adoptedStableId || financialIdentityGenerateStableAccountId_(row.domain);
-    accountSheet.appendRow([
-      stableId, row.domain, row.displayName, row.institution, row.accountType,
-      row.accountSubtype, row.ownerId, row.registrationType, row.currency,
-      row.last4, row.active ? 'Yes' : 'No', row.identityStatus,
-      row.legacyDomain, row.legacyKey, now, now
-    ]);
-    if (row.adoptedStableId) adopted++; else created++;
-    if (row.sourceLink && row.sourceLink.sourceAccountKey) {
-      linkSheet.appendRow([
-        'LINK-' + Utilities.getUuid(), stableId, row.sourceLink.sourceType,
-        row.sourceLink.sourceSystem, row.sourceLink.sourceAccountKey,
-        row.sourceLink.maskedIdentifier, row.sourceLink.institution,
-        row.sourceLink.sourceAccountType, row.sourceLink.linkStatus, now,
-        row.sourceLink.linkStatus === 'VERIFIED' ? now : ''
+  var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  try {
+    accountSheet = ensureFinancialAccountsSheet_(ss);
+    pendingRows.forEach(function(row) {
+      var stableId = row.adoptedStableId || financialIdentityGenerateStableAccountId_(row.domain);
+      accountSheet.appendRow([
+        stableId, row.domain, row.displayName, row.institution, row.accountType,
+        row.accountSubtype, row.ownerId, row.registrationType, row.currency,
+        row.last4, row.active ? 'Yes' : 'No', row.identityStatus,
+        row.legacyDomain, row.legacyKey, now, now
       ]);
-      linksCreated++;
-    }
-  });
-  SpreadsheetApp.flush();
-  return { ok: true, created: created, adopted: adopted,
-    conflicts: preview.summary.conflicts, linksCreated: linksCreated };
+      rowsWritten += 1;
+      if (row.adoptedStableId) adopted++; else created++;
+      if (row.sourceLink && row.sourceLink.sourceAccountKey) {
+        if (!linkSheet) linkSheet = ensureAccountSourceLinksSheet_(ss);
+        linkSheet.appendRow([
+          'LINK-' + Utilities.getUuid(), stableId, row.sourceLink.sourceType,
+          row.sourceLink.sourceSystem, row.sourceLink.sourceAccountKey,
+          row.sourceLink.maskedIdentifier, row.sourceLink.institution,
+          row.sourceLink.sourceAccountType, row.sourceLink.linkStatus, now,
+          row.sourceLink.linkStatus === 'VERIFIED' ? now : ''
+        ]);
+        linksCreated++;
+      }
+    });
+    SpreadsheetApp.flush();
+    return { ok: true, created: created, adopted: adopted,
+      conflicts: preview.summary.conflicts, linksCreated: linksCreated };
+  } catch (applyErr) {
+    financialIdentityRollbackPartialApply_(ss, headerOnlyAccountSheet, rowsWritten);
+    throw applyErr;
+  }
 }
 
 function financialIdentityReadRegistry_(ss) {
@@ -489,6 +556,70 @@ function financialIdentityExplicitlyActive_(value) {
     String(value === null || typeof value === 'undefined' ? '' : value).trim().toLowerCase()) !== -1;
 }
 
+function financialIdentityEffectiveStatus_(account) {
+  var code = String(account && account.identityStatus || '').trim().toUpperCase();
+  if (code) return code;
+  return (String(account && account.ownerId || '').trim().toUpperCase() === 'UNKNOWN_REVIEW_REQUIRED' ||
+      String(account && account.registrationType || '').trim().toUpperCase() === 'UNKNOWN')
+    ? 'REVIEW_REQUIRED' : 'VERIFIED';
+}
+
+function financialIdentityIsVerifiedForMatching_(account) {
+  return financialIdentityEffectiveStatus_(account) === 'VERIFIED';
+}
+
+function financialIdentityIsEligibleExplicitComparisonTarget_(account) {
+  if (!account) return false;
+  var explicitStatus = String(account.identityStatus || '').trim().toUpperCase();
+  if (explicitStatus === 'CONFLICT') return false;
+  if (!String(account.stableAccountId || '').trim()) return false;
+  var domain = String(account.domain || '').trim().toUpperCase();
+  // Explicit Plaid mapping is customer-selected by stableAccountId, not
+  // automatic matching. Registry rows remain eligible unless CONFLICT.
+  return domain === 'CASH' || domain === 'DEBT';
+}
+
+function financialIdentityReadExplicitComparisonAccounts_(ss) {
+  var registry = financialIdentityReadRegistry_(ss);
+  var accounts = (registry.accounts || []).slice();
+  var knownLegacy = Object.create(null);
+  accounts.forEach(function(row) {
+    if (row.legacyDomain && row.legacyKey) {
+      knownLegacy[String(row.legacyDomain).toUpperCase() + '::' + row.legacyKey] = true;
+    }
+  });
+  buildFinancialIdentityFoundationPreview_(ss).accounts.forEach(function(row) {
+    if (row.action === 'CONFLICT') return;
+    var domain = String(row.domain || '').trim().toUpperCase();
+    if (domain !== 'DEBT' && domain !== 'CASH') return;
+    var legacyDomain = String(row.legacyDomain || '').trim();
+    var legacyKey = String(row.legacyKey || '').trim();
+    if (!legacyDomain || !legacyKey) return;
+    var composite = legacyDomain.toUpperCase() + '::' + legacyKey;
+    if (knownLegacy[composite]) return;
+    var stableAccountId = String(row.existingStableId || row.adoptedStableId || '').trim();
+    if (!stableAccountId) return;
+    knownLegacy[composite] = true;
+    accounts.push({
+      stableAccountId: stableAccountId,
+      domain: domain,
+      displayName: row.displayName || '',
+      institution: row.institution || '',
+      accountType: row.accountType || '',
+      accountSubtype: row.accountSubtype || '',
+      ownerId: row.ownerId || '',
+      registrationType: row.registrationType || '',
+      currency: row.currency || 'USD',
+      last4: row.last4 || '',
+      active: row.active ? 'Yes' : 'No',
+      identityStatus: row.identityStatus || '',
+      legacyDomain: legacyDomain,
+      legacyKey: legacyKey
+    });
+  });
+  return { accounts: accounts };
+}
+
 function financialIdentityDigest_(value) {
   var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
     String(value || ''), Utilities.Charset.UTF_8);
@@ -604,4 +735,120 @@ function resolveConfirmedStatementSourceAssociation_(request, accounts, existing
       linkStatus: 'VERIFIED'
     }
   };
+}
+
+function financialIdentityFoundationPendingCount_(summary) {
+  summary = summary || {};
+  return Number(summary.adoptReady || 0) + Number(summary.createReady || 0);
+}
+
+/**
+ * Connected Accounts self-init for missing Part 2A identity registry rows.
+ * Uses the canonical preview/apply path only; fails closed on conflicts.
+ */
+function ensureFinancialIdentityFoundationForConnectedAccounts_(ss) {
+  if (!ss) throw new Error('CashCompass workbook is unavailable.');
+  var preview = buildFinancialIdentityFoundationPreview_(ss);
+  if (Number(preview.summary && preview.summary.conflicts || 0) > 0) {
+    throw new Error('FINANCIAL_IDENTITY_REVIEW_REQUIRED');
+  }
+  if (financialIdentityFoundationPendingCount_(preview.summary) <= 0) {
+    return { ok: true, applied: false, reason: 'ALREADY_INITIALIZED' };
+  }
+  var lock = LockService.getDocumentLock();
+  try { lock.waitLock(30000); } catch (lockErr) {
+    throw new Error('CashCompass account identity is unavailable.');
+  }
+  try {
+    preview = buildFinancialIdentityFoundationPreview_(ss);
+    if (Number(preview.summary && preview.summary.conflicts || 0) > 0) {
+      throw new Error('FINANCIAL_IDENTITY_REVIEW_REQUIRED');
+    }
+    if (financialIdentityFoundationPendingCount_(preview.summary) <= 0) {
+      return { ok: true, applied: false, reason: 'ALREADY_INITIALIZED' };
+    }
+    var applyResult = applyFinancialIdentityFoundation_(ss, preview.digest);
+    return {
+      ok: true,
+      applied: true,
+      reason: 'INITIALIZED',
+      createdCount: Number(applyResult.created || 0),
+      adoptedCount: Number(applyResult.adopted || 0),
+      linksCreatedCount: Number(applyResult.linksCreated || 0)
+    };
+  } finally {
+    try { lock.releaseLock(); } catch (_releaseErr) { /* best effort */ }
+  }
+}
+
+function financialIdentityFoundationAssertEditorAdmin_() {
+  if (typeof assertAdmin_ === 'function') {
+    assertAdmin_();
+    return;
+  }
+  throw new Error('Admin access required.');
+}
+
+function financialIdentityFoundationSanitizePreviewResult_(preview) {
+  var summary = preview && preview.summary ? preview.summary : {};
+  var accounts = preview && preview.accounts ? preview.accounts : [];
+  var sourceLinksReadyCount = 0;
+  accounts.forEach(function(row) {
+    if (row.action === 'CONFLICT' || row.action === 'EXISTING') return;
+    if (row.sourceLink && row.sourceLink.sourceAccountKey) sourceLinksReadyCount += 1;
+  });
+  return {
+    ok: true,
+    digest: String(preview && preview.digest || ''),
+    accountCount: Number(summary.total || 0),
+    existingCount: Number(summary.existing || 0),
+    adoptReadyCount: Number(summary.adoptReady || 0),
+    createReadyCount: Number(summary.createReady || 0),
+    conflictCount: Number(summary.conflicts || 0),
+    sourceLinksReadyCount: sourceLinksReadyCount
+  };
+}
+
+function financialIdentityFoundationSanitizeApplyResult_(result) {
+  return {
+    ok: !!(result && result.ok),
+    createdCount: Number(result && result.created || 0),
+    adoptedCount: Number(result && result.adopted || 0),
+    linksCreatedCount: Number(result && result.linksCreated || 0),
+    conflictCount: Number(result && result.conflicts || 0)
+  };
+}
+
+/**
+ * Editor-only, admin-safe preview for Part 2A identity foundation. Read-only.
+ */
+function runFinancialIdentityFoundationPreview() {
+  financialIdentityFoundationAssertEditorAdmin_();
+  var preview = getFinancialIdentityFoundationPreviewFromDashboard();
+  var result = financialIdentityFoundationSanitizePreviewResult_(preview);
+  console.log(JSON.stringify(result));
+  return result;
+}
+
+/**
+ * Editor-only, admin-safe apply for Part 2A identity foundation.
+ * Requires the exact digest returned by runFinancialIdentityFoundationPreview.
+ * Does not preview-and-apply in one step.
+ *
+ * Apps Script Run cannot pass arguments; create a one-run wrapper in the editor:
+ *   function runFinancialIdentityFoundationApplyReviewed() {
+ *     return runFinancialIdentityFoundationApply('PASTE_DIGEST_HERE');
+ *   }
+ */
+function runFinancialIdentityFoundationApply(previewDigest) {
+  financialIdentityFoundationAssertEditorAdmin_();
+  var digest = String(previewDigest || '').trim();
+  if (!digest) {
+    throw new Error('previewDigest is required. Copy the digest from runFinancialIdentityFoundationPreview ' +
+      'and call runFinancialIdentityFoundationApply with that exact value.');
+  }
+  var result = applyFinancialIdentityFoundationFromDashboard({ previewDigest: digest });
+  var sanitized = financialIdentityFoundationSanitizeApplyResult_(result);
+  console.log(JSON.stringify(sanitized));
+  return sanitized;
 }

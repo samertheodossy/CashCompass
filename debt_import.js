@@ -942,6 +942,16 @@ function debtImportIsRevolvingType_(type) {
     !/mortgage|auto|student|property|heloc|margin/i.test(String(type || ''));
 }
 
+function debtImportIsPlaidComparisonDebtType_(accountType) {
+  var type = String(accountType || '').trim();
+  if (debtImportIsRevolvingType_(type)) return true;
+  if (/(?:^|\b)(?:mortgage|home loan|property loan|heloc|home equity)(?:\b|$)/i.test(type)) {
+    return true;
+  }
+  var normalized = type.toLowerCase();
+  return normalized === 'loan' || normalized === 'heloc' || /^loan\s*\//.test(normalized);
+}
+
 function debtImportCellNumber_(row, col) {
   if (col === -1) return null;
   var value = Number(row[col]);

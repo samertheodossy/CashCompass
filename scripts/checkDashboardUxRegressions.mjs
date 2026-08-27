@@ -59,6 +59,36 @@ const files = Object.fromEntries(await Promise.all([
 ].map(async (name) => [name, await readFile(new URL(`../${name}`, import.meta.url), 'utf8')])));
 
 const render = files['Dashboard_Script_Render.html'];
+
+const dashboardPageIds = [
+  'page_overview',
+  'page_assets',
+  'page_cashflow',
+  'page_activity',
+  'page_properties',
+  'page_planning'
+];
+const overviewAncestors = openHtmlAncestorsAtId_(
+  files['Dashboard_Body.html'],
+  dashboardPageIds[0]
+);
+for (const id of dashboardPageIds.slice(1)) {
+  assert.deepEqual(
+    openHtmlAncestorsAtId_(files['Dashboard_Body.html'], id),
+    overviewAncestors,
+    `${id} must remain at the same dashboard wrapper depth as page_overview`
+  );
+}
+
+const globalErrorHandlerMatch = files['PlannerDashboardWeb.html'].match(
+  /window\.onerror\s*=\s*function[\s\S]*?\n\s*};/
+);
+assert.ok(globalErrorHandlerMatch, 'CashCompass global browser error logging must remain installed');
+assert.doesNotMatch(
+  globalErrorHandlerMatch[0],
+  /planner_status|CashCompass encountered a display problem|className\s*=\s*['"]status error/,
+  'global error handler must not leak transient section errors into dashboard status'
+);
 // Native browser dialogs are forbidden on every shipped/root HTML surface,
 // not only the main dashboard script includes. Read the directory inventory so
 // a newly added standalone UI or test console is covered automatically.
@@ -3978,6 +4008,7 @@ function trackedEditorSelect_() {
 function verifyConfirmedEmptyRouting_(functionName, source, dataKey, modeSetterName) {
   const select = trackedEditorSelect_();
   const modeCalls = [];
+  let activeMode = 'update';
   const context = vm.createContext({
     document: {
       getElementById: () => select,
@@ -3990,14 +4021,20 @@ function verifyConfirmedEmptyRouting_(functionName, source, dataKey, modeSetterN
     renderBankManageList_() {},
     renderInvestmentManageList_() {},
     clearSurfaceState_() {},
-    setBankPanelMode: (mode) => modeCalls.push(mode),
-    setInvestmentPanelMode: (mode) => modeCalls.push(mode),
+    currentTrackedEditorMode_: () => activeMode,
+    setBankPanelMode: (mode) => { activeMode = mode; modeCalls.push(mode); },
+    setInvestmentPanelMode: (mode) => { activeMode = mode; modeCalls.push(mode); },
     Array
   });
   vm.runInContext(functionSource_(source, functionName), context);
   context[functionName]({ [dataKey]: [] });
   assert.deepEqual(modeCalls, ['add'], `${functionName} must route explicit empty data to Add`);
   modeCalls.length = 0;
+  activeMode = 'connected';
+  context[functionName]({ [dataKey]: [] });
+  assert.deepEqual(modeCalls, [], `${functionName} must preserve Connected while an empty manual-account read finishes`);
+  modeCalls.length = 0;
+  activeMode = 'update';
   context[functionName]({ [dataKey]: ['Existing'] });
   assert.deepEqual(modeCalls, [], `${functionName} must preserve mode when records exist`);
   modeCalls.length = 0;
@@ -4009,6 +4046,7 @@ verifyConfirmedEmptyRouting_('fillInvestmentAccountDropdownFromData_', assetsEdi
 
 const debtModeCalls = [];
 const debtRequests = [];
+let debtActiveMode = 'update';
 const debtElements = {
   debt_typeFilter: trackedEditorSelect_(),
   debt_field: trackedEditorSelect_()
@@ -4022,7 +4060,8 @@ const debtEmptyContext = vm.createContext({
   populateDebtPropertyOptions_() {},
   filterDebtAccounts() {},
   clearSurfaceState_() {},
-  setDebtPanelMode: (mode) => debtModeCalls.push(mode),
+  currentTrackedEditorMode_: () => debtActiveMode,
+  setDebtPanelMode: (mode) => { debtActiveMode = mode; debtModeCalls.push(mode); },
   focusDebtTarget_() {},
   setStatusLoading() {},
   setStatus() {},
@@ -4043,10 +4082,42 @@ for (const [payload, expected, label] of [
   [{ types: ['All'], editableFields: [] }, [], 'malformed']
 ]) {
   debtModeCalls.length = 0;
+  debtActiveMode = 'update';
   debtEmptyContext.loadDebtSection();
   debtRequests.at(-1).onSuccess(payload);
   assert.deepEqual(debtModeCalls, expected, `Debt ${label} response must apply the correct editor mode`);
 }
+debtModeCalls.length = 0;
+debtActiveMode = 'connected';
+debtEmptyContext.loadDebtSection();
+debtRequests.at(-1).onSuccess({ debts: [], types: ['All'], editableFields: [] });
+assert.deepEqual(debtModeCalls, [],
+  'Debt explicit-empty response must preserve Connected when that mode was selected during the read');
+
+const houseModeCalls = [];
+let houseActiveMode = 'update';
+const houseSelect = trackedEditorSelect_();
+const houseContext = vm.createContext({
+  document: {
+    getElementById: () => houseSelect,
+    createElement: () => ({ value: '', textContent: '' })
+  },
+  populateHouseAddDatalists_() {},
+  updateHouseUpdateAvailability_() {},
+  renderHouseManageList_() {},
+  currentTrackedEditorMode_: () => houseActiveMode,
+  setHousePanelMode: (mode) => { houseActiveMode = mode; houseModeCalls.push(mode); },
+  Array
+});
+vm.runInContext('var __houseInactiveRows = null;\n' +
+  functionSource_(files['Dashboard_Script_AssetsHouseValues.html'], 'fillHouseDropdownFromData_'), houseContext);
+houseContext.fillHouseDropdownFromData_({ houses: [], inactiveHouses: [] });
+assert.deepEqual(houseModeCalls, ['add'], 'House explicit-empty response must route untouched Update to Add');
+houseModeCalls.length = 0;
+houseActiveMode = 'manage';
+houseContext.fillHouseDropdownFromData_({ houses: [], inactiveHouses: [] });
+assert.deepEqual(houseModeCalls, [],
+  'House explicit-empty response must preserve an intentional mode selected during the read');
 
 for (const [label, source, loader] of [
   ['Bank focus', assetsEditors, 'loadBankSectionThenSelect_'],

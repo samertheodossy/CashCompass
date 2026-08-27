@@ -1056,6 +1056,17 @@ function getBankAccountHistoryValueForMonth_(accountName, year, balanceDate) {
 }
 
 function updateBankAccountValueByDate(payload) {
+  return updateBankAccountValueByDate_(payload, null);
+}
+
+/**
+ * Canonical Bank Accounts writer implementation.
+ *
+ * trustedProvenance is accepted only through this private server function.
+ * The public dashboard RPC above always supplies null, so a browser cannot
+ * manufacture Plaid provenance or alter the normal writer contract.
+ */
+function updateBankAccountValueByDate_(payload, trustedProvenance) {
   const performanceTrace = startPerformanceTrace_('bank.ordinary_save');
   let failedStage = 'validate';
   try {
@@ -1189,7 +1200,16 @@ function updateBankAccountValueByDate(payload) {
           previousDisplay: previousDisplay,
           newRaw: newRaw,
           availableNowSet: updateAvailableNow,
-          minBufferSet: updateMinBuffer
+          minBufferSet: updateMinBuffer,
+          importProvenance: trustedProvenance ? {
+            source: String(trustedProvenance.source || ''),
+            environment: String(trustedProvenance.environment || ''),
+            provider: String(trustedProvenance.provider || ''),
+            factType: String(trustedProvenance.factType || ''),
+            observedAt: String(trustedProvenance.observedAt || ''),
+            effectiveAsOf: String(trustedProvenance.effectiveAsOf || ''),
+            protectedExternalAccountIdentity: String(trustedProvenance.protectedExternalAccountIdentity || '')
+          } : null
         })
       });
     } catch (logErr) {

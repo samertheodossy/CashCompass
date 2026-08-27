@@ -1,14 +1,8 @@
 function doGet(e) {
   // Allow-list gate: rejects any caller not in FAMILY_BETA_ALLOWLIST.
-  // Runs unconditionally — does not check CENTRAL_MODE — so the
-  // central deployment URL is never reachable by anonymous Google
-  // accounts. The existing bound deployment remains safe only because
-  // it is pinned to a prior script version that predates this gate;
-  // if the bound deployment is ever redeployed to head, the developer
-  // MUST be in FAMILY_BETA_ALLOWLIST for the bound URL to continue
-  // serving the dashboard (the platform-level access:MYSELF check
-  // admits the developer to doGet, but does not bypass the in-doGet
-  // allow-list).
+  // Runs unconditionally in both Central and bounded mode. The same reviewed
+  // source serves both product paths; deployment mode changes configuration,
+  // never the customer-facing application design.
   //
   // See:
   //   - CENTRAL_APP_RESOLVER_PROVISIONING_IMPLEMENTATION_PROMPT.md
@@ -45,6 +39,17 @@ function doGet(e) {
     return HtmlService.createTemplateFromFile('ValidationTestingUI')
       .evaluate()
       .setTitle('CashCompass — Validation & Testing')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
+  // Plaid P1 Sandbox connectivity proof. This is a guarded execution adapter,
+  // not a customer dashboard or second operator inventory. It is registered in
+  // the Validation console and is visible only to the permanent non-admin
+  // disposable identity while the explicit Sandbox proof flag is enabled.
+  if (view === 'plaid-sandbox' && isPlaidSandboxProofUser_()) {
+    return HtmlService.createTemplateFromFile('PlaidSandboxTestingUI')
+      .evaluate()
+      .setTitle('CashCompass — Plaid Sandbox Connectivity')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 

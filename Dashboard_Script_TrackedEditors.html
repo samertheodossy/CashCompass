@@ -31,6 +31,20 @@ function setTrackedEditorMode_(config, requestedMode) {
   return mode;
 }
 
+function currentTrackedEditorMode_(prefix, modes, defaultMode) {
+  const candidates = Array.isArray(modes) && modes.length
+    ? modes
+    : ['update', 'add', 'manage'];
+  for (let i = 0; i < candidates.length; i += 1) {
+    const button = document.getElementById(prefix + '_mode_' + candidates[i] + '_btn');
+    if (button && (button.classList.contains('active') ||
+        button.getAttribute('aria-selected') === 'true')) {
+      return candidates[i];
+    }
+  }
+  return defaultMode || candidates[0];
+}
+
 function trackedEditorItemsFromSelect_(selectId) {
   const select = document.getElementById(selectId);
   if (!select || !select.options) return [];

@@ -7,6 +7,19 @@ node_modules/**
 **/dist/**
 dist/**
 
+# Node Cloud Run services are deployed independently and must never be pushed
+# into either Apps Script project.
+services/**
+
+# Local OAuth desktop-client credentials and refresh tokens are private operator
+# material. They must never be committed or pushed to Apps Script.
+.cashcompass-admin/**
+
+# The Central-only manifest is copied into a marker-verified workspace staging
+# directory by push-central.sh. It must never be uploaded as a second manifest.
+appsscript.central.json
+.cashcompass-push/**
+
 # Vite cache (if present)
 **/.vite/**
 .vite/

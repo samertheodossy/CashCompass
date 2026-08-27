@@ -44,16 +44,14 @@
 </div>
 
 <script>
-  window.onerror = function(message, source, lineno, colno) {
-    if (window.console && typeof window.console.error === 'function') {
-      window.console.error('[CashCompass browser detail]', message, source, lineno, colno);
-    }
-    var el = document.getElementById('planner_status');
-    if (el) {
-      el.textContent = 'CashCompass encountered a display problem. Please refresh and try again.';
-      el.className = 'status error';
-    }
-  };
+window.onerror = function(message, source, lineno, colno) {
+  if (window.console && typeof window.console.error === 'function') {
+    window.console.error('[CashCompass browser detail]', message, source, lineno, colno);
+  }
+  // Individual loaders own their visible failure states. A transient browser
+  // error must not become a global dashboard failure banner that successful
+  // loading later clears.
+};
 </script>
 
 <? if (firstRunE2EEnabled) { ?>
@@ -140,6 +138,8 @@
   <?!= includeHtml_('Dashboard_Script_Activity'); ?>
 </script>
 
+<script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+
 <script>
   <?!= includeHtml_('Dashboard_Script_AssetsHouseValues'); ?>
 </script>
@@ -150,6 +150,10 @@
 
 <script>
   <?!= includeHtml_('Dashboard_Script_AssetsBankInvestments'); ?>
+</script>
+
+<script>
+  <?!= includeHtml_('Dashboard_Script_PlaidConnectedAccounts'); ?>
 </script>
 
 <script>

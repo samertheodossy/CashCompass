@@ -1,0 +1,99 @@
+<!doctype html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+  <style>
+    :root { --blue:#15557d; --ink:#1e2935; --muted:#5e6c7a; --line:#d9e1e8; --soft:#f4f8fb; --red:#9a2f2f; }
+    * { box-sizing:border-box; }
+    body { margin:0; font:15px/1.45 Arial,sans-serif; color:var(--ink); background:#eef3f7; }
+    main { width:min(760px,calc(100% - 28px)); margin:28px auto; background:white; border:1px solid var(--line); border-radius:14px; padding:24px; }
+    h1 { margin:0 0 6px; font-size:24px; }
+    .sub { color:var(--muted); margin:0 0 18px; }
+    .badge { display:inline-block; padding:4px 9px; border-radius:999px; background:#fff1b8; color:#6d5100; font-weight:700; font-size:12px; }
+    button { border:1px solid var(--blue); border-radius:8px; background:white; color:var(--blue); padding:9px 13px; font-weight:700; cursor:pointer; }
+    button.primary { background:var(--blue); color:white; }
+    button.danger { border-color:var(--red); color:var(--red); }
+    button:disabled { opacity:.55; cursor:not-allowed; }
+    #status { min-height:24px; margin:14px 0; color:var(--muted); }
+    .connection { border:1px solid var(--line); border-radius:10px; padding:16px; margin-top:12px; }
+    .account { background:var(--soft); border-radius:8px; padding:10px 12px; margin-top:8px; }
+    .account small { display:block; color:var(--muted); margin-top:2px; }
+    .confirm { display:none; margin-top:12px; border-left:4px solid var(--red); padding:10px 12px; background:#fff7f7; }
+    .confirm.open { display:block; }
+    .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+  </style>
+</head>
+<body>
+<main>
+  <span class="badge">SANDBOX ONLY</span>
+  <h1>Financial account connectivity proof</h1>
+  <p class="sub">Synthetic Plaid data only. This proves secure connection ownership and lifecycle; it does not import balances or financial facts.</p>
+  <button class="primary" id="connect" onclick="startConnect()">Connect financial account</button>
+  <div id="status" role="status" aria-live="polite"></div>
+  <div id="connections"></div>
+</main>
+<script>
+  var activeCorrelation = '';
+  function text(value) { return String(value == null ? '' : value); }
+  function esc(value) { return text(value).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function setStatus(message, error) {
+    var box=document.getElementById('status'); box.textContent=message||''; box.style.color=error?'#9a2f2f':'#5e6c7a';
+  }
+  function serverFailure(error) { setStatus((error&&error.message)||'Request failed.',true); document.getElementById('connect').disabled=false; }
+  function startConnect() {
+    document.getElementById('connect').disabled=true; setStatus('Creating secure Sandbox Link session…',false);
+    google.script.run.withSuccessHandler(function(result){
+      if(!result||!result.ok){serverFailure({message:(result&&result.error)||'Link session failed.'});return;}
+      activeCorrelation=result.correlationId;
+      var handler=Plaid.create({
+        token:result.linkToken,
+        onSuccess:function(publicToken){ exchange(publicToken); },
+        onExit:function(error){ document.getElementById('connect').disabled=false; if(error)setStatus('Plaid Sandbox Link ended before connection.',true); }
+      });
+      setStatus('Opening Plaid Sandbox Link…',false); handler.open();
+    }).withFailureHandler(serverFailure).plaidSandboxInitializeConnection();
+  }
+  function exchange(publicToken) {
+    setStatus('Securing the Sandbox connection and discovering accounts…',false);
+    google.script.run.withSuccessHandler(function(result){
+      document.getElementById('connect').disabled=false;
+      if(!result||!result.ok){serverFailure({message:(result&&result.error)||'Exchange failed.'});return;}
+      setStatus('Sandbox connection active. No balances or financial facts were imported.',false); loadConnections();
+    }).withFailureHandler(serverFailure).plaidSandboxExchangePublicToken({publicToken:publicToken,correlationId:activeCorrelation});
+  }
+  function loadConnections() {
+    google.script.run.withSuccessHandler(function(result){
+      if(!result||!result.ok){serverFailure({message:(result&&result.error)||'Could not list connections.'});return;}
+      render(result.connections||[]);
+    }).withFailureHandler(serverFailure).plaidSandboxListConnections();
+  }
+  function render(connections) {
+    var root=document.getElementById('connections');
+    if(!connections.length){root.innerHTML='<p class="sub">No Sandbox connections.</p>';return;}
+    root.innerHTML=connections.map(function(connection,index){
+      var accounts=(connection.accounts||[]).map(function(account){
+        var name=account.displayName||account.officialName||'Sandbox account';
+        var meta=[account.type,account.subtype,account.mask?('••••'+account.mask):''].filter(Boolean).join(' · ');
+        return '<div class="account"><strong>'+esc(name)+'</strong><small>'+esc(meta)+'</small></div>';
+      }).join('');
+      var key=esc(connection.protectedConnectionKey);
+      return '<section class="connection"><strong>'+esc(connection.institutionName||'Sandbox institution')+'</strong> <span class="badge">'+esc(connection.lifecycleStatus)+'</span>'+accounts+
+        '<div class="actions"><button class="danger" onclick="showDisconnect('+index+')">Disconnect</button></div>'+
+        '<div class="confirm" id="confirm-'+index+'"><strong>Disconnect this Sandbox connection?</strong><p>This revokes the Plaid Item and removes the encrypted credential while retaining a sanitized tombstone.</p><div class="actions"><button class="danger" onclick="disconnectConnection(\''+key+'\')">Disconnect</button><button onclick="hideDisconnect('+index+')">Cancel</button></div></div></section>';
+    }).join('');
+  }
+  function showDisconnect(index){document.getElementById('confirm-'+index).classList.add('open');}
+  function hideDisconnect(index){document.getElementById('confirm-'+index).classList.remove('open');}
+  function disconnectConnection(key){
+    setStatus('Revoking the Sandbox connection…',false);
+    google.script.run.withSuccessHandler(function(result){
+      if(!result||!result.ok){serverFailure({message:(result&&result.error)||'Disconnect is pending.'});return;}
+      setStatus('Sandbox connection disconnected and credential removed.',false); loadConnections();
+    }).withFailureHandler(serverFailure).plaidSandboxDisconnect({protectedConnectionKey:key});
+  }
+  loadConnections();
+</script>
+</body>
+</html>

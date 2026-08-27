@@ -8,7 +8,7 @@
 
 ---
 
-## Current status (2026-08-23)
+## Current status (2026-08-24)
 
 **Completed:**
 
@@ -57,15 +57,33 @@
   This next slice does not silently switch Planning authority, execute payments,
   or broadly import transactions. Any authority migration requires a later
   explicit checkpoint.
-- **Current milestone:** **Cash + Credit Card Import / Refresh**. The credit-card
-  correctness boundaries and representative real Chase source proof are closed,
-  and **Chase Shadow Import V1 Phase A — contract foundation** is complete
-  locally: additive `STATEMENT_BALANCE`, exact Chase fact/APR boundaries,
-  explicit statement association, and semantic QFX/PDF replay contracts have
-  permanent regressions. The next phase is provider-profile parser
-  implementation; no parser, upload UI, customer Apply, or authority switch is
-  part of Phase A. Existing Part 2A-1 through 2A-5 remain enabling foundation,
-  not production-ready customer import or Planning authority.
+- **Current milestone:** **Contextual Main-App Plaid Read-Only Candidate — Ready
+  for Owner UX Review**, inside **Cash + Credit Card Import / Refresh**. The
+  dedicated Trial project now serves revision
+  `cashcompass-plaid-backend-00006-lgd`, and isolated Central `@403` provides
+  the protected Trial/real-data read-only candidate inside the normal app.
+  Connected evidence is grouped by product context: depository accounts under
+  Bank Accounts, credit and mortgage accounts under Debts, and investment
+  accounts under Investments. There is no separate top-level Connected Accounts
+  workspace. One retained Chase connection proves the credit-card path. One BofA
+  connection exposed fourteen accounts through one login: twelve depository
+  accounts with current and available candidates, plus two mortgage accounts
+  with current-balance candidates. The corrected preview attaches evidence by
+  protected account identity, not provider array order; comparison requires an
+  explicit active, verified CashCompass identity. Mortgage comparison exposes
+  only `CURRENT_BALANCE` and does not manufacture available-balance semantics.
+  The owner validated both mortgage mappings on `@399`; the contextual `@403`
+  candidate passed focused and full local regressions. Trial capacity is 10
+  total / 3 consumed / 7 remaining: two retained connections and one orphaned
+  first Chase attempt. **PLAID IS A REVIEWED IMPORT CHANNEL:** Plaid retrieves
+  candidate financial data, CashCompass previews it, and the user decides what
+  later becomes authoritative; no silent overwrite. No Apply, Financial Facts
+  write, Planning authority switch, broad transaction ingestion, payment,
+  transfer, or trade is implemented. Central remains on GCP Default, Beta stays
+  `@106`, bounded is untouched, Sandbox remains intact, and
+  `cashcompass-application` remains **PREPARED BUT UNATTACHED / PARKED**.
+  Existing Part 2A-1 through 2A-5 remain enabling foundation, not production-ready
+  customer import or Planning authority.
 - **Open lifecycle-adjacent gaps:** House metadata Edit/Rename remains required
   before broad Beta. Income Edit/Rename is a known unclaimed capability and must
   be explicitly scoped or deferred; it is not part of the completed

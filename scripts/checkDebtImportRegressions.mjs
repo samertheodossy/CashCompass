@@ -26,6 +26,12 @@ const context = {
 vm.createContext(context);
 for (const [name, source] of sources) vm.runInContext(source, context, { filename: name });
 
+assert.equal(context.debtImportIsPlaidComparisonDebtType_('Credit Card'), true);
+assert.equal(context.debtImportIsPlaidComparisonDebtType_('Loan'), true);
+assert.equal(context.debtImportIsPlaidComparisonDebtType_('HELOC'), true);
+assert.equal(context.debtImportIsPlaidComparisonDebtType_('Mortgage'), true);
+assert.equal(context.debtImportIsPlaidComparisonDebtType_('Auto Loan'), false);
+
 const noDomainReadiness = context.evaluateWeeklyPlanDataReadinessFromState_([], {},
   '2026-08-16T20:00:00.000Z');
 assert.equal(noDomainReadiness.dimensions.cash.status, 'NOT_CONNECTED',

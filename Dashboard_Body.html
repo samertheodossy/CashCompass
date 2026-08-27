@@ -292,6 +292,15 @@
       <button class="tab-btn" data-tab="investments" onclick="showTab('investments')">Investments</button>
       <button class="tab-btn active" data-tab="houses" onclick="showTab('houses')">Houses</button>
     </div>
+    <div id="plaid_main_disconnect_confirm" class="confirm" role="dialog" aria-modal="true" aria-labelledby="plaid_main_disconnect_title" style="display:none;">
+      <strong id="plaid_main_disconnect_title">Disconnect this institution?</strong>
+      <p id="plaid_main_disconnect_summary"></p>
+      <p class="muted">This removes CashCompass access to the institution across Bank Accounts, Debts, and Investments. It does not change existing CashCompass values or restore Plaid Trial capacity.</p>
+      <div class="tracked-editor-actions">
+        <button type="button" onclick="plaidMainConfirmDisconnect_()">Disconnect institution</button>
+        <button type="button" class="small-btn" onclick="plaidMainCancelDisconnect_()">Cancel</button>
+      </div>
+    </div>
 
     <div id="houses" class="panel active">
       <div class="panel-head">
@@ -394,6 +403,7 @@
         <button type="button" id="bank_mode_update_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setBankPanelMode('update')">Update</button>
         <button type="button" id="bank_mode_add_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setBankPanelMode('add')">Add new</button>
         <button type="button" id="bank_mode_manage_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setBankPanelMode('manage')">Manage accounts</button>
+        <button type="button" id="bank_mode_connected_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setBankPanelMode('connected')">Connected</button>
       </div>
 
       <div id="bank_mode_update_wrap" class="bank-mode-wrap active">
@@ -573,6 +583,7 @@
             </div>
           </div>
         </div>
+      </div>
 
       <div id="bank_mode_review_wrap" class="tracked-editor-secondary-view" style="display:none;">
         <button type="button" class="small-btn tracked-editor-back" onclick="setBankPanelMode('manage')">← Back to account management</button>
@@ -586,6 +597,18 @@
           </div>
         </div>
         <div id="bank_import_review_list"></div>
+      </div>
+
+      <div id="bank_mode_connected_wrap" class="bank-mode-wrap">
+        <h3>Connected bank accounts</h3>
+        <p class="muted">Connect institutions, match depository accounts to CashCompass bank accounts, and review current balance evidence here.</p>
+        <div class="warning-box">Plaid is optional. Connected evidence is managed securely by CashCompass and never silently changes your bank accounts.</div>
+        <div class="tracked-editor-actions" style="margin-top:12px;">
+          <button type="button" id="plaid_main_cash_connect_btn" class="small-btn primary" onclick="plaidMainConnect_('CASH')">Connect institution</button>
+          <button type="button" id="plaid_main_cash_reload_btn" class="small-btn" onclick="loadPlaidConnectedAccounts_(true, 'CASH')">Reload</button>
+        </div>
+        <div id="plaid_main_cash_status" class="status" role="status" aria-live="polite"></div>
+        <div id="plaid_main_cash_connections"></div>
       </div>
 
       <div id="bank_mode_import_wrap" class="tracked-editor-secondary-view" style="display:none;">
@@ -617,7 +640,6 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <button type="button" id="bank_import_csv_stage_btn" class="small-btn primary" onclick="confirmBankImportCsvPasteStage_()" disabled>Stage rows for review</button>
         </div>
       </div>
-      </div>
 
       <div id="bank_status" class="status"></div>
     </div>
@@ -631,6 +653,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         <button type="button" id="inv_mode_update_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setInvestmentPanelMode('update')">Update</button>
         <button type="button" id="inv_mode_add_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setInvestmentPanelMode('add')">Add new</button>
         <button type="button" id="inv_mode_manage_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setInvestmentPanelMode('manage')">Manage investments</button>
+        <button type="button" id="inv_mode_connected_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setInvestmentPanelMode('connected')">Connected</button>
       </div>
 
       <div id="inv_mode_update_wrap" class="bank-mode-wrap active">
@@ -734,6 +757,18 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <p class="muted" style="margin:0 0 12px 0;">These investments are not part of the current tracking year. When Reactivate is available, it restores the existing account without changing its values or history; historical-only records remain available for reporting.</p>
           <div id="inv_inactive_list" class="tracked-editor-list"></div>
         </div>
+      </div>
+
+      <div id="inv_mode_connected_wrap" class="bank-mode-wrap">
+        <h3>Connected investments</h3>
+        <p class="muted">Connected investment accounts appear here. They remain comparison-only; CashCompass investment values and activity are never changed by this view.</p>
+        <div class="warning-box">Plaid is optional. Connected investment evidence is managed securely by CashCompass and remains comparison-only.</div>
+        <div class="tracked-editor-actions" style="margin-top:12px;">
+          <button type="button" id="plaid_main_investment_connect_btn" class="small-btn primary" onclick="plaidMainConnect_('INVESTMENT')">Connect institution</button>
+          <button type="button" id="plaid_main_investment_reload_btn" class="small-btn" onclick="loadPlaidConnectedAccounts_(true, 'INVESTMENT')">Reload</button>
+        </div>
+        <div id="plaid_main_investment_status" class="status" role="status" aria-live="polite"></div>
+        <div id="plaid_main_investment_connections"></div>
       </div>
 
       <div id="inv_status" class="status"></div>
@@ -2039,6 +2074,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         <button type="button" id="debt_mode_update_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setDebtPanelMode('update')">Update</button>
         <button type="button" id="debt_mode_add_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setDebtPanelMode('add')">Add new</button>
         <button type="button" id="debt_mode_manage_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setDebtPanelMode('manage')">Manage debts</button>
+        <button type="button" id="debt_mode_connected_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setDebtPanelMode('connected')">Connected</button>
       </div>
 
       <div id="debt_mode_update_wrap" class="bank-mode-wrap active">
@@ -2165,6 +2201,18 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <p class="muted" style="margin:0 0 12px 0;">These debts are no longer included in Dashboard totals, Net Worth, or Planning. The original debt and all history are preserved. Reactivate restores the existing debt without changing balances, due dates, Cash Flow history, or Activity history.</p>
           <div id="debt_inactive_list" class="bills-manage-list"></div>
         </div>
+      </div>
+
+      <div id="debt_mode_connected_wrap" class="bank-mode-wrap">
+        <h3>Connected debts</h3>
+        <p class="muted">Match credit cards and mortgages to CashCompass debts and review provider evidence here. Debt and mortgage values remain comparison-only.</p>
+        <div class="warning-box">Plaid is optional. Connected debt evidence is managed securely by CashCompass and remains comparison-only.</div>
+        <div class="tracked-editor-actions" style="margin-top:12px;">
+          <button type="button" id="plaid_main_debt_connect_btn" class="small-btn primary" onclick="plaidMainConnect_('DEBT')">Connect institution</button>
+          <button type="button" id="plaid_main_debt_reload_btn" class="small-btn" onclick="loadPlaidConnectedAccounts_(true, 'DEBT')">Reload</button>
+        </div>
+        <div id="plaid_main_debt_status" class="status" role="status" aria-live="polite"></div>
+        <div id="plaid_main_debt_connections"></div>
       </div>
 
       <div id="debt_status" class="status"></div>
