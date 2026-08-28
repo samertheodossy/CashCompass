@@ -160,7 +160,7 @@ assert(/plaidMainImportData_[\s\S]{0,600}protectedAccountKey/.test(client),
 assert(client.includes('plaidMainPatchAccountCard_') &&
   client.includes('plaidMainDeferPlannerRefresh_') &&
   /plaidMainImportData_[\s\S]{0,900}plaidMainPatchAccountCard_/.test(client) &&
-  /plaidMainApplySelectedUpdates_[\s\S]{0,1200}plaidMainPatchAccountCard_/.test(client),
+  /plaidMainApplySelectedUpdates_[\s\S]{0,1800}plaidMainPatchAccountCard_/.test(client),
   'Import and Apply must patch only the affected account card and defer planner refresh');
 
 assert(bridge.includes('plaidImportAccountReviewObservedAt_') &&
@@ -228,6 +228,11 @@ assert(client.includes('plaidImportApplyCashUpdates') &&
   client.includes('Available Balance is informational only') &&
   !client.includes('updateBankAccountValueByDate('),
   'Connected client routes Bank Apply through bridge only');
+
+assert(/plaidMainApplySelectedUpdates_[\s\S]{0,1500}plaidMainEnsureAccountReviewExpanded_/.test(client) &&
+  /plaidMainShouldForceReviewExpanded_[\s\S]{0,400}applyingKeys/.test(client) &&
+  /plaidMainShouldForceReviewExpanded_[\s\S]{0,400}isError/.test(client),
+  'Apply must keep the affected account expanded while applying and on failure');
 
 new vm.Script(bridge);
 new vm.Script(client);

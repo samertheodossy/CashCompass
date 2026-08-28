@@ -24,6 +24,7 @@ const files = Object.fromEntries(await Promise.all([
   'Dashboard_Script_Render.html',
   'Dashboard_Script_TrackedEditors.html',
   'Dashboard_Script_RollingDebtPayoff.html',
+  'Dashboard_Script_PlaidConnectedAccounts.html',
   'Dashboard_Styles.html',
   'BankAccountsUI.html',
   'DebtsUI.html',
@@ -4257,5 +4258,19 @@ assert.match(files['Dashboard_Script_PlanningRetirement.html'], /Retirement assu
   'Retirement assumption guidance must use one concise next step');
 assert.doesNotMatch(files['Dashboard_Script_PlanningRetirement.html'], /From profile DOB/,
   'Retirement customer copy must spell out date of birth');
+
+{
+  const plaidClient = files['Dashboard_Script_PlaidConnectedAccounts.html'];
+  assert.match(plaidClient, /collapsedAccountKeys/,
+    'Connected account collapse state must be account-keyed');
+  assert.match(plaidClient, /plaidMainApplySelectionKey_[\s\S]{0,120}protectedConnectionKey[\s\S]{0,80}protectedAccountKey/,
+    'Connected collapse state must not key by display name or array index');
+  assert.match(plaidClient, /plaid-main-review-toggle[\s\S]{0,200}aria-expanded/,
+    'Connected review toggle must expose aria-expanded');
+  assert.match(plaidClient, /plaid-main-account-card[\s\S]{0,400}overflow-x:hidden/,
+    'Collapsed Connected account cards must avoid horizontal overflow on narrow screens');
+  assert.doesNotMatch(plaidClient, /plaidMainToggleAccountReviewCollapsed_[\s\S]{0,300}plaidMainCall_/,
+    'Connected collapse/expand must not trigger server requests');
+}
 
 console.log('Dashboard UX regression checks passed.');

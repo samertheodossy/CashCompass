@@ -21,6 +21,7 @@ var plaidMainState_ = {
   applyResults: {},
   applyingKeys: {},
   importingKeys: {},
+  collapsedAccountKeys: {},
   accountMessages: {},
   pendingDisconnectKey: '',
   pendingDisconnectAccountKey: '',
@@ -150,7 +151,17 @@ function plaidMainEnsureStyles_() {
     '.plaid-main-account-status-busy{color:#555;font-style:italic}',
     '.plaid-main-account-status-error{color:#c0392b}',
     '.plaid-main-account-status-info{color:#196f3d}',
+    '.plaid-main-account-card{overflow-x:hidden}',
+    '.plaid-main-account-header{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px}',
+    '.plaid-main-account-identity{flex:1 1 220px;min-width:0}',
+    '.plaid-main-review-toggle{flex:0 0 auto;font-size:12px;padding:2px 10px;opacity:.9}',
+    '.plaid-main-collapsed-review-summary{margin-top:6px;padding:8px 10px;background:#f4f6f8;border-radius:4px;font-size:13px}',
+    '.plaid-main-collapsed-review-status{color:#444}',
+    '.plaid-main-collapsed-review-status.plaid-main-review-up-to-date{color:#196f3d}',
+    '.plaid-main-collapsed-review-status.plaid-main-review-needs{color:#7d6608;font-weight:600}',
     '@media (max-width:640px){',
+    '.plaid-main-account-header{gap:6px}',
+    '.plaid-main-collapsed-review-summary{padding:6px 8px;font-size:12px}',
     '.plaid-main-review-panel{max-width:none;margin:12px 0 0;padding:12px}',
     '.plaid-main-comparison-table thead{display:none}',
     '.plaid-main-comparison-table tr{display:block;margin-bottom:10px;border-bottom:1px solid #e6e6e6}',
@@ -737,6 +748,86 @@ function plaidMainApplySelectionKey_(connection, account) {
   return String(connection.protectedConnectionKey || '') + '::' + String(account.protectedAccountKey || '');
 }
 
+function plaidMainReviewPanelDomId_(connection, account) {
+  return plaidMainAccountDomId_(connection, account) + '-review';
+}
+
+function plaidMainIsAccountReviewCollapsed_(connection, account) {
+  var key = plaidMainApplySelectionKey_(connection, account);
+  return !!(plaidMainState_.collapsedAccountKeys && plaidMainState_.collapsedAccountKeys[key]);
+}
+
+function plaidMainSetAccountReviewCollapsed_(connection, account, collapsed) {
+  if (!plaidMainState_.collapsedAccountKeys) plaidMainState_.collapsedAccountKeys = {};
+  var key = plaidMainApplySelectionKey_(connection, account);
+  if (collapsed) plaidMainState_.collapsedAccountKeys[key] = true;
+  else delete plaidMainState_.collapsedAccountKeys[key];
+}
+
+function plaidMainEnsureAccountReviewExpanded_(connection, account) {
+  plaidMainSetAccountReviewCollapsed_(connection, account, false);
+}
+
+function plaidMainShouldForceReviewExpanded_(connection, account) {
+  var key = plaidMainApplySelectionKey_(connection, account);
+  if (plaidMainState_.importingKeys[key] || plaidMainState_.applyingKeys[key]) return true;
+  var msg = plaidMainState_.accountMessages[key];
+  return !!(msg && msg.isError);
+}
+
+function plaidMainToggleAccountReviewCollapsed_(domain, connection, account) {
+  plaidMainSetAccountReviewCollapsed_(connection, account,
+    !plaidMainIsAccountReviewCollapsed_(connection, account));
+  plaidMainPatchAccountCard_(domain, connection, account);
+}
+
+function plaidMainActionableReviewSummaryText_(groups) {
+  groups = groups || {};
+  if ((groups.review || []).length) return { text: 'Needs review', className: 'plaid-main-review-needs' };
+  var ready = groups.ready || [];
+  var i;
+  for (i = 0; i < ready.length; i++) {
+    if (ready[i].needsAprSelection || ready[i].change === 'Needs selection') {
+      return { text: 'Needs review', className: 'plaid-main-review-needs' };
+    }
+  }
+  var count = 0;
+  for (i = 0; i < ready.length; i++) {
+    var row = ready[i];
+    if (!row || row.derivedOnly || row.informational || row.change === 'Same') continue;
+    count++;
+  }
+  if (count === 0) return { text: '✓ Up to date', className: 'plaid-main-review-up-to-date' };
+  if (count === 1) return { text: '1 change to review', className: '' };
+  return { text: count + ' changes to review', className: '' };
+}
+
+function plaidMainRenderReviewToggleButton_(domain, connection, account, collapsed, reviewPanelId) {
+  var label = collapsed ? 'Expand' : 'Collapse';
+  var toggleBtn = plaidMainButton_(label, 'small-btn plaid-main-review-toggle', function() {
+    plaidMainToggleAccountReviewCollapsed_(domain, connection, account);
+  });
+  toggleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  toggleBtn.setAttribute('aria-controls', reviewPanelId);
+  toggleBtn.setAttribute('aria-label', label + ' imported review for this account');
+  return toggleBtn;
+}
+
+function plaidMainRenderCollapsedReviewSummary_(connection, account, preview) {
+  var accountPreview = (preview.accounts || []).filter(function(row) {
+    return String(row.protectedAccountKey || '') === String(account.protectedAccountKey || '');
+  })[0];
+  if (!accountPreview) return null;
+  var accountDomain = plaidMainAccountDomain_(account);
+  var groups = plaidMainBuildDomainReview_(accountPreview, accountDomain, preview);
+  var summary = plaidMainActionableReviewSummaryText_(groups);
+  var wrap = plaidMainElement_('div', 'plaid-main-collapsed-review-summary');
+  var status = plaidMainElement_('div', 'plaid-main-collapsed-review-status' +
+    (summary.className ? ' ' + summary.className : ''), summary.text);
+  wrap.appendChild(status);
+  return wrap;
+}
+
 function plaidMainSetAccountMessage_(connection, account, message, isError, busy) {
   var key = plaidMainApplySelectionKey_(connection, account);
   if (!message && !busy) {
@@ -760,13 +851,15 @@ function plaidMainClearAccountReviewState_(connection, account) {
   var key = plaidMainApplySelectionKey_(connection, account);
   delete plaidMainState_.accountPreviews[key];
   delete plaidMainState_.accountImportState[key];
+  if (plaidMainState_.collapsedAccountKeys) delete plaidMainState_.collapsedAccountKeys[key];
   plaidMainClearAccountSelections_(connection, account);
 }
 
 function plaidMainClearConnectionAccountReviewState_(connectionKey) {
   var prefix = String(connectionKey || '') + '::';
   ['accountPreviews', 'accountImportState', 'selectedApplyKeys', 'applyResults',
-    'accountMessages', 'importingKeys', 'applyingKeys', 'importRequestSeq', 'applyRequestSeq'].forEach(function(field) {
+    'accountMessages', 'importingKeys', 'applyingKeys', 'importRequestSeq', 'applyRequestSeq',
+    'collapsedAccountKeys'].forEach(function(field) {
     var bucket = plaidMainState_[field];
     if (!bucket) return;
     Object.keys(bucket).forEach(function(key) {
@@ -969,6 +1062,7 @@ function plaidMainApplySelectedUpdates_(domain, connection, account, accountPrev
     plaidMainRenderDomain_(domain);
     return;
   }
+  plaidMainEnsureAccountReviewExpanded_(connection, account);
   plaidMainState_.applyingKeys[selectionKey] = true;
   plaidMainSetAccountMessage_(connection, account, '', false, false);
   plaidMainPatchAccountCard_(domain, connection, account);
@@ -1142,7 +1236,7 @@ function plaidMainRenderTechnicalDetails_(technicalRows, observedAt) {
   return details;
 }
 
-function plaidMainRenderPreviewAccount_(domain, connection, account, accountCard, preview) {
+function plaidMainRenderPreviewAccount_(domain, connection, account, accountCard, preview, reviewPanelId) {
   var accountPreview = (preview.accounts || []).filter(function(row) {
     return String(row.protectedAccountKey || '') === String(account.protectedAccountKey || '');
   })[0];
@@ -1152,6 +1246,7 @@ function plaidMainRenderPreviewAccount_(domain, connection, account, accountCard
   plaidMainPruneStaleApplySelections_(connection, account, accountPreview, preview, accountDomain);
 
   var panel = plaidMainElement_('div', 'plaid-main-review-panel');
+  if (reviewPanelId) panel.id = reviewPanelId;
   var reviewWrap = plaidMainElement_('div', 'plaid-main-review');
   reviewWrap.appendChild(plaidMainElement_('div', 'plaid-main-review-title', 'Review imported changes'));
 
@@ -1343,15 +1438,28 @@ function plaidMainDeferPlannerRefresh_() {
 }
 
 function plaidMainBuildAccountCard_(domain, connection, account) {
-  var accountCard = plaidMainElement_('div', 'info');
+  var accountCard = plaidMainElement_('div', 'info plaid-main-account-card');
   accountCard.id = plaidMainAccountDomId_(connection, account);
   accountCard.style.marginTop = '10px';
+  var preview = plaidMainGetAccountPreviewBundle_(connection, account);
+  var hasPreview = !!(preview && plaidMainHasValidAccountPreview_(connection, account));
+  var forceExpanded = plaidMainShouldForceReviewExpanded_(connection, account);
+  var collapsed = hasPreview && !forceExpanded && plaidMainIsAccountReviewCollapsed_(connection, account);
+  var reviewPanelId = plaidMainReviewPanelDomId_(connection, account);
+
+  var header = plaidMainElement_('div', 'plaid-main-account-header');
+  var identity = plaidMainElement_('div', 'plaid-main-account-identity');
   var title = (account.displayName || account.officialName || 'Financial account') +
     (account.mask ? ' ••••' + account.mask : '');
-  accountCard.appendChild(plaidMainElement_('strong', '', title));
-  accountCard.appendChild(plaidMainElement_('span', 'muted',
+  identity.appendChild(plaidMainElement_('strong', '', title));
+  identity.appendChild(plaidMainElement_('span', 'muted',
     '  ' + String(account.type || 'unknown').toUpperCase() +
     (account.subtype ? ' · ' + account.subtype : '')));
+  header.appendChild(identity);
+  if (hasPreview) {
+    header.appendChild(plaidMainRenderReviewToggleButton_(domain, connection, account, collapsed, reviewPanelId));
+  }
+  accountCard.appendChild(header);
   plaidMainRenderAssociation_(domain, connection, account, accountCard);
 
   var localStatus = plaidMainRenderAccountLocalStatus_(connection, account);
@@ -1361,11 +1469,15 @@ function plaidMainBuildAccountCard_(domain, connection, account) {
   accountCard.appendChild(plaidMainElement_('div', 'muted',
     'Last imported: ' + (importedAt ? plaidMainFormatImportedAt_(importedAt) : 'Not yet imported')));
 
+  if (hasPreview && collapsed) {
+    var summary = plaidMainRenderCollapsedReviewSummary_(connection, account, preview);
+    if (summary) accountCard.appendChild(summary);
+  }
+
   plaidMainRenderAccountActions_(domain, connection, account, accountCard);
 
-  var preview = plaidMainGetAccountPreviewBundle_(connection, account);
-  if (preview && plaidMainHasValidAccountPreview_(connection, account)) {
-    plaidMainRenderPreviewAccount_(domain, connection, account, accountCard, preview);
+  if (hasPreview && !collapsed) {
+    plaidMainRenderPreviewAccount_(domain, connection, account, accountCard, preview, reviewPanelId);
   }
   return accountCard;
 }
@@ -1447,6 +1559,7 @@ function plaidMainImportData_(domain, connection, account) {
       plaidMainState_.importingKeys[selectionKey] = false;
       if (plaidMainApplyImportResult_(connection, account, result, requestId)) {
         plaidMainClearAccountSelections_(connection, account);
+        plaidMainEnsureAccountReviewExpanded_(connection, account);
         plaidMainSetAccountMessage_(connection, account,
           '✓ Data imported. Review changes below.', false, false);
       }

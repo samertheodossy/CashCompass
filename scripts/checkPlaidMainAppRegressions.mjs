@@ -158,6 +158,32 @@ assert(client.includes('plaidMainHasValidAccountPreview_') &&
   client.includes('Not yet imported'),
   'review UI must use account-scoped previews that coexist under one connection');
 
+assert(client.includes('collapsedAccountKeys') &&
+  client.includes('plaidMainApplySelectionKey_') &&
+  client.includes('plaidMainIsAccountReviewCollapsed_') &&
+  client.includes('plaidMainToggleAccountReviewCollapsed_') &&
+  client.includes('plaid-main-review-toggle') &&
+  /plaidMainRenderReviewToggleButton_[\s\S]{0,400}Collapse/.test(client) &&
+  /plaidMainRenderReviewToggleButton_[\s\S]{0,400}Expand/.test(client) &&
+  client.includes('aria-expanded') &&
+  client.includes('aria-controls') &&
+  client.includes('plaid-main-collapsed-review-summary') &&
+  client.includes('plaidMainActionableReviewSummaryText_') &&
+  client.includes('✓ Up to date') &&
+  client.includes('changes to review') &&
+  /plaidMainActionableReviewSummaryText_[\s\S]{0,600}derivedOnly/.test(client) &&
+  /plaidMainActionableReviewSummaryText_[\s\S]{0,600}informational/.test(client) &&
+  /plaidMainActionableReviewSummaryText_[\s\S]{0,600}change === 'Same'/.test(client) &&
+  /plaidMainBuildAccountCard_[\s\S]{0,2500}!collapsed[\s\S]{0,400}plaidMainRenderPreviewAccount_/.test(client) &&
+  /plaidMainBuildAccountCard_[\s\S]{0,2500}collapsed[\s\S]{0,400}plaidMainRenderCollapsedReviewSummary_/.test(client) &&
+  /plaidMainToggleAccountReviewCollapsed_[\s\S]{0,300}plaidMainPatchAccountCard_/.test(client) &&
+  !/plaidMainToggleAccountReviewCollapsed_[\s\S]{0,300}plaidMainCall_/.test(client) &&
+  /plaidMainImportData_[\s\S]{0,900}plaidMainEnsureAccountReviewExpanded_/.test(client) &&
+  /plaidMainApplySelectedUpdates_[\s\S]{0,1500}plaidMainEnsureAccountReviewExpanded_/.test(client) &&
+  /plaidMainClearAccountReviewState_[\s\S]{0,300}collapsedAccountKeys/.test(client) &&
+  /if \(hasPreview\) \{[\s\S]{0,200}plaidMainRenderReviewToggleButton_/.test(client),
+  'Connected account review collapse/expand UX contract is missing');
+
 new vm.Script(bridge);
 new vm.Script(client);
 

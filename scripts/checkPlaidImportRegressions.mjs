@@ -161,6 +161,11 @@ assert(client.includes("plaidMainCall_('plaidImportPreviewMapped'") &&
   !client.includes('updateDebtField(') &&
   !client.includes('updateBankAccountValueByDate('),
   'Connected client must preview read-only and Apply through bridge only');
+assert(client.includes('plaidMainEnsureAccountReviewExpanded_') &&
+  /plaidMainImportData_[\s\S]{0,900}plaidMainEnsureAccountReviewExpanded_/.test(client) &&
+  !/plaidMainEnsureAccountReviewExpanded_[\s\S]{0,200}plaidMainCall_/.test(client),
+  'successful Import must expand only the affected account without a backend call');
+
 assert(!/accessToken|itemId|account_id|item_id|client_id|production secret/i.test(client),
   'browser client references raw provider identities or credentials');
 assert(runbook.includes('Future approved-Apply Activity Log contract') &&
