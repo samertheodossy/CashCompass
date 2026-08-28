@@ -157,11 +157,20 @@ assert(/plaidMainBeginApplyRequest_[\s\S]{0,400}applyRequestSeq/.test(client) &&
 assert(/plaidMainImportData_[\s\S]{0,600}protectedAccountKey/.test(client),
   'Import Data must scope server baseline persistence to the triggering account');
 
+assert(client.includes('plaidMainPatchAccountCard_') &&
+  client.includes('plaidMainDeferPlannerRefresh_') &&
+  /plaidMainImportData_[\s\S]{0,900}plaidMainPatchAccountCard_/.test(client) &&
+  /plaidMainApplySelectedUpdates_[\s\S]{0,1200}plaidMainPatchAccountCard_/.test(client),
+  'Import and Apply must patch only the affected account card and defer planner refresh');
+
 assert(bridge.includes('plaidImportAccountReviewObservedAt_') &&
   bridge.includes('targetProtectedAccountKey') &&
   /plaidImportFetchPreviewMappedCore_[\s\S]{0,2500}targetProtectedAccountKey/.test(bridge) &&
   bridge.includes('plaidImportRefreshPreviewAccountAfterApplySafe_') &&
-  bridge.includes('refreshNotice'),
+  bridge.includes('refreshNotice') &&
+  bridge.includes('plaidImportBeginRequestSession_') &&
+  bridge.includes('plaidImportRequestRegistry_') &&
+  bridge.includes('stageTimingMs'),
   'server must store account-scoped review tokens and not overwrite sibling baselines on Import');
 
 assert(/plaidMainLastImportedAt_[\s\S]{0,400}stableAccountId/.test(client) &&
@@ -204,9 +213,9 @@ assert(cashApplyInner.includes('plaidImportCashApplyValuesEqual_') &&
   cashApplyInner.includes('CashCompass values changed since review'),
   'Bank Apply must reject stale review and no-op balances');
 
-assert(cashApplyInner.includes('stableAccountId') &&
-  cashApplyInner.includes('CashCompass account association must be confirmed'),
-  'Bank Apply must revalidate account association server-side');
+assert(cashApplyInner.includes('targetProtectedAccountKey') &&
+  /plaidImportApplyCashUpdates_[\s\S]{0,2000}plaidImportBeginRequestSession_/.test(bridge),
+  'Bank Apply must use account-scoped preview revalidation with request-local reuse');
 
 assert(banks.includes("importSource: plaidApply ? 'PLAID'") &&
   banks.includes("accountSource: plaidApply ? 'PLAID'") &&

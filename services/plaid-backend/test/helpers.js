@@ -239,6 +239,11 @@ export class FakeStore {
     value.lifecycleStatus = 'ACTIVE';
     delete value.reconnectReasonCode;
   }
+  async listStoredAccounts(user, connectionKey) {
+    const value = this.connections.get(this.key(user, connectionKey));
+    if (!value || !Array.isArray(value.accounts)) return [];
+    return value.accounts.map(account => JSON.parse(JSON.stringify(account)));
+  }
   async recordObservation(user, connectionKey, observedAt) {
     this.connections.get(this.key(user, connectionKey)).lastObservedAt = observedAt;
   }

@@ -85,6 +85,25 @@ function publicConnection(connection) {
   };
 }
 
+function accountNeedsLiabilitiesFetch_(account) {
+  const type = String(account?.type || '').toLowerCase();
+  const subtype = String(account?.subtype || '').toLowerCase();
+  return type === 'credit' && subtype === 'credit card';
+}
+
+function previewNeedsLiabilities_(storedAccounts, targetAccountKey, liveAccounts) {
+  const liveHasCredit = (liveAccounts || []).some(account =>
+    String(account?.type || '').toLowerCase() === 'credit' &&
+    String(account?.subtype || '').toLowerCase() === 'credit card');
+  if (!liveHasCredit) return false;
+  const scopedKey = String(targetAccountKey || '').trim();
+  if (!scopedKey) return true;
+  const target = (storedAccounts || []).find(account =>
+    String(account?.protectedAccountKey || '') === scopedKey);
+  if (!target) return true;
+  return accountNeedsLiabilitiesFetch_(target);
+}
+
 export class PlaidConnectionService {
   constructor({ config, store, cipher, credentials, plaid, randomId, now = () => Date.now() }) {
     this.config = config;
@@ -342,31 +361,37 @@ export class PlaidConnectionService {
   async preview(userKey, input) {
     const connectionKey = requiredString(input?.protectedConnectionKey, 'connection key', 128);
     if (!/^[a-f0-9]{64}$/.test(connectionKey)) fail(400, 'INVALID_REQUEST', 'Connection key is invalid.');
+    const targetAccountKey = String(input?.targetProtectedAccountKey || '').trim();
     const existingByAccount = input?.existingFactsByProtectedAccountKey &&
       typeof input.existingFactsByProtectedAccountKey === 'object' &&
       !Array.isArray(input.existingFactsByProtectedAccountKey)
       ? input.existingFactsByProtectedAccountKey : {};
     const state = await this.store.getReusableConnection(userKey, connectionKey);
+    const storedAccounts = typeof this.store.listStoredAccounts === 'function'
+      ? await this.store.listStoredAccounts(userKey, connectionKey) : [];
     const credential = decodeCredentialBlob(await this.cipher.decrypt(state.credentialCiphertext));
     const observedAt = new Date(this.now()).toISOString();
     try {
       const accountsResponse = await this.plaid.getAccounts(credential.accessToken);
-      const hasCredit = (accountsResponse.accounts || []).some(account =>
-        String(account?.type || '').toLowerCase() === 'credit' &&
-        String(account?.subtype || '').toLowerCase() === 'credit card');
-      const liabilitiesResponse = hasCredit
+      const needsLiabilities = previewNeedsLiabilities_(storedAccounts, targetAccountKey,
+        accountsResponse.accounts || []);
+      const liabilitiesResponse = needsLiabilities
         ? await this.plaid.getLiabilities(credential.accessToken) : null;
       const identitySecret = await this.credentials.getIdentityHmac();
       const accounts = normalizePlaidMixedAccounts({ accountsResponse, liabilitiesResponse,
         identitySecret, config: this.config, protectedKey, observedAt });
-      const preview = accounts.flatMap(account => buildReadOnlyPreview({ accounts: [account],
+      const scopedAccounts = targetAccountKey
+        ? accounts.filter(account => String(account.protectedAccountKey || '') === targetAccountKey)
+        : accounts;
+      const preview = scopedAccounts.flatMap(account => buildReadOnlyPreview({ accounts: [account],
         existingFacts: existingByAccount[account.protectedAccountKey] || {}, observedAt,
         environment: this.config.environment,
         comparisonExplicit: Object.hasOwn(existingByAccount, account.protectedAccountKey) }));
       await this.store.recordObservation(userKey, connectionKey, observedAt, this.now());
+      const usedLiabilities = !!liabilitiesResponse;
       return { ok: true, environment: this.config.environment, readOnly: true,
-        authority: 'SHADOW_ONLY', products: hasCredit ? ['assets', 'liabilities'] : ['assets'],
-        sources: hasCredit ? ['accounts/get', 'liabilities/get'] : ['accounts/get'],
+        authority: 'SHADOW_ONLY', products: usedLiabilities ? ['assets', 'liabilities'] : ['assets'],
+        sources: usedLiabilities ? ['accounts/get', 'liabilities/get'] : ['accounts/get'],
         observedAt, accounts: preview };
     } catch (error) {
       if (error instanceof PlaidError && ['ITEM_LOGIN_REQUIRED', 'PENDING_EXPIRATION',

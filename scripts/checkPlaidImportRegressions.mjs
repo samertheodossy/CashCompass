@@ -103,7 +103,8 @@ assert(!/appendRow|setValue|setValues|appendFinancialFact|runDebtPlanner/i.test(
   assert(!previewCore.includes('updateBankAccountValueByDate_') &&
     !previewCore.includes('updateDebtField('),
     'Import Data preview core must not write financial fields');
-  assert(previewCore.includes('targetProtectedAccountKey'),
+  assert(previewCore.includes('targetProtectedAccountKey') &&
+    previewCore.includes('plaidImportConfirmedFacts_(connection, mappings, targetAccountKey)'),
     'Import Data must persist baselines only for the triggering account');
   assert(bridge.includes('plaidImportAccountReviewObservedAt_'),
     'Import Data must use account-scoped review tokens for Apply freshness');

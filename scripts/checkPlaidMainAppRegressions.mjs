@@ -154,6 +154,7 @@ assert(client.includes('plaidMainHasValidAccountPreview_') &&
   client.includes('plaidMainClearAccountReviewState_') &&
   /plaidMainRenderDomain_[\s\S]{0,3000}plaidMainGetAccountPreviewBundle_/.test(client) &&
   /plaidMainImportData_[\s\S]{0,600}protectedAccountKey/.test(client) &&
+  client.includes('plaidMainPatchAccountCard_') &&
   client.includes('Not yet imported'),
   'review UI must use account-scoped previews that coexist under one connection');
 

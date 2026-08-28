@@ -278,6 +278,24 @@ test('multi-account preview is read-only and preserves depository and credit evi
   assert.equal(JSON.stringify(result).includes('raw-request-id-private'), false);
 });
 
+test('account-scoped depository preview skips liabilities on mixed connections', async () => {
+  const { service, plaid: observedPlaid, dto } = await connected();
+  const checking = dto.accounts.find(account => account.subtype === 'checking');
+  assert.ok(checking);
+  const result = await service.preview('opaque-user-a', {
+    protectedConnectionKey: dto.protectedConnectionKey,
+    targetProtectedAccountKey: checking.protectedAccountKey,
+    existingFactsByProtectedAccountKey: {
+      [checking.protectedAccountKey]: { CURRENT_BALANCE: { value: 1000 } }
+    }
+  });
+  assert.equal(result.accounts.length, 1);
+  assert.equal(result.accounts[0].protectedAccountKey, checking.protectedAccountKey);
+  assert.deepEqual(result.products, ['assets']);
+  assert.deepEqual(result.sources, ['accounts/get']);
+  assert.equal(observedPlaid.liabilitiesCalls, 0);
+});
+
 test('depository-only refresh does not initialize or call Liabilities', async () => {
   const plaid = new FakePlaid();
   plaid.getAccounts = async () => {

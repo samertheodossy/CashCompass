@@ -447,6 +447,12 @@ export class FirestoreConnectionStore {
     });
   }
 
+  async listStoredAccounts(userKey, connectionKey) {
+    const snapshot = await this.user(userKey).collection('connections').doc(connectionKey)
+      .collection('accounts').get();
+    return snapshot.docs.map(doc => doc.data());
+  }
+
   async recordObservation(userKey, connectionKey, observedAt, nowMs = Date.now()) {
     await this.user(userKey).collection('connections').doc(connectionKey).update({
       lastObservedAt: new Date(observedAt), updatedAt: new Date(nowMs)

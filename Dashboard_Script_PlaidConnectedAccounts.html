@@ -971,7 +971,7 @@ function plaidMainApplySelectedUpdates_(domain, connection, account, accountPrev
   }
   plaidMainState_.applyingKeys[selectionKey] = true;
   plaidMainSetAccountMessage_(connection, account, '', false, false);
-  plaidMainRenderDomain_(domain);
+  plaidMainPatchAccountCard_(domain, connection, account);
   plaidMainCall_(plaidMainApplyRpcName_(accountDomain), {
     protectedConnectionKey: connection.protectedConnectionKey,
     protectedAccountKey: account.protectedAccountKey,
@@ -986,16 +986,12 @@ function plaidMainApplySelectedUpdates_(domain, connection, account, accountPrev
     if (result.refreshNotice) {
       plaidMainSetAccountMessage_(connection, account, result.refreshNotice, false, false);
     }
-    plaidMainRenderDomain_(domain);
-    if (typeof runPlannerAndRefreshDashboardFromSave === 'function') {
-      setTimeout(function() {
-        try { runPlannerAndRefreshDashboardFromSave(); } catch (_e) { /* background refresh */ }
-      }, 0);
-    }
+    plaidMainPatchAccountCard_(domain, connection, account);
+    plaidMainDeferPlannerRefresh_();
   }, function(err) {
     if (!plaidMainFinishApplyRequest_(connection, account, requestId)) return;
     plaidMainSetAccountMessage_(connection, account, plaidMainUserMessage_(err), true, false);
-    plaidMainRenderDomain_(domain);
+    plaidMainPatchAccountCard_(domain, connection, account);
   });
 }
 
@@ -1334,6 +1330,58 @@ function plaidMainRenderAccountActions_(domain, connection, account, accountCard
   }
 }
 
+function plaidMainAccountDomId_(connection, account) {
+  return 'plaid-main-acct-' + plaidMainApplySelectionKey_(connection, account)
+    .replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function plaidMainDeferPlannerRefresh_() {
+  if (typeof runPlannerAndRefreshDashboardFromSave !== 'function') return;
+  setTimeout(function() {
+    try { runPlannerAndRefreshDashboardFromSave(); } catch (_e) { /* background refresh */ }
+  }, 2500);
+}
+
+function plaidMainBuildAccountCard_(domain, connection, account) {
+  var accountCard = plaidMainElement_('div', 'info');
+  accountCard.id = plaidMainAccountDomId_(connection, account);
+  accountCard.style.marginTop = '10px';
+  var title = (account.displayName || account.officialName || 'Financial account') +
+    (account.mask ? ' ••••' + account.mask : '');
+  accountCard.appendChild(plaidMainElement_('strong', '', title));
+  accountCard.appendChild(plaidMainElement_('span', 'muted',
+    '  ' + String(account.type || 'unknown').toUpperCase() +
+    (account.subtype ? ' · ' + account.subtype : '')));
+  plaidMainRenderAssociation_(domain, connection, account, accountCard);
+
+  var localStatus = plaidMainRenderAccountLocalStatus_(connection, account);
+  if (localStatus) accountCard.appendChild(localStatus);
+
+  var importedAt = plaidMainLastImportedAt_(connection, account);
+  accountCard.appendChild(plaidMainElement_('div', 'muted',
+    'Last imported: ' + (importedAt ? plaidMainFormatImportedAt_(importedAt) : 'Not yet imported')));
+
+  plaidMainRenderAccountActions_(domain, connection, account, accountCard);
+
+  var preview = plaidMainGetAccountPreviewBundle_(connection, account);
+  if (preview && plaidMainHasValidAccountPreview_(connection, account)) {
+    plaidMainRenderPreviewAccount_(domain, connection, account, accountCard, preview);
+  }
+  return accountCard;
+}
+
+function plaidMainPatchAccountCard_(domain, connection, account) {
+  var domId = plaidMainAccountDomId_(connection, account);
+  var existing = document.getElementById(domId);
+  var nextCard = plaidMainBuildAccountCard_(domain, connection, account);
+  if (existing && existing.parentNode) {
+    existing.parentNode.replaceChild(nextCard, existing);
+    return true;
+  }
+  plaidMainRenderDomain_(domain);
+  return false;
+}
+
 function plaidMainRenderDomain_(domain) {
   var targetDomain = plaidMainDomain_(domain);
   var root = document.getElementById(plaidMainIds_(targetDomain).connections);
@@ -1357,30 +1405,7 @@ function plaidMainRenderDomain_(domain) {
     card.appendChild(heading);
 
     entry.accounts.forEach(function(account) {
-      var accountCard = plaidMainElement_('div', 'info');
-      accountCard.style.marginTop = '10px';
-      var title = (account.displayName || account.officialName || 'Financial account') +
-        (account.mask ? ' ••••' + account.mask : '');
-      accountCard.appendChild(plaidMainElement_('strong', '', title));
-      accountCard.appendChild(plaidMainElement_('span', 'muted',
-        '  ' + String(account.type || 'unknown').toUpperCase() +
-        (account.subtype ? ' · ' + account.subtype : '')));
-      plaidMainRenderAssociation_(targetDomain, connection, account, accountCard);
-
-      var localStatus = plaidMainRenderAccountLocalStatus_(connection, account);
-      if (localStatus) accountCard.appendChild(localStatus);
-
-      var importedAt = plaidMainLastImportedAt_(connection, account);
-      accountCard.appendChild(plaidMainElement_('div', 'muted',
-        'Last imported: ' + (importedAt ? plaidMainFormatImportedAt_(importedAt) : 'Not yet imported')));
-
-      plaidMainRenderAccountActions_(targetDomain, connection, account, accountCard);
-
-      var preview = plaidMainGetAccountPreviewBundle_(connection, account);
-      if (preview && plaidMainHasValidAccountPreview_(connection, account)) {
-        plaidMainRenderPreviewAccount_(targetDomain, connection, account, accountCard, preview);
-      }
-      card.appendChild(accountCard);
+      card.appendChild(plaidMainBuildAccountCard_(targetDomain, connection, account));
     });
     root.appendChild(card);
   });
@@ -1413,7 +1438,7 @@ function plaidMainImportData_(domain, connection, account) {
   var requestId = plaidMainBeginImportRequest_(connection, account);
   plaidMainState_.importingKeys[selectionKey] = true;
   plaidMainSetAccountMessage_(connection, account, '', false, false);
-  plaidMainRenderDomain_(domain);
+  plaidMainPatchAccountCard_(domain, connection, account);
   plaidMainCall_('plaidImportPreviewMapped', {
     protectedConnectionKey: connection.protectedConnectionKey,
     protectedAccountKey: account.protectedAccountKey
@@ -1425,11 +1450,11 @@ function plaidMainImportData_(domain, connection, account) {
         plaidMainSetAccountMessage_(connection, account,
           '✓ Data imported. Review changes below.', false, false);
       }
-      plaidMainRenderDomain_(domain);
+      plaidMainPatchAccountCard_(domain, connection, account);
     }, function(err) {
       plaidMainState_.importingKeys[selectionKey] = false;
       plaidMainSetAccountMessage_(connection, account, plaidMainUserMessage_(err), true, false);
-      plaidMainRenderDomain_(domain);
+      plaidMainPatchAccountCard_(domain, connection, account);
     });
 }
 
