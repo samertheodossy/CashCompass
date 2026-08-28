@@ -855,6 +855,9 @@ Sequenced **immediately after Validator Phase 2 and before major new user featur
 - `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` — deferred next Investment milestone:
   multi-broker normalization, tax lots, passive income, and recommendation-only
   optimizers (Robinhood protected).
+- `MULTI_BROKER_PORTFOLIO_DATA_MODEL.md` — Foundation v1 canonical contracts
+  (CSV-first adapter model, replay/reconciliation, retirement registration); no
+  broker adapters beyond Robinhood wrapper yet.
 - `TODO.md → Product Maturity Stages` — the detailed Stage 1–6 roadmap (effort, dependencies, history, Beta Gate).
 - `PROJECT_CONTEXT.md` — current architecture + project status.
 - `ENGINEERING_STANDARDS.md` — engineering rules, canonical styling, and **Milestone Discipline (§11)**.

@@ -13,6 +13,8 @@ function getSheetNames_() {
     INVESTMENT_ACTIVITY: 'SYS - Investment Activity',
     INVESTMENT_HOLDINGS: 'SYS - Investment Holdings',
     INVESTMENT_PLANS: 'SYS - Investment Plans',
+    INVESTMENT_TAX_LOTS: 'SYS - Investment Tax Lots',
+    INVESTMENT_SECURITIES: 'SYS - Investment Securities',
     FINANCIAL_ACCOUNTS: 'SYS - Financial Accounts',
     ACCOUNT_SOURCE_LINKS: 'SYS - Account Source Links',
     FINANCIAL_FACTS: 'SYS - Financial Facts',

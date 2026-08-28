@@ -29,7 +29,9 @@ var FINANCIAL_IDENTITY_OWNER_IDS_ = {
 };
 var FINANCIAL_IDENTITY_REGISTRATION_TYPES_ = {
   INDIVIDUAL: true, JOINT: true, CUSTODIAL: true, TAXABLE: true,
-  '401K': true, IRA: true, '529': true, TRUST: true,
+  TRADITIONAL_IRA: true, ROTH_IRA: true,
+  '401K': true, '403B': true, HSA: true, OTHER_RETIREMENT: true,
+  IRA: true, '529': true, TRUST: true,
   PROPERTY_TITLE: true, UNKNOWN: true
 };
 
