@@ -1179,6 +1179,8 @@ function updateBankAccountValueByDate_(payload, trustedProvenance) {
       const tz = Session.getScriptTimeZone();
       const monthLabel = Utilities.formatDate(balanceDate, tz, 'MMM-yy');
       const newRaw = round2_(toNumber_(currentValue));
+      const plaidApply = trustedProvenance &&
+        String(trustedProvenance.source || '').toUpperCase() === 'PLAID';
       appendActivityLog_(ss, {
         eventType: 'bank_account_update',
         entryDate: Utilities.formatDate(stripTime_(new Date()), tz, 'yyyy-MM-dd'),
@@ -1186,7 +1188,7 @@ function updateBankAccountValueByDate_(payload, trustedProvenance) {
         direction: '',
         payee: accountName,
         category: '',
-        accountSource: '',
+        accountSource: plaidApply ? 'PLAID' : '',
         cashFlowSheet: '',
         cashFlowMonth: '',
         dedupeKey: '',
@@ -1201,6 +1203,7 @@ function updateBankAccountValueByDate_(payload, trustedProvenance) {
           newRaw: newRaw,
           availableNowSet: updateAvailableNow,
           minBufferSet: updateMinBuffer,
+          importSource: plaidApply ? 'PLAID' : '',
           importProvenance: trustedProvenance ? {
             source: String(trustedProvenance.source || ''),
             environment: String(trustedProvenance.environment || ''),

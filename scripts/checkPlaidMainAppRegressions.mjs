@@ -125,14 +125,37 @@ assert(!/plaidMainElement_\([^)]*row\.status|row\.reason \? ' · '/.test(client)
   'raw provider review codes must not be rendered in Connected UI');
 assert(client.includes('plaidMainApplySelectedUpdates_') &&
   client.includes('plaidImportApplyDebtUpdates') &&
+  client.includes('plaidImportApplyCashUpdates') &&
+  client.includes('PLAID_MAIN_CASH_APPLY_KEYS_') &&
   client.includes("'Apply Selected Updates'") &&
   client.includes('allowApplySelection') &&
-  client.includes('plaidMainDebtApplySelectable_'),
-  'Debt Apply selection UX is missing from Connected client');
+  client.includes('plaidMainApplySelectable_') &&
+  client.includes('plaidMainSelectedEligibleApplyCount_') &&
+  client.includes('importingKeys') &&
+  client.includes('plaidMainRenderAccountLocalStatus_'),
+  'Debt and Bank Apply selection UX and account-local status are present in Connected client');
+
+assert(client.includes('Importing data…') &&
+  !client.includes('Importing provider data…') &&
+  /loadPlaidConnectedAccounts_[\s\S]{0,400}plaidMainSetStatus_/.test(client),
+  'section Reload must keep section-level status while Import uses account-local status');
+
+assert(/plaidMainApplySelectable_[\s\S]{0,200}change === 'Same'/.test(client) &&
+  /applyBtn\.disabled = applying \|\| applyCount < 1/.test(client),
+  'Apply button must disable when no eligible changed fields remain selected');
 assert(!client.includes('approvalToken'),
   'Apply must not use browser approval tokens');
 assert(client.includes('Import Data = read-only provider retrieval'),
   'Connected client must document Import vs Apply contract');
+
+assert(client.includes('plaidMainHasValidAccountPreview_') &&
+  client.includes('accountImportState') &&
+  client.includes('accountPreviews') &&
+  client.includes('plaidMainClearAccountReviewState_') &&
+  /plaidMainRenderDomain_[\s\S]{0,3000}plaidMainGetAccountPreviewBundle_/.test(client) &&
+  /plaidMainImportData_[\s\S]{0,600}protectedAccountKey/.test(client) &&
+  client.includes('Not yet imported'),
+  'review UI must use account-scoped previews that coexist under one connection');
 
 new vm.Script(bridge);
 new vm.Script(client);

@@ -44,7 +44,7 @@ assert(bridge.includes("['owner', 'email', 'userKey', 'workbookId', 'spreadsheet
   'browser ownership fields are not rejected');
 for (const operation of ['plaidImportExchangePublicToken', 'plaidImportReconnect',
   'plaidImportCompleteReconnect', 'plaidImportSaveMapping', 'plaidImportPreviewMapped',
-  'plaidImportApplyDebtUpdates', 'plaidImportInvalidateMapping', 'plaidImportDisconnect']) {
+  'plaidImportApplyDebtUpdates', 'plaidImportApplyCashUpdates', 'plaidImportInvalidateMapping', 'plaidImportDisconnect']) {
   const start = bridge.indexOf(`function ${operation}`);
   const end = bridge.indexOf('\nfunction ', start + 1);
   const source = bridge.slice(start, end < 0 ? bridge.length : end);
@@ -94,8 +94,22 @@ assert(bridge.includes('plaidImportEnsureIdentityFoundationForConnected_') &&
   bridge.includes('PLAID_IMPORT_IDENTITY_REVIEW_ERROR_') &&
   bridge.includes('runPlaidImportIdentitySelfInitDiagnostic'),
   'Connected path does not self-init identity foundation safely');
-assert(!/appendRow|setValue|setValues|appendFinancialFact|updateBankAccountValueByDate_|runDebtPlanner/i.test(bridge),
+assert(!/appendRow|setValue|setValues|appendFinancialFact|runDebtPlanner/i.test(bridge),
   'bridge file must not contain direct workbook or Planning writers');
+{
+  const previewStart = bridge.indexOf('function plaidImportFetchPreviewMappedCore_');
+  const previewEnd = bridge.indexOf('\nfunction plaidImportRefreshPreviewAccountAfterApply_');
+  const previewCore = bridge.slice(previewStart, previewEnd);
+  assert(!previewCore.includes('updateBankAccountValueByDate_') &&
+    !previewCore.includes('updateDebtField('),
+    'Import Data preview core must not write financial fields');
+  assert(previewCore.includes('targetProtectedAccountKey'),
+    'Import Data must persist baselines only for the triggering account');
+  assert(bridge.includes('plaidImportAccountReviewObservedAt_'),
+    'Import Data must use account-scoped review tokens for Apply freshness');
+  assert(/function plaidImportApplyCashUpdates_[\s\S]{0,8000}updateBankAccountValueByDate_\(/.test(bridge),
+    'Bank Apply must use canonical bank writer');
+}
 assert(!/transactions\/|investments\/|\/asset_report\//i.test(bridge),
   'read-only bridge requests a prohibited provider product endpoint');
 
@@ -136,12 +150,15 @@ assert(client.includes("plaidMainCall_('plaidImportSaveAprSourcePreference'") ||
   client.includes('plaidImportSaveAprSourcePreference'),
   'Connected client must save APR source preferences through the bridge');
 assert(bridge.includes('plaidImportApplyDebtUpdates') &&
+  bridge.includes('plaidImportApplyCashUpdates') &&
   bridge.includes('PLAID_IMPORT_REVIEW_BASELINE_KEY_PREFIX_') &&
   bridge.includes('reviewObservedAt') &&
-  bridge.includes('updateDebtField({'),
-  'Debt Apply bridge, review baseline, and canonical writer seam are missing');
+  bridge.includes('updateDebtField({') &&
+  bridge.includes('updateBankAccountValueByDate_('),
+  'Debt and Bank Apply bridges, review baseline, and canonical writer seams are present');
 assert(client.includes("plaidMainCall_('plaidImportPreviewMapped'") &&
-  !client.includes('updateDebtField('),
+  !client.includes('updateDebtField(') &&
+  !client.includes('updateBankAccountValueByDate('),
   'Connected client must preview read-only and Apply through bridge only');
 assert(!/accessToken|itemId|account_id|item_id|client_id|production secret/i.test(client),
   'browser client references raw provider identities or credentials');
