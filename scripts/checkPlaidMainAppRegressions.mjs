@@ -184,6 +184,37 @@ assert(client.includes('collapsedAccountKeys') &&
   /if \(hasPreview\) \{[\s\S]{0,200}plaidMainRenderReviewToggleButton_/.test(client),
   'Connected account review collapse/expand UX contract is missing');
 
+assert(client.includes('metadataByDomain') &&
+  client.includes('plaidMainInvalidateMetadataCache_') &&
+  client.includes('plaidMainStoreMetadataCache_') &&
+  /loadPlaidConnectedAccounts_[\s\S]{0,900}metadataByDomain\[targetDomain\]/.test(client) &&
+  /plaidMainCall_\('plaidImportConnectedAccountsState', \{ domain: targetDomain \}/.test(client) &&
+  /loadPlaidConnectedAccounts_\(true, targetDomain\)/.test(client) &&
+  /plaidMainInvalidateMetadataCache_\(\)[\s\S]{0,400}loadPlaidConnectedAccounts_\(true/.test(client) &&
+  !/plaidMainImportData_[\s\S]{0,600}plaidMainInvalidateMetadataCache_/.test(client) &&
+  !/plaidMainApplySelectedUpdates_[\s\S]{0,900}plaidMainInvalidateMetadataCache_/.test(client),
+  'Connected initial load must use domain-scoped session metadata cache with explicit invalidation');
+
+{
+  const connectedStart = bridge.indexOf('function plaidImportConnectedAccountsState');
+  const connectedEnd = bridge.indexOf('\nfunction ', connectedStart + 1);
+  const connectedSource = bridge.slice(connectedStart, connectedEnd < 0 ? bridge.length : connectedEnd);
+  assert(!connectedSource.includes('/v1/preview') &&
+    !connectedSource.includes('plaidImportFetchPreviewMappedCore_') &&
+    !connectedSource.includes('plaidImportExistingFacts_') &&
+    !connectedSource.includes('plaidImportStoreReviewBaseline_') &&
+    !connectedSource.includes('buildFinancialIdentityFoundationPreview_') &&
+    !connectedSource.includes('financialIdentityReadExplicitComparisonAccounts_') &&
+    !connectedSource.includes('plaidImportRequestRegistry_') &&
+    connectedSource.includes('plaidImportFetchConnectedBackendMetadata_') &&
+    bridge.includes('UrlFetchApp.fetchAll') &&
+    connectedSource.includes('metadataOnly: true') &&
+    connectedSource.includes('stageTimingMs') &&
+    connectedSource.includes('plaidImportBuildConnectedDisplayTargetsFromRegistry_') &&
+    /plaidImportMappingState_\(connection, account, mappings, registry\)/.test(connectedSource),
+    'initial Connected load must remain metadata-only without financial evidence reads');
+}
+
 new vm.Script(bridge);
 new vm.Script(client);
 

@@ -22,6 +22,7 @@ var plaidMainState_ = {
   applyingKeys: {},
   importingKeys: {},
   collapsedAccountKeys: {},
+  metadataByDomain: {},
   accountMessages: {},
   pendingDisconnectKey: '',
   pendingDisconnectAccountKey: '',
@@ -207,12 +208,39 @@ function plaidMainSetBusy_(domain, busy) {
   });
 }
 
+function plaidMainInvalidateMetadataCache_(domain) {
+  if (!plaidMainState_.metadataByDomain) plaidMainState_.metadataByDomain = {};
+  if (domain) {
+    delete plaidMainState_.metadataByDomain[plaidMainDomain_(domain)];
+  } else {
+    plaidMainState_.metadataByDomain = {};
+  }
+  plaidMainState_.data = null;
+}
+
+function plaidMainStoreMetadataCache_(domain, result) {
+  if (!plaidMainState_.metadataByDomain) plaidMainState_.metadataByDomain = {};
+  var key = plaidMainDomain_(domain);
+  plaidMainState_.metadataByDomain[key] = result;
+  plaidMainState_.data = result;
+}
+
+function plaidMainSyncActiveMetadataCache_(domain) {
+  var key = plaidMainDomain_(domain);
+  if (!plaidMainState_.metadataByDomain || !plaidMainState_.data) return;
+  plaidMainState_.metadataByDomain[key] = plaidMainState_.data;
+}
+
 function loadPlaidConnectedAccounts_(force, domain) {
   plaidMainEnsureStyles_();
   var targetDomain = plaidMainDomain_(domain);
   var root = document.getElementById(plaidMainIds_(targetDomain).connections);
   if (!root) return;
-  if (!force && plaidMainState_.data) {
+  if (!force && plaidMainState_.metadataByDomain &&
+      plaidMainState_.metadataByDomain[targetDomain]) {
+    plaidMainState_.data = plaidMainState_.metadataByDomain[targetDomain];
+    var cachedRoot = document.getElementById(plaidMainIds_(targetDomain).connections);
+    if (cachedRoot) cachedRoot.setAttribute('data-plaid-metadata-source', 'cache');
     plaidMainRenderDomain_(targetDomain);
     return;
   }
@@ -221,8 +249,9 @@ function loadPlaidConnectedAccounts_(force, domain) {
   plaidMainSetBusy_(targetDomain, true);
   plaidMainSetStatus_(targetDomain, 'Loading connected ' + plaidMainDomainLabel_(targetDomain) + '…', false);
   root.textContent = '';
-  plaidMainCall_('plaidImportConnectedAccountsState', undefined, function(result) {
-    plaidMainState_.data = result;
+  root.setAttribute('data-plaid-metadata-source', 'network');
+  plaidMainCall_('plaidImportConnectedAccountsState', { domain: targetDomain }, function(result) {
+    plaidMainStoreMetadataCache_(targetDomain, result);
     plaidMainState_.loading[targetDomain] = false;
     plaidMainSetBusy_(targetDomain, false);
     plaidMainSetStatus_(targetDomain, '', false);
@@ -230,7 +259,9 @@ function loadPlaidConnectedAccounts_(force, domain) {
   }, function(err) {
     plaidMainState_.loading[targetDomain] = false;
     plaidMainSetBusy_(targetDomain, false);
-    plaidMainSetStatus_(targetDomain, plaidMainUserMessage_(err), true);
+    var message = plaidMainUserMessage_(err);
+    plaidMainSetStatus_(targetDomain, message, true);
+    root.appendChild(plaidMainElement_('p', 'muted', message));
   });
 }
 
@@ -1536,6 +1567,7 @@ function plaidMainSaveMapping_(domain, connection, account, stableAccountId, sta
       result.mapping, stableAccountId, status);
     plaidMainState_.associationEditing[plaidMainAssociationKey_(connection, account)] = false;
     plaidMainClearAccountReviewState_(connection, account);
+    plaidMainSyncActiveMetadataCache_(domain);
     plaidMainSetAccountMessage_(connection, account,
       status === 'IGNORED' ? 'Provider account ignored.' : 'CashCompass account associated.', false, false);
     plaidMainRenderDomain_(domain);
@@ -1590,7 +1622,7 @@ function plaidMainConnect_(domain) {
           correlationId: result.correlationId,
           institutionId: String(metadata && metadata.institution && metadata.institution.institution_id || '')
         }, function() {
-          plaidMainState_.data = null;
+          plaidMainInvalidateMetadataCache_();
           plaidMainSetBusy_(targetDomain, false);
           plaidMainSetStatus_(targetDomain, 'Institution connected.', false);
           loadPlaidConnectedAccounts_(true, targetDomain);
@@ -1623,7 +1655,7 @@ function plaidMainReconnect_(domain, connection, account) {
           protectedConnectionKey: connection.protectedConnectionKey,
           correlationId: result.correlationId
         }, function() {
-          plaidMainState_.data = null;
+          plaidMainInvalidateMetadataCache_();
           plaidMainSetAccountMessage_(connection, account, 'Connection restored.', false, false);
           loadPlaidConnectedAccounts_(true, targetDomain);
         });
@@ -1689,7 +1721,7 @@ function plaidMainConfirmDisconnect_() {
     plaidMainRenderDomain_(domain);
   }
   plaidMainCall_('plaidImportDisconnect', { protectedConnectionKey: key }, function() {
-    plaidMainState_.data = null;
+    plaidMainInvalidateMetadataCache_();
     plaidMainClearConnectionAccountReviewState_(key);
     if (pair) {
       plaidMainSetAccountMessage_(pair.connection, pair.account, 'Institution disconnected.', false, false);

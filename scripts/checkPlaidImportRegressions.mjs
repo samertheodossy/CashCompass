@@ -176,6 +176,61 @@ assert(regressionScenarios.includes('REG-075') && regressionScenarios.includes('
   regressionScenarios.includes('Connected data is temporarily unavailable.'),
   'one-product inline or future Activity Log regression is missing');
 
+assert(bridge.includes('plaidImportBuildConnectedDisplayTargets_') &&
+  bridge.includes('plaidImportBuildConnectedDisplayTargetsFromRegistry_') &&
+  bridge.includes('plaidImportEnsureIdentityReadyForConnected_') &&
+  bridge.includes('financialIdentityReadRegistry_') &&
+  bridge.includes('plaidImportFetchConnectedBackendMetadata_') &&
+  bridge.includes('UrlFetchApp.fetchAll') &&
+  bridge.includes('plaidImportLogConnectedLoadTiming_') &&
+  bridge.includes('metadataOnly: true') &&
+  /function plaidImportConnectedAccountsState[\s\S]{0,2200}stageTimingMs/.test(bridge),
+  'Connected initial load must expose lightweight metadata path with stage timing');
+
+{
+  const connectedStart = bridge.indexOf('function plaidImportConnectedAccountsState');
+  const connectedEnd = bridge.indexOf('\nfunction ', connectedStart + 1);
+  const connectedSource = bridge.slice(connectedStart, connectedEnd < 0 ? bridge.length : connectedEnd);
+  assert(!connectedSource.includes('/v1/preview') &&
+    !connectedSource.includes('plaidImportExistingFacts_') &&
+    !connectedSource.includes('plaidImportRequestDebtLegacyIndex_') &&
+    !connectedSource.includes('plaidImportRequestCashLegacyIndex_') &&
+    !connectedSource.includes('getBankAccountUiData()') &&
+    !connectedSource.includes('getDebtsUiData()') &&
+    !connectedSource.includes('getInvestmentUiData()') &&
+    !connectedSource.includes('buildFinancialIdentityFoundationPreview_') &&
+    !connectedSource.includes('financialIdentityReadExplicitComparisonAccounts_') &&
+    !connectedSource.includes('plaidImportRequestRegistry_') &&
+    !connectedSource.includes('reviewAnchorDate') &&
+    /plaidImportMappingState_\(connection, account, mappings, registry\)/.test(connectedSource),
+    'initial Connected metadata load must not fetch preview, UI models, or foundation preview');
+}
+
+{
+  const displayStart = bridge.indexOf('function plaidImportBuildConnectedDisplayTargetsFromRegistry_');
+  const displayEnd = bridge.indexOf('function plaidImportLogConnectedLoadTiming_');
+  const displaySource = bridge.slice(displayStart, displayEnd);
+  assert(displaySource.includes('plaidImportConnectedTargetEligible_') &&
+    displaySource.includes('displayName') &&
+    displaySource.includes('stableAccountId') &&
+    !displaySource.includes('getBankAccountUiData()') &&
+    !displaySource.includes('getDebtsUiData()') &&
+    !displaySource.includes('getInvestmentUiData()'),
+    'Connected display targets must use registry labels only');
+  const eligibleStart = bridge.indexOf('function plaidImportConnectedTargetEligible_');
+  const eligibleEnd = bridge.indexOf('function plaidImportBuildConnectedDisplayTargetsFromRegistry_');
+  const eligibleSource = bridge.slice(eligibleStart, eligibleEnd);
+  assert(eligibleSource.includes("normalized === 'INVESTMENT'") &&
+    eligibleSource.includes("normalized === 'DEBT'") &&
+    eligibleSource.includes("rowDomain === 'CASH'"),
+    'Connected display targets must remain domain scoped');
+}
+
+assert(client.includes("plaidMainCall_('plaidImportConnectedAccountsState', { domain:") &&
+  client.includes('metadataByDomain') &&
+  /loadPlaidConnectedAccounts_\(true,/.test(client),
+  'Connected client must pass domain and support explicit metadata reload');
+
 new vm.Script(bridge);
 new vm.Script(client);
 

@@ -4271,6 +4271,12 @@ assert.doesNotMatch(files['Dashboard_Script_PlanningRetirement.html'], /From pro
     'Collapsed Connected account cards must avoid horizontal overflow on narrow screens');
   assert.doesNotMatch(plaidClient, /plaidMainToggleAccountReviewCollapsed_[\s\S]{0,300}plaidMainCall_/,
     'Connected collapse/expand must not trigger server requests');
+  assert.match(plaidClient, /metadataByDomain/,
+    'Connected metadata cache must be session-local');
+  assert.match(plaidClient, /plaidMainCall_\('plaidImportConnectedAccountsState', \{ domain: targetDomain \}/,
+    'Connected initial load must request domain-scoped metadata');
+  assert.doesNotMatch(plaidClient, /plaidMainImportData_[\s\S]{0,600}plaidMainInvalidateMetadataCache_/,
+    'Import Data must not invalidate connection metadata cache');
 }
 
 console.log('Dashboard UX regression checks passed.');
