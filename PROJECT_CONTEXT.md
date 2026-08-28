@@ -25,9 +25,28 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
 - **P0 Project Stabilization — ✅ complete 2026-07-20:** ProductDecision inventory, documentation synchronization, static Tier-2 Central resolver verification, Recovery Validation 6F, and the two-track isolated Central UX/runtime pass are closed. The source fixes were pushed to the Central project and only the isolated deployment was updated to `@114`; Beta remains `@106` and no bound deployment or owner/bounded workbook was touched. The representative populated fixture verified real Bank, Investment, House, and Debt rendering; selection/action gating; property equity; Setup/Help language; subtab retention; and broad navigation with a clean console. The Central-owned fixture was returned to Drive Trash after testing.
 - **Status snapshot (2026-08-07):** Central Architecture ~96%+; the major platform, recovery, financial-integrity, workbook, Validator, Harness, and Release Readiness foundations are shipped. The shared correction foundation `5h` and direct Quick Add/Donation correction `5i` remain committed foundations in `d040a34` and `16b6a8f`, with clean guarded isolated Central `@240` evidence. Bill occurrence correction (`5j`) is deferred for a later focused redesign. The completed page-UX slices are `3c` in `7c0e2ac` at isolated `@293`, `3a` in `be76bdb` at `@294`, and `3b` in `3e2db4f` at `@298`. Follow-up Bill reliability commit `433bfed` is user-verified at `@299`. Exact-owner Performance Planner evidence is ratified for `8aa4bf5` / isolated `@318`; `4d` cross-flow measurement is complete on `@319`; ordinary Save `4f` is closed on `@322` as a 41.0% p50 improvement with a documented strict-budget near-miss; Retirement `4g` is closed on `@328`; and money-format consistency `3n` / `REG-067` is committed and pushed as `d1278ef` after a 26/26 Populated V12 PASS on `@331`. Beta remains `@106`; bounded deployment and workbook control remain with the user.
 
-**Current implementation priority (2026-08-25):** preserve the frozen Planning foundation and owner-review the contextual main-app integration for the proven read-only Plaid evidence. Connected evidence is grouped under Bank Accounts, Debts, and Investments rather than a separate top-level workspace. Existing Part 2A-1 through 2A-5 remain an enabling shadow foundation, not production-ready import or Planning authority. No Apply, Financial Facts write, Planning switch, or transaction ingestion exists. **PLAID IS A REVIEWED IMPORT CHANNEL**: Plaid retrieves candidate data, CashCompass previews it, and the user later decides what becomes authoritative; no silent overwrite.
+**Current implementation priority (2026-08-27):**
 
-**Plaid connectivity checkpoint (2026-08-25):** Plaid remains optional; read `PLAID_CONNECTIVITY.md` before related work. Trial project `cashcompass-plaid-trial` (`462665464202`) runs revision `cashcompass-plaid-backend-00006-lgd`; isolated Central `@403` provides the contextual Trial/real-data read-only candidate inside Bank Accounts, Debts, and Investments, with no separate top-level Connected Accounts workspace. `@403` fixes the asynchronous editor-mode race so a late manual-account response cannot move a selected Connected view to Add; it retains the Bank Accounts panel-structure correction from `@402`. One retained Chase connection and one retained BofA connection are visible; the BofA Item exposed fourteen accounts through one login, including twelve depository accounts and two mortgage accounts. Trial capacity is 10 total / 3 consumed / 7 remaining because the first Chase timeout left one orphaned slot. Central remains GCP Default, Beta `@106`, bounded unchanged, Sandbox intact, and `cashcompass-application` parked. No Apply or authority switch is authorized.
+1. Finish and optimize **Plaid Debt Apply** (bounded-proven; latency work in progress)
+2. Finish **Activity Log / PLAID provenance** validation
+3. Finish appropriate **Bank Account Apply**
+4. **Clean / commit** Connected / Apply cluster
+5. **Then** begin **Multi-Broker Portfolio Intelligence Phase 1** — see
+   `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` (**implementation deferred**)
+
+Preserve the frozen Planning foundation. Connected evidence lives under Bank
+Accounts, Debts, and Investments. **Controlled Debt Apply** is runtime-proven on
+bounded (Chase / Credit Card - SW); writes use `updateDebtField` with server-side
+revalidation and Activity Log `source=PLAID`. Bank and Investment Apply remain
+out of scope for the current cluster. **PLAID IS A REVIEWED IMPORT CHANNEL:**
+Plaid retrieves candidates, CashCompass previews, the user selects approved
+fields, and Apply writes only through canonical writers.
+
+**Plaid connectivity checkpoint (2026-08-27):** Plaid remains optional; read
+`PLAID_CONNECTIVITY.md` before related work. Trial backend
+`cashcompass-plaid-backend-00006-lgd`; bounded Chase + BofA Connected proven;
+Debt Apply proven. Central GCP Default, Beta `@106`, bounded owner-operated,
+Sandbox intact, `cashcompass-application` parked.
 
 **CashCompass Application GCP checkpoint (2026-08-24):** permanent project `cashcompass-application` (`498289193120`) is **PREPARED BUT UNATTACHED / PARKED**. IAM and the Apps Script/Drive APIs are prepared and billing is unlinked, but Plaid P1 does not require Central reassociation. Do not attach Central, continue OAuth configuration, create a desktop client, delete the project, or repurpose it as provider infrastructure without a new owner-approved task. Central remains on GCP Default and no user reauthorization occurred. Read `CASHCOMPASS_APPLICATION_GCP.md` before any related administration.
 

@@ -1209,14 +1209,19 @@ function updateDebtField(payload) {
     throw new Error('This field cannot be edited here: ' + (fieldName || '(blank)'));
   }
 
-  const ss = getUserSpreadsheet_();
-  const sheet = getSheet_(ss, 'DEBTS');
+  const applySession = typeof plaidImportDebtApplyWriteSession_ === 'function'
+    ? plaidImportDebtApplyWriteSession_() : null;
+  const reuseApplySession = !!payload.plaidImportApplyBatch && applySession &&
+    String(applySession.accountName || '') === accountName;
 
-  const display = sheet.getDataRange().getDisplayValues();
+  const ss = reuseApplySession ? applySession.ss : getUserSpreadsheet_();
+  const sheet = reuseApplySession ? applySession.sheet : getSheet_(ss, 'DEBTS');
+
+  const display = reuseApplySession ? applySession.display : sheet.getDataRange().getDisplayValues();
   if (display.length < 2) throw new Error('Debts list is empty.');
 
-  const headerMap = getDebtsHeaderMap_(sheet);
-  const targetRow = findDebtRow_(sheet, accountName);
+  const headerMap = reuseApplySession ? applySession.headerMap : getDebtsHeaderMap_(sheet);
+  const targetRow = reuseApplySession ? applySession.targetRow : findDebtRow_(sheet, accountName);
   if (targetRow === -1) {
     throw new Error('Debt account not found: ' + accountName);
   }
@@ -1306,6 +1311,23 @@ function updateDebtField(payload) {
     const typeForLog = headerMap.typeColZero === -1
       ? ''
       : String((display[targetRow - 1] || [])[headerMap.typeColZero] || '').trim();
+    var logDetails = {
+      detailsVersion: 1,
+      fieldName: fieldName,
+      fieldKind: fieldKind,
+      previousRaw: previousRaw,
+      previousDisplay: previousDisplay,
+      newRaw: newRawForLog,
+      sheetRow: targetRow
+    };
+    var importProvenance = payload.importProvenance && typeof payload.importProvenance === 'object'
+      ? payload.importProvenance : null;
+    if (importProvenance && String(importProvenance.source || '').toUpperCase() === 'PLAID') {
+      logDetails.importSource = 'PLAID';
+      if (importProvenance.sourceSemantic) {
+        logDetails.importSourceSemantic = String(importProvenance.sourceSemantic);
+      }
+    }
     appendActivityLog_(ss, {
       eventType: 'debt_update',
       entryDate: Utilities.formatDate(stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
@@ -1313,19 +1335,12 @@ function updateDebtField(payload) {
       direction: '',
       payee: accountName,
       category: typeForLog,
-      accountSource: '',
+      accountSource: importProvenance && String(importProvenance.source || '').toUpperCase() === 'PLAID'
+        ? 'PLAID' : '',
       cashFlowSheet: '',
       cashFlowMonth: '',
       dedupeKey: '',
-      details: JSON.stringify({
-        detailsVersion: 1,
-        fieldName: fieldName,
-        fieldKind: fieldKind,
-        previousRaw: previousRaw,
-        previousDisplay: previousDisplay,
-        newRaw: newRawForLog,
-        sheetRow: targetRow
-      })
+      details: JSON.stringify(logDetails)
     });
   } catch (logErr) {
     Logger.log('updateDebtField activity log: ' + logErr);

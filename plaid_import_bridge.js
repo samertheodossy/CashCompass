@@ -11,10 +11,23 @@
  *   Import Data (plaidImportPreviewMapped) = read-only provider retrieval and
  *   comparison; performs zero CashCompass financial writes and must not create
  *   Activity Log financial-update entries.
- *   Apply Selected Updates = future explicit mutation via reviewed canonical
- *   writers only; future Apply must record Activity Log provenance source=PLAID.
+ *   Apply Selected Updates (plaidImportApplyDebtUpdates) = explicit Debt-only
+ *   mutation via updateDebtField after server-side revalidation; records Activity
+ *   Log provenance source=PLAID. Bank Account and Investment Apply are out of scope.
  */
 var PLAID_IMPORT_ENABLED_KEY_ = 'PLAID_IMPORT_ENABLED';
+var PLAID_IMPORT_REVIEW_BASELINE_KEY_PREFIX_ = 'PLAID_IMPORT_REVIEW_BASELINE_V1_';
+var PLAID_IMPORT_DEBT_APPLY_KEYS_ = {
+  CURRENT_BALANCE: true, CREDIT_LIMIT: true, MINIMUM_PAYMENT: true,
+  NEXT_PAYMENT_DATE: true, INT_RATE: true
+};
+var PLAID_IMPORT_DEBT_APPLY_WRITERS_ = {
+  CURRENT_BALANCE: 'Account Balance',
+  CREDIT_LIMIT: 'Credit Limit',
+  MINIMUM_PAYMENT: 'Minimum Payment',
+  NEXT_PAYMENT_DATE: 'Due Date',
+  INT_RATE: 'Int Rate'
+};
 var PLAID_IMPORT_ENVIRONMENT_KEY_ = 'PLAID_IMPORT_ENVIRONMENT';
 var PLAID_IMPORT_LEGACY_USER_KEY_PREFIX_ = 'PLAID_IMPORT_PROTECTED_USER_KEY_V1_';
 var PLAID_IMPORT_LEGACY_MAPPING_KEY_PREFIX_ = 'PLAID_IMPORT_ACCOUNT_MAPPINGS_V1_';
@@ -680,39 +693,478 @@ function plaidImportConfirmedFacts_(connection, mappings) {
   return existing;
 }
 
+function plaidImportFetchPreviewMappedCore_(connectionKey, options) {
+  options = options || {};
+  var mappings = options.mappings || plaidImportReadMappings_();
+  var connection = options.connection || null;
+  if (!connection) {
+    var owned = plaidImportRequest_('GET', '/v1/connections', 'CONNECTIONS_LIST', null);
+    connection = (owned.connections || []).map(plaidImportSanitizeConnection_).filter(function(row) {
+      return row.protectedConnectionKey === connectionKey && row.lifecycleStatus === 'ACTIVE';
+    })[0];
+  }
+  if (!connection) throw new Error('Connected institution is unavailable.');
+  var existing = plaidImportConfirmedFacts_(connection, mappings);
+  var result = plaidImportRequest_('POST', '/v1/preview', 'LIABILITIES_PREVIEW', {
+    protectedConnectionKey: connectionKey, existingFactsByProtectedAccountKey: existing
+  });
+  var aprPreferences = options.aprPreferences ||
+    plaidImportReadAprSourcePreferencesForConnection_(connection, mappings);
+  var observedAt = String(result.observedAt || '');
+  (result.accounts || []).forEach(function(accountPreview) {
+    var account = (connection.accounts || []).filter(function(row) {
+      return row.protectedAccountKey === accountPreview.protectedAccountKey;
+    })[0];
+    if (!account) return;
+    var mapping = plaidImportMappingState_(connection, account, mappings);
+    accountPreview.mapping = mapping;
+    if (mapping.status === 'CONFIRMED') {
+      accountPreview.cashCompassLegacy = plaidImportExistingFacts_(mapping.stableAccountId);
+      accountPreview.aprSourcePreference = aprPreferences[accountPreview.protectedAccountKey] || null;
+      accountPreview.reviewObservedAt = observedAt;
+      if (options.persistBaselines !== false &&
+          plaidImportIsDebtConfirmedAccount_(connection, account, mappings)) {
+        plaidImportStoreReviewBaseline_(connectionKey, accountPreview.protectedAccountKey,
+          mapping.stableAccountId, plaidImportCreateReviewBaseline_(
+            accountPreview, accountPreview.aprSourcePreference, observedAt));
+      }
+    }
+  });
+  return {
+    ok: true,
+    connection: connection,
+    mappings: mappings,
+    environment: plaidImportEnvironment_(),
+    readOnly: true,
+    authority: 'SHADOW_ONLY',
+    observedAt: observedAt,
+    reviewAnchorDate: plaidImportReviewAnchorDate_(),
+    aprSourcePreferences: aprPreferences,
+    accounts: result.accounts || []
+  };
+}
+
+function plaidImportRefreshPreviewAccountAfterApply_(previewResult, connectionKey, accountKey,
+  stableAccountId, connection, mappings) {
+  var accountPreview = (previewResult.accounts || []).filter(function(row) {
+    return String(row.protectedAccountKey || '') === accountKey;
+  })[0];
+  if (!accountPreview) return previewResult;
+  var aprPref = accountPreview.aprSourcePreference || null;
+  accountPreview.cashCompassLegacy = plaidImportExistingFacts_(stableAccountId);
+  accountPreview.reviewObservedAt = previewResult.observedAt;
+  plaidImportStoreReviewBaseline_(connectionKey, accountKey, stableAccountId,
+    plaidImportCreateReviewBaseline_(accountPreview, aprPref, previewResult.observedAt));
+  return previewResult;
+}
+
+function plaidImportApplyTimingCreate_() {
+  var startedAt = Date.now();
+  var lastMarkAt = startedAt;
+  var stages = {};
+  return {
+    mark: function(stageName) {
+      var now = Date.now();
+      stages[String(stageName || 'unknown')] = now - lastMarkAt;
+      lastMarkAt = now;
+    },
+    finish: function() {
+      stages.total = Date.now() - startedAt;
+      return stages;
+    }
+  };
+}
+
+var PLAID_IMPORT_DEBT_APPLY_WRITE_SESSION_ = null;
+
+function plaidImportBeginDebtApplyWriteSession_(accountName) {
+  const ss = getUserSpreadsheet_();
+  const sheet = getSheet_(ss, 'DEBTS');
+  var display = sheet.getDataRange().getDisplayValues();
+  if (display.length < 2) throw new Error('Debts list is empty.');
+  var headerMap = getDebtsHeaderMap_(sheet);
+  var targetRow = findDebtRow_(sheet, accountName);
+  if (targetRow === -1) throw new Error('Debt account not found: ' + accountName);
+  PLAID_IMPORT_DEBT_APPLY_WRITE_SESSION_ = {
+    accountName: accountName,
+    ss: ss,
+    sheet: sheet,
+    display: display,
+    headerMap: headerMap,
+    targetRow: targetRow
+  };
+}
+
+function plaidImportEndDebtApplyWriteSession_() {
+  PLAID_IMPORT_DEBT_APPLY_WRITE_SESSION_ = null;
+}
+
+function plaidImportDebtApplyWriteSession_() {
+  return PLAID_IMPORT_DEBT_APPLY_WRITE_SESSION_;
+}
+
 function plaidImportPreviewMapped(payload) {
   return plaidImportSafe_(function() {
     var input = payload && typeof payload === 'object' ? payload : {};
     plaidImportRejectBrowserAuthority_(input);
     var connectionKey = String(input.protectedConnectionKey || '');
-    var owned = plaidImportRequest_('GET', '/v1/connections', 'CONNECTIONS_LIST', null);
-    var connection = (owned.connections || []).map(plaidImportSanitizeConnection_).filter(function(row) {
-      return row.protectedConnectionKey === connectionKey && row.lifecycleStatus === 'ACTIVE';
-    })[0];
-    if (!connection) throw new Error('Connected institution is unavailable.');
-    var mappings = plaidImportReadMappings_();
-    var existing = plaidImportConfirmedFacts_(connection, mappings);
-    var result = plaidImportRequest_('POST', '/v1/preview', 'LIABILITIES_PREVIEW', {
-      protectedConnectionKey: connectionKey, existingFactsByProtectedAccountKey: existing
-    });
-    var aprPreferences = plaidImportReadAprSourcePreferencesForConnection_(connection, mappings);
-    (result.accounts || []).forEach(function(accountPreview) {
-      var account = (connection.accounts || []).filter(function(row) {
-        return row.protectedAccountKey === accountPreview.protectedAccountKey;
-      })[0];
-      if (!account) return;
-      var mapping = plaidImportMappingState_(connection, account, mappings);
-      accountPreview.mapping = mapping;
-      if (mapping.status === 'CONFIRMED') {
-        accountPreview.cashCompassLegacy = plaidImportExistingFacts_(mapping.stableAccountId);
-        accountPreview.aprSourcePreference = aprPreferences[accountPreview.protectedAccountKey] || null;
-      }
-    });
-    return { ok: true, environment: plaidImportEnvironment_(), readOnly: true,
-      authority: 'SHADOW_ONLY', observedAt: String(result.observedAt || ''),
-      reviewAnchorDate: plaidImportReviewAnchorDate_(),
-      aprSourcePreferences: aprPreferences, accounts: result.accounts || [] };
+    var preview = plaidImportFetchPreviewMappedCore_(connectionKey, { persistBaselines: true });
+    return {
+      ok: preview.ok,
+      environment: preview.environment,
+      readOnly: preview.readOnly,
+      authority: preview.authority,
+      observedAt: preview.observedAt,
+      reviewAnchorDate: preview.reviewAnchorDate,
+      aprSourcePreferences: preview.aprSourcePreferences,
+      accounts: preview.accounts || []
+    };
   });
+}
+
+function plaidImportIsDebtConfirmedAccount_(connection, account, mappings) {
+  var mapping = plaidImportMappingState_(connection, account, mappings);
+  if (mapping.status !== 'CONFIRMED' || !mapping.stableAccountId) return false;
+  try {
+    var target = plaidImportCanonicalTarget_(mapping.stableAccountId, account);
+    return String(target.domain || '').toUpperCase() === 'DEBT';
+  } catch (_e) {
+    return false;
+  }
+}
+
+function plaidImportReviewBaselineStorageKey_(connectionKey, accountKey, stableAccountId) {
+  var identity = plaidImportAuthenticatedIdentity_();
+  return PLAID_IMPORT_REVIEW_BASELINE_KEY_PREFIX_ + plaidImportEnvironment_() + '|' +
+    identity.subject + '|' + String(connectionKey || '') + '|' +
+    String(accountKey || '') + '|' + String(stableAccountId || '');
+}
+
+function plaidImportStableJsonHash_(value) {
+  return plaidSandboxSha256_(JSON.stringify(value));
+}
+
+function plaidImportFactsHashPayload_(legacy) {
+  var out = {};
+  ['CURRENT_BALANCE', 'CREDIT_LIMIT', 'MINIMUM_PAYMENT', 'APR', 'NEXT_PAYMENT_DATE'].forEach(function(key) {
+    var entry = legacy && legacy[key];
+    var val = entry && Object.prototype.hasOwnProperty.call(entry, 'value') ? entry.value : entry;
+    if (val !== null && val !== undefined && val !== '') out[key] = val;
+  });
+  return out;
+}
+
+function plaidImportCandidatesHashPayload_(accountPreview, aprPref) {
+  var rows = accountPreview.rows || [];
+  var byType = {};
+  rows.forEach(function(row) {
+    if (row && row.factType && row.candidate) byType[row.factType] = row.candidate;
+  });
+  var out = {};
+  ['CURRENT_BALANCE', 'CREDIT_LIMIT', 'MINIMUM_PAYMENT', 'NEXT_PAYMENT_DATE'].forEach(function(key) {
+    if (!byType[key]) return;
+    var candidate = byType[key];
+    out[key] = candidate.numericValue !== undefined && candidate.numericValue !== null
+      ? candidate.numericValue
+      : (candidate.textValue || candidate.value || '');
+  });
+  if (aprPref && aprPref.sourceSemantic && byType[aprPref.sourceSemantic]) {
+    out.INT_RATE = {
+      semantic: aprPref.sourceSemantic,
+      value: byType[aprPref.sourceSemantic].numericValue
+    };
+  }
+  return out;
+}
+
+function plaidImportCreateReviewBaseline_(accountPreview, aprPref, observedAt) {
+  return {
+    observedAt: String(observedAt || ''),
+    stableAccountId: String(accountPreview.mapping && accountPreview.mapping.stableAccountId || ''),
+    baselineFactsHash: plaidImportStableJsonHash_(
+      plaidImportFactsHashPayload_(accountPreview.cashCompassLegacy || {})),
+    candidateHash: plaidImportStableJsonHash_(
+      plaidImportCandidatesHashPayload_(accountPreview, aprPref))
+  };
+}
+
+function plaidImportStoreReviewBaseline_(connectionKey, accountKey, stableAccountId, baseline) {
+  PropertiesService.getUserProperties().setProperty(
+    plaidImportReviewBaselineStorageKey_(connectionKey, accountKey, stableAccountId),
+    JSON.stringify(baseline));
+}
+
+function plaidImportLoadReviewBaseline_(connectionKey, accountKey, stableAccountId) {
+  var raw = PropertiesService.getUserProperties().getProperty(
+    plaidImportReviewBaselineStorageKey_(connectionKey, accountKey, stableAccountId));
+  if (!raw) return null;
+  try {
+    var parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (_e) {
+    return null;
+  }
+}
+
+function plaidImportFindPreviewRow_(rows, factType) {
+  return (rows || []).filter(function(row) {
+    return row && String(row.factType || '') === String(factType || '');
+  })[0] || null;
+}
+
+function plaidImportDueDayFromIso_(value) {
+  var match = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  var day = parseInt(match[3], 10);
+  return day >= 1 && day <= 31 ? day : null;
+}
+
+function plaidImportParseDueDayFromLegacy_(value) {
+  if (value === null || value === undefined || value === '') return null;
+  var str = String(value).trim();
+  var plain = str.match(/^(\d{1,2})(?:st|nd|rd|th)?$/i);
+  if (plain) {
+    var day = parseInt(plain[1], 10);
+    if (day >= 1 && day <= 31) return day;
+  }
+  var asNum = parseInt(str, 10);
+  if (!isNaN(asNum) && asNum >= 1 && asNum <= 31 && String(asNum) === str) return asNum;
+  var iso = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return parseInt(iso[3], 10);
+  return null;
+}
+
+function plaidImportDebtApplyValuesEqual_(applyKey, currentRaw, proposedValue) {
+  if (applyKey === 'NEXT_PAYMENT_DATE') {
+    return plaidImportParseDueDayFromLegacy_(currentRaw) === proposedValue;
+  }
+  if (applyKey === 'INT_RATE') {
+    return round2_(toNumber_(currentRaw)) === round2_(toNumber_(proposedValue));
+  }
+  return round2_(toNumber_(currentRaw)) === round2_(toNumber_(proposedValue));
+}
+
+function plaidImportResolveDebtAccountName_(stableAccountId) {
+  var registry = financialIdentityReadExplicitComparisonAccounts_(plaidImportWorkbook_());
+  var target = (registry.accounts || []).filter(function(row) {
+    return String(row.stableAccountId || '') === stableAccountId;
+  })[0];
+  if (!target || String(target.legacyDomain || '').toUpperCase() !== 'INPUT_DEBTS') {
+    throw new Error('CashCompass debt account is unavailable.');
+  }
+  var accountName = String(target.legacyKey || '').trim();
+  if (!accountName) throw new Error('CashCompass debt account is unavailable.');
+  return accountName;
+}
+
+function plaidImportResolveDebtApplyValue_(applyKey, accountPreview, aprPref) {
+  var rows = accountPreview.rows || [];
+  if (applyKey === 'INT_RATE') {
+    if (!aprPref || !aprPref.sourceSemantic) {
+      throw new Error('APR source must be selected before applying Int Rate.');
+    }
+    var aprRow = plaidImportFindPreviewRow_(rows, aprPref.sourceSemantic);
+    if (!aprRow || !aprRow.candidate) {
+      throw new Error('Selected APR source is unavailable. Import Data again.');
+    }
+    return {
+      value: Number(aprRow.candidate.numericValue),
+      sourceSemantic: aprPref.sourceSemantic
+    };
+  }
+  if (applyKey === 'NEXT_PAYMENT_DATE') {
+    var dateRow = plaidImportFindPreviewRow_(rows, 'NEXT_PAYMENT_DATE');
+    if (!dateRow || !dateRow.candidate) throw new Error('Due Date import is unavailable.');
+    var day = plaidImportDueDayFromIso_(dateRow.candidate.textValue || dateRow.candidate.value);
+    if (day === null) throw new Error('Due Date import is unavailable.');
+    return { value: day };
+  }
+  var row = plaidImportFindPreviewRow_(rows, applyKey);
+  if (!row || !row.candidate) throw new Error('Imported value is unavailable.');
+  return { value: Number(row.candidate.numericValue) };
+}
+
+function plaidImportCurrentLegacyValue_(legacy, applyKey) {
+  if (applyKey === 'INT_RATE') {
+    var apr = legacy && legacy.APR;
+    return apr && Object.prototype.hasOwnProperty.call(apr, 'value') ? apr.value : apr;
+  }
+  if (applyKey === 'NEXT_PAYMENT_DATE') {
+    var due = legacy && legacy.NEXT_PAYMENT_DATE;
+    var raw = due && Object.prototype.hasOwnProperty.call(due, 'value') ? due.value : due;
+    return plaidImportParseDueDayFromLegacy_(raw);
+  }
+  var entry = legacy && legacy[applyKey];
+  return entry && Object.prototype.hasOwnProperty.call(entry, 'value') ? entry.value : entry;
+}
+
+function plaidImportFormatApplyDisplay_(applyKey, value, sourceSemantic) {
+  if (applyKey === 'INT_RATE') {
+    return round2_(toNumber_(value)).toFixed(2) + '%';
+  }
+  if (applyKey === 'NEXT_PAYMENT_DATE') {
+    return String(value);
+  }
+  var num = round2_(toNumber_(value));
+  return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function plaidImportRejectApplyFinancialAuthority_(input) {
+  ['value', 'values', 'accountName', 'fieldName', 'newValue', 'previousValue',
+    'rowNumber', 'sheetRow', 'providerAccountId', 'itemId', 'accessToken'].forEach(function(field) {
+    if (Object.prototype.hasOwnProperty.call(input || {}, field)) {
+      throw new Error('Browser-provided financial values are not accepted.');
+    }
+  });
+}
+
+function plaidImportApplyDebtUpdates(payload) {
+  try {
+    var input = payload && typeof payload === 'object' ? payload : {};
+    plaidImportRejectBrowserAuthority_(input);
+    return plaidImportApplyDebtUpdates_(payload);
+  } catch (error) {
+    var message = String(error && error.message || '');
+    if (/Browser-provided|Import Data again|APR source must be selected|cannot be applied|not accepted|unavailable for apply/i.test(message)) {
+      return { ok: false, error: message };
+    }
+    if (message === 'FINANCIAL_IDENTITY_REVIEW_REQUIRED') {
+      return { ok: false, error: PLAID_IMPORT_IDENTITY_REVIEW_ERROR_ };
+    }
+    return { ok: false, error: PLAID_IMPORT_PUBLIC_ERROR_ };
+  }
+}
+
+function plaidImportApplyDebtUpdates_(payload) {
+  var timing = plaidImportApplyTimingCreate_();
+  var input = payload && typeof payload === 'object' ? payload : {};
+  plaidImportRejectBrowserAuthority_(input);
+  plaidImportRejectApplyFinancialAuthority_(input);
+  plaidImportAssertAllowed_();
+  timing.mark('entryAuth');
+  var connectionKey = String(input.protectedConnectionKey || '');
+  var accountKey = String(input.protectedAccountKey || '');
+  var stableAccountId = String(input.stableAccountId || '');
+  var reviewObservedAt = String(input.reviewObservedAt || '');
+  var selectedKeys = Array.isArray(input.selectedApplyKeys) ? input.selectedApplyKeys : [];
+  if (!connectionKey || !accountKey || !stableAccountId || !reviewObservedAt) {
+    throw new Error('Apply request is incomplete. Import Data again.');
+  }
+  if (!selectedKeys.length) throw new Error('Select at least one field to apply.');
+  selectedKeys.forEach(function(key) {
+    if (!PLAID_IMPORT_DEBT_APPLY_KEYS_[String(key || '')]) {
+      throw new Error('Selected field cannot be applied: ' + key);
+    }
+  });
+  var mappings = plaidImportReadMappings_();
+  timing.mark('mappingLoad');
+  var previewResult = plaidImportFetchPreviewMappedCore_(connectionKey, {
+    mappings: mappings,
+    persistBaselines: false
+  });
+  timing.mark('previewRevalidation');
+  var connection = previewResult.connection;
+  var account = (connection.accounts || []).filter(function(row) {
+    return String(row.protectedAccountKey || '') === accountKey;
+  })[0];
+  if (!account || String(connection.lifecycleStatus || '') !== 'ACTIVE') {
+    throw new Error('Connected account is unavailable.');
+  }
+  var mapping = plaidImportMappingState_(connection, account, mappings);
+  if (mapping.status !== 'CONFIRMED' || String(mapping.stableAccountId || '') !== stableAccountId) {
+    throw new Error('CashCompass account association must be confirmed before Apply.');
+  }
+  var canonicalTarget = plaidImportCanonicalTarget_(stableAccountId, account);
+  if (String(canonicalTarget.domain || '').toUpperCase() !== 'DEBT') {
+    throw new Error('Apply is available for Debt accounts only.');
+  }
+  timing.mark('accountValidation');
+  var baseline = plaidImportLoadReviewBaseline_(connectionKey, accountKey, stableAccountId);
+  if (!baseline || baseline.observedAt !== reviewObservedAt ||
+      String(baseline.stableAccountId || '') !== stableAccountId) {
+    throw new Error('Review is stale. Import Data again.');
+  }
+  var accountPreview = (previewResult.accounts || []).filter(function(row) {
+    return String(row.protectedAccountKey || '') === accountKey;
+  })[0];
+  if (!accountPreview) throw new Error('Imported preview is unavailable. Import Data again.');
+  var aprPref = accountPreview.aprSourcePreference || null;
+  var currentLegacy = accountPreview.cashCompassLegacy || {};
+  if (plaidImportStableJsonHash_(plaidImportFactsHashPayload_(currentLegacy)) !== baseline.baselineFactsHash) {
+    throw new Error('CashCompass values changed since review. Import Data again.');
+  }
+  if (plaidImportStableJsonHash_(plaidImportCandidatesHashPayload_(accountPreview, aprPref)) !== baseline.candidateHash) {
+    throw new Error('Imported values changed since review. Import Data again.');
+  }
+  timing.mark('freshnessValidation');
+  var accountName = String(canonicalTarget.legacyKey || '').trim();
+  if (!accountName) throw new Error('CashCompass debt account is unavailable.');
+  var plan = [];
+  selectedKeys.forEach(function(applyKey) {
+    var resolved = plaidImportResolveDebtApplyValue_(applyKey, accountPreview, aprPref);
+    var currentRaw = plaidImportCurrentLegacyValue_(currentLegacy, applyKey);
+    if (plaidImportDebtApplyValuesEqual_(applyKey, currentRaw, resolved.value)) return;
+    var fieldName = PLAID_IMPORT_DEBT_APPLY_WRITERS_[applyKey];
+    plan.push({
+      applyKey: applyKey,
+      fieldName: fieldName,
+      value: resolved.value,
+      sourceSemantic: resolved.sourceSemantic || '',
+      previousDisplay: plaidImportFormatApplyDisplay_(applyKey, currentRaw, resolved.sourceSemantic),
+      newDisplay: plaidImportFormatApplyDisplay_(applyKey, resolved.value, resolved.sourceSemantic)
+    });
+  });
+  if (!plan.length) throw new Error('No changes are available to apply.');
+  timing.mark('planBuild');
+  var applied = [];
+  plaidImportBeginDebtApplyWriteSession_(accountName);
+  try {
+    for (var i = 0; i < plan.length; i++) {
+      var item = plan[i];
+      try {
+        updateDebtField({
+          accountName: accountName,
+          fieldName: item.fieldName,
+          value: item.value,
+          plaidImportApplyBatch: true,
+          importProvenance: {
+            source: 'PLAID',
+            sourceSemantic: item.sourceSemantic || ''
+          }
+        });
+        applied.push({
+          applyKey: item.applyKey,
+          fieldName: item.fieldName,
+          previousDisplay: item.previousDisplay,
+          newDisplay: item.newDisplay,
+          sourceSemantic: item.sourceSemantic || ''
+        });
+      } catch (writeError) {
+        var partialMessage = applied.length
+          ? 'Apply stopped after updating ' + applied.length + ' field(s). Import Data and review again.'
+          : String(writeError && writeError.message || PLAID_IMPORT_PUBLIC_ERROR_);
+        return {
+          ok: false,
+          error: partialMessage,
+          partialApplied: applied,
+          stageTimingMs: timing.finish()
+        };
+      }
+    }
+  } finally {
+    plaidImportEndDebtApplyWriteSession_();
+  }
+  timing.mark('canonicalWrites');
+  plaidImportRefreshPreviewAccountAfterApply_(previewResult, connectionKey, accountKey,
+    stableAccountId, connection, mappings);
+  timing.mark('postWritePreviewPatch');
+  return {
+    ok: true,
+    appliedCount: applied.length,
+    applied: applied,
+    preview: previewResult,
+    stageTimingMs: timing.finish()
+  };
 }
 
 function plaidImportDisconnect(payload) {

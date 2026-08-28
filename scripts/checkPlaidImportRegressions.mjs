@@ -44,7 +44,7 @@ assert(bridge.includes("['owner', 'email', 'userKey', 'workbookId', 'spreadsheet
   'browser ownership fields are not rejected');
 for (const operation of ['plaidImportExchangePublicToken', 'plaidImportReconnect',
   'plaidImportCompleteReconnect', 'plaidImportSaveMapping', 'plaidImportPreviewMapped',
-  'plaidImportInvalidateMapping', 'plaidImportDisconnect']) {
+  'plaidImportApplyDebtUpdates', 'plaidImportInvalidateMapping', 'plaidImportDisconnect']) {
   const start = bridge.indexOf(`function ${operation}`);
   const end = bridge.indexOf('\nfunction ', start + 1);
   const source = bridge.slice(start, end < 0 ? bridge.length : end);
@@ -135,10 +135,14 @@ assert(bridge.includes('plaidImportSaveAprSourcePreference') &&
 assert(client.includes("plaidMainCall_('plaidImportSaveAprSourcePreference'") ||
   client.includes('plaidImportSaveAprSourcePreference'),
   'Connected client must save APR source preferences through the bridge');
-assert(!/plaidImportApply|approvalToken/i.test(client + bridge),
-  'current candidate exposes Plaid Apply authority');
-assert(!client.includes("plaidMainButton_('Apply Selected Updates'"),
-  'disabled Apply Selected Updates control must stay hidden in review-only UX');
+assert(bridge.includes('plaidImportApplyDebtUpdates') &&
+  bridge.includes('PLAID_IMPORT_REVIEW_BASELINE_KEY_PREFIX_') &&
+  bridge.includes('reviewObservedAt') &&
+  bridge.includes('updateDebtField({'),
+  'Debt Apply bridge, review baseline, and canonical writer seam are missing');
+assert(client.includes("plaidMainCall_('plaidImportPreviewMapped'") &&
+  !client.includes('updateDebtField('),
+  'Connected client must preview read-only and Apply through bridge only');
 assert(!/accessToken|itemId|account_id|item_id|client_id|production secret/i.test(client),
   'browser client references raw provider identities or credentials');
 assert(runbook.includes('Future approved-Apply Activity Log contract') &&

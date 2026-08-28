@@ -84,9 +84,10 @@ assert(client.includes('CashCompass account') && !client.includes('Confirm mappi
   !client.includes('Mapping: Confirmed') && !client.includes('Mapping: '),
   'Connected association must not expose mapping terminology');
 assert(client.includes('Manage connection') &&
-  !client.includes("plaidMainButton_('Apply Selected Updates'") &&
-  client.includes('Review only — no CashCompass values have been changed'),
-  'Connected review must stay read-only without disabled Apply clutter');
+  client.includes("'Apply Selected Updates'") &&
+  client.includes('allowApplySelection') &&
+  client.includes('Select approved fields, then Apply Selected Updates'),
+  'Debt Connected review must expose controlled Apply selection UX');
 assert(client.includes('Review imported changes') && client.includes('Changes to review') &&
   client.includes('Additional information') && client.includes('Needs review') &&
   client.includes('plaid-main-review-panel') && client.includes('max-width:920px') &&
@@ -122,8 +123,14 @@ assert(client.includes('plaidMainApplyMappingLocally_'), 'association save must 
 }
 assert(!/plaidMainElement_\([^)]*row\.status|row\.reason \? ' · '/.test(client),
   'raw provider review codes must not be rendered in Connected UI');
-assert(!/plaidImportApply|approvalToken/i.test(client + bridge),
-  'read-only main app must not expose Apply writer machinery');
+assert(client.includes('plaidMainApplySelectedUpdates_') &&
+  client.includes('plaidImportApplyDebtUpdates') &&
+  client.includes("'Apply Selected Updates'") &&
+  client.includes('allowApplySelection') &&
+  client.includes('plaidMainDebtApplySelectable_'),
+  'Debt Apply selection UX is missing from Connected client');
+assert(!client.includes('approvalToken'),
+  'Apply must not use browser approval tokens');
 assert(client.includes('Import Data = read-only provider retrieval'),
   'Connected client must document Import vs Apply contract');
 

@@ -57,33 +57,30 @@
   This next slice does not silently switch Planning authority, execute payments,
   or broadly import transactions. Any authority migration requires a later
   explicit checkpoint.
-- **Current milestone:** **Contextual Main-App Plaid Read-Only Candidate — Ready
-  for Owner UX Review**, inside **Cash + Credit Card Import / Refresh**. The
-  dedicated Trial project now serves revision
-  `cashcompass-plaid-backend-00006-lgd`, and isolated Central `@403` provides
-  the protected Trial/real-data read-only candidate inside the normal app.
-  Connected evidence is grouped by product context: depository accounts under
-  Bank Accounts, credit and mortgage accounts under Debts, and investment
-  accounts under Investments. There is no separate top-level Connected Accounts
-  workspace. One retained Chase connection proves the credit-card path. One BofA
-  connection exposed fourteen accounts through one login: twelve depository
-  accounts with current and available candidates, plus two mortgage accounts
-  with current-balance candidates. The corrected preview attaches evidence by
-  protected account identity, not provider array order; comparison requires an
-  explicit active, verified CashCompass identity. Mortgage comparison exposes
-  only `CURRENT_BALANCE` and does not manufacture available-balance semantics.
-  The owner validated both mortgage mappings on `@399`; the contextual `@403`
-  candidate passed focused and full local regressions. Trial capacity is 10
-  total / 3 consumed / 7 remaining: two retained connections and one orphaned
-  first Chase attempt. **PLAID IS A REVIEWED IMPORT CHANNEL:** Plaid retrieves
-  candidate financial data, CashCompass previews it, and the user decides what
-  later becomes authoritative; no silent overwrite. No Apply, Financial Facts
-  write, Planning authority switch, broad transaction ingestion, payment,
-  transfer, or trade is implemented. Central remains on GCP Default, Beta stays
-  `@106`, bounded is untouched, Sandbox remains intact, and
-  `cashcompass-application` remains **PREPARED BUT UNATTACHED / PARKED**.
-  Existing Part 2A-1 through 2A-5 remain enabling foundation, not production-ready
-  customer import or Planning authority.
+- **Current milestone cluster:** **Connected Accounts — Plaid Import, Review, and
+  Controlled Debt Apply.** Trial backend revision
+  `cashcompass-plaid-backend-00006-lgd` and isolated Central `@403` established
+  read-only import and comparison. **Bounded runtime has proven controlled Debt
+  Apply** (Chase / Credit Card - SW: Current Balance and Credit Limit) through
+  the canonical `updateDebtField` writer with server-side revalidation, Activity
+  Log provenance `source=PLAID`, and review-table refresh without full reconnect.
+  Apply latency optimization is in progress. **Bank Account Apply** and
+  **Investment Apply** remain out of scope for this cluster. **PLAID IS A
+  REVIEWED IMPORT CHANNEL:** Plaid retrieves candidate data, CashCompass previews
+  it, the user selects approved fields, and Apply writes only through reviewed
+  canonical writers; no silent overwrite. Central remains on GCP Default, Beta
+  stays `@106`, bounded deployment is owner-operated, Sandbox remains intact,
+  and `cashcompass-application` remains **PREPARED BUT UNATTACHED / PARKED**.
+  Existing Part 2A-1 through 2A-5 remain enabling foundation, not
+  production-ready Planning authority for all domains.
+- **Next major Investment milestone (after this cluster is committed):**
+  **Multi-Broker Portfolio Intelligence — Phase 1: Data Foundation**
+  (`MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md`). Extend the proven Robinhood
+  activity/holdings model; normalize E*TRADE, M1, and Schwab through
+  source-agnostic adapters (Plaid optional, CSV expected); preserve tax-lot detail
+  where available; protect Robinhood from default cash-funding sell
+  recommendations. **Implementation deferred** until Debt Apply, Activity Log
+  validation, Bank Apply, and Connected/Apply commit work complete.
 - **Open lifecycle-adjacent gaps:** House metadata Edit/Rename remains required
   before broad Beta. Income Edit/Rename is a known unclaimed capability and must
   be explicitly scoped or deferred; it is not part of the completed
@@ -124,7 +121,7 @@ remain in `FULL_BETA_REMAINING_PLAN.md`.
 | C — known product gap | Central planner-email debounce/trigger noise | Open historical Central design issue; no financial-data impact | Must be dispositioned in known limitations/operations; implementation priority depends on cohort impact | Re-qualify before implementation; do not mix into import work |
 | C — known product gap | AutoPay creation of a missing exact Cash Flow payee row | Open product/financial decision; current behavior fails closed to manual handling | No unless cohort evidence promotes it | Separate higher-risk Bills decision; not part of completed lifecycle |
 | D — deferred strategic | Residual `RFP-4`/`RFP-5`, shared sheet-write utilities, Income Expected/Due, Money Plan Phase 2, debt aliases/merge, refresh awareness | Deferred | No, except exact evidence already represented elsewhere | Re-qualify after current Beta-critical work |
-| E — future/north star | Strategic Capital Allocation, Whole-Household Debt Freedom Planner, rewards/spend optimization, recurring schedule/gap modeling, Recurring Bill & Subscription Discovery, Property Value / AVM Refresh, broader transaction/provider ingestion, investment/tax optimization, Chat/Assistant, billing activation | Future | No | Each requires its stated authoritative-data, safety, privacy, licensing, or release dependency |
+| E — future/north star | Strategic Capital Allocation, Whole-Household Debt Freedom Planner, **Multi-Broker Portfolio Intelligence** (`MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` Phases 1–8), rewards/spend optimization, recurring schedule/gap modeling, Recurring Bill & Subscription Discovery, Property Value / AVM Refresh, broader transaction/provider ingestion, Chat/Assistant, billing activation | Future | No | Multi-Broker Phase 1 starts **after** Connected/Apply cluster committed; Phases 5–8 are recommendation-only until separate execution approval |
 | F — obsolete/stale | Bills/House/Income recovery listed as open; native browser confirmation migration listed as open; zero-count recovery listed as missing; old Bank Import Step 2a “not started”; old bounded deployment cleanup item | Closed or superseded | No | Retain only as clearly labeled history |
 
 The Planning Overview and Debt surfaces remain frozen. Import work improves the
@@ -536,10 +533,14 @@ optional funding-purpose metadata → `RFP-6a` broker activity/holdings foundati
 (prioritized after granular data arrived) → `RFP-3` read-only recommendation engine →
 `RFP-4` completed **This Week** decision detail with deterministic **Why not?**
 counterfactuals → `RFP-5` disposable-workbook and isolated runtime proof.
-`RFP-6b` allocation analysis and `RFP-7` tax-lot analysis are later optional
-portfolio layers; the household plan must work without either. Each slice has a
-separate review and commit boundary. Existing Rolling Debt Payoff behavior stays
-unchanged until a reviewed composition seam is introduced, and no slice may
+**Next Investment milestone after Connected/Apply:** **Multi-Broker Portfolio
+Intelligence Phase 1** (`MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md`) — canonical
+Activity/Holdings/Tax Lot contracts and source-agnostic adapters for E*TRADE,
+M1, and Schwab while preserving Robinhood. `RFP-6b` allocation analysis and
+`RFP-7` tax-lot analysis are later portfolio layers (Phases 5–6 of that doc);
+the household plan must work without either. Each slice has a separate review
+and commit boundary. Existing Rolling Debt Payoff behavior stays unchanged
+until a reviewed composition seam is introduced, and no slice may
 automatically transfer cash, sell securities, or post debt payments.
 
 `RFP-6c` is the product-wide data-import framework follow-up. It extracts the
@@ -690,6 +691,16 @@ Performance under `8b`. Preserve Beta `@106` plus the user-controlled bounded de
 
 ### Priority 4 — Future features
 
+- **Multi-Broker Portfolio Intelligence** *(next major Investment milestone
+  after Connected/Apply is committed; **implementation deferred**)* —
+  normalized multi-broker portfolio data and, later, recommendation-only
+  cash-funding and reinvestment optimizers. Extends `RFP-6a` Robinhood foundation
+  to E*TRADE, M1, and Schwab through source-agnostic adapters (Plaid optional,
+  CSV acceptable). Robinhood remains **protected** from default sell-for-cash
+  recommendations; tax-lot detail preserved where sources provide it;
+  aggregate holdings alone are insufficient for optimization. Phases 1–4 data;
+  Phases 5–7 intelligence; Phase 8 execution out of scope until separately
+  approved. Authoritative direction: `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md`.
 - **Strategic Capital Allocation and Portfolio Growth** *(overarching north-star
   capability; after authoritative cross-domain facts)* — continuously answer
   where the household's next available dollar should go across debt reduction,
@@ -841,6 +852,9 @@ Sequenced **immediately after Validator Phase 2 and before major new user featur
 
 ## Related documents
 
+- `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` — deferred next Investment milestone:
+  multi-broker normalization, tax lots, passive income, and recommendation-only
+  optimizers (Robinhood protected).
 - `TODO.md → Product Maturity Stages` — the detailed Stage 1–6 roadmap (effort, dependencies, history, Beta Gate).
 - `PROJECT_CONTEXT.md` — current architecture + project status.
 - `ENGINEERING_STANDARDS.md` — engineering rules, canonical styling, and **Milestone Discipline (§11)**.
