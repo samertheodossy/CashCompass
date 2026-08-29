@@ -33,7 +33,8 @@ Canonical sources (`INVESTMENT_PORTFOLIO_SOURCES_`):
 | Source | Status |
 |--------|--------|
 | `ROBINHOOD_CSV` | Adapter wrapper (delegates to legacy parser) |
-| `ETRADE_CSV` | Contract only |
+| `ETRADE_CSV` | Contract only (Transactions CSV activity subset) |
+| `ETRADE_PACKAGE` | Contract only — multi-file: Transactions CSV + Expanded Positions PDF + Gains & Losses PDF; see `ETRADE_SOURCE_MAPPING.md` |
 | `M1_CSV` | Contract only |
 | `SCHWAB_CSV` | Contract only |
 | `RETIREMENT_PLAN_CSV` | Contract only |
@@ -59,15 +60,17 @@ Import package shape (conceptual):
 
 ```javascript
 {
-  source: 'ETRADE_CSV',
+  source: 'ETRADE_PACKAGE',
   accountHint: { investmentId, stableAccountId },
   files: [
-    { role: 'ACTIVITY', content: '...' },
-    { role: 'HOLDINGS', content: '...' },
-    { role: 'TAX_LOTS', content: '...' }
+    { role: 'ACTIVITY', content: '...' },           // Transactions CSV
+    { role: 'HOLDINGS', content: '...' },             // Expanded Positions PDF (open lots)
+    { role: 'REALIZED_GAIN_LOSS', content: '...' }    // Gains & Losses PDF (period-scoped closed lots)
   ]
 }
 ```
+
+Activity-only packages may use `source: 'ETRADE_CSV'` with a single `ACTIVITY` file.
 
 Adapters infer file roles when safe; ambiguous packages fail preview with a review-required error.
 
@@ -343,8 +346,9 @@ Generic adapter infrastructure is parallel and not wired to dashboard persistenc
 
 ## Future phases (not in Foundation v1)
 
-- E*TRADE / M1 / Schwab CSV adapters
-- Real brokerage file import
+- Preview-only E*TRADE `ETRADE_PACKAGE` adapter (after owner approves `ETRADE_SOURCE_MAPPING.md`)
+- M1 / Schwab source inspection and adapters
+- Real brokerage file import / persistence wiring
 - Market quote provider
 - Holdings-derived Net Worth authority migration
 - Portfolio optimizer
@@ -354,13 +358,16 @@ Generic adapter infrastructure is parallel and not wired to dashboard persistenc
 
 ---
 
-## Next milestone: E*TRADE Source Inspection
+## E*TRADE source inspection — complete (2026-08-28)
 
-Owner provides real E*TRADE structured exports **outside Git**:
+Owner-supplied exports were inspected **outside Git**. Authoritative structural mapping: **`ETRADE_SOURCE_MAPPING.md`**.
 
-- Transaction history
-- Holdings / positions
-- Cost-basis / tax-lot export
-- Realized gain/loss export (if available)
+| Source | Role |
+|--------|------|
+| Transactions CSV | Activity / cash events |
+| Expanded Positions PDF | Current holdings + **open lots** |
+| Gains & Losses PDF | **Realized closed lots** for owner-selected Date From → Date Closed only |
 
-Then: inspect schemas → design `ETRADE_CSV` adapter → synthetic fixtures → preview-only implementation → owner review before persistence.
+**Unresolved:** structured Positions or Gains & Losses CSV/XLS exports (download stubs were invalid).
+
+**Next engineering milestone:** preview-only `ETRADE_PACKAGE` adapter (synthetic fixtures → normalized preview). **Not** persistence, dashboard upload, or production import until owner review passes.

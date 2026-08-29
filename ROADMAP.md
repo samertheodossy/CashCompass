@@ -36,6 +36,8 @@
 - ✅ **House tracking/recovery lifecycle convergence** — commit `0bf7610` is on `origin/main`. Stop tracking preserves House Values, House Assets, the `HOUSES - <name>` history sheet, linked-debt evidence, and immutable Activity; counted inactive discovery and exact stale/duplicate-safe Reactivate restore the same logical House. Isolated Central `@391` passed 2/2 House Financial Accuracy scenarios and 50/50 assertions with both Restricted fixtures TRASHED and the runner OFF. House metadata Edit/Rename is a separate open product gap.
 - ✅ **Income tracking/recovery lifecycle convergence** — commit `cdbef99` is on `origin/main`. Current income, Add income, and Manage income now separate ordinary review, creation, and lifecycle maintenance; Stop preserves all Cash Flow values/history, explicit Reactivate changes only the guarded Active cells, Add refuses an inactive logical identity, and `income_reactivate` remains non-monetary evidence. Permanent local lifecycle and Dashboard UX regressions pass. This exact final source has owner acceptance and full local regression evidence; no post-change isolated Income writer run is claimed. Income Edit/Rename remains separately unclaimed.
 - ✅ **CashCompass confirmation and inactive-recovery consistency** — customer-facing web actions no longer depend on browser-native `alert`, `confirm`, or `prompt`. One CashCompass-owned confirmation surface covers the reviewed Stop/Reactivate/Skip actions. Bank, Debt, Investment, House, Bill, and Income recovery affordances start hidden, appear only for an authoritative positive inactive count, remain hidden for zero or unknown/error, and collapse after the last reactivation. Administrative `SpreadsheetApp.getUi()` utilities are not customer browser dialogs and remain outside this closure.
+- ✅ **Multi-Broker Portfolio Foundation v1** — commit `e52645f` on `origin/main`. Canonical contracts in `investment_portfolio_foundation.js` and `investment_adapters.js`; Robinhood production path unchanged; synthetic regression suite `test:portfolio-foundation`. Authoritative model: `MULTI_BROKER_PORTFOLIO_DATA_MODEL.md`.
+- ✅ **E*TRADE Source Inspection (documentation only)** — **complete** 2026-08-28. Owner-supplied sources inspected outside Git: **Transactions CSV** (activity), **Expanded Positions PDF** (open lots), **Gains & Losses PDF** (realized closed lots for a selected closing-date period only). Authoritative mapping: `ETRADE_SOURCE_MAPPING.md`. Structured Positions/Gains CSV availability **remains unresolved**. No adapter, persistence, or workbook changes.
 
 **Now / next:**
 
@@ -73,14 +75,12 @@
   and `cashcompass-application` remains **PREPARED BUT UNATTACHED / PARKED**.
   Existing Part 2A-1 through 2A-5 remain enabling foundation, not
   production-ready Planning authority for all domains.
-- **Next major Investment milestone (after this cluster is committed):**
-  **Multi-Broker Portfolio Intelligence — Phase 1: Data Foundation**
-  (`MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md`). Extend the proven Robinhood
-  activity/holdings model; normalize E*TRADE, M1, and Schwab through
-  source-agnostic adapters (Plaid optional, CSV expected); preserve tax-lot detail
-  where available; protect Robinhood from default cash-funding sell
-  recommendations. **Implementation deferred** until Debt Apply, Activity Log
-  validation, Bank Apply, and Connected/Apply commit work complete.
+- **Next major Investment milestone (after owner approves `ETRADE_SOURCE_MAPPING.md`
+  for commit):** **preview-only `ETRADE_PACKAGE` adapter design** — synthetic
+  fixtures and normalized preview for Transactions CSV + Expanded Positions PDF +
+  Gains & Losses PDF (`ETRADE_SOURCE_MAPPING.md`). **Not** persistence, dashboard
+  upload, or production import. M1 and Schwab source inspection remain future.
+  Broader direction: `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` Phase 1.
 - **Open lifecycle-adjacent gaps:** House metadata Edit/Rename remains required
   before broad Beta. Income Edit/Rename is a known unclaimed capability and must
   be explicitly scoped or deferred; it is not part of the completed
@@ -121,7 +121,7 @@ remain in `FULL_BETA_REMAINING_PLAN.md`.
 | C — known product gap | Central planner-email debounce/trigger noise | Open historical Central design issue; no financial-data impact | Must be dispositioned in known limitations/operations; implementation priority depends on cohort impact | Re-qualify before implementation; do not mix into import work |
 | C — known product gap | AutoPay creation of a missing exact Cash Flow payee row | Open product/financial decision; current behavior fails closed to manual handling | No unless cohort evidence promotes it | Separate higher-risk Bills decision; not part of completed lifecycle |
 | D — deferred strategic | Residual `RFP-4`/`RFP-5`, shared sheet-write utilities, Income Expected/Due, Money Plan Phase 2, debt aliases/merge, refresh awareness | Deferred | No, except exact evidence already represented elsewhere | Re-qualify after current Beta-critical work |
-| E — future/north star | Strategic Capital Allocation, Whole-Household Debt Freedom Planner, **Multi-Broker Portfolio Intelligence** (`MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` Phases 1–8), rewards/spend optimization, recurring schedule/gap modeling, Recurring Bill & Subscription Discovery, Property Value / AVM Refresh, broader transaction/provider ingestion, Chat/Assistant, billing activation | Future | No | Multi-Broker Phase 1 starts **after** Connected/Apply cluster committed; Phases 5–8 are recommendation-only until separate execution approval |
+| E — future/north star | Strategic Capital Allocation, Whole-Household Debt Freedom Planner, **Multi-Broker Portfolio Intelligence** (`MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` Phases 1–8), rewards/spend optimization, recurring schedule/gap modeling, Recurring Bill & Subscription Discovery, Property Value / AVM Refresh, broader transaction/provider ingestion, Chat/Assistant, billing activation | Future | No | Foundation v1 + E*TRADE source inspection complete; preview-only E*TRADE adapter next after doc approval; M1/Schwab later |
 | F — obsolete/stale | Bills/House/Income recovery listed as open; native browser confirmation migration listed as open; zero-count recovery listed as missing; old Bank Import Step 2a “not started”; old bounded deployment cleanup item | Closed or superseded | No | Retain only as clearly labeled history |
 
 The Planning Overview and Debt surfaces remain frozen. Import work improves the
@@ -533,15 +533,18 @@ optional funding-purpose metadata → `RFP-6a` broker activity/holdings foundati
 (prioritized after granular data arrived) → `RFP-3` read-only recommendation engine →
 `RFP-4` completed **This Week** decision detail with deterministic **Why not?**
 counterfactuals → `RFP-5` disposable-workbook and isolated runtime proof.
-**Next Investment milestone after Connected/Apply:** **Multi-Broker Portfolio
-Intelligence Phase 1** (`MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md`) — canonical
-Activity/Holdings/Tax Lot contracts and source-agnostic adapters for E*TRADE,
-M1, and Schwab while preserving Robinhood. `RFP-6b` allocation analysis and
-`RFP-7` tax-lot analysis are later portfolio layers (Phases 5–6 of that doc);
-the household plan must work without either. Each slice has a separate review
-and commit boundary. Existing Rolling Debt Payoff behavior stays unchanged
-until a reviewed composition seam is introduced, and no slice may
-automatically transfer cash, sell securities, or post debt payments.
+**Next Investment milestone after Connected/Apply and E*TRADE doc approval:**
+**preview-only `ETRADE_PACKAGE` adapter** (Phases A–C in
+`ETRADE_SOURCE_MAPPING.md`) — Transactions CSV, Expanded Positions PDF, Gains &
+Losses PDF parsers → normalized preview only. Foundation v1 and E*TRADE source
+inspection are complete; M1/Schwab inspection and persistence wiring remain
+future. Broader multi-broker direction: `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md`
+Phase 1. `RFP-6b` allocation analysis and `RFP-7` tax-lot analysis are later
+portfolio layers (Phases 5–6 of that doc); the household plan must work without
+either. Each slice has a separate review and commit boundary. Existing Rolling
+Debt Payoff behavior stays unchanged until a reviewed composition seam is
+introduced, and no slice may automatically transfer cash, sell securities, or
+post debt payments.
 
 `RFP-6c` is the product-wide data-import framework follow-up. It extracts the
 safe workflow established by the Robinhood adapter—source detection,
@@ -691,16 +694,18 @@ Performance under `8b`. Preserve Beta `@106` plus the user-controlled bounded de
 
 ### Priority 4 — Future features
 
-- **Multi-Broker Portfolio Intelligence** *(next major Investment milestone
-  after Connected/Apply is committed; **implementation deferred**)* —
-  normalized multi-broker portfolio data and, later, recommendation-only
-  cash-funding and reinvestment optimizers. Extends `RFP-6a` Robinhood foundation
-  to E*TRADE, M1, and Schwab through source-agnostic adapters (Plaid optional,
-  CSV acceptable). Robinhood remains **protected** from default sell-for-cash
-  recommendations; tax-lot detail preserved where sources provide it;
-  aggregate holdings alone are insufficient for optimization. Phases 1–4 data;
-  Phases 5–7 intelligence; Phase 8 execution out of scope until separately
-  approved. Authoritative direction: `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md`.
+- **Multi-Broker Portfolio Intelligence** *(Foundation v1 and E*TRADE source
+  inspection complete; **preview-only E*TRADE adapter next** after owner doc
+  approval; broader M1/Schwab work deferred)* — normalized multi-broker portfolio
+  data and, later, recommendation-only cash-funding and reinvestment optimizers.
+  Extends `RFP-6a` Robinhood foundation through source-agnostic adapters (Plaid
+  optional; E*TRADE uses **`ETRADE_PACKAGE`** = txn CSV + Positions PDF + G/L
+  PDF per `ETRADE_SOURCE_MAPPING.md`). Robinhood remains **protected** from
+  default sell-for-cash recommendations; tax-lot detail preserved where sources
+  provide it; aggregate holdings alone are insufficient for optimization. Phases
+  1–4 data; Phases 5–7 intelligence; Phase 8 execution out of scope until
+  separately approved. Authoritative direction:
+  `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md`.
 - **Strategic Capital Allocation and Portfolio Growth** *(overarching north-star
   capability; after authoritative cross-domain facts)* — continuously answer
   where the household's next available dollar should go across debt reduction,
@@ -856,8 +861,11 @@ Sequenced **immediately after Validator Phase 2 and before major new user featur
   multi-broker normalization, tax lots, passive income, and recommendation-only
   optimizers (Robinhood protected).
 - `MULTI_BROKER_PORTFOLIO_DATA_MODEL.md` — Foundation v1 canonical contracts
-  (CSV-first adapter model, replay/reconciliation, retirement registration); no
-  broker adapters beyond Robinhood wrapper yet.
+  (CSV-first adapter model, replay/reconciliation, retirement registration);
+  Robinhood wrapper only; no broker persistence adapters yet.
+- `ETRADE_SOURCE_MAPPING.md` — E*TRADE source inspection **complete**
+  (Transactions CSV + Expanded Positions PDF + Gains & Losses PDF); preview-only
+  adapter design input; structured Positions/G-L CSV availability unresolved.
 - `TODO.md → Product Maturity Stages` — the detailed Stage 1–6 roadmap (effort, dependencies, history, Beta Gate).
 - `PROJECT_CONTEXT.md` — current architecture + project status.
 - `ENGINEERING_STANDARDS.md` — engineering rules, canonical styling, and **Milestone Discipline (§11)**.
