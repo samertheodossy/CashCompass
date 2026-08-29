@@ -11,6 +11,7 @@ var INVESTMENT_PORTFOLIO_SCHEMA_VERSION_ = '1.0.0';
 var INVESTMENT_PORTFOLIO_SOURCES_ = {
   ROBINHOOD_CSV: true,
   ETRADE_CSV: true,
+  ETRADE_PACKAGE: true,
   M1_CSV: true,
   SCHWAB_CSV: true,
   RETIREMENT_PLAN_CSV: true,
@@ -58,6 +59,33 @@ var INVESTMENT_PORTFOLIO_ACTIVITY_TYPES_ = {
   LOAN: true,
   HARDSHIP_WITHDRAWAL: true,
   UNSUPPORTED: true
+};
+
+/**
+ * Canonical activitySubtype values for broker-specific distinctions.
+ * Robinhood legacy previews may carry broker transCode strings when allowLegacy is set.
+ */
+var INVESTMENT_PORTFOLIO_ACTIVITY_SUBTYPES_ = {
+  QUALIFIED_DIVIDEND: true,
+  REINVESTMENT: true,
+  EXCHANGE_RECEIVED: true,
+  EXCHANGE_DELIVERED: true,
+  REDEMPTION: true,
+  STOCK_SPLIT: true,
+  CASH_IN_LIEU: true,
+  CANCEL_SOLD: true,
+  ONLINE_TRANSFER: true,
+  SERVICE_FEE: true
+};
+
+var INVESTMENT_PORTFOLIO_CANONICAL_SUBTYPE_SOURCES_ = {
+  ETRADE_CSV: true,
+  ETRADE_PACKAGE: true,
+  M1_CSV: true,
+  SCHWAB_CSV: true,
+  RETIREMENT_PLAN_CSV: true,
+  PLAID_INVESTMENTS: true,
+  MANUAL_STRUCTURED: true
 };
 
 var INVESTMENT_PORTFOLIO_REGISTRATION_TYPES_ = {
@@ -191,6 +219,222 @@ var INVESTMENT_PORTFOLIO_RETIREMENT_REGISTRATIONS_ = {
 function investmentPortfolioNormalizeSource_(value) {
   var key = String(value || '').trim().toUpperCase();
   return INVESTMENT_PORTFOLIO_SOURCES_[key] ? key : '';
+}
+
+function investmentPortfolioNormalizeActivitySubtype_(value, options) {
+  options = options || {};
+  var raw = String(value || '').trim();
+  if (!raw) return '';
+  var key = raw.toUpperCase();
+  if (INVESTMENT_PORTFOLIO_ACTIVITY_SUBTYPES_[key]) return key;
+  if (options.allowLegacy) return raw;
+  return options.unknownFallback || '';
+}
+
+function investmentPortfolioIsCanonicalActivitySubtype_(value) {
+  var key = String(value || '').trim().toUpperCase();
+  return !!INVESTMENT_PORTFOLIO_ACTIVITY_SUBTYPES_[key];
+}
+
+function investmentPortfolioSourceRequiresCanonicalSubtype_(source) {
+  var key = investmentPortfolioNormalizeSource_(source);
+  return INVESTMENT_PORTFOLIO_CANONICAL_SUBTYPE_SOURCES_[key] === true;
+}
+
+function investmentPortfolioActivityHasTradeSemantics_(activity) {
+  var type = String(activity && activity.activityType || '').trim().toUpperCase();
+  return type === 'BUY' || type === 'SELL' || type === 'RECURRING_BUY';
+}
+
+function investmentPortfolioBuildDividendGroupKey_(activity) {
+  var row = activity || {};
+  var type = String(row.activityType || '').trim().toUpperCase();
+  var subtype = String(row.activitySubtype || '').trim().toUpperCase();
+  if (type !== 'DIVIDEND' && type !== 'REINVESTMENT') return '';
+  if (!String(row.activityDate || '').trim() || !String(row.ticker || '').trim()) return '';
+  return [
+    row.activityDate,
+    String(row.ticker || '').trim().toUpperCase(),
+    'dividend'
+  ].join('|');
+}
+
+function investmentPortfolioSummarizeDividendIncome_(activities) {
+  var groups = {};
+  var reinvestGroups = {};
+  (activities || []).forEach(function(row) {
+    var type = String(row.activityType || '').trim().toUpperCase();
+    var groupKey = investmentPortfolioBuildDividendGroupKey_(row);
+    if (!groupKey) return;
+    if (type === 'REINVESTMENT') {
+      reinvestGroups[groupKey] = (reinvestGroups[groupKey] || 0) + 1;
+      return;
+    }
+    if (type !== 'DIVIDEND') return;
+    var amount = Number(row.amount);
+    if (!isFinite(amount) || amount <= 0) return;
+    groups[groupKey] = (groups[groupKey] || 0) + amount;
+  });
+  var totalCashDividendIncome = 0;
+  Object.keys(groups).forEach(function(key) {
+    totalCashDividendIncome += groups[key];
+  });
+  return {
+    totalCashDividendIncome: totalCashDividendIncome,
+    groups: groups,
+    reinvestGroups: reinvestGroups
+  };
+}
+
+function investmentPortfolioMapEtradeSourceActivity_(row) {
+  row = row || {};
+  var label = String(row.etradeActivityType || row.activityTypeLabel || '').trim().toLowerCase();
+  var description = String(row.description || '').trim();
+  var descUpper = description.toUpperCase();
+  var amount = Number(row.amount);
+  var quantity = Number(row.quantity);
+  var hasQty = isFinite(quantity) && quantity !== 0;
+  var mapped = {
+    activityType: 'UNSUPPORTED',
+    activitySubtype: '',
+    dividendGroupKey: '',
+    tradeSemantics: false,
+    incomeEligible: false,
+    reviewRequired: false
+  };
+
+  if (label === 'bought') {
+    mapped.activityType = 'BUY';
+    mapped.tradeSemantics = true;
+    return mapped;
+  }
+  if (label === 'sold') {
+    mapped.activityType = 'SELL';
+    mapped.tradeSemantics = true;
+    return mapped;
+  }
+  if (label === 'qualified dividend') {
+    mapped.activityType = 'DIVIDEND';
+    mapped.activitySubtype = 'QUALIFIED_DIVIDEND';
+    mapped.incomeEligible = true;
+    mapped.dividendGroupKey = investmentPortfolioBuildDividendGroupKey_({
+      activityDate: row.activityDate,
+      ticker: row.ticker,
+      activityType: 'DIVIDEND',
+      activitySubtype: 'QUALIFIED_DIVIDEND'
+    });
+    return mapped;
+  }
+  if (label === 'dividend') {
+    if (descUpper.indexOf('DIVIDEND REINVESTMENT') !== -1) {
+      mapped.activityType = 'REINVESTMENT';
+      mapped.activitySubtype = 'REINVESTMENT';
+      mapped.dividendGroupKey = investmentPortfolioBuildDividendGroupKey_({
+        activityDate: row.activityDate,
+        ticker: row.ticker,
+        activityType: 'REINVESTMENT',
+        activitySubtype: 'REINVESTMENT'
+      });
+      return mapped;
+    }
+    mapped.activityType = 'DIVIDEND';
+    mapped.incomeEligible = isFinite(amount) && amount > 0;
+    mapped.dividendGroupKey = investmentPortfolioBuildDividendGroupKey_({
+      activityDate: row.activityDate,
+      ticker: row.ticker,
+      activityType: 'DIVIDEND',
+      activitySubtype: ''
+    });
+    return mapped;
+  }
+  if (label === 'transfer') {
+    if (descUpper.indexOf('ACH DEPOSIT') !== -1) {
+      mapped.activityType = 'CONTRIBUTION';
+      mapped.activitySubtype = 'ONLINE_TRANSFER';
+      return mapped;
+    }
+    if (descUpper.indexOf('TFR TO ACCT') !== -1 || descUpper.indexOf('GIFT TFR') !== -1) {
+      mapped.activityType = hasQty && quantity < 0 ? 'TRANSFER_OUT' : 'TRANSFER_IN';
+      return mapped;
+    }
+    mapped.activityType = hasQty && quantity < 0 ? 'TRANSFER_OUT' : 'TRANSFER_IN';
+    mapped.reviewRequired = true;
+    return mapped;
+  }
+  if (label === 'online transfer') {
+    if (isFinite(amount) && amount > 0) {
+      mapped.activityType = descUpper.indexOf('ACH DEPOSIT') !== -1 ? 'CONTRIBUTION' : 'TRANSFER_IN';
+    } else if (isFinite(amount) && amount < 0) {
+      mapped.activityType = descUpper.indexOf('ACH WITHDRAW') !== -1 ? 'WITHDRAWAL' : 'TRANSFER_OUT';
+    } else {
+      mapped.activityType = 'TRANSFER_IN';
+      mapped.reviewRequired = true;
+    }
+    mapped.activitySubtype = 'ONLINE_TRANSFER';
+    return mapped;
+  }
+  if (label === 'exchange received in') {
+    mapped.activityType = 'CORPORATE_ACTION';
+    mapped.activitySubtype = 'EXCHANGE_RECEIVED';
+    return mapped;
+  }
+  if (label === 'exchange delivered out') {
+    mapped.activityType = 'CORPORATE_ACTION';
+    mapped.activitySubtype = 'EXCHANGE_DELIVERED';
+    return mapped;
+  }
+  if (label === 'cash in lieu') {
+    mapped.activityType = 'CORPORATE_ACTION';
+    mapped.activitySubtype = 'CASH_IN_LIEU';
+    return mapped;
+  }
+  if (label === 'stock split') {
+    mapped.activityType = 'SPLIT';
+    mapped.activitySubtype = 'STOCK_SPLIT';
+    return mapped;
+  }
+  if (label === 'redemption') {
+    mapped.activityType = 'CORPORATE_ACTION';
+    mapped.activitySubtype = 'REDEMPTION';
+    return mapped;
+  }
+  if (label === 'cancel sold') {
+    mapped.activityType = 'CORPORATE_ACTION';
+    mapped.activitySubtype = 'CANCEL_SOLD';
+    return mapped;
+  }
+  if (label === 'service fee') {
+    mapped.activityType = 'FEE';
+    mapped.activitySubtype = 'SERVICE_FEE';
+    return mapped;
+  }
+  if (label === 'interest income') {
+    mapped.activityType = 'INTEREST';
+    return mapped;
+  }
+  mapped.reviewRequired = true;
+  return mapped;
+}
+
+function investmentPortfolioApplyEtradeMappedActivity_(row, mapped) {
+  mapped = mapped || investmentPortfolioMapEtradeSourceActivity_(row);
+  return {
+    activityDate: row.activityDate || '',
+    settleDate: row.settleDate || '',
+    ticker: row.ticker || '',
+    description: row.description || '',
+    quantity: row.quantity,
+    price: row.price,
+    amount: row.amount,
+    fees: row.fees,
+    source: investmentPortfolioNormalizeSource_(row.source) || 'ETRADE_CSV',
+    activityType: mapped.activityType,
+    activitySubtype: mapped.activitySubtype,
+    dividendGroupKey: mapped.dividendGroupKey || '',
+    tradeSemantics: mapped.tradeSemantics === true,
+    incomeEligible: mapped.incomeEligible === true,
+    reviewRequired: mapped.reviewRequired === true
+  };
 }
 
 function investmentPortfolioNormalizeRegistrationType_(value) {
@@ -345,7 +589,8 @@ function investmentPortfolioActivitiesEquivalent_(left, right) {
     Number(a.quantity || 0) === Number(b.quantity || 0) &&
     Number(a.price || 0) === Number(b.price || 0) &&
     Number(a.amount || 0) === Number(b.amount || 0) &&
-    Number(a.fees || 0) === Number(b.fees || 0);
+    Number(a.fees || 0) === Number(b.fees || 0) &&
+    String(a.activitySubtype || '') === String(b.activitySubtype || '');
 }
 
 function investmentPortfolioClassifyReplay_(incoming, existing, options) {
@@ -398,6 +643,19 @@ function investmentPortfolioValidateActivity_(activity) {
   if (!String(row.activityDate || '').trim()) errors.push('activityDate');
   var type = String(row.activityType || '').trim().toUpperCase();
   if (!INVESTMENT_PORTFOLIO_ACTIVITY_TYPES_[type]) errors.push('activityType');
+  var subtypeRaw = String(row.activitySubtype || '').trim();
+  if (subtypeRaw) {
+    var source = investmentPortfolioNormalizeSource_(row.source);
+    var allowLegacy = source === 'ROBINHOOD_CSV';
+    var normalizedSubtype = investmentPortfolioNormalizeActivitySubtype_(subtypeRaw, {
+      allowLegacy: allowLegacy
+    });
+    if (!normalizedSubtype) errors.push('activitySubtype');
+    else if (investmentPortfolioSourceRequiresCanonicalSubtype_(source) &&
+        !investmentPortfolioIsCanonicalActivitySubtype_(normalizedSubtype)) {
+      errors.push('activitySubtype');
+    }
+  }
   ['quantity', 'price', 'amount', 'fees'].forEach(function(field) {
     if (row[field] === null || typeof row[field] === 'undefined' || row[field] === '') return;
     if (!isFinite(Number(row[field]))) errors.push(field);
@@ -555,7 +813,9 @@ function investmentPortfolioNormalizeRobinhoodPreview_(legacyPreview, accountMet
       source: 'ROBINHOOD_CSV',
       sourceRecordKey: '',
       sourceAccountKey: '',
-      activitySubtype: row.transCode || '',
+      activitySubtype: investmentPortfolioNormalizeActivitySubtype_(row.transCode || '', {
+        allowLegacy: true
+      }) || String(row.transCode || '').trim(),
       parserVersion: String(preview.parserVersion || ''),
       dataQuality: 'NORMALIZED',
       incomeBucketSnapshot: incomeBucket

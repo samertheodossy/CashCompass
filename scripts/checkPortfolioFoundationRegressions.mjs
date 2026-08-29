@@ -61,6 +61,8 @@ assert.deepEqual(context.listInvestmentAdapterSources_(), ['ROBINHOOD_CSV'],
 assert.throws(() => context.getInvestmentAdapter_('ETRADE_CSV'),
   /not implemented/, 'Future broker adapters must not be stubbed as live');
 assert.equal(context.investmentPortfolioNormalizeSource_('robinhood_csv'), 'ROBINHOOD_CSV');
+assert.equal(context.investmentPortfolioNormalizeSource_('etrade_package'), 'ETRADE_PACKAGE',
+  'ETRADE_PACKAGE must be a registered foundation source');
 
 // --- Registration types ---
 ['TRADITIONAL_IRA', 'ROTH_IRA', '403B', 'HSA', 'OTHER_RETIREMENT', 'TAXABLE'].forEach((type) => {
@@ -103,6 +105,191 @@ assert.equal(context.investmentPortfolioResolveIncomeBucket_('ROTH_IRA'),
   'RETIREMENT_PORTFOLIO_INCOME');
 assert.equal(context.investmentPortfolioResolveIncomeBucket_('IRA'),
   'RETIREMENT_PORTFOLIO_INCOME');
+
+// --- Activity subtype model (E*TRADE foundation; Robinhood legacy preserved) ---
+[
+  'QUALIFIED_DIVIDEND', 'REINVESTMENT', 'EXCHANGE_RECEIVED', 'EXCHANGE_DELIVERED',
+  'REDEMPTION', 'STOCK_SPLIT', 'CASH_IN_LIEU', 'CANCEL_SOLD', 'ONLINE_TRANSFER', 'SERVICE_FEE'
+].forEach((subtype) => {
+  assert.equal(context.investmentPortfolioIsCanonicalActivitySubtype_(subtype), true,
+    `${subtype} must be a canonical activitySubtype`);
+});
+assert.equal(context.investmentPortfolioNormalizeActivitySubtype_('qualified_dividend'), 'QUALIFIED_DIVIDEND');
+assert.equal(context.investmentPortfolioNormalizeActivitySubtype_('Buy', { allowLegacy: true }), 'Buy',
+  'Robinhood transCode strings must pass through unchanged when allowLegacy is set');
+assert.equal(context.investmentPortfolioNormalizeActivitySubtype_('Buy'), '',
+  'Non-canonical subtypes must not normalize without allowLegacy');
+
+const etradeQualified = context.investmentPortfolioMapEtradeSourceActivity_({
+  etradeActivityType: 'Qualified Dividend',
+  activityDate: '2026-01-15',
+  ticker: 'SYNAAA',
+  amount: 12.34
+});
+assert.deepEqual({
+  activityType: etradeQualified.activityType,
+  activitySubtype: etradeQualified.activitySubtype,
+  tradeSemantics: etradeQualified.tradeSemantics,
+  incomeEligible: etradeQualified.incomeEligible
+}, {
+  activityType: 'DIVIDEND',
+  activitySubtype: 'QUALIFIED_DIVIDEND',
+  tradeSemantics: false,
+  incomeEligible: true
+});
+
+const etradeReinvest = context.investmentPortfolioMapEtradeSourceActivity_({
+  etradeActivityType: 'Dividend',
+  description: 'SYNAAA DIVIDEND REINVESTMENT',
+  activityDate: '2026-01-15',
+  ticker: 'SYNAAA',
+  amount: -12.34,
+  quantity: 0.25
+});
+assert.equal(etradeReinvest.activityType, 'REINVESTMENT');
+assert.equal(etradeReinvest.activitySubtype, 'REINVESTMENT');
+assert.equal(etradeReinvest.tradeSemantics, false);
+
+const etradeExchangeIn = context.investmentPortfolioMapEtradeSourceActivity_({
+  etradeActivityType: 'Exchange Received In',
+  quantity: 10
+});
+assert.equal(etradeExchangeIn.activityType, 'CORPORATE_ACTION');
+assert.equal(etradeExchangeIn.activitySubtype, 'EXCHANGE_RECEIVED');
+assert.equal(context.investmentPortfolioActivityHasTradeSemantics_(etradeExchangeIn), false);
+
+const etradeExchangeOut = context.investmentPortfolioMapEtradeSourceActivity_({
+  etradeActivityType: 'Exchange Delivered Out',
+  quantity: -10
+});
+assert.equal(etradeExchangeOut.activitySubtype, 'EXCHANGE_DELIVERED');
+assert.notEqual(etradeExchangeOut.activityType, 'BUY');
+assert.notEqual(etradeExchangeOut.activityType, 'SELL');
+
+const etradeTransfer = context.investmentPortfolioMapEtradeSourceActivity_({
+  etradeActivityType: 'Transfer',
+  description: 'TFR TO ACCT',
+  quantity: -5
+});
+assert.equal(etradeTransfer.activityType, 'TRANSFER_OUT');
+assert.equal(context.investmentPortfolioActivityHasTradeSemantics_(etradeTransfer), false);
+
+const etradeAch = context.investmentPortfolioMapEtradeSourceActivity_({
+  etradeActivityType: 'Online Transfer',
+  description: 'ACH DEPOSIT',
+  amount: 500
+});
+assert.equal(etradeAch.activityType, 'CONTRIBUTION');
+assert.equal(etradeAch.activitySubtype, 'ONLINE_TRANSFER');
+
+const etradeSplit = context.investmentPortfolioMapEtradeSourceActivity_({
+  etradeActivityType: 'Stock Split',
+  description: 'SPLIT RATIO 10:1',
+  quantity: 90
+});
+assert.equal(etradeSplit.activityType, 'SPLIT');
+assert.equal(etradeSplit.activitySubtype, 'STOCK_SPLIT');
+
+const etradeApplied = context.investmentPortfolioApplyEtradeMappedActivity_({
+  source: 'ETRADE_PACKAGE',
+  activityDate: '2026-02-01',
+  ticker: 'SYNBBB',
+  amount: -1.25,
+  etradeActivityType: 'Service Fee'
+});
+assert.equal(etradeApplied.activityType, 'FEE');
+assert.equal(etradeApplied.activitySubtype, 'SERVICE_FEE');
+assert.equal(context.investmentPortfolioValidateActivity_(etradeApplied).ok, true);
+
+assert.equal(context.investmentPortfolioValidateActivity_({
+  activityDate: '2026-02-01',
+  activityType: 'DIVIDEND',
+  activitySubtype: 'QUALIFIED_DIVIDEND',
+  source: 'ETRADE_CSV'
+}).ok, true);
+assert.equal(context.investmentPortfolioValidateActivity_({
+  activityDate: '2026-02-01',
+  activityType: 'DIVIDEND',
+  activitySubtype: 'NotARealSubtype',
+  source: 'ETRADE_CSV'
+}).ok, false);
+assert.equal(context.investmentPortfolioValidateActivity_({
+  activityDate: '2026-02-01',
+  activityType: 'BUY',
+  activitySubtype: 'Buy',
+  source: 'ROBINHOOD_CSV'
+}).ok, true, 'Robinhood legacy transCode subtypes remain valid');
+
+const dividendPair = [
+  context.investmentPortfolioApplyEtradeMappedActivity_({
+    source: 'ETRADE_CSV',
+    activityDate: '2026-01-15',
+    ticker: 'SYNAAA',
+    amount: 10,
+    etradeActivityType: 'Qualified Dividend'
+  }),
+  context.investmentPortfolioApplyEtradeMappedActivity_({
+    source: 'ETRADE_CSV',
+    activityDate: '2026-01-15',
+    ticker: 'SYNAAA',
+    amount: -10,
+    quantity: 0.5,
+    description: 'SYNAAA DIVIDEND REINVESTMENT',
+    etradeActivityType: 'Dividend'
+  })
+];
+const dividendIncome = context.investmentPortfolioSummarizeDividendIncome_(dividendPair);
+assert.equal(dividendIncome.totalCashDividendIncome, 10,
+  'Qualified dividend income must not double-count paired reinvestment');
+assert.equal(dividendIncome.reinvestGroups[dividendPair[0].dividendGroupKey], 1);
+
+// --- Subtype-aware replay identity ---
+const subtypeBase = {
+  source: 'ETRADE_CSV',
+  sourceAccountKey: 'acct-1',
+  sourceRecordKey: 'txn-div-1',
+  activityDate: '2026-01-15',
+  ticker: 'SYNAAA',
+  activityType: 'DIVIDEND',
+  activitySubtype: 'QUALIFIED_DIVIDEND',
+  quantity: 0,
+  price: 0,
+  amount: 10,
+  fees: 0
+};
+assert.equal(context.investmentPortfolioClassifyReplay_(subtypeBase, { ...subtypeBase }), 'EXACT_REPLAY');
+const subtypeOnlyCorrection = { ...subtypeBase, activitySubtype: 'REINVESTMENT' };
+assert.equal(subtypeOnlyCorrection.activityType, subtypeBase.activityType,
+  'Subtype replay test must hold primary activityType constant');
+assert.equal(subtypeOnlyCorrection.sourceRecordKey, subtypeBase.sourceRecordKey,
+  'Subtype replay test must hold sourceRecordKey constant');
+assert.notEqual(
+  context.investmentPortfolioBuildActivityFingerprint_(subtypeBase),
+  context.investmentPortfolioBuildActivityFingerprint_(subtypeOnlyCorrection),
+  'Distinct subtypes must affect activity fingerprints'
+);
+assert.notEqual(
+  context.investmentPortfolioClassifyReplay_(subtypeOnlyCorrection, subtypeBase),
+  'EXACT_REPLAY',
+  'Subtype-only correction must not classify as exact replay'
+);
+assert.equal(
+  context.investmentPortfolioClassifyReplay_(subtypeOnlyCorrection, subtypeBase),
+  'SOURCE_CORRECTION',
+  'Same source record key with subtype-only change must be SOURCE_CORRECTION'
+);
+const fingerprintSubtypeA = {
+  activityDate: '2026-02-01', ticker: 'SYNAAA', activityType: 'DIVIDEND',
+  activitySubtype: 'QUALIFIED_DIVIDEND', amount: 10, source: 'ETRADE_CSV'
+};
+const fingerprintSubtypeB = { ...fingerprintSubtypeA, activitySubtype: 'REINVESTMENT' };
+assert.equal(fingerprintSubtypeB.activityType, fingerprintSubtypeA.activityType,
+  'Fingerprint subtype test must hold primary activityType constant');
+assert.notEqual(
+  context.investmentPortfolioBuildReplayKey_(fingerprintSubtypeA),
+  context.investmentPortfolioBuildReplayKey_(fingerprintSubtypeB),
+  'Subtype differences must change fingerprint replay keys when no source record key exists'
+);
 
 // --- Robinhood characterization: classification unchanged ---
 const universe = { QQQ: true, JEPQ: true };
@@ -270,6 +457,12 @@ assert.doesNotMatch(dashboardInvestments,
   'Dashboard investment UI must not wire generic foundation persistence yet');
 assert.match(foundationSource, /INVESTMENT_ACTIVITY_EXTENDED_HEADERS_/,
   'Activity schema extension contract must exist');
+assert.match(foundationSource, /INVESTMENT_PORTFOLIO_ACTIVITY_SUBTYPES_/,
+  'Canonical activitySubtype enum must exist');
+assert.match(foundationSource, /investmentPortfolioMapEtradeSourceActivity_/,
+  'E*TRADE source mapping helper must exist for future adapter work');
+assert.match(foundationSource, /investmentPortfolioSummarizeDividendIncome_/,
+  'Dividend income summarization must exist to prevent double-counting');
 assert.match(foundationSource, /INVESTMENT_TAX_LOT_HEADERS_/,
   'Tax lot first-create headers must be defined');
 assert.match(foundationSource, /INVESTMENT_SECURITIES_HEADERS_/,
