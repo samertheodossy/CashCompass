@@ -75,11 +75,7 @@
   and `cashcompass-application` remains **PREPARED BUT UNATTACHED / PARKED**.
   Existing Part 2A-1 through 2A-5 remain enabling foundation, not
   production-ready Planning authority for all domains.
-- **Next major Investment milestone (after owner approves `ETRADE_SOURCE_MAPPING.md`
-  for commit):** **preview-only `ETRADE_PACKAGE` adapter design** — synthetic
-  fixtures and normalized preview for Transactions CSV + Expanded Positions PDF +
-  Gains & Losses PDF (`ETRADE_SOURCE_MAPPING.md`). **Not** persistence, dashboard
-  upload, or production import. M1 and Schwab source inspection remain future.
+- **E*TRADE Phase A (preview-only Transactions CSV):** implemented locally — synthetic fixtures, `investment_etrade_csv.js`, adapter registry entries, regression tests. **Not** committed/deployed until owner approval; **not** persistence, dashboard upload, or production import. **Next:** Phase B Positions PDF + Phase C Gains & Losses PDF preview (`ETRADE_SOURCE_MAPPING.md`). M1 and Schwab source inspection remain future.
   Broader direction: `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` Phase 1.
 - **Open lifecycle-adjacent gaps:** House metadata Edit/Rename remains required
   before broad Beta. Income Edit/Rename is a known unclaimed capability and must

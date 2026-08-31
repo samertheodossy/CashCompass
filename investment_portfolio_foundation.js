@@ -437,6 +437,149 @@ function investmentPortfolioApplyEtradeMappedActivity_(row, mapped) {
   };
 }
 
+function investmentPortfolioExtractEtradeRefId_(description) {
+  var match = String(description || '').match(/REFID[:\s]+(\d+)/i);
+  return match ? 'REFID:' + match[1] : '';
+}
+
+function investmentPortfolioNormalizeEtradeDescription_(description) {
+  return String(description || '').replace(/\s+/g, ' ').trim().toUpperCase();
+}
+
+function investmentPortfolioBuildEtradeStableIdentityParts_(activity, rawRow) {
+  var row = activity || {};
+  var raw = rawRow || {};
+  return [
+    row.activityDate || '',
+    raw.etradeActivityType || raw.activityTypeLabel || row.etradeActivityType || '',
+    row.ticker || '',
+    investmentPortfolioNormalizeEtradeDescription_(row.description || raw.description)
+  ];
+}
+
+function investmentPortfolioBuildEtradeFullFingerprintParts_(activity, rawRow) {
+  var row = activity || {};
+  var raw = rawRow || {};
+  return investmentPortfolioBuildEtradeStableIdentityParts_(row, raw).concat([
+    row.settleDate || '',
+    row.quantity,
+    row.price,
+    row.amount,
+    row.fees
+  ]);
+}
+
+function investmentPortfolioAssessEtradeSourceIdentity_(activity, rawRow) {
+  var row = activity || {};
+  var raw = rawRow || {};
+  var description = row.description || raw.description || '';
+  if (investmentPortfolioExtractEtradeRefId_(description)) {
+    return { strength: 'REFID', reviewRequired: false };
+  }
+  return {
+    strength: 'AMBIGUOUS',
+    reviewRequired: true,
+    reason: 'E*TRADE row has no REFID; provider export can repeat same-day ticker + description for distinct fills.'
+  };
+}
+
+function investmentPortfolioBuildEtradeSourceRecordKey_(activity, rawRow) {
+  var row = activity || {};
+  var raw = rawRow || {};
+  var refId = investmentPortfolioExtractEtradeRefId_(row.description || raw.description);
+  if (refId) return refId;
+  return 'FP:' + investmentPortfolioDigest_(
+    investmentPortfolioBuildEtradeFullFingerprintParts_(row, raw));
+}
+
+function investmentPortfolioSummarizeEtradeStableKeyAmbiguity_(activities) {
+  var summary = {
+    groups: 0,
+    rows: 0,
+    items: []
+  };
+  var groups = {};
+  (activities || []).forEach(function(row) {
+    var recordKey = String(row.sourceRecordKey || '').trim();
+    if (!recordKey || recordKey.indexOf('REFID:') === 0) return;
+    var stableKey = 'STABLE:' + investmentPortfolioDigest_([
+      String(row.sourceAccountKey || ''),
+      investmentPortfolioBuildEtradeStableIdentityParts_(row, {
+        etradeActivityType: row.etradeActivityType,
+        description: row.description
+      }).join('||')
+    ]);
+    if (!groups[stableKey]) groups[stableKey] = [];
+    groups[stableKey].push(row);
+  });
+  Object.keys(groups).forEach(function(stableKey) {
+    var members = groups[stableKey];
+    if (members.length <= 1) return;
+    var allEquivalent = members.every(function(row) {
+      return investmentPortfolioActivitiesEquivalent_(members[0], row);
+    });
+    if (allEquivalent) return;
+    summary.groups += 1;
+    summary.rows += members.length;
+    members.forEach(function(row) {
+      row.stableKeyAmbiguous = true;
+      row.reviewRequired = true;
+    });
+    summary.items.push({
+      stableKey: stableKey,
+      sourceRecordKeys: members.map(function(row) { return row.sourceRecordKey; }),
+      rowIndexes: members.map(function(row) { return row.sourceRowIndex; })
+    });
+  });
+  return summary;
+}
+
+function investmentPortfolioSummarizeIntraFileSourceKeys_(activities) {
+  var summary = {
+    exactDuplicates: 0,
+    mutableDuplicates: 0,
+    conflicts: 0,
+    items: []
+  };
+  var groups = {};
+  (activities || []).forEach(function(row) {
+    var recordKey = String(row.sourceRecordKey || '').trim();
+    var accountKey = String(row.sourceAccountKey || '').trim();
+    if (!recordKey) return;
+    var compositeKey = accountKey + '||' + recordKey;
+    if (!groups[compositeKey]) groups[compositeKey] = [];
+    groups[compositeKey].push(row);
+  });
+  Object.keys(groups).forEach(function(compositeKey) {
+    var members = groups[compositeKey];
+    if (members.length <= 1) return;
+    var primary = members[0];
+    for (var i = 1; i < members.length; i++) {
+      var duplicate = members[i];
+      var outcome;
+      if (investmentPortfolioActivitiesEquivalent_(primary, duplicate)) {
+        outcome = 'DUPLICATE_EXACT';
+        summary.exactDuplicates += 1;
+      } else if (primary.reviewRequired || duplicate.reviewRequired) {
+        outcome = 'DUPLICATE_CONFLICT';
+        summary.conflicts += 1;
+      } else {
+        outcome = 'DUPLICATE_MUTABLE';
+        summary.mutableDuplicates += 1;
+      }
+      duplicate.intraFileOutcome = outcome;
+      duplicate.intraFilePrimarySourceRecordKey = primary.sourceRecordKey;
+      summary.items.push({
+        sourceRecordKey: primary.sourceRecordKey,
+        outcome: outcome,
+        primaryRowIndex: primary.sourceRowIndex,
+        duplicateRowIndex: duplicate.sourceRowIndex
+      });
+    }
+  });
+  return summary;
+}
+
 function investmentPortfolioNormalizeRegistrationType_(value) {
   var key = String(value || '').trim().toUpperCase() || 'UNKNOWN';
   if (INVESTMENT_PORTFOLIO_REGISTRATION_TYPES_[key]) return key;
@@ -535,7 +678,7 @@ function investmentPortfolioDigest_(parts) {
 function investmentPortfolioHashOpaqueKey_(prefix, raw) {
   var text = String(raw || '').trim();
   if (!text) return '';
-  return prefix + ':' + investmentPortfolioDigest_(text);
+  return prefix + ':' + investmentPortfolioDigest_([text]);
 }
 
 function investmentPortfolioBuildActivityFingerprint_(activity) {
@@ -603,6 +746,7 @@ function investmentPortfolioClassifyReplay_(incoming, existing, options) {
     var incomingSourceKey = String(incoming.sourceRecordKey || '').trim();
     var existingSourceKey = String(existing.sourceRecordKey || '').trim();
     if (incomingSourceKey && existingSourceKey && incomingSourceKey === existingSourceKey) {
+      if (/^FP:/.test(incomingSourceKey)) return 'CONFLICT';
       return 'SOURCE_CORRECTION';
     }
     return 'CONFLICT';
@@ -770,7 +914,10 @@ function investmentPortfolioBuildImportPreviewSummary_(parts) {
       exactReplays: Number(parts.exactReplays || 0),
       newRecords: Number(parts.newRecords || 0),
       sourceCorrections: Number(parts.sourceCorrections || 0),
-      conflicts: Number(parts.conflicts || 0)
+      conflicts: Number(parts.conflicts || 0),
+      intraFileExactDuplicates: Number(parts.intraFileExactDuplicates || 0),
+      intraFileMutableDuplicates: Number(parts.intraFileMutableDuplicates || 0),
+      intraFileConflicts: Number(parts.intraFileConflicts || 0)
     },
     holdings: {
       reportedCount: Number(parts.reportedHoldings || 0),

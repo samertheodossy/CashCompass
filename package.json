@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "build:rolling-dashboard": "vite build --config vite.rolling-dashboard.config.ts && node scripts/emitRollingDashboardBundleHtml.mjs",
-    "test": "npm run test:plaid-backend && npm run test:plaid-bridge && npm run test:plaid-import && npm run test:plaid-apply && npm run test:plaid-main-app && npm run test:plaid-provisioning && npm run test:maintenance && npm run test:dashboard-ux && npm run test:rfp-metadata && npm run test:rfp-capital-allocation && npm run test:portfolio-foundation && npm run test:financial-identity && npm run test:financial-facts && npm run test:cash-import && npm run test:debt-import && npm run test:data-readiness && npm run test:performance-timing && npm run test:populated-harness && npm run test:p1-evidence && npm run test:production-paths",
+    "test": "npm run test:plaid-backend && npm run test:plaid-bridge && npm run test:plaid-import && npm run test:plaid-apply && npm run test:plaid-main-app && npm run test:plaid-provisioning && npm run test:maintenance && npm run test:dashboard-ux && npm run test:rfp-metadata && npm run test:rfp-capital-allocation && npm run test:portfolio-foundation && npm run test:etrade-adapter && npm run test:etrade-preview-lab && npm run test:financial-identity && npm run test:financial-facts && npm run test:cash-import && npm run test:debt-import && npm run test:data-readiness && npm run test:performance-timing && npm run test:populated-harness && npm run test:p1-evidence && npm run test:production-paths",
     "test:plaid-backend": "npm --prefix services/plaid-backend test",
     "test:plaid-bridge": "node scripts/checkPlaidBridgeRegressions.mjs",
     "test:plaid-import": "node scripts/checkPlaidImportRegressions.mjs",
@@ -15,6 +15,8 @@
     "test:rfp-metadata": "node scripts/checkRfpMetadataRegressions.mjs",
     "test:rfp-capital-allocation": "node scripts/checkRfpCapitalAllocationRegressions.mjs",
     "test:portfolio-foundation": "node scripts/checkPortfolioFoundationRegressions.mjs",
+    "test:etrade-adapter": "node scripts/checkEtradeAdapterRegressions.mjs",
+    "test:etrade-preview-lab": "node scripts/checkEtradePreviewLabRegressions.mjs",
     "test:financial-identity": "node scripts/checkFinancialIdentityRegressions.mjs",
     "test:financial-facts": "node scripts/checkFinancialFactsRegressions.mjs",
     "test:cash-import": "node scripts/checkCashImportRegressions.mjs",

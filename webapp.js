@@ -42,6 +42,15 @@ function doGet(e) {
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 
+  // E*TRADE Preview Lab: /exec?view=etrade-preview-lab. Admin-gated, Central-only
+  // preview surface. Non-admins silently fall through to the normal dashboard.
+  if (view === 'etrade-preview-lab' && isAdminUser_()) {
+    return HtmlService.createTemplateFromFile('EtradePreviewLabUI')
+      .evaluate()
+      .setTitle('CashCompass — E*TRADE Preview Lab')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
   // Plaid P1 Sandbox connectivity proof. This is a guarded execution adapter,
   // not a customer dashboard or second operator inventory. It is registered in
   // the Validation console and is visible only to the permanent non-admin

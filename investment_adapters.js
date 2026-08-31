@@ -33,6 +33,36 @@ var INVESTMENT_ADAPTER_REGISTRY_ = {
     detect: investmentAdapterDetectRobinhoodCsv_,
     preview: investmentAdapterPreviewRobinhoodCsv_,
     normalize: investmentAdapterNormalizeRobinhoodCsv_
+  },
+  ETRADE_PACKAGE: {
+    source: 'ETRADE_PACKAGE',
+    parserVersion: ETRADE_TXN_CSV_PARSER_VERSION_,
+    capabilities: {
+      activities: true,
+      holdings: false,
+      taxLots: false,
+      accountSnapshot: false,
+      dividendHistory: false,
+      realizedGainLoss: false
+    },
+    detect: investmentEtradeDetectTxnCsv_,
+    preview: investmentAdapterPreviewEtradePackage_,
+    normalize: investmentAdapterNormalizeEtradePackage_
+  },
+  ETRADE_CSV: {
+    source: 'ETRADE_CSV',
+    parserVersion: ETRADE_TXN_CSV_PARSER_VERSION_,
+    capabilities: {
+      activities: true,
+      holdings: false,
+      taxLots: false,
+      accountSnapshot: false,
+      dividendHistory: false,
+      realizedGainLoss: false
+    },
+    detect: investmentEtradeDetectTxnCsv_,
+    preview: investmentAdapterPreviewEtradeCsv_,
+    normalize: investmentAdapterNormalizeEtradeCsv_
   }
 };
 
@@ -105,6 +135,39 @@ function investmentAdapterPreviewRobinhoodCsv_(input, optionalSs) {
 
 function investmentAdapterNormalizeRobinhoodCsv_(input, optionalSs) {
   var preview = investmentAdapterPreviewRobinhoodCsv_(input, optionalSs);
+  if (!preview.ok) return preview;
+  return preview.normalized;
+}
+
+function investmentAdapterPreviewEtradePackage_(input, optionalSs) {
+  var payload = input || {};
+  payload.source = investmentPortfolioNormalizeSource_(payload.source) || 'ETRADE_PACKAGE';
+  var detection = investmentEtradeDetectTxnCsv_(payload);
+  if (!detection.ok) {
+    return {
+      ok: false,
+      reviewRequired: true,
+      error: detection.reason,
+      source: payload.source
+    };
+  }
+  return investmentEtradePreviewTxnCsv_(payload);
+}
+
+function investmentAdapterNormalizeEtradePackage_(input, optionalSs) {
+  var preview = investmentAdapterPreviewEtradePackage_(input, optionalSs);
+  if (!preview.ok) return preview;
+  return preview.normalized;
+}
+
+function investmentAdapterPreviewEtradeCsv_(input, optionalSs) {
+  var payload = input || {};
+  payload.source = 'ETRADE_CSV';
+  return investmentAdapterPreviewEtradePackage_(payload, optionalSs);
+}
+
+function investmentAdapterNormalizeEtradeCsv_(input, optionalSs) {
+  var preview = investmentAdapterPreviewEtradeCsv_(input, optionalSs);
   if (!preview.ok) return preview;
   return preview.normalized;
 }

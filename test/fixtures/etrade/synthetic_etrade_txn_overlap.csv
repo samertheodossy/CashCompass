@@ -1,0 +1,14 @@
+All Transactions Activity Types
+
+Account TEST-ACCT-0001 | Jan 1, 2024 - Aug 28, 2026
+
+Total: $500.00
+
+Activity/Trade Date,Transaction Date,Settlement Date,Activity Type,Description,Symbol,Cusip,Quantity #,Price $,Amount $,Commission,Category,Note
+01/15/2024,01/15/2024,01/16/2024,Bought,SYNAAA BUY SYNTHETIC,SYNAAA,--,10,25.00,-250.00,0.0,--,--
+01/25/2024,01/25/2024,,Online Transfer,ACH DEPOSIT REFID 1234567890,--,--,,,505.00,0.0,--,--
+02/15/2024,02/15/2024,02/16/2024,Bought,SYNNEW NEW POSITION,SYNNEW,--,2,10.00,-20.00,0.0,--,--
+"Transactions exported from a synthetic CashCompass overlap fixture.",,,,,,,,,,,,
+"Overlap file includes one exact replay, one source correction, and one new row.",,,,,,,,,,,,
+"Not real brokerage data.",,,,,,,,,,,,
+"End of synthetic overlap export.",,,,,,,,,,,,

@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base target="_top">
+  <title>CashCompass — E*TRADE Preview Lab</title>
+  <style>
+    :root {
+      --ink: #1f2933;
+      --ink-soft: #52606d;
+      --line: #e1e5ea;
+      --bg: #f5f7fa;
+      --card: #fff;
+      --blue: #2563eb;
+      --warn-bg: #fff4d6;
+      --warn-border: #f0c200;
+      --warn-fg: #723b13;
+      --ok-fg: #03543f;
+      --bad-fg: #9b1c1c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      margin: 0;
+      padding: 24px 16px 64px;
+      background: var(--bg);
+      line-height: 1.5;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+         color: var(--ink-soft); margin: 0 0 10px; }
+    .sub { color: var(--ink-soft); font-size: 13px; margin: 0 0 16px; }
+    .banner-warn {
+      background: var(--warn-bg);
+      border: 2px solid var(--warn-border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--warn-fg);
+      margin: 0 0 18px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 18px;
+      margin: 0 0 16px;
+    }
+    label { display: block; font-size: 12px; color: var(--ink-soft); margin: 0 0 4px; }
+    input[type=text], input[type=file], select {
+      width: 100%;
+      padding: 9px 11px;
+      font-size: 13px;
+      border: 1px solid #cbd2d9;
+      border-radius: 8px;
+      margin: 0 0 12px;
+    }
+    .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+    button {
+      font-size: 13px;
+      padding: 9px 16px;
+      border-radius: 8px;
+      border: 1px solid #cbd2d9;
+      background: #fff;
+      cursor: pointer;
+    }
+    button.primary {
+      background: var(--blue);
+      border-color: var(--blue);
+      color: #fff;
+      font-weight: 600;
+    }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .file-meta { font-size: 12px; color: var(--ink-soft); margin: -6px 0 12px; }
+    table { border-collapse: collapse; width: 100%; font-size: 12px; }
+    th, td {
+      text-align: left;
+      padding: 6px 8px;
+      border-bottom: 1px solid #eceff2;
+      vertical-align: top;
+    }
+    th { background: #fafbfc; color: var(--ink-soft); font-weight: 600; }
+    .pill {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .pill-ok { background: #def7ec; color: var(--ok-fg); }
+    .pill-warn { background: #fdf6b2; color: var(--warn-fg); }
+    .pill-bad { background: #fde8e8; color: var(--bad-fg); }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 10px;
+    }
+    .stat {
+      border: 1px solid #eceff2;
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #fafbfc;
+    }
+    .stat .label { font-size: 11px; color: var(--ink-soft); }
+    .stat .value { font-size: 18px; font-weight: 600; margin-top: 2px; }
+    .counts-pre {
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 11px;
+      white-space: pre-wrap;
+      background: #fafbfc;
+      border: 1px solid #eceff2;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin: 0;
+      max-height: 220px;
+      overflow: auto;
+    }
+    .error-box {
+      background: #fde8e8;
+      border: 1px solid #f8b4b4;
+      color: var(--bad-fg);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      margin: 0 0 16px;
+    }
+    .muted { color: var(--ink-soft); font-size: 12px; }
+    .dash-loading {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .dash-loading-spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid #e2e8f0;
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.72s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .dash-loading-spinner { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>E*TRADE Preview Lab</h1>
+      <p class="sub">Central admin-only — validate E*TRADE Transactions CSV normalization before any import exists.
+        <a href="?view=admin" style="color:#2563eb;text-decoration:none;">← Admin Diagnostics</a>
+      </p>
+    </header>
+
+    <div class="banner-warn" role="status">
+      Preview only — no workbook changes or import will occur.
+    </div>
+
+    <div class="card">
+      <h2>Upload &amp; metadata</h2>
+      <label for="csvFile">E*TRADE Transactions CSV</label>
+      <input type="file" id="csvFile" accept=".csv,text/csv">
+
+      <div class="file-meta" id="fileMeta">No file selected.</div>
+
+      <div class="row">
+        <div>
+          <label for="previewSource">Preview source</label>
+          <select id="previewSource">
+            <option value="ETRADE_CSV">ETRADE_CSV (activity-only alias)</option>
+            <option value="ETRADE_PACKAGE">ETRADE_PACKAGE (ACTIVITY file)</option>
+          </select>
+        </div>
+        <div>
+          <label for="stableAccountId">stableAccountId (optional)</label>
+          <input type="text" id="stableAccountId" placeholder="e.g. INV-ET-PREVIEW-1" autocomplete="off">
+        </div>
+        <div>
+          <label for="registrationType">registrationType</label>
+          <select id="registrationType">
+            <option value="TAXABLE">TAXABLE</option>
+            <option value="TRADITIONAL_IRA">TRADITIONAL_IRA</option>
+            <option value="ROTH_IRA">ROTH_IRA</option>
+            <option value="401K">401K</option>
+            <option value="HSA">HSA</option>
+            <option value="UNKNOWN">UNKNOWN</option>
+          </select>
+        </div>
+        <div>
+          <label for="accountName">accountName (optional)</label>
+          <input type="text" id="accountName" placeholder="Preview label only" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" class="primary" id="previewBtn" disabled>Preview</button>
+        <button type="button" id="clearBtn">Clear</button>
+      </div>
+      <p class="muted" style="margin:12px 0 0;">
+        Metadata is request-scoped only and is never written to a sheet or stored.
+      </p>
+    </div>
+
+    <div id="statusArea"></div>
+    <div id="resultsArea"></div>
+  </div>
+
+  <script>
+    (function() {
+      var csvFileEl = document.getElementById('csvFile');
+      var fileMetaEl = document.getElementById('fileMeta');
+      var previewBtn = document.getElementById('previewBtn');
+      var clearBtn = document.getElementById('clearBtn');
+      var statusArea = document.getElementById('statusArea');
+      var resultsArea = document.getElementById('resultsArea');
+
+      var state = {
+        fileName: '',
+        fileSize: 0,
+        rawCsv: ''
+      };
+
+      function formatBytes(n) {
+        if (!n) return '0 B';
+        if (n < 1024) return n + ' B';
+        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+        return (n / (1024 * 1024)).toFixed(2) + ' MB';
+      }
+
+      function setLoading(on, label) {
+        if (!on) {
+          statusArea.innerHTML = '';
+          return;
+        }
+        statusArea.innerHTML =
+          '<div class="card"><div class="dash-loading">' +
+          '<div class="dash-loading-spinner"></div>' +
+          '<span>' + (label || 'Running preview…') + '</span></div></div>';
+      }
+
+      function renderCounts(title, counts) {
+        if (!counts || !Object.keys(counts).length) {
+          return '<p class="muted">None</p>';
+        }
+        var lines = Object.keys(counts).sort().map(function(key) {
+          return key + ': ' + counts[key];
+        });
+        return '<pre class="counts-pre">' + escapeHtml(lines.join('\n')) + '</pre>';
+      }
+
+      function escapeHtml(text) {
+        return String(text)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function pill(ok, review) {
+        if (!ok) return '<span class="pill pill-bad">failed</span>';
+        if (review) return '<span class="pill pill-warn">review required</span>';
+        return '<span class="pill pill-ok">ok</span>';
+      }
+
+      function renderResults(data) {
+        if (!data || !data.ok) {
+          resultsArea.innerHTML =
+            '<div class="error-box">' + escapeHtml(data && data.error ? data.error : 'Preview failed.') + '</div>';
+          return;
+        }
+
+        var agg = data.aggregates || {};
+        var tc = agg.transferCounts || {};
+        var ec = agg.exchangeCounts || {};
+        var div = agg.dividendIncomeSummary || {};
+
+        var html = '';
+        html += '<div class="card"><h2>Summary</h2>';
+        html += '<div class="stat-grid">';
+        html += stat('Parser', data.parserVersion || '—');
+        html += stat('Status', pill(true, data.reviewRequired));
+        html += stat('Accepted rows', agg.acceptedActivityCount);
+        html += stat('Unsupported rows', agg.unsupportedRowCount);
+        html += stat('Warnings', agg.warningCount);
+        html += stat('Exact replays', agg.exactReplayCount);
+        html += stat('Source corrections', agg.sourceCorrectionCount);
+        html += stat('Duplicates', agg.duplicateCount);
+        html += stat('Stable-key ambiguity', agg.stableKeyAmbiguityCount);
+        html += stat('Conflicts', agg.conflictCount);
+        html += stat('Fees (net signed)', agg.feeCount + ' · $' +
+          Number(agg.feeNetTotal || 0).toFixed(2));
+        html += stat('Gross fee activity', '$' +
+          Number(agg.feeGrossActivityTotal || 0).toFixed(2));
+        html += stat('Cash dividends', '$' + Number(div.cashDividendIncome || 0).toFixed(2));
+        html += stat('Reinvestment groups', div.reinvestmentCount || 0);
+        html += stat('Transfers in/out', tc.transferIn + ' / ' + tc.transferOut);
+        html += stat('Contributions / withdrawals', tc.contribution + ' / ' + tc.withdrawal);
+        html += stat('Exchanges recv/del', ec.exchangeReceived + ' / ' + ec.exchangeDelivered);
+        html += '</div></div>';
+
+        html += '<div class="card"><h2>Observed source activity types</h2>';
+        html += renderCounts('', agg.sourceActivityTypeCounts);
+        html += '<h2 style="margin-top:16px;">Canonical activity types</h2>';
+        html += renderCounts('', agg.canonicalActivityTypeCounts);
+        html += '<h2 style="margin-top:16px;">Activity subtypes</h2>';
+        html += renderCounts('', agg.activitySubtypeCounts);
+        html += '</div>';
+
+        if ((data.warnings || []).length) {
+          html += '<div class="card"><h2>Warnings</h2><ul>';
+          data.warnings.forEach(function(w) {
+            html += '<li>' + escapeHtml(w) + '</li>';
+          });
+          html += '</ul></div>';
+        }
+
+        if ((data.unsupportedRows || []).length) {
+          html += '<div class="card"><h2>Unsupported rows</h2><table><thead><tr>' +
+            '<th>Row #</th><th>Source type</th><th>Reason</th></tr></thead><tbody>';
+          data.unsupportedRows.forEach(function(row) {
+            html += '<tr><td>' + escapeHtml(row.rowIndex) + '</td>' +
+              '<td>' + escapeHtml(row.activityType) + '</td>' +
+              '<td>' + escapeHtml(row.reason) + '</td></tr>';
+          });
+          html += '</tbody></table></div>';
+        }
+
+        html += '<div class="card"><h2>Activity preview';
+        if (data.activityPreviewTruncated) {
+          html += ' <span class="muted">(first ' + data.activityPreviewRows.length +
+            ' of ' + data.activityPreviewTotal + ')</span>';
+        }
+        html += '</h2><div style="overflow-x:auto;"><table><thead><tr>' +
+          '<th>Row #</th><th>Date</th><th>Symbol</th><th>Type</th><th>Subtype</th>' +
+          '<th>Qty</th><th>Amount</th><th>Replay</th><th>Intra-file</th><th>Review</th>' +
+          '</tr></thead><tbody>';
+        (data.activityPreviewRows || []).forEach(function(row) {
+          html += '<tr>' +
+            '<td>' + escapeHtml(row.sourceRowIndex) + '</td>' +
+            '<td>' + escapeHtml(row.activityDate) + '</td>' +
+            '<td>' + escapeHtml(row.symbol) + '</td>' +
+            '<td>' + escapeHtml(row.activityType) + '</td>' +
+            '<td>' + escapeHtml(row.activitySubtype) + '</td>' +
+            '<td>' + escapeHtml(row.quantity) + '</td>' +
+            '<td>' + escapeHtml(row.amount) + '</td>' +
+            '<td>' + escapeHtml(row.replayOutcome) + '</td>' +
+            '<td>' + escapeHtml(row.intraFileOutcome) + '</td>' +
+            '<td>' + (row.reviewRequired ? 'yes' : '') + '</td>' +
+            '</tr>';
+        });
+        html += '</tbody></table></div></div>';
+
+        resultsArea.innerHTML = html;
+      }
+
+      function stat(label, value) {
+        return '<div class="stat"><div class="label">' + escapeHtml(label) +
+          '</div><div class="value">' + value + '</div></div>';
+      }
+
+      function resetPreview() {
+        state.fileName = '';
+        state.fileSize = 0;
+        state.rawCsv = '';
+        csvFileEl.value = '';
+        fileMetaEl.textContent = 'No file selected.';
+        previewBtn.disabled = true;
+        statusArea.innerHTML = '';
+        resultsArea.innerHTML = '';
+        google.script.run
+          .withFailureHandler(function() { /* no server state */ })
+          .adminUiEtradePreviewLabClear();
+      }
+
+      csvFileEl.addEventListener('change', function() {
+        var file = csvFileEl.files && csvFileEl.files[0];
+        if (!file) {
+          resetPreview();
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function(ev) {
+          state.fileName = file.name;
+          state.fileSize = file.size;
+          state.rawCsv = String(ev.target.result || '');
+          fileMetaEl.textContent = state.fileName + ' — ' + formatBytes(state.fileSize);
+          previewBtn.disabled = !state.rawCsv.trim();
+        };
+        reader.onerror = function() {
+          state.rawCsv = '';
+          previewBtn.disabled = true;
+          fileMetaEl.textContent = 'Could not read file.';
+        };
+        reader.readAsText(file);
+      });
+
+      previewBtn.addEventListener('click', function() {
+        if (!state.rawCsv.trim()) return;
+        previewBtn.disabled = true;
+        clearBtn.disabled = true;
+        setLoading(true, 'Parsing CSV in memory…');
+        resultsArea.innerHTML = '';
+
+        var source = document.getElementById('previewSource').value;
+        var payload = {
+          rawCsv: state.rawCsv,
+          source: source,
+          stableAccountId: document.getElementById('stableAccountId').value,
+          registrationType: document.getElementById('registrationType').value,
+          accountName: document.getElementById('accountName').value,
+          usePackageFiles: source === 'ETRADE_PACKAGE'
+        };
+
+        google.script.run
+          .withSuccessHandler(function(res) {
+            setLoading(false);
+            previewBtn.disabled = false;
+            clearBtn.disabled = false;
+            renderResults(res);
+          })
+          .withFailureHandler(function(err) {
+            setLoading(false);
+            previewBtn.disabled = false;
+            clearBtn.disabled = false;
+            resultsArea.innerHTML =
+              '<div class="error-box">' + escapeHtml(err && err.message ? err.message : String(err)) + '</div>';
+          })
+          .adminUiEtradePreviewLabPreview(payload);
+      });
+
+      clearBtn.addEventListener('click', resetPreview);
+    })();
+  </script>
+</body>
+</html>

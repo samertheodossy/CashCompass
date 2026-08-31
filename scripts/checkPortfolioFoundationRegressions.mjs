@@ -21,6 +21,7 @@ function extractFunction(source, name) {
 const configSource = read('config.js');
 const identitySource = read('financial_identity.js');
 const foundationSource = read('investment_portfolio_foundation.js');
+const etradeSource = read('investment_etrade_csv.js');
 const adaptersSource = read('investment_adapters.js');
 const activitySource = read('investment_activity.js');
 const dashboardInvestments = read('Dashboard_Script_AssetsBankInvestments.html');
@@ -53,13 +54,16 @@ vm.runInContext(`
   ${extractFunction(activitySource, 'investmentImportDigest_')}
   ${extractFunction(activitySource, 'summarizeInvestmentImportPreview_')}
 `, context, { filename: 'investment_activity_partial.js' });
+vm.runInContext(etradeSource, context, { filename: 'investment_etrade_csv.js' });
 vm.runInContext(adaptersSource, context, { filename: 'investment_adapters.js' });
 
 // --- Source enum / adapter registry ---
-assert.deepEqual(context.listInvestmentAdapterSources_(), ['ROBINHOOD_CSV'],
-  'Foundation v1 implements Robinhood adapter only');
-assert.throws(() => context.getInvestmentAdapter_('ETRADE_CSV'),
+assert.deepEqual(context.listInvestmentAdapterSources_(), [
+  'ETRADE_CSV', 'ETRADE_PACKAGE', 'ROBINHOOD_CSV'
+], 'Foundation implements Robinhood and preview-only E*TRADE adapters');
+assert.throws(() => context.getInvestmentAdapter_('M1_CSV'),
   /not implemented/, 'Future broker adapters must not be stubbed as live');
+assert.equal(context.getInvestmentAdapter_('ETRADE_PACKAGE').source, 'ETRADE_PACKAGE');
 assert.equal(context.investmentPortfolioNormalizeSource_('robinhood_csv'), 'ROBINHOOD_CSV');
 assert.equal(context.investmentPortfolioNormalizeSource_('etrade_package'), 'ETRADE_PACKAGE',
   'ETRADE_PACKAGE must be a registered foundation source');
@@ -189,6 +193,139 @@ const etradeSplit = context.investmentPortfolioMapEtradeSourceActivity_({
 });
 assert.equal(etradeSplit.activityType, 'SPLIT');
 assert.equal(etradeSplit.activitySubtype, 'STOCK_SPLIT');
+
+const etradeInterest = context.investmentPortfolioMapEtradeSourceActivity_({
+  etradeActivityType: 'Interest Income',
+  amount: 0.15
+});
+assert.equal(etradeInterest.activityType, 'INTEREST');
+
+const etradeRedemption = context.investmentPortfolioMapEtradeSourceActivity_({
+  etradeActivityType: 'Redemption',
+  quantity: -100,
+  amount: 5000
+});
+assert.equal(etradeRedemption.activityType, 'CORPORATE_ACTION');
+assert.equal(etradeRedemption.activitySubtype, 'REDEMPTION');
+
+const etradeCancelSold = context.investmentPortfolioMapEtradeSourceActivity_({
+  etradeActivityType: 'Cancel Sold',
+  quantity: 0.25,
+  amount: 10
+});
+assert.equal(etradeCancelSold.activityType, 'CORPORATE_ACTION');
+assert.equal(etradeCancelSold.activitySubtype, 'CANCEL_SOLD');
+
+const etradeCashInLieu = context.investmentPortfolioMapEtradeSourceActivity_({
+  etradeActivityType: 'Cash in Lieu',
+  amount: 0.47
+});
+assert.equal(etradeCashInLieu.activityType, 'CORPORATE_ACTION');
+assert.equal(etradeCashInLieu.activitySubtype, 'CASH_IN_LIEU');
+
+const etradeCashDividend = context.investmentPortfolioMapEtradeSourceActivity_({
+  etradeActivityType: 'Dividend',
+  description: 'SYNBBB CASH DIVIDEND',
+  amount: 5
+});
+assert.equal(etradeCashDividend.activityType, 'DIVIDEND');
+assert.equal(etradeCashDividend.incomeEligible, true);
+
+const fpKeyBase = {
+  activityDate: '2024-04-10',
+  settleDate: '2024-04-11',
+  ticker: 'SYNETF',
+  description: 'SYNETF FRACTIONAL BUY',
+  amount: -12.30,
+  quantity: 0.123,
+  price: 100,
+  fees: 0.99
+};
+const fpRaw = {
+  etradeActivityType: 'Bought',
+  description: 'SYNETF FRACTIONAL BUY'
+};
+const fpKey = context.investmentPortfolioBuildEtradeSourceRecordKey_(fpKeyBase, fpRaw);
+const changedAmountKey = context.investmentPortfolioBuildEtradeSourceRecordKey_(
+  Object.assign({}, fpKeyBase, { amount: -12.50, fees: 1.99 }), fpRaw);
+assert.notEqual(fpKey, changedAmountKey,
+  'No-REFID FP sourceRecordKey must include mutable fields so distinct fills stay distinct');
+assert.match(fpKey, /^FP:/);
+
+const refidIdentity = context.investmentPortfolioAssessEtradeSourceIdentity_(
+  { description: 'ACH DEPOSIT REFID:1234567890' },
+  { description: 'ACH DEPOSIT REFID:1234567890' });
+assert.equal(refidIdentity.strength, 'REFID');
+assert.equal(refidIdentity.reviewRequired, false);
+const ambiguousIdentity = context.investmentPortfolioAssessEtradeSourceIdentity_(
+  fpKeyBase, fpRaw);
+assert.equal(ambiguousIdentity.strength, 'AMBIGUOUS');
+assert.equal(ambiguousIdentity.reviewRequired, true);
+
+assert.equal(context.investmentPortfolioExtractEtradeRefId_('ACH DEPOSIT REFID:1234567890'),
+  'REFID:1234567890');
+assert.equal(context.investmentPortfolioExtractEtradeRefId_('ACH DEPOSIT REFID 1234567890'),
+  'REFID:1234567890');
+
+const refidCorrectionOutcome = context.investmentPortfolioClassifyReplay_({
+  source: 'ETRADE_PACKAGE',
+  sourceAccountKey: 'INV-ET-SYNTH-1',
+  sourceRecordKey: 'REFID:1234567890',
+  activityDate: '2024-01-25',
+  activityType: 'CONTRIBUTION',
+  amount: 505
+}, {
+  source: 'ETRADE_PACKAGE',
+  sourceAccountKey: 'INV-ET-SYNTH-1',
+  sourceRecordKey: 'REFID:1234567890',
+  activityDate: '2024-01-25',
+  activityType: 'CONTRIBUTION',
+  amount: 500
+});
+assert.equal(refidCorrectionOutcome, 'SOURCE_CORRECTION');
+
+const fpCorrectionBlocked = context.investmentPortfolioClassifyReplay_({
+  source: 'ETRADE_PACKAGE',
+  sourceAccountKey: 'INV-ET-SYNTH-1',
+  sourceRecordKey: fpKey,
+  activityDate: '2024-04-10',
+  ticker: 'SYNETF',
+  activityType: 'BUY',
+  quantity: 0.123,
+  price: 100,
+  amount: -12.50,
+  fees: 1.99
+}, {
+  source: 'ETRADE_PACKAGE',
+  sourceAccountKey: 'INV-ET-SYNTH-1',
+  sourceRecordKey: fpKey,
+  activityDate: '2024-04-10',
+  ticker: 'SYNETF',
+  activityType: 'BUY',
+  quantity: 0.123,
+  price: 100,
+  amount: -12.30,
+  fees: 0.99
+});
+assert.equal(fpCorrectionBlocked, 'CONFLICT',
+  'No-REFID FP rows must not auto-classify as SOURCE_CORRECTION');
+
+const refidFpCorrectionAllowed = context.investmentPortfolioClassifyReplay_({
+  source: 'ETRADE_PACKAGE',
+  sourceAccountKey: 'INV-ET-SYNTH-1',
+  sourceRecordKey: 'REFID:999',
+  activityDate: '2024-01-25',
+  activityType: 'CONTRIBUTION',
+  amount: 505
+}, {
+  source: 'ETRADE_PACKAGE',
+  sourceAccountKey: 'INV-ET-SYNTH-1',
+  sourceRecordKey: 'REFID:999',
+  activityDate: '2024-01-25',
+  activityType: 'CONTRIBUTION',
+  amount: 500
+});
+assert.equal(refidFpCorrectionAllowed, 'SOURCE_CORRECTION');
 
 const etradeApplied = context.investmentPortfolioApplyEtradeMappedActivity_({
   source: 'ETRADE_PACKAGE',
@@ -445,7 +582,14 @@ const robinhoodCsv = [
 ].join('\n');
 assert.equal(context.investmentAdapterDetectRobinhoodCsv_({ rawCsv: robinhoodCsv }).ok, true);
 assert.equal(context.investmentAdapterDetectRobinhoodCsv_({ rawCsv: 'Date,Amount\n1/1/2026,1' }).ok, false);
-assert.equal(context.investmentAdapterBuildPackagePreview_({ source: 'ETRADE_CSV', files: [] }).ok, false);
+assert.equal(context.investmentAdapterBuildPackagePreview_({
+  source: 'ETRADE_CSV',
+  rawCsv: ''
+}).ok, false);
+assert.equal(context.investmentAdapterBuildPackagePreview_({
+  source: 'M1_CSV',
+  files: []
+}).ok, false);
 
 // --- Workbook safety / production path audit ---
 assert.doesNotMatch(foundationSource, /investmentPortfolioEnsureTaxLotsSheet_\(\)/,

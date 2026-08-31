@@ -1,8 +1,8 @@
 # E*TRADE Source Mapping — Inspection Report (Adapter Design Input)
 
-**Status:** Source inspection **complete** (Transactions CSV + Expanded Positions PDF + Gains & Losses PDF). **No adapter, persistence, production import, or workbook changes.**
+**Status:** Source inspection **complete**. **Phase A (preview-only Transactions CSV adapter)** implemented locally — not committed. Positions PDF, Gains & Losses PDF, persistence, production import, and workbook changes are **not** implemented.
 
-**Inspection date:** 2026-08-28  
+**Inspection date:** 2026-08-28
 **Foundation baseline:** `investment_portfolio_foundation.js` v1.0.0, `investment_adapters.js`, `MULTI_BROKER_PORTFOLIO_DATA_MODEL.md`
 
 ### Three-source model (inspected)
@@ -15,7 +15,7 @@
 
 Import package identifier: **`ETRADE_PACKAGE`** (multi-file). Activity-only CSV parsing may register under `ETRADE_CSV` as a single-file subset.
 
-**Readiness boundary:** Source **mapping** is ready for **preview-only adapter design**. It is **not** ready for persistence, dashboard upload, production import, or Net Worth authority changes.
+**Readiness boundary:** Source **mapping** is ready. **Phase A** delivers **preview-only** Transactions CSV normalization (`investment_etrade_csv.js`, synthetic fixtures, regression tests). Positions PDF, Gains & Losses PDF, persistence, dashboard upload, production import, and Net Worth authority changes remain **out of scope**.
 
 ---
 
@@ -89,7 +89,7 @@ Adapter must **not** silently flip signs; normalize to canonical `amount` (signe
 
 ## 2. E*TRADE activity taxonomy → canonical mapping
 
-### Observed E*TRADE `Activity Type` values (15 + footer blank)
+### Observed E*TRADE `Activity Type` values (14 + footer blank)
 
 | Count | E*TRADE Activity Type | Proposed canonical type | Notes |
 |------:|----------------------|-------------------------|-------|
@@ -109,20 +109,9 @@ Adapter must **not** silently flip signs; normalize to canonical `amount` (signe
 | 1 | `Stock Split` | `STOCK_SPLIT` | Ratio in description |
 | 4 | *(footer disclaimers)* | *(exclude)* | Non-transaction prose rows |
 
-### Foundation v1 gap
+### Foundation activity subtype mapping (Phase A)
 
-`INVESTMENT_PORTFOLIO_ACTIVITY_TYPES_` today includes `BUY`, `SELL`, `DIVIDEND`, `REINVESTMENT`, `TRANSFER_IN`, `TRANSFER_OUT`, `SPLIT`, `FEE`, `INTEREST`, `CORPORATE_ACTION`, `UNSUPPORTED` but **not**:
-
-- `QUALIFIED_DIVIDEND`
-- `STOCK_SPLIT` (maps to `SPLIT` or new alias)
-- `EXCHANGE`
-- `REDEMPTION`
-- `CASH_IN_LIEU`
-- `CANCEL`
-
-**Recommendation before adapter:** extend foundation enum **or** map to `activitySubtype` on canonical rows while keeping primary type conservative (e.g. `DIVIDEND` + subtype `QUALIFIED`; `CORPORATE_ACTION` + subtype `EXCHANGE_RECEIVED`).
-
-User-requested adapter-facing taxonomy should be preserved in **`activitySubtype`** at minimum even if primary enum stays narrower until Foundation v1.1.
+Phase A maps E*TRADE distinctions through canonical **`activitySubtype`** values on normalized rows (`QUALIFIED_DIVIDEND`, `REINVESTMENT`, `EXCHANGE_RECEIVED`, etc.) while keeping primary `activityType` conservative (`DIVIDEND`, `CORPORATE_ACTION`, `SPLIT`, …).
 
 ### Mapping table (target adapter output)
 
@@ -175,7 +164,7 @@ User-requested adapter-facing taxonomy should be preserved in **`activitySubtype
 - Emit **one income event** (`QUALIFIED_DIVIDEND` or `DIVIDEND`) for the cash credit amount.
 - Emit **one `REINVESTMENT`** linked to the same `sourceDividendKey` / pairing group.
 - **Do not** double-count income in holdings cash or portfolio income summaries.
-- Link group id: `{tradeDate}|{symbol}|dividend-group` for review UI.
+- Link group id: `{tradeDate}|{symbol}|dividend` on `dividendGroupKey` for income summarization (see §5). **Not** a replay or transaction identity key.
 - Foreign tax / gross-up rows with `$0.00` amount → preserve as `UNSUPPORTED` or `DIVIDEND` subtype `TAX_ADJUSTMENT` with review flag.
 
 **Observed edge case:** `Cancel Sold` immediately before reinvest `Bought` on same symbol/date/qty — treat as **single reinvest chain**, not a round-trip trade.
@@ -246,8 +235,12 @@ These affect **cash balance** but not security holdings. Overlap with `INPUT - I
 Normalize:
 
 - `fees` = abs(commission) on trades
-- Standalone `FEE` rows as separate activities
-- Fee reversals → linked `FEE` with negative fee amount or `CANCEL` subtype `FEE_REVERSAL`
+- Standalone `Service Fee` rows → canonical `activityType = FEE`, `activitySubtype = SERVICE_FEE`
+- **Preserve signed `amount` on each fee activity** (debits negative, reversals/credits positive). Do not remap reversals to expenses or other activity types.
+- Preview Lab fee summaries (Phase A):
+  - **`feeNetTotal`** — net signed fee cash impact (sum of fee `amount` values)
+  - **`feeGrossActivityTotal`** — gross fee activity volume (sum of `abs(amount)` per fee row; matches owner smoke-test “$380 on 10 fees” when debits and credits are both counted as absolute activity)
+  - **`feeDebitTotal` / `feeCreditTotal`** — signed subtotals for charges vs reversals
 
 ---
 
@@ -276,12 +269,25 @@ Normalize:
 
 ### Priority
 
-1. **`REFID` from Description** when present (~6% of rows in sample — mostly ACH and account transfers)  
+1. **`REFID` from Description** when present (observed as `REFID:{digits}` or `REFID {digits}` — mostly ACH and account transfers)
    `sourceRecordKey = 'REFID:' + digits`
-2. **Deterministic fingerprint** (foundation `investmentPortfolioBuildActivityFingerprint_`) using:  
-   `source + sourceAccountKey + activityDate + settleDate + activityType + symbol + quantity + price + amount + commission + normalizedDescription`
-3. **Paired-event group key** for dividend reinvest triplets:  
-   `DIVGROUP:{date}:{symbol}:{sequence}` — prevents partial replay from splitting pairs
+2. **Full-row fingerprint** for rows without REFID:
+   `sourceRecordKey = 'FP:' + digest(activityDate + etradeActivityType + symbol + normalizedDescription + settleDate + quantity + price + amount + fees)`
+   **No-REFID rows are ambiguous by default:** `reviewRequired: true`, and automatic `SOURCE_CORRECTION` is **disabled**.
+   Real owner export inspection (outside Git) found **7 same-day stable-key collision groups** where date + activity type + symbol + description repeat for **distinct fills** (e.g. two `Bought` rows for the same symbol with generic `UNSOLICITED TRADE` descriptions and different quantity/price/amount). Do **not** treat ticker + description as provider-stable identity without REFID.
+3. **Stable-key ambiguity surfacing:** when multiple no-REFID rows share the same `(activityDate, activityType, symbol, description)` but differ in quantity/price/amount/fees, preview reports `stableKeyAmbiguity` and requires review. Rows remain visible; they are **not** merged.
+4. **Paired-event group key** (`dividendGroupKey`) for dividend + reinvestment income summarization only:
+   `{activityDate}|{symbol}|dividend` — links qualified/cash dividend rows to reinvestment legs for **income deduplication**.
+   **Not** used as `sourceRecordKey`, `replayKey`, or transaction identity. Each CSV row keeps its own `sourceRecordKey` (REFID or full-row `FP:` fingerprint).
+
+### Replay policy summary (Phase A)
+
+| Row class | `sourceRecordKey` | Cross-import replay | Auto `SOURCE_CORRECTION` | Review |
+|-----------|-------------------|---------------------|--------------------------|--------|
+| REFID present | `REFID:{digits}` | Exact replay when equivalent | **Yes** when REFID matches and mutables differ | No (unless other flags) |
+| No REFID | `FP:` + full-row digest | Exact replay when full fingerprint matches | **No** — `FP:` corrections are not automatic | **Yes** (`AMBIGUOUS`) |
+| Stable-key collision | Distinct `FP:` per fill | Both rows visible; `stableKeyAmbiguity` flagged | No | **Yes** |
+| Intra-file duplicate | Same `FP:` or `REFID:` | Second row flagged `DUPLICATE_EXACT` / conflict; remains visible | No | **Yes** |
 
 ### Overlapping two-year exports
 
@@ -289,14 +295,15 @@ Expected workflow: re-download overlapping CSV monthly.
 
 | Outcome | When |
 |---------|------|
-| `EXACT_REPLAY` | Same `sourceRecordKey` or fingerprint match + equivalent fields |
-| `NEW_RECORD` | New date/type not in prior import batch |
-| `SOURCE_CORRECTION` | Same REFID/fingerprint but changed amount/qty/settle date |
-| `CONFLICT` | Same key, materially different non-correction shape |
+| `EXACT_REPLAY` | Same `sourceRecordKey` + equivalent mutable fields |
+| `NEW_RECORD` | No prior row with the same `sourceRecordKey` |
+| `SOURCE_CORRECTION` | **REFID rows only:** same `REFID:{digits}` with changed mutable fields |
+| `CONFLICT` | Same non-REFID key with different shape, stable-key ambiguity, or intra-file duplicate ambiguity |
 
 **Collision risks (documented):**
 
-- Same-day identical trades without REFID
+- Same-day identical trades without REFID and with generic descriptions (`UNSOLICITED TRADE`) — **observed in real export**
+- No-REFID export corrections across overlapping imports — treat as review-required; do not auto-correct without REFID
 - Dividend triplet partial overlap if grouping logic differs between imports
 - Exchange multi-leg if legs imported in separate batches without group id
 
@@ -345,9 +352,9 @@ Register in future `SYS - Investment Securities` on first persistence (not durin
 
 ### Expanded Positions PDF — observed structure
 
-**Provenance:** E*TRADE Portfolios → Positions (expanded open-lot view), saved as PDF.  
-**Pages:** 40 (38 data pages + 2 disclosure pages).  
-**Snapshot as-of:** header `Refresh` timestamp (observed format: `Aug DD, YYYY HH:MM PM ET`).  
+**Provenance:** E*TRADE Portfolios → Positions (expanded open-lot view), saved as PDF.
+**Pages:** 40 (38 data pages + 2 disclosure pages).
+**Snapshot as-of:** header `Refresh` timestamp (observed format: `Aug DD, YYYY HH:MM PM ET`).
 **Position count:** footer reports `Viewing N of N positions` (observed example N = 32; use export footer, not hard-coded count).
 
 **Account header block (each export):**
@@ -404,8 +411,8 @@ Register in future `SYS - Investment Securities` on first persistence (not durin
 
 ### Gains & Losses PDF — observed structure
 
-**Provenance:** E*TRADE Portfolios → Gains & Losses, custom date range, saved as PDF.  
-**Pages:** 16 (15 data + wash-sale legend footer).  
+**Provenance:** E*TRADE Portfolios → Gains & Losses, custom date range, saved as PDF.
+**Pages:** 16 (15 data + wash-sale legend footer).
 **Selected period:** custom **Date From → Date Closed** (observed example spans three years; exact dates vary by owner export).
 
 **Critical limitation:** This PDF reports **realized closed lots only for the selected closing-date period**. It is not full account tax history. Re-export with a wider period if older closes are required.
@@ -522,18 +529,23 @@ Separate stable identities expected (per capital allocation regression design):
 
 ---
 
-## 12. Synthetic fixture plan (Git-safe)
+## 12. Synthetic fixtures (Git-safe)
 
-**No real brokerage data in Git.** Fixtures under `test/fixtures/etrade/` (future):
+**No real brokerage data in Git.** Fixtures under `test/fixtures/etrade/`:
 
-### `synthetic_etrade_txn_minimal.csv`
+### `synthetic_etrade_txn_minimal.csv` — **Phase A implemented**
 
 - Preamble with **fake** account label `TEST-ACCT-0001` and date range
-- Rows covering: BUY, SELL, QUALIFIED_DIVIDEND + REINVESTMENT pair, cash DIVIDEND, ACH deposit/withdrawal, security TRANSFER, EXCHANGE in/out + CASH_IN_LIEU, STOCK_SPLIT, REDEMPTION, FEE + reversal, INTEREST, CANCEL_SOLD
+- Rows covering all 14 Activity Type labels: BUY, SELL, QUALIFIED_DIVIDEND + REINVESTMENT pair, cash DIVIDEND, ACH deposit/withdrawal, security TRANSFER, EXCHANGE in/out + CASH_IN_LIEU, STOCK_SPLIT, REDEMPTION, FEE + reversal, INTEREST, CANCEL_SOLD
 - Footer disclaimer rows (must be skipped)
 - Symbols: `SYNAAA`, `SYNBBB`, `SYNETF` only
+- Includes intra-file duplicate row and stable-key ambiguity regression patterns
 
-### `synthetic_etrade_positions_snapshot.json`
+### `synthetic_etrade_txn_overlap.csv` — **Phase A implemented**
+
+- Overlap export for exact replay, REFID source correction, and new-record detection
+
+### `synthetic_etrade_positions_snapshot.json` — **Phase B (not implemented)**
 
 - Mimics Positions PDF parse output (not raw PDF bytes in Git)
 - 2 symbols (`SYNAAA`, `SYNETF`), each with header aggregate + 2 open-lot children
@@ -541,42 +553,41 @@ Separate stable identities expected (per capital allocation regression design):
 - Cash row + explicit **excluded** page-total row for negative testing
 - `authority: PROVIDER_REPORTED`, fake `priceAsOf` timestamp
 
-### `synthetic_etrade_open_lots.json`
+### `synthetic_etrade_open_lots.json` — **Phase B (not implemented)**
 
 - Normalized open lots extracted from snapshot; `lotAuthority: PROVIDER_REPORTED`
 - Fields: acquisitionDate, quantity, pricePaid, marketValue, unrealizedGain, washSaleAdjusted
 
-### `synthetic_etrade_realized_gl.json`
+### `synthetic_etrade_realized_gl.json` — **Phase C (not implemented)**
 
 - Mimics G/L PDF parse output for custom period `2023-01-01` → `2026-01-01`
 - Symbol summary + 2 `Sell` lot rows: one Long FIFO, one Short FIFO
 - One lot with negative `deferredLoss` (e.g. `-0.13`)
 - `Mixed` term symbol summary row for review-path testing
 
-### Regression coverage (future adapter phase)
+### Regression coverage (Phase A — implemented)
 
 - Preamble/footer stripping
-- Activity type mapping table
-- Dividend pair grouping (no double income)
-- Exchange leg grouping
-- REFID extraction + fingerprint fallback
-- Overlapping import replay outcomes
-- Positions vs reconstructed reconciliation classifications
+- Activity type mapping table (14 labels)
+- Dividend pair grouping (no double income) via `dividendGroupKey` only
+- REFID extraction (`REFID:` and `REFID ` forms) + full-row `FP:` fingerprint fallback
+- No-REFID stable-key ambiguity surfacing
+- Intra-file duplicate flagging (rows remain visible)
+- Overlapping import replay outcomes (REFID source correction; no-REFID not auto-corrected)
 
 ---
 
----
-
-## Cross-reference updates (reconciliation pass)
+## 13. Cross-reference updates
 
 | File | Update |
 |------|--------|
 | `MULTI_BROKER_PORTFOLIO_DATA_MODEL.md` | Link here; next milestone → preview-only E*TRADE adapter |
 | `ROADMAP.md` | Single status: E*TRADE Source Inspection **complete** |
-| `investment_portfolio_foundation.js` | Future: extend activity enum or subtype mapping |
-| `investment_adapters.js` | Future: register `ETRADE_PACKAGE` after fixtures (not started) |
+| `investment_portfolio_foundation.js` | E*TRADE stable identity + replay classification (Phase A) |
+| `investment_adapters.js` | **Phase A (preview-only):** `ETRADE_PACKAGE` + `ETRADE_CSV` Transactions CSV adapter registered; no persistence |
+| `investment_etrade_csv.js` | **Phase A:** preview-only Transactions CSV parser (`etrade-txn-csv-v1`) |
 
-## Adapter package contract (proposed)
+## 14. Adapter package contract
 
 ```javascript
 {
@@ -587,11 +598,11 @@ Separate stable identities expected (per capital allocation regression design):
     { role: 'REALIZED_GAIN_LOSS', format: 'PDF', required: false }  // Gains & Losses
   ],
   capabilities: {
-    activities: true,
-    holdings: true,
-    taxLots: true,           // open lots from Positions PDF
-    realizedGainLoss: true,  // closed lots from G/L PDF
-    accountSnapshot: true    // header block: cash, MV, as-of
+    activities: true,              // Phase A implemented (Transactions CSV)
+    holdings: false,               // Phase B — Positions PDF not implemented
+    taxLots: false,                // Phase B — not implemented
+    realizedGainLoss: false,       // Phase C — Gains & Losses PDF not implemented
+    accountSnapshot: false           // Phase B — not implemented
   }
 }
 ```
@@ -604,31 +615,30 @@ Separate stable identities expected (per capital allocation regression design):
 
 ---
 
-## Readiness assessment
+## 15. Readiness assessment
 
 | Gate | Ready? |
 |------|--------|
 | Transactions CSV structural mapping | **Yes** |
-| Positions PDF structural mapping (open lots) | **Yes** |
-| G/L PDF structural mapping (closed lots, period-scoped) | **Yes** |
+| Positions PDF structural mapping (open lots) | **Yes** (design only) |
+| G/L PDF structural mapping (closed lots, period-scoped) | **Yes** (design only) |
 | Structured Positions/G-L CSV availability | **Unresolved** |
-| Foundation enum/subtype support | **Partial** — extend or use `activitySubtype` |
-| PDF parser implementation | **No** — design only |
-| Synthetic fixtures | **Not started** — plan defined |
-| Preview-only adapter design | **Yes** — may begin after owner approves this doc |
+| Foundation enum/subtype support | **Implemented** for Phase A activity subtypes |
+| Transactions CSV preview adapter (Phase A) | **Yes** — local implementation + synthetic fixtures + regressions |
+| Positions PDF parser (Phase B) | **No** |
+| G/L PDF parser (Phase C) | **No** |
 | Persistence / production import | **No** |
 
-**Overall:** The **source mapping contract** is ready for **preview-only `ETRADE_PACKAGE` adapter design** (Phases A–C below). Parser code, synthetic fixtures, owner preview validation, and an explicit persistence approval gate remain before any workbook writes.
+**Overall:** Phase A **Transactions CSV preview** is ready for owner review and commit. Phases B–C (PDF parsers), persistence, dashboard upload, and production import remain gated.
 
 ---
 
-## Recommended next development step
+## 16. Recommended next development step
 
-1. **Owner review:** Approve `ETRADE_SOURCE_MAPPING.md` for commit (structural findings only; no real data in repo).
-2. **Engineering (after approval):** Extend foundation activity subtypes → build synthetic fixtures → implement **preview-only** `ETRADE_PACKAGE` adapter:
-   - Phase A: Transactions CSV → normalized activity preview
+1. **Owner review:** Approve Phase A commit set (adapter + fixtures + docs; no real data in repo).
+2. **Engineering (after approval):**
    - Phase B: Expanded Positions PDF → open lots + holdings snapshot preview
    - Phase C: Gains & Losses PDF → period-scoped realized closed-lot preview
 3. **Owner validation:** Compare preview summaries against live exports **outside Git** before any persistence or dashboard wiring.
 
-**Do not implement persistence, dashboard upload, workbook sheet creation, or production import until preview-only adapter passes owner review.**
+**Do not implement persistence, dashboard upload, workbook sheet creation, or production import until preview-only adapters pass owner review.**

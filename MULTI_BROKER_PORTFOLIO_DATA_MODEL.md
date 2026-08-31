@@ -2,7 +2,7 @@
 
 CSV-first canonical investment infrastructure for CashCompass. This document describes the Foundation v1 contracts implemented in `investment_portfolio_foundation.js` and `investment_adapters.js`.
 
-**Status:** Foundation infrastructure only. Robinhood production import remains in `investment_activity.js`. No E*TRADE, M1, or Schwab adapters yet.
+**Status:** Foundation infrastructure. Robinhood production import remains in `investment_activity.js`. E*TRADE Phase A preview-only Transactions CSV adapter is implemented locally (not committed). M1 and Schwab adapters are not implemented.
 
 ---
 
@@ -33,8 +33,8 @@ Canonical sources (`INVESTMENT_PORTFOLIO_SOURCES_`):
 | Source | Status |
 |--------|--------|
 | `ROBINHOOD_CSV` | Adapter wrapper (delegates to legacy parser) |
-| `ETRADE_CSV` | Contract only (Transactions CSV activity subset) |
-| `ETRADE_PACKAGE` | Contract only — multi-file: Transactions CSV + Expanded Positions PDF + Gains & Losses PDF; see `ETRADE_SOURCE_MAPPING.md` |
+| `ETRADE_CSV` | **Preview-only** — Transactions CSV activity alias (`source: 'ETRADE_CSV'`) |
+| `ETRADE_PACKAGE` | **Preview-only Phase A** — Transactions CSV implemented; Positions PDF and Gains & Losses PDF **not** implemented; see `ETRADE_SOURCE_MAPPING.md` |
 | `M1_CSV` | Contract only |
 | `SCHWAB_CSV` | Contract only |
 | `RETIREMENT_PLAN_CSV` | Contract only |
@@ -346,7 +346,7 @@ Generic adapter infrastructure is parallel and not wired to dashboard persistenc
 
 ## Future phases (not in Foundation v1)
 
-- Preview-only E*TRADE `ETRADE_PACKAGE` adapter (after owner approves `ETRADE_SOURCE_MAPPING.md`)
+- **Phase B/C E*TRADE:** Positions PDF, Gains & Losses PDF, multi-file package merge (Phase A Transactions CSV preview is implemented — preview-only, no persistence)
 - M1 / Schwab source inspection and adapters
 - Real brokerage file import / persistence wiring
 - Market quote provider
@@ -370,4 +370,6 @@ Owner-supplied exports were inspected **outside Git**. Authoritative structural 
 
 **Unresolved:** structured Positions or Gains & Losses CSV/XLS exports (download stubs were invalid).
 
-**Next engineering milestone:** preview-only `ETRADE_PACKAGE` adapter (synthetic fixtures → normalized preview). **Not** persistence, dashboard upload, or production import until owner review passes.
+**Phase A status (2026-08-29):** preview-only Transactions CSV adapter implemented locally (`investment_etrade_csv.js`, synthetic fixtures, regression tests). **Not** persistence, dashboard upload, or production import.
+
+**Next engineering milestone:** Phase B Positions PDF preview, then Phase C Gains & Losses PDF — still preview-only until owner review passes.
