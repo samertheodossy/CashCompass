@@ -4,6 +4,7 @@ import { publicError } from './errors.js';
 
 const ROUTES = new Map([
   ['POST /v1/link-token', { action: 'LINK_TOKEN_CREATE', invoke: (service, userKey) => service.createLinkToken(userKey) }],
+  ['POST /v1/link-session/abandon', { action: 'LINK_SESSION_ABANDON', invoke: (service, userKey, body) => service.abandonLinkSession(userKey, body) }],
   ['POST /v1/update-link-token', { action: 'UPDATE_LINK_TOKEN_CREATE', invoke: (service, userKey, body) => service.createUpdateLinkToken(userKey, body) }],
   ['POST /v1/update-complete', { action: 'UPDATE_COMPLETE', invoke: (service, userKey, body) => service.completeUpdate(userKey, body) }],
   ['POST /v1/preview', { action: 'LIABILITIES_PREVIEW', invoke: (service, userKey, body) => service.preview(userKey, body) }],

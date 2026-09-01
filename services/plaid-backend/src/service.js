@@ -22,6 +22,12 @@ const LINK_SESSION_MAX_LIFETIME_MS = Object.freeze({
   UPDATE: 30 * 60 * 1000
 });
 
+/** Shorter than link-session lifetime so abandoned Connect retries recover without bypassing concurrency. */
+const CONNECTION_INTENT_LOCK_LIFETIME_MS = Object.freeze({
+  CREATE: 30 * 60 * 1000,
+  UPDATE: 30 * 60 * 1000
+});
+
 const SOLE_ADMIN_EMAIL = 'samertheodossy@gmail.com';
 const MAPPING_STATUSES = new Set(['CONFIRMED', 'IGNORED']);
 
@@ -52,6 +58,12 @@ function linkSessionExpiry(response, mode, nowMs) {
     fail(502, 'PROVIDER_RESPONSE_INVALID', 'Provider Link expiration is invalid.');
   }
   return Math.min(providerExpiry, nowMs + maxLifetime);
+}
+
+function connectionIntentLockExpiry(sessionExpiresAtMs, mode, nowMs) {
+  const maxLockLifetime = CONNECTION_INTENT_LOCK_LIFETIME_MS[mode];
+  if (!maxLockLifetime) fail(500, 'INTERNAL_ERROR', 'Connection lock lifetime is unavailable.');
+  return Math.min(sessionExpiresAtMs, nowMs + maxLockLifetime);
 }
 
 function sanitizedAccount(account, identitySecret, config) {
@@ -229,7 +241,8 @@ export class PlaidConnectionService {
     const linkToken = requiredString(response.link_token, 'link token', 4096);
     const nowMs = this.now();
     const expiresAtMs = linkSessionExpiry(response, 'CREATE', nowMs);
-    await this.store.createLinkSession(userKey, { correlationId, expiresAtMs, mode: 'CREATE',
+    const lockExpiresAtMs = connectionIntentLockExpiry(expiresAtMs, 'CREATE', nowMs);
+    await this.store.createLinkSession(userKey, { correlationId, expiresAtMs, lockExpiresAtMs, mode: 'CREATE',
       products: ['assets'], additionalConsentedProducts: ['liabilities'] }, nowMs);
     return {
       ok: true,
@@ -255,11 +268,18 @@ export class PlaidConnectionService {
     const linkToken = requiredString(response.link_token, 'link token', 4096);
     const nowMs = this.now();
     const expiresAtMs = linkSessionExpiry(response, 'UPDATE', nowMs);
-    await this.store.createLinkSession(userKey, { correlationId, expiresAtMs,
+    const lockExpiresAtMs = connectionIntentLockExpiry(expiresAtMs, 'UPDATE', nowMs);
+    await this.store.createLinkSession(userKey, { correlationId, expiresAtMs, lockExpiresAtMs,
       mode: 'UPDATE', connectionKey }, nowMs);
     return { ok: true, environment: this.config.environment,
       linkToken, correlationId,
       protectedConnectionKey: connectionKey, expiresAt: new Date(expiresAtMs).toISOString() };
+  }
+
+  async abandonLinkSession(userKey, input) {
+    const correlationId = requiredString(input?.correlationId, 'correlation ID', 128);
+    await this.store.abandonLinkSession(userKey, correlationId, this.now());
+    return { ok: true, environment: this.config.environment };
   }
 
   async completeUpdate(userKey, input) {

@@ -57,6 +57,10 @@ var PLAID_IMPORT_PUBLIC_ERROR_ = 'Connected data is temporarily unavailable.';
 var PLAID_IMPORT_IDENTITY_REVIEW_ERROR_ =
   'CashCompass account identity needs review before Connected accounts can be matched.';
 var PLAID_IMPORT_SOLE_ADMIN_EMAIL_ = 'samertheodossy@gmail.com';
+var PLAID_IMPORT_ALLOWLISTED_CONNECTION_ERROR_CODES_ = {
+  CONNECT_IN_PROGRESS: true,
+  LINK_COMPLETION_REVIEW_REQUIRED: true
+};
 
 function plaidImportSafe_(fn) {
   try { return fn(); }
@@ -65,6 +69,27 @@ function plaidImportSafe_(fn) {
       return { ok: false, error: PLAID_IMPORT_IDENTITY_REVIEW_ERROR_ };
     }
     return { ok: false, error: PLAID_IMPORT_PUBLIC_ERROR_ };
+  }
+}
+
+function plaidImportExtractRequestErrorCode_(error) {
+  var message = String(error && error.message || '');
+  var prefix = 'Plaid import request failed: ';
+  if (message.indexOf(prefix) !== 0) return '';
+  var code = message.slice(prefix.length).trim();
+  return /^[A-Z0-9_]+$/.test(code) ? code : '';
+}
+
+function plaidImportSafeConnection_(fn) {
+  try { return fn(); }
+  catch (e) {
+    if (String(e && e.message || '') === 'FINANCIAL_IDENTITY_REVIEW_REQUIRED') {
+      return { ok: false, error: PLAID_IMPORT_IDENTITY_REVIEW_ERROR_ };
+    }
+    var code = plaidImportExtractRequestErrorCode_(e);
+    var out = { ok: false, error: PLAID_IMPORT_PUBLIC_ERROR_ };
+    if (PLAID_IMPORT_ALLOWLISTED_CONNECTION_ERROR_CODES_[code]) out.connectionErrorCode = code;
+    return out;
   }
 }
 
@@ -338,15 +363,26 @@ function plaidImportSanitizeConnection_(connection) {
 }
 
 function plaidImportInitializeConnection() {
-  return plaidImportSafe_(function() {
+  return plaidImportSafeConnection_(function() {
     var result = plaidImportRequest_('POST', '/v1/link-token', 'LINK_TOKEN_CREATE', {});
     return { ok: true, environment: plaidImportEnvironment_(), linkToken: String(result.linkToken || ''),
       correlationId: String(result.correlationId || ''), expiresAt: String(result.expiresAt || '') };
   });
 }
 
+function plaidImportAbandonConnection(payload) {
+  return plaidImportSafeConnection_(function() {
+    var input = payload && typeof payload === 'object' ? payload : {};
+    plaidImportRejectBrowserAuthority_(input);
+    plaidImportRequest_('POST', '/v1/link-session/abandon', 'LINK_SESSION_ABANDON', {
+      correlationId: String(input.correlationId || '')
+    });
+    return { ok: true };
+  });
+}
+
 function plaidImportExchangePublicToken(payload) {
-  return plaidImportSafe_(function() {
+  return plaidImportSafeConnection_(function() {
     var input = payload && typeof payload === 'object' ? payload : {};
     plaidImportRejectBrowserAuthority_(input);
     var result = plaidImportRequest_('POST', '/v1/exchange', 'PUBLIC_TOKEN_EXCHANGE', {

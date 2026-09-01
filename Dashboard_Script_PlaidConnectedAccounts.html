@@ -26,10 +26,20 @@ var plaidMainState_ = {
   accountMessages: {},
   pendingDisconnectKey: '',
   pendingDisconnectAccountKey: '',
-  pendingDisconnectDomain: 'CASH'
+  pendingDisconnectDomain: 'CASH',
+  connectingByDomain: {},
+  connectRequestSeq: {},
+  connectTimers: {}
 };
 
 var PLAID_MAIN_UNAVAILABLE_ = 'Connected data is temporarily unavailable.';
+var PLAID_MAIN_CONNECT_PROGRESS_ =
+  'Creating secure connection session. This may take up to 60 seconds.';
+var PLAID_MAIN_CONNECT_TIMEOUT_MS_ = 90000;
+var PLAID_MAIN_CONNECT_ERROR_CODES_ = {
+  CONNECT_IN_PROGRESS: 'A connection is already in progress. Please wait before trying again.',
+  LINK_COMPLETION_REVIEW_REQUIRED: 'A previous connection attempt requires administrator review.'
+};
 var PLAID_MAIN_MISSING_ = '—';
 var PLAID_MAIN_MISSING_NOTE_ = '— Not currently tracked in CashCompass';
 
@@ -92,6 +102,12 @@ var PLAID_MAIN_MONTH_NAMES_ = [
 
 function plaidMainUserMessage_(err) {
   return (err && err.message) || PLAID_MAIN_UNAVAILABLE_;
+}
+
+function plaidMainConnectErrorMessage_(err) {
+  var code = String(err && err.connectionErrorCode || '');
+  if (PLAID_MAIN_CONNECT_ERROR_CODES_[code]) return PLAID_MAIN_CONNECT_ERROR_CODES_[code];
+  return PLAID_MAIN_UNAVAILABLE_;
 }
 
 function plaidMainDomain_(domain) {
@@ -187,7 +203,10 @@ function plaidMainSetStatus_(domain, message, isError) {
 function plaidMainCall_(name, payload, success, failure) {
   var reject = failure || function() {};
   var failClosed = function(result) {
-    reject({ message: (result && result.error) || PLAID_MAIN_UNAVAILABLE_ });
+    reject({
+      message: (result && result.error) || PLAID_MAIN_UNAVAILABLE_,
+      connectionErrorCode: result && result.connectionErrorCode
+    });
   };
   var runner = google.script.run
     .withSuccessHandler(function(result) {
@@ -208,6 +227,41 @@ function plaidMainSetBusy_(domain, busy) {
     var el = document.getElementById(id);
     if (el) el.disabled = !!busy;
   });
+}
+
+function plaidMainSetConnectBusy_(domain, busy) {
+  var el = document.getElementById(plaidMainIds_(plaidMainDomain_(domain)).connect);
+  if (el) el.disabled = !!busy;
+}
+
+function plaidMainIsConnectInFlight_(domain) {
+  return !!plaidMainState_.connectingByDomain[plaidMainDomain_(domain)];
+}
+
+function plaidMainClearConnectTimer_(domain) {
+  var key = plaidMainDomain_(domain);
+  var timerId = plaidMainState_.connectTimers[key];
+  if (timerId) {
+    clearTimeout(timerId);
+    delete plaidMainState_.connectTimers[key];
+  }
+}
+
+function plaidMainBeginConnect_(domain) {
+  var key = plaidMainDomain_(domain);
+  if (!plaidMainState_.connectRequestSeq) plaidMainState_.connectRequestSeq = {};
+  if (!plaidMainState_.connectTimers) plaidMainState_.connectTimers = {};
+  plaidMainState_.connectRequestSeq[key] = (plaidMainState_.connectRequestSeq[key] || 0) + 1;
+  plaidMainState_.connectingByDomain[key] = true;
+  plaidMainSetConnectBusy_(key, true);
+  return plaidMainState_.connectRequestSeq[key];
+}
+
+function plaidMainEndConnect_(domain) {
+  var key = plaidMainDomain_(domain);
+  plaidMainClearConnectTimer_(key);
+  plaidMainState_.connectingByDomain[key] = false;
+  plaidMainSetConnectBusy_(key, false);
 }
 
 function plaidMainInvalidateMetadataCache_(domain) {
@@ -1680,43 +1734,76 @@ function plaidMainImportData_(domain, connection, account) {
     });
 }
 
+function plaidMainAbandonPendingConnect_(correlationId, domain, requestId, onDone) {
+  var targetDomain = plaidMainDomain_(domain);
+  var done = typeof onDone === 'function' ? onDone : function() {};
+  if (!correlationId || plaidMainState_.connectRequestSeq[targetDomain] !== requestId) {
+    done();
+    return;
+  }
+  plaidMainCall_('plaidImportAbandonConnection', { correlationId: correlationId }, function() {
+    done();
+  }, function() {
+    done();
+  });
+}
+
 function plaidMainConnect_(domain) {
   var targetDomain = plaidMainDomain_(domain);
+  if (plaidMainIsConnectInFlight_(targetDomain)) return;
   if (!window.Plaid || typeof window.Plaid.create !== 'function') {
     plaidMainSetStatus_(targetDomain, 'Secure Plaid Link is unavailable. Refresh and try again.', true);
     return;
   }
-  plaidMainSetBusy_(targetDomain, true);
-  plaidMainSetStatus_(targetDomain, 'Creating secure Link session…', false);
+  var requestId = plaidMainBeginConnect_(targetDomain);
+  plaidMainSetStatus_(targetDomain, PLAID_MAIN_CONNECT_PROGRESS_, false);
+  plaidMainClearConnectTimer_(targetDomain);
+  plaidMainState_.connectTimers[targetDomain] = setTimeout(function() {
+    if (plaidMainState_.connectRequestSeq[targetDomain] !== requestId) return;
+    plaidMainEndConnect_(targetDomain);
+    plaidMainSetStatus_(targetDomain, 'Connection session timed out. Please try again.', true);
+  }, PLAID_MAIN_CONNECT_TIMEOUT_MS_);
   plaidMainCall_('plaidImportInitializeConnection', undefined, function(result) {
+    if (plaidMainState_.connectRequestSeq[targetDomain] !== requestId) return;
+    plaidMainClearConnectTimer_(targetDomain);
     var authorizationCompleted = false;
     var handler = window.Plaid.create({
       token: result.linkToken,
       onSuccess: function(publicToken, metadata) {
         authorizationCompleted = true;
+        plaidMainSetStatus_(targetDomain, 'Completing institution connection…', false);
         plaidMainCall_('plaidImportExchangePublicToken', {
           publicToken: publicToken,
           correlationId: result.correlationId,
           institutionId: String(metadata && metadata.institution && metadata.institution.institution_id || '')
         }, function() {
+          if (plaidMainState_.connectRequestSeq[targetDomain] !== requestId) return;
+          plaidMainEndConnect_(targetDomain);
           plaidMainInvalidateMetadataCache_();
-          plaidMainSetBusy_(targetDomain, false);
           plaidMainSetStatus_(targetDomain, 'Institution connected.', false);
           loadPlaidConnectedAccounts_(true, targetDomain);
-        }, function() {
-          plaidMainSetBusy_(targetDomain, false);
-          plaidMainSetStatus_(targetDomain, PLAID_MAIN_UNAVAILABLE_, true);
+        }, function(err) {
+          if (plaidMainState_.connectRequestSeq[targetDomain] !== requestId) return;
+          plaidMainEndConnect_(targetDomain);
+          plaidMainSetStatus_(targetDomain, plaidMainConnectErrorMessage_(err), true);
         });
       },
       onExit: function(error) {
-        if (!authorizationCompleted) plaidMainSetBusy_(targetDomain, false);
-        if (error) plaidMainSetStatus_(targetDomain, 'Link ended before connection.', true);
+        if (plaidMainState_.connectRequestSeq[targetDomain] !== requestId) return;
+        if (!authorizationCompleted) {
+          plaidMainAbandonPendingConnect_(result.correlationId, targetDomain, requestId, function() {
+            plaidMainEndConnect_(targetDomain);
+            if (error) plaidMainSetStatus_(targetDomain, 'Link ended before connection.', true);
+            else plaidMainSetStatus_(targetDomain, '', false);
+          });
+        }
       }
     });
     handler.open();
-  }, function() {
-    plaidMainSetBusy_(targetDomain, false);
-    plaidMainSetStatus_(targetDomain, PLAID_MAIN_UNAVAILABLE_, true);
+  }, function(err) {
+    if (plaidMainState_.connectRequestSeq[targetDomain] !== requestId) return;
+    plaidMainEndConnect_(targetDomain);
+    plaidMainSetStatus_(targetDomain, plaidMainConnectErrorMessage_(err), true);
   });
 }
 
@@ -1725,9 +1812,11 @@ function plaidMainReconnect_(domain, connection, account) {
   plaidMainSetAccountMessage_(connection, account, 'Opening secure reconnect…', false, true);
   plaidMainRenderDomain_(targetDomain);
   plaidMainCall_('plaidImportReconnect', { protectedConnectionKey: connection.protectedConnectionKey }, function(result) {
+    var reconnectCompleted = false;
     window.Plaid.create({
       token: result.linkToken,
       onSuccess: function() {
+        reconnectCompleted = true;
         plaidMainCall_('plaidImportCompleteReconnect', {
           protectedConnectionKey: connection.protectedConnectionKey,
           correlationId: result.correlationId
@@ -1738,6 +1827,24 @@ function plaidMainReconnect_(domain, connection, account) {
         });
       },
       onExit: function(error) {
+        if (!reconnectCompleted) {
+          plaidMainCall_('plaidImportAbandonConnection', { correlationId: result.correlationId }, function() {
+            if (error) {
+              plaidMainSetAccountMessage_(connection, account, 'Reconnect ended before completion.', true, false);
+            } else {
+              plaidMainSetAccountMessage_(connection, account, '', false, false);
+            }
+            plaidMainRenderDomain_(targetDomain);
+          }, function() {
+            if (error) {
+              plaidMainSetAccountMessage_(connection, account, 'Reconnect ended before completion.', true, false);
+            } else {
+              plaidMainSetAccountMessage_(connection, account, '', false, false);
+            }
+            plaidMainRenderDomain_(targetDomain);
+          });
+          return;
+        }
         if (error) {
           plaidMainSetAccountMessage_(connection, account, 'Reconnect ended before completion.', true, false);
           plaidMainRenderDomain_(targetDomain);

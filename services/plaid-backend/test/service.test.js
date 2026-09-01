@@ -83,11 +83,76 @@ test('Update Mode applies its separate 30-minute maximum', async () => {
   assert.equal(Date.parse(update.expiresAt) - now(), 30 * 60 * 1000);
 });
 
+test('create mode uses a shorter connection-intent lock than the provider link session', async () => {
+  const plaid = new FakePlaid();
+  plaid.createLinkToken = async () => ({ link_token: 'link-sandbox-token',
+    expiration: new Date(Date.UTC(2026, 7, 24, 22, 0, 0)).toISOString() });
+  const { service, store, now } = fixture({ plaid });
+  const result = await service.createLinkToken('opaque-user-a');
+  const session = store.sessions.get(`opaque-user-a|${result.correlationId}`);
+  const lock = store.connectionLocks.get('opaque-user-a');
+  assert.equal(Date.parse(result.expiresAt) - now(), 4 * 60 * 60 * 1000);
+  assert.equal(lock.expiresAtMs - now(), 30 * 60 * 1000);
+  assert.ok(session.expiresAtMs > lock.expiresAtMs);
+});
+
 test('guards concurrent connection intents for one protected user', async () => {
   const { service } = fixture();
   await service.createLinkToken('opaque-user-a');
   await assert.rejects(service.createLinkToken('opaque-user-a'), error => error.code === 'CONNECT_IN_PROGRESS');
   await service.createLinkToken('opaque-user-b');
+});
+
+test('allows a new Link after the connection-intent lock expires while the session remains valid', async () => {
+  const plaid = new FakePlaid();
+  plaid.createLinkToken = async () => ({ link_token: 'link-sandbox-token',
+    expiration: new Date(Date.UTC(2026, 7, 24, 22, 0, 0)).toISOString() });
+  const { service, advance } = fixture({ plaid });
+  const first = await service.createLinkToken('opaque-user-a');
+  advance(31 * 60 * 1000);
+  const second = await service.createLinkToken('opaque-user-a');
+  assert.notEqual(second.correlationId, first.correlationId);
+  const result = await service.exchange('opaque-user-a', {
+    correlationId: second.correlationId, publicToken: 'public', institutionId: 'raw-institution-id'
+  });
+  assert.equal(result.lifecycleStatus, 'ACTIVE');
+});
+
+test('abandoning a pending Link session releases the connection-intent lock', async () => {
+  const { service } = fixture();
+  const link = await service.createLinkToken('opaque-user-a');
+  await service.abandonLinkSession('opaque-user-a', { correlationId: link.correlationId });
+  const retry = await service.createLinkToken('opaque-user-a');
+  assert.notEqual(retry.correlationId, link.correlationId);
+  await assert.rejects(service.exchange('opaque-user-a', {
+    correlationId: link.correlationId, publicToken: 'public', institutionId: 'raw-institution-id'
+  }), error => error.code === 'LINK_SESSION_REPLAY');
+});
+
+test('update mode keeps its separate 30-minute lock and session lifetime', async () => {
+  const plaid = new FakePlaid();
+  plaid.createLinkToken = async () => ({ link_token: 'link-sandbox-token',
+    expiration: new Date(Date.UTC(2026, 7, 24, 22, 0, 0)).toISOString() });
+  const connectedFixture = fixture({ plaid });
+  const link = await connectedFixture.service.createLinkToken('opaque-user-a');
+  const dto = await connectedFixture.service.exchange('opaque-user-a', {
+    correlationId: link.correlationId, publicToken: 'public-token-private',
+    institutionId: 'raw-institution-id'
+  });
+  plaid.createUpdateLinkToken = async () => ({ link_token: 'link-update-token',
+    expiration: new Date(Date.UTC(2026, 7, 24, 22, 0, 0)).toISOString() });
+  const { service, store, now } = connectedFixture;
+  const update = await service.createUpdateLinkToken('opaque-user-a', {
+    protectedConnectionKey: dto.protectedConnectionKey
+  });
+  const session = store.sessions.get(`opaque-user-a|${update.correlationId}`);
+  const lock = store.connectionLocks.get('opaque-user-a');
+  assert.equal(Date.parse(update.expiresAt) - now(), 30 * 60 * 1000);
+  assert.equal(lock.expiresAtMs - now(), 30 * 60 * 1000);
+  assert.equal(session.expiresAtMs, lock.expiresAtMs);
+  await assert.rejects(service.createUpdateLinkToken('opaque-user-a', {
+    protectedConnectionKey: dto.protectedConnectionKey
+  }), error => error.code === 'CONNECT_IN_PROGRESS');
 });
 
 test('exchange persists only encrypted credentials and sanitized account discovery', async () => {

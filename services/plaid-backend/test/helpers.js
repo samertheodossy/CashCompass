@@ -31,6 +31,7 @@ export class FakeStore {
     this.mappings = new Map();
     this.mappingMigrations = new Map();
     this.persistedDocuments = [];
+    this.connectionLocks = new Map();
   }
   key(user, id) { return `${user}|${id}`; }
   mappingKey(user, connectionKey, accountKey) {
@@ -144,15 +145,29 @@ export class FakeStore {
     if (this.nonces.has(key)) throw new ServiceError(409, 'AUTH_REPLAY', 'replay');
     this.nonces.add(key);
   }
-  async createLinkSession(user, session) {
-    for (const [key, value] of this.sessions) {
-      if (key.startsWith(`${user}|`) && value.status === 'PENDING' && value.expiresAtMs > this.now()) {
-        throw new ServiceError(409, 'CONNECT_IN_PROGRESS', 'in progress');
-      }
+  async createLinkSession(user, session, nowMs = this.now()) {
+    const lock = this.connectionLocks.get(user);
+    if (lock && lock.expiresAtMs > nowMs) {
+      throw new ServiceError(409, 'CONNECT_IN_PROGRESS', 'in progress');
     }
+    const lockExpiresAtMs = Number(session.lockExpiresAtMs || session.expiresAtMs || 0);
+    this.connectionLocks.set(user, { correlationId: session.correlationId, expiresAtMs: lockExpiresAtMs });
     this.sessions.set(this.key(user, session.correlationId), {
       ...session, connectionKey: session.connectionKey || '', status: 'PENDING'
     });
+  }
+  async abandonLinkSession(user, correlationId, nowMs = this.now()) {
+    const session = this.sessions.get(this.key(user, correlationId));
+    if (!session) throw new ServiceError(404, 'LINK_SESSION_NOT_FOUND', 'not found');
+    if (session.status !== 'PENDING') throw new ServiceError(409, 'LINK_SESSION_REPLAY', 'replay');
+    const lock = this.connectionLocks.get(user);
+    if (lock) {
+      if (lock.correlationId !== correlationId && lock.expiresAtMs > nowMs) {
+        throw new ServiceError(409, 'CONNECT_IN_PROGRESS', 'in progress');
+      }
+      if (lock.correlationId === correlationId) this.connectionLocks.delete(user);
+    }
+    session.status = 'ABANDONED';
   }
   async consumeLinkSession(user, id, now, expected = null) {
     const session = this.sessions.get(this.key(user, id));
@@ -169,6 +184,7 @@ export class FakeStore {
       throw new ServiceError(409, 'LINK_SESSION_MISMATCH', 'mismatch');
     }
     session.status = 'EXCHANGING';
+    this.connectionLocks.delete(user);
   }
   async markLinkSession(user, id, status) {
     const session = this.sessions.get(this.key(user, id));

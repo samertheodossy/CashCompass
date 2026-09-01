@@ -288,7 +288,8 @@ export class FirestoreConnectionStore {
       if (lock.exists && Number(lock.data().expiresAtMs || 0) > nowMs) {
         fail(409, 'CONNECT_IN_PROGRESS', 'A connection is already in progress.');
       }
-      tx.set(lockRef, { correlationId: session.correlationId, expiresAtMs: session.expiresAtMs });
+      const lockExpiresAtMs = Number(session.lockExpiresAtMs || session.expiresAtMs || 0);
+      tx.set(lockRef, { correlationId: session.correlationId, expiresAtMs: lockExpiresAtMs });
       tx.create(sessionRef, {
         status: 'PENDING',
         environment: this.environment,
@@ -299,6 +300,31 @@ export class FirestoreConnectionStore {
         createdAt: new Date(nowMs),
         expiresAt: new Date(session.expiresAtMs)
       });
+    });
+  }
+
+  async abandonLinkSession(userKey, correlationId, nowMs = Date.now()) {
+    const userRef = this.user(userKey);
+    const ref = userRef.collection('linkSessions').doc(correlationId);
+    const lockRef = userRef.collection('connectionIntents').doc('current');
+    await this.db.runTransaction(async tx => {
+      const snapshot = await tx.get(ref);
+      if (!snapshot.exists) fail(404, 'LINK_SESSION_NOT_FOUND', 'Link session was not found.');
+      const value = snapshot.data();
+      if (value.status !== 'PENDING') {
+        fail(409, 'LINK_SESSION_REPLAY', 'Link session was already consumed.');
+      }
+      const lock = await tx.get(lockRef);
+      if (lock.exists) {
+        const lockData = lock.data();
+        const lockExpiry = Number(lockData.expiresAtMs || 0);
+        const lockCorrelationId = String(lockData.correlationId || '');
+        if (lockCorrelationId && lockCorrelationId !== correlationId && lockExpiry > nowMs) {
+          fail(409, 'CONNECT_IN_PROGRESS', 'A connection is already in progress.');
+        }
+        if (lockCorrelationId === correlationId) tx.delete(lockRef);
+      }
+      tx.update(ref, { status: 'ABANDONED', abandonedAt: new Date(nowMs) });
     });
   }
 

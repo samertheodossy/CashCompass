@@ -287,4 +287,57 @@ assert(reviewSafe.ok === false &&
   reviewSafe.error === 'CashCompass account identity needs review before Connected accounts can be matched.',
   'identity review failures must surface a dedicated user-facing message');
 
+assert(client.includes('PLAID_MAIN_CONNECT_PROGRESS_') &&
+  client.includes('Creating secure connection session. This may take up to 60 seconds.') &&
+  client.includes('PLAID_MAIN_CONNECT_ERROR_CODES_') &&
+  client.includes('plaidMainConnectErrorMessage_') &&
+  client.includes('plaidMainIsConnectInFlight_') &&
+  client.includes('plaidMainBeginConnect_') &&
+  client.includes('plaidMainEndConnect_') &&
+  client.includes('plaidMainSetConnectBusy_') &&
+  client.includes('connectingByDomain') &&
+  client.includes('connectRequestSeq'),
+  'connect concurrency UX helpers are missing');
+
+assert(/function plaidMainConnect_[\s\S]{0,220}plaidMainIsConnectInFlight_/.test(client) &&
+  /function plaidMainConnect_[\s\S]{0,500}return;[\s\S]{0,120}plaidMainBeginConnect_/.test(client),
+  'Connect must ignore duplicate clicks while a request is in flight');
+
+assert(/function plaidMainConnect_[\s\S]{0,900}PLAID_MAIN_CONNECT_PROGRESS_/.test(client) &&
+  /function plaidMainConnect_[\s\S]{0,1200}connectRequestSeq\[targetDomain\] !== requestId/.test(client),
+  'Connect must show slow-session progress and ignore stale responses');
+
+assert(/function plaidMainConnect_[\s\S]{0,2200}plaidMainConnectErrorMessage_\(err\)/.test(client) &&
+  client.includes('CONNECT_IN_PROGRESS: \'A connection is already in progress. Please wait before trying again.\'') &&
+  client.includes('LINK_COMPLETION_REVIEW_REQUIRED: \'A previous connection attempt requires administrator review.\''),
+  'Connect must map allowlisted backend codes to safe user messages');
+
+assert(/function plaidMainConnectErrorMessage_[\s\S]{0,260}PLAID_MAIN_UNAVAILABLE_/.test(client),
+  'Connect must fall back to the generic unavailable message for other failures');
+
+assert(/function plaidMainConnect_[\s\S]{0,2800}plaidMainEndConnect_\(targetDomain\)[\s\S]{0,220}plaidMainSetStatus_\(targetDomain, plaidMainConnectErrorMessage_\(err\), true\)/.test(client) &&
+  !/function plaidMainConnect_[\s\S]{0,2800}plaidMainConnectErrorMessage_\(err\), true\)[\s\S]{0,120}loadPlaidConnectedAccounts_/.test(client) &&
+  !/function plaidMainConnect_[\s\S]{0,2800}plaidMainConnectErrorMessage_\(err\), true\)[\s\S]{0,120}plaidMainRenderDomain_/.test(client),
+  'new-connect failure must not reload or replace existing connection cards');
+
+assert(/function plaidMainConnect_[\s\S]{0,3200}handler\.open\(\)/.test(client) &&
+  !/function plaidMainConnect_[\s\S]{0,3200}plaidImportInitializeConnection[\s\S]{0,400}plaidImportInitializeConnection/.test(client),
+  'successful link-token response must open Plaid Link once without auto-retry');
+
+assert(!/function plaidMainConnect_[\s\S]{0,4000}plaidImportPreviewMapped/.test(client) &&
+  !/function plaidMainConnect_[\s\S]{0,4000}plaidImportApplyDebtUpdates/.test(client) &&
+  !/function plaidMainConnect_[\s\S]{0,4000}plaidImportApplyCashUpdates/.test(client),
+  'Connect must not invoke Import Data or Apply flows');
+
+assert(/function plaidMainConnect_[\s\S]{0,4000}PLAID_MAIN_CONNECT_TIMEOUT_MS_/.test(client) &&
+  /function plaidMainConnect_[\s\S]{0,4000}Connection session timed out/.test(client),
+  'Connect must handle client timeout and re-enable the button');
+
+assert(/function plaidMainAbandonPendingConnect_[\s\S]{0,500}plaidImportAbandonConnection/.test(client) &&
+  /function plaidMainConnect_[\s\S]{0,4200}plaidMainAbandonPendingConnect_\(result\.correlationId/.test(client),
+  'Connect onExit must abandon a still-pending link session before re-enabling');
+
+assert(/function plaidMainCall_[\s\S]{0,260}connectionErrorCode/.test(client),
+  'bridge responses must pass allowlisted connection error codes to the client');
+
 console.log('Plaid main-app regressions passed.');

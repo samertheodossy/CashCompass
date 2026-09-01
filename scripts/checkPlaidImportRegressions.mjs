@@ -231,6 +231,51 @@ assert(client.includes("plaidMainCall_('plaidImportConnectedAccountsState', { do
   /loadPlaidConnectedAccounts_\(true,/.test(client),
   'Connected client must pass domain and support explicit metadata reload');
 
+assert(bridge.includes('plaidImportSafeConnection_') &&
+  bridge.includes('PLAID_IMPORT_ALLOWLISTED_CONNECTION_ERROR_CODES_') &&
+  bridge.includes('connectionErrorCode'),
+  'connection bridge must allowlist safe backend error codes only');
+{
+  const initStart = bridge.indexOf('function plaidImportInitializeConnection');
+  const initEnd = bridge.indexOf('\nfunction ', initStart + 1);
+  const initSource = bridge.slice(initStart, initEnd < 0 ? bridge.length : initEnd);
+  const exchangeStart = bridge.indexOf('function plaidImportExchangePublicToken');
+  const exchangeEnd = bridge.indexOf('\nfunction ', exchangeStart + 1);
+  const exchangeSource = bridge.slice(exchangeStart, exchangeEnd < 0 ? bridge.length : exchangeEnd);
+  assert(initSource.includes('plaidImportSafeConnection_') &&
+    exchangeSource.includes('plaidImportSafeConnection_'),
+    'initialize and exchange must use connection-safe wrapper');
+  const abandonStart = bridge.indexOf('function plaidImportAbandonConnection');
+  const abandonEnd = bridge.indexOf('\nfunction ', abandonStart + 1);
+  const abandonSource = bridge.slice(abandonStart, abandonEnd < 0 ? bridge.length : abandonEnd);
+  assert(abandonSource.includes("'/v1/link-session/abandon'") &&
+    abandonSource.includes("'LINK_SESSION_ABANDON'") &&
+    abandonSource.includes('plaidImportSafeConnection_'),
+    'abandon connection must call the backend through the safe connection wrapper');
+}
+{
+  const ctx = vm.createContext({ console });
+  vm.runInContext(bridge, ctx);
+  const inProgress = ctx.plaidImportSafeConnection_(() => {
+    throw new Error('Plaid import request failed: CONNECT_IN_PROGRESS');
+  });
+  assert(inProgress.ok === false &&
+    inProgress.connectionErrorCode === 'CONNECT_IN_PROGRESS' &&
+    inProgress.error === 'Connected data is temporarily unavailable.' &&
+    !JSON.stringify(inProgress).includes('linkToken'),
+    'CONNECT_IN_PROGRESS must pass allowlisted code without sensitive fields');
+  const reviewRequired = ctx.plaidImportSafeConnection_(() => {
+    throw new Error('Plaid import request failed: LINK_COMPLETION_REVIEW_REQUIRED');
+  });
+  assert(reviewRequired.connectionErrorCode === 'LINK_COMPLETION_REVIEW_REQUIRED',
+    'LINK_COMPLETION_REVIEW_REQUIRED must pass allowlisted code');
+  const generic = ctx.plaidImportSafeConnection_(() => {
+    throw new Error('Plaid import request failed: INVALID_API_KEYS');
+  });
+  assert(generic.ok === false && !generic.connectionErrorCode,
+    'non-allowlisted backend failures must not expose raw codes');
+}
+
 new vm.Script(bridge);
 new vm.Script(client);
 
