@@ -101,6 +101,12 @@ assert(client.includes('Review imported changes') && client.includes('Changes to
   client.includes('plaidMainDerivedCreditLeft_') &&
   !client.includes('Same due day'),
   'Connected import review tables and semantics are missing');
+assert(client.includes('plaidMainProviderImportTiming_') &&
+  client.includes('plaidMainProviderBalanceEffectiveAt_') &&
+  client.includes('Provider balance as of:') &&
+  client.includes('Plaid retrieved:') &&
+  client.includes('providerEffectiveAsOf'),
+  'Connected import review must show Plaid retrieval and provider balance timestamps');
 assert(client.includes('plaidMainSaveAprPreference_') &&
   client.includes('plaidImportSaveAprSourcePreference') &&
   client.includes('writerField: \'Int Rate\'') &&

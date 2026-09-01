@@ -36,16 +36,16 @@ var INVESTMENT_ADAPTER_REGISTRY_ = {
   },
   ETRADE_PACKAGE: {
     source: 'ETRADE_PACKAGE',
-    parserVersion: ETRADE_TXN_CSV_PARSER_VERSION_,
+    parserVersion: 'etrade-txn-csv-v1+etrade-positions-pdf-v1',
     capabilities: {
       activities: true,
-      holdings: false,
-      taxLots: false,
+      holdings: true,
+      taxLots: true,
       accountSnapshot: false,
       dividendHistory: false,
       realizedGainLoss: false
     },
-    detect: investmentEtradeDetectTxnCsv_,
+    detect: investmentEtradeDetectPackage_,
     preview: investmentAdapterPreviewEtradePackage_,
     normalize: investmentAdapterNormalizeEtradePackage_
   },
@@ -142,16 +142,7 @@ function investmentAdapterNormalizeRobinhoodCsv_(input, optionalSs) {
 function investmentAdapterPreviewEtradePackage_(input, optionalSs) {
   var payload = input || {};
   payload.source = investmentPortfolioNormalizeSource_(payload.source) || 'ETRADE_PACKAGE';
-  var detection = investmentEtradeDetectTxnCsv_(payload);
-  if (!detection.ok) {
-    return {
-      ok: false,
-      reviewRequired: true,
-      error: detection.reason,
-      source: payload.source
-    };
-  }
-  return investmentEtradePreviewTxnCsv_(payload);
+  return investmentEtradePreviewPackage_(payload);
 }
 
 function investmentAdapterNormalizeEtradePackage_(input, optionalSs) {

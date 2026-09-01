@@ -23,6 +23,7 @@ const configSource = read('config.js');
 const identitySource = read('financial_identity.js');
 const foundationSource = read('investment_portfolio_foundation.js');
 const etradeSource = read('investment_etrade_csv.js');
+const etradePositionsSource = read('investment_etrade_positions_pdf.js');
 const adaptersSource = read('investment_adapters.js');
 const activitySource = read('investment_activity.js');
 const previewLabSource = read('central_etrade_preview_lab.js');
@@ -63,6 +64,7 @@ function buildContext(overrides = {}) {
     ${extractFunction(activitySource, 'parseInvestmentImportNumber_')}
   `, context, { filename: 'activity-stubs.js' });
   vm.runInContext(etradeSource, context, { filename: 'investment_etrade_csv.js' });
+  vm.runInContext(etradePositionsSource, context, { filename: 'investment_etrade_positions_pdf.js' });
   vm.runInContext(adaptersSource, context, { filename: 'investment_adapters.js' });
   vm.runInContext(previewLabSource, context, { filename: 'central_etrade_preview_lab.js' });
   return context;
@@ -70,6 +72,7 @@ function buildContext(overrides = {}) {
 
 const minimalCsv = fixture('synthetic_etrade_txn_minimal.csv');
 const overlapCsv = fixture('synthetic_etrade_txn_overlap.csv');
+const positionsFixture = fixture('synthetic_etrade_positions_minimal.txt');
 const ctx = buildContext();
 
 // --- Admin gating ---
@@ -85,7 +88,7 @@ assert.match(boundedResult.error, /Central mode only/);
 // --- Empty file ---
 const empty = ctx.adminUiEtradePreviewLabPreview({ rawCsv: '' });
 assert.equal(empty.ok, false);
-assert.match(empty.error, /empty/i);
+assert.match(empty.error, /CSV or Positions PDF text content is required/i);
 
 // --- Invalid CSV ---
 const invalid = ctx.adminUiEtradePreviewLabPreview({
@@ -262,6 +265,37 @@ badPreview.unsupportedRows.forEach((row) => {
   assert.ok(row.rowIndex);
   assert.ok(row.reason);
 });
+
+// --- Positions PDF text preview (Phase B) ---
+const positionsPreview = ctx.adminUiEtradePreviewLabPreview({
+  rawPositionsText: positionsFixture,
+  source: 'ETRADE_PACKAGE',
+  usePackageFiles: true,
+  stableAccountId: 'INV-ET-POS-PREVIEW-1',
+  registrationType: 'TAXABLE'
+});
+assert.equal(positionsPreview.ok, true, positionsPreview.error || 'positions preview failed');
+assert.equal(positionsPreview.aggregates.reportedHoldingsCount, 3);
+assert.equal(positionsPreview.aggregates.openLotCount, 5);
+assert.equal(positionsPreview.aggregates.washSaleLotCount, 1);
+assert.equal(positionsPreview.aggregates.positionsNoiseExcluded.cashRowsExcluded, 1);
+assert.equal(positionsPreview.aggregates.positionsNoiseExcluded.pageTotalsExcluded, 2);
+assert.ok(positionsPreview.holdingsPreviewRows.length === 3);
+assert.ok(positionsPreview.taxLotPreviewRows.length === 5);
+assert.equal('stableLotId' in (positionsPreview.taxLotPreviewRows[0] || {}), false);
+assert.equal(positionsPreview.reviewRequired, true);
+
+const combinedPreview = ctx.adminUiEtradePreviewLabPreview({
+  rawCsv: minimalCsv,
+  rawPositionsText: positionsFixture,
+  source: 'ETRADE_PACKAGE',
+  usePackageFiles: true,
+  stableAccountId: 'INV-ET-COMBINED-1'
+});
+assert.equal(combinedPreview.ok, true);
+assert.ok(combinedPreview.aggregates.acceptedActivityCount > 0);
+assert.equal(combinedPreview.aggregates.reportedHoldingsCount, 3);
+assert.match(combinedPreview.parserVersion, /etrade-positions-pdf-v1/);
 
 // --- Clear endpoint ---
 const cleared = ctx.adminUiEtradePreviewLabClear();

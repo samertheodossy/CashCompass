@@ -264,6 +264,56 @@ function getLatestBankAccountValuesForYear_(sheet, year, optionalDisplay) {
   return result;
 }
 
+/**
+ * Read one INPUT - Bank Accounts month cell for Plaid Apply review.
+ * Empty month cells return monthBalance 0 and hasMonthValue false.
+ */
+function readBankAccountMonthBalanceForDate_(accountName, balanceDateIso, optionalSs) {
+  const account = String(accountName || '').trim();
+  const tz = Session.getScriptTimeZone();
+  let balanceDate;
+  try {
+    balanceDate = parseIsoDateLocal_(balanceDateIso);
+  } catch (_parseErr) {
+    balanceDate = new Date();
+  }
+  const monthLabel = Utilities.formatDate(balanceDate, tz, 'MMM-yy');
+  const balanceMonthKey = Utilities.formatDate(balanceDate, tz, 'yyyy-MM');
+  const emptyResult = {
+    monthLabel: monthLabel,
+    monthBalance: 0,
+    hasMonthValue: false,
+    balanceMonthKey: balanceMonthKey
+  };
+  if (!account) return emptyResult;
+
+  const ss = optionalSs || getUserSpreadsheet_();
+  const sheet = getSheet_(ss, 'BANK_ACCOUNTS');
+  const display = sheet.getDataRange().getDisplayValues();
+  const block = getBankAccountsYearBlock_(sheet, balanceDate.getFullYear(), display);
+  const row = findBankAccountRowInBlock_(sheet, block, account, display);
+  if (row === -1) return emptyResult;
+
+  const headerRow = display[block.headerRow - 1] || [];
+  const monthCol = findMonthColumnIndex_(headerRow, balanceDate);
+  if (monthCol === -1) {
+    throw new Error(
+      'Could not find month column for ' +
+      Utilities.formatDate(balanceDate, tz, 'MMM-yyyy') +
+      ' on sheet "' + sheet.getName() + '".'
+    );
+  }
+
+  const raw = sheet.getRange(row, monthCol).getValue();
+  const hasMonthValue = !(raw === '' || raw === null || raw === undefined);
+  return {
+    monthLabel: monthLabel,
+    monthBalance: hasMonthValue ? round2_(toNumber_(raw)) : 0,
+    hasMonthValue: hasMonthValue,
+    balanceMonthKey: balanceMonthKey
+  };
+}
+
 function getBankAccountUiData() {
   // Performance: the previous implementation read SYS - Accounts THREE
   // times in a row — once for distinct Type values, once for distinct

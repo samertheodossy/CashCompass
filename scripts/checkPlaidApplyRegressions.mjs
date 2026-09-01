@@ -210,8 +210,21 @@ assert(bridge.includes('PLAID_IMPORT_CASH_APPLY_KEYS_') &&
 
 assert(cashApplyInner.includes('plaidImportCashApplyValuesEqual_') &&
   cashApplyInner.includes('No changes are available to apply') &&
-  cashApplyInner.includes('CashCompass values changed since review'),
-  'Bank Apply must reject stale review and no-op balances');
+  cashApplyInner.includes('CashCompass values changed since review') &&
+  cashApplyInner.includes('plaidImportCurrentCashApplyValue_') &&
+  cashApplyInner.includes('cashCompassApplyContext'),
+  'Bank Apply must compare against target month balance and reject stale review');
+
+assert(banks.includes('function readBankAccountMonthBalanceForDate_') &&
+  banks.includes('hasMonthValue: false') &&
+  bridge.includes('plaidImportEnrichCashApplyContext_') &&
+  bridge.includes('readBankAccountMonthBalanceForDate_'),
+  'Bank Apply review must read INPUT month cells and treat empty months as zero');
+
+assert(client.includes('plaidMainBuildCashBalanceRow_') &&
+  client.includes('cashCompassApplyContext') &&
+  /plaidMainBuildCashBalanceRow_[\s\S]{0,500}monthBalance/.test(client),
+  'Connected client must compare bank Apply against target month balance');
 
 assert(cashApplyInner.includes('targetProtectedAccountKey') &&
   /plaidImportApplyCashUpdates_[\s\S]{0,2000}plaidImportBeginRequestSession_/.test(bridge),

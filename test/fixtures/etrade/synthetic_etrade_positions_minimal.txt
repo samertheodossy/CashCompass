@@ -1,0 +1,21 @@
+# Synthetic E*TRADE Expanded Positions PDF text extract — Phase B fixture (no real holdings)
+Refresh: Aug 15, 2025 04:30 PM ET
+Account: TEST-ACCT-POS-1
+Net Account Value: $125,000.00
+Viewing 3 of 3 positions
+
+Symbol / CUSIP | Type | Last Price $ | Change $ | Change % | Qty # | Price Paid $ | Day's Gain $ | Total Gain $ | Total Gain % | Value $
+SYNAAA | Trade | $150.00 | $2.00 | 1.35% | 30 | $3,500.00 | $60.00 | $1,000.00 | 40.00% | $4,500.00
+01/15/2024 | | $150.00 | $2.00 | 1.35% | 10 | $1,000.00 | $20.00 | $500.00 | 50.00% | $1,500.00
+03/20/2024 WS | | $150.00 | $2.00 | 1.35% | 20 | $2,500.00 | $40.00 | $500.00 | 25.00% | $3,000.00
+SYNETF | Trade | $50.00 | -$0.50 | -1.00% | 100 | $4,800.00 | -$50.00 | $200.00 | 4.17% | $5,000.00
+06/01/2024 | | $50.00 | -$0.50 | -1.00% | 60 | $2,880.00 | -$30.00 | $120.00 | 4.17% | $3,000.00
+08/10/2024 | | $50.00 | -$0.50 | -1.00% | 40 | $1,920.00 | -$20.00 | $80.00 | 4.17% | $2,000.00
+SYNBBB* | Trade | $25.00 | $0.25 | 1.01% | 5 | $100.00 | $1.25 | $25.00 | 25.00% | $125.00
+01/01/2024 | | $25.00 | $0.25 | 1.01% | 3 | $60.00 | $0.75 | $15.00 | 25.00% | $75.00
+Cash | Transfer money | — | — | — | — | — | — | — | — | $12,345.67
+Total | | | | | | $8,500.00 | | $1,225.00 | | $9,725.00
+Total | | | | | | $8,500.00 | | $1,225.00 | | $9,725.00
+???BAD | Trade | not-a-price | | | abc | | | | | |
+SYNMAL | Trade | $10.00 | | | 5 | $50.00 | | | | not-a-value
+WS This lot has been adjusted for wash sales

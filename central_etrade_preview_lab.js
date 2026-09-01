@@ -6,6 +6,7 @@
  */
 
 var ETRADE_PREVIEW_LAB_MAX_CSV_CHARS_ = 5000000;
+var ETRADE_PREVIEW_LAB_MAX_POSITIONS_CHARS_ = 5000000;
 var ETRADE_PREVIEW_LAB_MAX_TABLE_ROWS_ = 250;
 
 function etradePreviewLabSafe_(fn) {
@@ -31,6 +32,7 @@ function assertEtradePreviewLabAllowed_() {
  *
  * @param {{
  *   rawCsv?: string,
+ *   rawPositionsText?: string,
  *   source?: string,
  *   stableAccountId?: string,
  *   registrationType?: string,
@@ -60,14 +62,22 @@ function adminUiEtradePreviewLabClear() {
 
 function etradePreviewLabBuildPreview_(payload) {
   var rawCsv = String(payload.rawCsv || '');
-  if (!rawCsv.trim()) {
-    return { ok: false, error: 'CSV content is empty.' };
+  var rawPositionsText = String(payload.rawPositionsText || '');
+  if (!rawCsv.trim() && !rawPositionsText.trim()) {
+    return { ok: false, error: 'CSV or Positions PDF text content is required.' };
   }
   if (rawCsv.length > ETRADE_PREVIEW_LAB_MAX_CSV_CHARS_) {
     return {
       ok: false,
       error: 'CSV exceeds the maximum preview size (' +
         ETRADE_PREVIEW_LAB_MAX_CSV_CHARS_ + ' characters).'
+    };
+  }
+  if (rawPositionsText.length > ETRADE_PREVIEW_LAB_MAX_POSITIONS_CHARS_) {
+    return {
+      ok: false,
+      error: 'Positions PDF text exceeds the maximum preview size (' +
+        ETRADE_PREVIEW_LAB_MAX_POSITIONS_CHARS_ + ' characters).'
     };
   }
 
@@ -84,12 +94,14 @@ function etradePreviewLabBuildPreview_(payload) {
 
   var input = {
     source: source,
-    accountMeta: accountMeta
+    accountMeta: accountMeta,
+    rawCsv: rawCsv,
+    rawPositionsText: rawPositionsText
   };
   if (source === 'ETRADE_PACKAGE' && payload.usePackageFiles) {
-    input.files = [{ role: 'ACTIVITY', content: rawCsv }];
-  } else {
-    input.rawCsv = rawCsv;
+    input.files = [];
+    if (rawCsv.trim()) input.files.push({ role: 'ACTIVITY', content: rawCsv });
+    if (rawPositionsText.trim()) input.files.push({ role: 'HOLDINGS', content: rawPositionsText });
   }
 
   var preview = (source === 'ETRADE_CSV')
@@ -118,11 +130,17 @@ function etradePreviewLabSanitizeResponse_(preview, context) {
   var tableRows = activities.slice(0, ETRADE_PREVIEW_LAB_MAX_TABLE_ROWS_).map(
     etradePreviewLabSanitizeActivityRow_
   );
+  var holdingsRows = (normalized.holdingsSnapshots || [])
+    .slice(0, ETRADE_PREVIEW_LAB_MAX_TABLE_ROWS_)
+    .map(etradePreviewLabSanitizeHoldingsRow_);
+  var taxLotRows = (normalized.taxLots || [])
+    .slice(0, ETRADE_PREVIEW_LAB_MAX_TABLE_ROWS_)
+    .map(etradePreviewLabSanitizeTaxLotRow_);
   var unsupportedRows = (normalized.unsupportedRows || []).map(function(row) {
     return {
       rowIndex: row.rowIndex,
       reason: String(row.reason || row.error || 'UNSUPPORTED'),
-      activityType: String(row.activityType || '')
+      activityType: String(row.activityType || row.symbol || '')
     };
   });
   var warnings = (normalized.warnings || []).map(function(text) {
@@ -143,6 +161,14 @@ function etradePreviewLabSanitizeResponse_(preview, context) {
     activityPreviewRows: tableRows,
     activityPreviewTruncated: activities.length > ETRADE_PREVIEW_LAB_MAX_TABLE_ROWS_,
     activityPreviewTotal: activities.length,
+    holdingsPreviewRows: holdingsRows,
+    holdingsPreviewTruncated: (normalized.holdingsSnapshots || []).length >
+      ETRADE_PREVIEW_LAB_MAX_TABLE_ROWS_,
+    holdingsPreviewTotal: (normalized.holdingsSnapshots || []).length,
+    taxLotPreviewRows: taxLotRows,
+    taxLotPreviewTruncated: (normalized.taxLots || []).length >
+      ETRADE_PREVIEW_LAB_MAX_TABLE_ROWS_,
+    taxLotPreviewTotal: (normalized.taxLots || []).length,
     unsupportedRows: unsupportedRows,
     warnings: warnings
   };
@@ -204,6 +230,15 @@ function etradePreviewLabBuildAggregates_(normalized, preview) {
     acceptedActivityCount: activities.length,
     unsupportedRowCount: (normalized.unsupportedRows || []).length,
     warningCount: (normalized.warnings || []).length,
+    reportedHoldingsCount: (normalized.holdingsSnapshots || []).length,
+    openLotCount: (normalized.taxLots || []).length,
+    washSaleLotCount: (normalized.taxLots || []).filter(function(lot) {
+      return lot.washSaleAdjusted;
+    }).length,
+    holdingsReviewRequiredCount: (normalized.holdingsSnapshots || []).filter(function(row) {
+      return row.reviewRequired;
+    }).length,
+    positionsNoiseExcluded: normalized.positionsParseMeta || null,
     sourceActivityTypeCounts: sourceActivityTypeCounts,
     canonicalActivityTypeCounts: canonicalActivityTypeCounts,
     activitySubtypeCounts: activitySubtypeCounts,
@@ -258,6 +293,37 @@ function etradePreviewLabSanitizeActivityRow_(activity) {
     replayOutcome: activity.replayOutcome || '',
     intraFileOutcome: activity.intraFileOutcome || '',
     reviewRequired: !!activity.reviewRequired
+  };
+}
+
+function etradePreviewLabSanitizeHoldingsRow_(holding) {
+  return {
+    sourceRowIndex: holding.sourceRowIndex,
+    symbol: holding.ticker || holding.sourceSecurityKey || '',
+    quantity: holding.quantity,
+    currentPrice: holding.currentPrice,
+    marketValue: holding.marketValue,
+    providerCostBasis: holding.providerCostBasis,
+    unrealizedGain: holding.unrealizedGain,
+    openLotCount: holding.openLotCount,
+    authority: holding.authority || '',
+    reviewRequired: !!holding.reviewRequired
+  };
+}
+
+function etradePreviewLabSanitizeTaxLotRow_(lot) {
+  return {
+    sourceRowIndex: lot.sourceRowIndex,
+    symbol: lot.ticker || '',
+    acquisitionDate: lot.acquisitionDate || '',
+    quantity: lot.remainingQuantity != null ? lot.remainingQuantity : lot.originalQuantity,
+    pricePaid: lot.originalCostBasis,
+    currentPrice: lot.currentPrice,
+    marketValue: lot.currentValue,
+    unrealizedGain: lot.unrealizedGain,
+    washSaleAdjusted: !!lot.washSaleAdjusted,
+    lotAuthority: lot.lotAuthority || '',
+    reviewRequired: !!lot.reviewRequired
   };
 }
 

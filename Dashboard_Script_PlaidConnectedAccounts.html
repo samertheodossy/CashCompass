@@ -160,6 +160,8 @@ function plaidMainEnsureStyles_() {
     '.plaid-main-collapsed-review-status{color:#444}',
     '.plaid-main-collapsed-review-status.plaid-main-review-up-to-date{color:#196f3d}',
     '.plaid-main-collapsed-review-status.plaid-main-review-needs{color:#7d6608;font-weight:600}',
+    '.plaid-main-provider-timing{margin-top:4px;font-size:12px;line-height:1.45}',
+    '.plaid-main-review-timing{margin:-2px 0 12px}',
     '@media (max-width:640px){',
     '.plaid-main-account-header{gap:6px}',
     '.plaid-main-collapsed-review-summary{padding:6px 8px;font-size:12px}',
@@ -351,6 +353,44 @@ function plaidMainFormatImportedAt_(iso) {
   return datePart + ' at ' + timePart;
 }
 
+function plaidMainFindPreviewFactRow_(accountPreview, factType) {
+  return (accountPreview.rows || []).filter(function(row) {
+    return String(row.factType || '') === String(factType || '');
+  })[0] || null;
+}
+
+function plaidMainProviderBalanceEffectiveAt_(accountPreview) {
+  var row = plaidMainFindPreviewFactRow_(accountPreview, 'CURRENT_BALANCE');
+  if (!row) return '';
+  return String(row.effectiveAsOf ||
+    (row.candidate && row.candidate.providerEffectiveAsOf) || '').trim();
+}
+
+function plaidMainProviderImportTiming_(accountPreview, preview) {
+  var balanceRow = plaidMainFindPreviewFactRow_(accountPreview, 'CURRENT_BALANCE');
+  return {
+    retrievedAt: String((preview && preview.observedAt) ||
+      (balanceRow && balanceRow.observedAt) || ''),
+    balanceEffectiveAt: plaidMainProviderBalanceEffectiveAt_(accountPreview)
+  };
+}
+
+function plaidMainRenderProviderImportTiming_(accountPreview, preview) {
+  if (!accountPreview) return null;
+  var timing = plaidMainProviderImportTiming_(accountPreview, preview);
+  var wrap = plaidMainElement_('div', 'plaid-main-provider-timing muted');
+  if (timing.retrievedAt) {
+    wrap.appendChild(plaidMainElement_('div', '',
+      'Plaid retrieved: ' + plaidMainFormatImportedAt_(timing.retrievedAt)));
+  }
+  var balanceAsOf = timing.balanceEffectiveAt
+    ? plaidMainFormatImportedAt_(timing.balanceEffectiveAt)
+    : '';
+  wrap.appendChild(plaidMainElement_('div', '',
+    'Provider balance as of: ' + (balanceAsOf || 'not reported by bank feed')));
+  return wrap;
+}
+
 function plaidMainFormatMoney_(value, currency) {
   var number = Number(value);
   if (!Number.isFinite(number)) return PLAID_MAIN_MISSING_;
@@ -500,6 +540,29 @@ function plaidMainExistingCreditLeft_(legacy) {
     Number(plaidMainLegacyValue_(legacy, 'CREDIT_LIMIT')),
     Number(plaidMainLegacyValue_(legacy, 'CURRENT_BALANCE'))
   );
+}
+
+function plaidMainBuildCashBalanceRow_(config, previewRow, applyContext) {
+  if (!previewRow || !previewRow.candidate) return null;
+  var importedNum = Number(previewRow.candidate.numericValue);
+  var currency = previewRow.candidate.currencyOrUnit || previewRow.candidate.currency || 'USD';
+  var monthLabel = applyContext && applyContext.monthLabel
+    ? String(applyContext.monthLabel) : '';
+  var existingNum = applyContext
+    ? Number(applyContext.monthBalance || 0)
+    : NaN;
+  if (!applyContext || !Number.isFinite(existingNum)) existingNum = 0;
+  var itemLabel = monthLabel ? config.label + ' (' + monthLabel + ')' : config.label;
+  return {
+    item: itemLabel,
+    cashCompass: plaidMainFormatMoney_(existingNum, currency),
+    imported: plaidMainFormatMoney_(importedNum, currency),
+    change: plaidMainFormatCurrencyChange_(existingNum, importedNum, currency),
+    writerField: config.writerField || '',
+    factType: previewRow.factType,
+    applyKey: PLAID_MAIN_CASH_APPLY_KEYS_[previewRow.factType] ? previewRow.factType : '',
+    technical: previewRow
+  };
 }
 
 function plaidMainBuildCurrencyRow_(config, previewRow, legacyKey, legacy, accountDomain) {
@@ -722,6 +785,8 @@ function plaidMainBuildDomainReview_(accountPreview, domain, preview) {
     if (config.kind === 'dueDate') built = plaidMainBuildDueDateRow_(previewRow, legacy, preview);
     else if (config.kind === 'date') {
       built = plaidMainBuildDateRow_(config, previewRow, factType, legacy);
+    } else if (domain === 'CASH' && factType === 'CURRENT_BALANCE') {
+      built = plaidMainBuildCashBalanceRow_(config, previewRow, accountPreview.cashCompassApplyContext);
     } else {
       built = plaidMainBuildCurrencyRow_(config, previewRow,
         plaidMainLegacyKeyForFact_(factType), legacy, domain);
@@ -1280,6 +1345,11 @@ function plaidMainRenderPreviewAccount_(domain, connection, account, accountCard
   if (reviewPanelId) panel.id = reviewPanelId;
   var reviewWrap = plaidMainElement_('div', 'plaid-main-review');
   reviewWrap.appendChild(plaidMainElement_('div', 'plaid-main-review-title', 'Review imported changes'));
+  var providerTiming = plaidMainRenderProviderImportTiming_(accountPreview, preview);
+  if (providerTiming) {
+    providerTiming.className = 'plaid-main-provider-timing plaid-main-review-timing muted';
+    reviewWrap.appendChild(providerTiming);
+  }
 
   if (!(accountPreview.rows || []).length) {
     reviewWrap.appendChild(plaidMainElement_('div', 'muted',
@@ -1499,6 +1569,13 @@ function plaidMainBuildAccountCard_(domain, connection, account) {
   var importedAt = plaidMainLastImportedAt_(connection, account);
   accountCard.appendChild(plaidMainElement_('div', 'muted',
     'Last imported: ' + (importedAt ? plaidMainFormatImportedAt_(importedAt) : 'Not yet imported')));
+  if (hasPreview && preview) {
+    var accountPreview = (preview.accounts || []).filter(function(row) {
+      return String(row.protectedAccountKey || '') === String(account.protectedAccountKey || '');
+    })[0];
+    var providerTiming = plaidMainRenderProviderImportTiming_(accountPreview, preview);
+    if (providerTiming) accountCard.appendChild(providerTiming);
+  }
 
   if (hasPreview && collapsed) {
     var summary = plaidMainRenderCollapsedReviewSummary_(connection, account, preview);

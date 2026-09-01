@@ -979,16 +979,21 @@ function plaidImportFetchPreviewMappedCore_(connectionKey, options) {
       accountPreview.cashCompassLegacy = confirmedFactsByKey[accountPreview.protectedAccountKey] ||
         plaidImportExistingFacts_(mapping.stableAccountId);
       accountPreview.aprSourcePreference = aprPreferences[accountPreview.protectedAccountKey] || null;
+      var reviewDomain = '';
+      try {
+        reviewDomain = plaidImportReviewDomainForStableAccount_(mapping.stableAccountId, account);
+      } catch (_domainErr) {
+        reviewDomain = '';
+      }
+      if (reviewDomain === 'CASH') {
+        plaidImportEnrichCashApplyContext_(accountPreview, {
+          reviewAnchorDate: plaidImportReviewAnchorDate_()
+        });
+      }
       if (options.persistBaselines !== false) {
         if (!targetAccountKey ||
             targetAccountKey !== String(accountPreview.protectedAccountKey || '')) {
           return;
-        }
-        var reviewDomain = '';
-        try {
-          reviewDomain = plaidImportReviewDomainForStableAccount_(mapping.stableAccountId, account);
-        } catch (_domainErr) {
-          reviewDomain = '';
         }
         if (reviewDomain === 'DEBT' || reviewDomain === 'CASH') {
           var baseline = plaidImportCreateReviewBaseline_(
@@ -1041,6 +1046,9 @@ function plaidImportRefreshPreviewAccountAfterApply_(previewResult, connectionKe
   var aprPref = accountPreview.aprSourcePreference || null;
   var reviewDomain = plaidImportReviewDomainForStableAccount_(stableAccountId, account);
   accountPreview.cashCompassLegacy = plaidImportExistingFacts_(stableAccountId);
+  if (reviewDomain === 'CASH') {
+    plaidImportEnrichCashApplyContext_(accountPreview, previewResult);
+  }
   var baseline = plaidImportCreateReviewBaseline_(
     accountPreview, aprPref, previewResult.observedAt, reviewDomain, accountKey);
   accountPreview.reviewObservedAt = baseline.observedAt;
@@ -1189,11 +1197,43 @@ function plaidImportFactsHashPayload_(legacy) {
   return out;
 }
 
-function plaidImportCashFactsHashPayload_(legacy) {
+function plaidImportCashFactsHashPayload_(legacy, applyContext) {
+  applyContext = applyContext || null;
+  if (applyContext && applyContext.balanceMonthKey) {
+    return {
+      APPLY_MONTH: String(applyContext.balanceMonthKey || ''),
+      CURRENT_BALANCE: applyContext.hasMonthValue ? applyContext.monthBalance : 0
+    };
+  }
   var entry = legacy && legacy.CURRENT_BALANCE;
   var val = entry && Object.prototype.hasOwnProperty.call(entry, 'value') ? entry.value : entry;
   if (val !== null && val !== undefined && val !== '') return { CURRENT_BALANCE: val };
   return {};
+}
+
+function plaidImportEnrichCashApplyContext_(accountPreview, previewMeta) {
+  accountPreview = accountPreview || {};
+  previewMeta = previewMeta || {};
+  var stableAccountId = String(accountPreview.mapping && accountPreview.mapping.stableAccountId || '');
+  if (!stableAccountId) return;
+  var balanceRow = plaidImportFindPreviewRow_(accountPreview.rows || [], 'CURRENT_BALANCE');
+  var balanceDate = plaidImportBalanceDateFromPreview_(balanceRow, previewMeta);
+  var accountName = plaidImportResolveCashAccountName_(stableAccountId);
+  var monthRead = readBankAccountMonthBalanceForDate_(accountName, balanceDate);
+  accountPreview.cashCompassApplyContext = {
+    balanceDate: balanceDate,
+    monthLabel: monthRead.monthLabel,
+    monthBalance: monthRead.monthBalance,
+    hasMonthValue: !!monthRead.hasMonthValue,
+    balanceMonthKey: monthRead.balanceMonthKey
+  };
+}
+
+function plaidImportCurrentCashApplyValue_(legacy, applyContext, applyKey) {
+  if (String(applyKey || '') === 'CURRENT_BALANCE' && applyContext) {
+    return applyContext.hasMonthValue ? applyContext.monthBalance : 0;
+  }
+  return plaidImportCurrentLegacyValue_(legacy, applyKey);
 }
 
 function plaidImportCashCandidatesHashPayload_(accountPreview) {
@@ -1228,9 +1268,9 @@ function plaidImportCandidatesHashPayload_(accountPreview, aprPref, domain) {
   return out;
 }
 
-function plaidImportFactsHashPayloadForDomain_(legacy, domain) {
+function plaidImportFactsHashPayloadForDomain_(legacy, domain, applyContext) {
   if (String(domain || '').toUpperCase() === 'CASH') {
-    return plaidImportCashFactsHashPayload_(legacy);
+    return plaidImportCashFactsHashPayload_(legacy, applyContext);
   }
   return plaidImportFactsHashPayload_(legacy);
 }
@@ -1254,7 +1294,8 @@ function plaidImportCreateReviewBaseline_(accountPreview, aprPref, connectionObs
   var stableAccountId = String(accountPreview.mapping && accountPreview.mapping.stableAccountId || '');
   var resolvedAccountKey = String(accountKey || accountPreview.protectedAccountKey || '');
   var baselineFactsHash = plaidImportStableJsonHash_(
-    plaidImportFactsHashPayloadForDomain_(legacy, reviewDomain));
+    plaidImportFactsHashPayloadForDomain_(legacy, reviewDomain,
+      accountPreview.cashCompassApplyContext || null));
   var candidateHash = plaidImportStableJsonHash_(
     plaidImportCandidatesHashPayload_(accountPreview, aprPref, reviewDomain));
   return {
@@ -1670,7 +1711,8 @@ function plaidImportApplyCashUpdates_(payload) {
   })[0];
   if (!accountPreview) throw new Error('Imported preview is unavailable. Import Data again.');
   var currentLegacy = accountPreview.cashCompassLegacy || {};
-  if (plaidImportStableJsonHash_(plaidImportFactsHashPayloadForDomain_(currentLegacy, 'CASH')) !== baseline.baselineFactsHash) {
+  if (plaidImportStableJsonHash_(plaidImportFactsHashPayloadForDomain_(currentLegacy, 'CASH',
+      accountPreview.cashCompassApplyContext || null)) !== baseline.baselineFactsHash) {
     throw new Error('CashCompass values changed since review. Import Data again.');
   }
   if (plaidImportStableJsonHash_(plaidImportCandidatesHashPayload_(accountPreview, null, 'CASH')) !== baseline.candidateHash) {
@@ -1681,7 +1723,8 @@ function plaidImportApplyCashUpdates_(payload) {
   var plan = [];
   selectedKeys.forEach(function(applyKey) {
     var resolved = plaidImportResolveCashApplyValue_(accountPreview);
-    var currentRaw = plaidImportCurrentLegacyValue_(currentLegacy, applyKey);
+    var currentRaw = plaidImportCurrentCashApplyValue_(currentLegacy,
+      accountPreview.cashCompassApplyContext || null, applyKey);
     if (plaidImportCashApplyValuesEqual_(currentRaw, resolved.value)) return;
     var balanceRow = plaidImportFindPreviewRow_(accountPreview.rows || [], 'CURRENT_BALANCE');
     plan.push({

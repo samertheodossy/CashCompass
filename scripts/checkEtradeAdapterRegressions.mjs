@@ -23,6 +23,7 @@ const configSource = read('config.js');
 const identitySource = read('financial_identity.js');
 const foundationSource = read('investment_portfolio_foundation.js');
 const etradeSource = read('investment_etrade_csv.js');
+const etradePositionsSource = read('investment_etrade_positions_pdf.js');
 const adaptersSource = read('investment_adapters.js');
 const activitySource = read('investment_activity.js');
 const dashboardInvestments = read('Dashboard_Script_AssetsBankInvestments.html');
@@ -51,6 +52,7 @@ vm.runInContext(`
   ${extractFunction(activitySource, 'parseInvestmentImportNumber_')}
 `, context, { filename: 'investment_activity_partial.js' });
 vm.runInContext(etradeSource, context, { filename: 'investment_etrade_csv.js' });
+vm.runInContext(etradePositionsSource, context, { filename: 'investment_etrade_positions_pdf.js' });
 vm.runInContext(adaptersSource, context, { filename: 'investment_adapters.js' });
 
 const minimalCsv = fixture('synthetic_etrade_txn_minimal.csv');

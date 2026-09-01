@@ -153,7 +153,7 @@
   <div class="wrap">
     <header>
       <h1>E*TRADE Preview Lab</h1>
-      <p class="sub">Central admin-only — validate E*TRADE Transactions CSV normalization before any import exists.
+      <p class="sub">Central admin-only — validate E*TRADE Transactions CSV and Expanded Positions PDF text before any import exists.
         <a href="?view=admin" style="color:#2563eb;text-decoration:none;">← Admin Diagnostics</a>
       </p>
     </header>
@@ -164,17 +164,20 @@
 
     <div class="card">
       <h2>Upload &amp; metadata</h2>
-      <label for="csvFile">E*TRADE Transactions CSV</label>
+      <label for="csvFile">E*TRADE Transactions CSV (optional)</label>
       <input type="file" id="csvFile" accept=".csv,text/csv">
 
-      <div class="file-meta" id="fileMeta">No file selected.</div>
+      <label for="positionsFile" style="margin-top:8px;">Expanded Positions PDF text (optional)</label>
+      <input type="file" id="positionsFile" accept=".txt,text/plain">
+
+      <div class="file-meta" id="fileMeta">No files selected.</div>
 
       <div class="row">
         <div>
           <label for="previewSource">Preview source</label>
           <select id="previewSource">
             <option value="ETRADE_CSV">ETRADE_CSV (activity-only alias)</option>
-            <option value="ETRADE_PACKAGE">ETRADE_PACKAGE (ACTIVITY file)</option>
+            <option value="ETRADE_PACKAGE">ETRADE_PACKAGE (ACTIVITY + HOLDINGS files)</option>
           </select>
         </div>
         <div>
@@ -214,6 +217,7 @@
   <script>
     (function() {
       var csvFileEl = document.getElementById('csvFile');
+      var positionsFileEl = document.getElementById('positionsFile');
       var fileMetaEl = document.getElementById('fileMeta');
       var previewBtn = document.getElementById('previewBtn');
       var clearBtn = document.getElementById('clearBtn');
@@ -221,10 +225,26 @@
       var resultsArea = document.getElementById('resultsArea');
 
       var state = {
-        fileName: '',
-        fileSize: 0,
-        rawCsv: ''
+        csvFileName: '',
+        csvFileSize: 0,
+        rawCsv: '',
+        positionsFileName: '',
+        positionsFileSize: 0,
+        rawPositionsText: ''
       };
+
+      function updateFileMeta() {
+        var parts = [];
+        if (state.rawCsv.trim()) {
+          parts.push('CSV: ' + state.csvFileName + ' (' + formatBytes(state.csvFileSize) + ')');
+        }
+        if (state.rawPositionsText.trim()) {
+          parts.push('Positions: ' + state.positionsFileName + ' (' +
+            formatBytes(state.positionsFileSize) + ')');
+        }
+        fileMetaEl.textContent = parts.length ? parts.join(' · ') : 'No files selected.';
+        previewBtn.disabled = !(state.rawCsv.trim() || state.rawPositionsText.trim());
+      }
 
       function formatBytes(n) {
         if (!n) return '0 B';
@@ -286,6 +306,7 @@
         html += stat('Parser', data.parserVersion || '—');
         html += stat('Status', pill(true, data.reviewRequired));
         html += stat('Accepted rows', agg.acceptedActivityCount);
+        html += stat('Holdings snapshots', agg.reportedHoldingsCount || 0);
         html += stat('Unsupported rows', agg.unsupportedRowCount);
         html += stat('Warnings', agg.warningCount);
         html += stat('Exact replays', agg.exactReplayCount);
@@ -293,6 +314,13 @@
         html += stat('Duplicates', agg.duplicateCount);
         html += stat('Stable-key ambiguity', agg.stableKeyAmbiguityCount);
         html += stat('Conflicts', agg.conflictCount);
+        html += stat('Open lots', agg.openLotCount || 0);
+        html += stat('Wash-sale lots', agg.washSaleLotCount || 0);
+        html += stat('Holdings review', agg.holdingsReviewRequiredCount || 0);
+        if (agg.positionsNoiseExcluded) {
+          html += stat('Cash rows excluded', agg.positionsNoiseExcluded.cashRowsExcluded || 0);
+          html += stat('Page totals excluded', agg.positionsNoiseExcluded.pageTotalsExcluded || 0);
+        }
         html += stat('Fees (net signed)', agg.feeCount + ' · $' +
           Number(agg.feeNetTotal || 0).toFixed(2));
         html += stat('Gross fee activity', '$' +
@@ -331,6 +359,63 @@
           html += '</tbody></table></div>';
         }
 
+        html += '</div></div>';
+
+        if ((data.holdingsPreviewRows || []).length) {
+          html += '<div class="card"><h2>Holdings snapshots';
+          if (data.holdingsPreviewTruncated) {
+            html += ' <span class="muted">(first ' + data.holdingsPreviewRows.length +
+              ' of ' + data.holdingsPreviewTotal + ')</span>';
+          }
+          html += '</h2><div style="overflow-x:auto;"><table><thead><tr>' +
+            '<th>Row #</th><th>Symbol</th><th>Qty</th><th>Last price</th><th>Market value</th>' +
+            '<th>Cost basis</th><th>Unrealized G/L</th><th>Lots</th><th>Authority</th><th>Review</th>' +
+            '</tr></thead><tbody>';
+          data.holdingsPreviewRows.forEach(function(row) {
+            html += '<tr>' +
+              '<td>' + escapeHtml(row.sourceRowIndex) + '</td>' +
+              '<td>' + escapeHtml(row.symbol) + '</td>' +
+              '<td>' + escapeHtml(row.quantity) + '</td>' +
+              '<td>' + escapeHtml(row.currentPrice) + '</td>' +
+              '<td>' + escapeHtml(row.marketValue) + '</td>' +
+              '<td>' + escapeHtml(row.providerCostBasis) + '</td>' +
+              '<td>' + escapeHtml(row.unrealizedGain) + '</td>' +
+              '<td>' + escapeHtml(row.openLotCount) + '</td>' +
+              '<td>' + escapeHtml(row.authority) + '</td>' +
+              '<td>' + (row.reviewRequired ? 'yes' : '') + '</td>' +
+              '</tr>';
+          });
+          html += '</tbody></table></div></div>';
+        }
+
+        if ((data.taxLotPreviewRows || []).length) {
+          html += '<div class="card"><h2>Open tax lots';
+          if (data.taxLotPreviewTruncated) {
+            html += ' <span class="muted">(first ' + data.taxLotPreviewRows.length +
+              ' of ' + data.taxLotPreviewTotal + ')</span>';
+          }
+          html += '</h2><div style="overflow-x:auto;"><table><thead><tr>' +
+            '<th>Row #</th><th>Symbol</th><th>Acquired</th><th>Qty</th><th>Price paid</th>' +
+            '<th>Last price</th><th>Market value</th><th>Unrealized G/L</th><th>WS</th><th>Review</th>' +
+            '</tr></thead><tbody>';
+          data.taxLotPreviewRows.forEach(function(row) {
+            html += '<tr>' +
+              '<td>' + escapeHtml(row.sourceRowIndex) + '</td>' +
+              '<td>' + escapeHtml(row.symbol) + '</td>' +
+              '<td>' + escapeHtml(row.acquisitionDate) + '</td>' +
+              '<td>' + escapeHtml(row.quantity) + '</td>' +
+              '<td>' + escapeHtml(row.pricePaid) + '</td>' +
+              '<td>' + escapeHtml(row.currentPrice) + '</td>' +
+              '<td>' + escapeHtml(row.marketValue) + '</td>' +
+              '<td>' + escapeHtml(row.unrealizedGain) + '</td>' +
+              '<td>' + (row.washSaleAdjusted ? 'yes' : '') + '</td>' +
+              '<td>' + (row.reviewRequired ? 'yes' : '') + '</td>' +
+              '</tr>';
+          });
+          html += '</tbody></table></div></div>';
+        }
+
+        if ((data.activityPreviewRows || []).length) {
         html += '<div class="card"><h2>Activity preview';
         if (data.activityPreviewTruncated) {
           html += ' <span class="muted">(first ' + data.activityPreviewRows.length +
@@ -355,6 +440,7 @@
             '</tr>';
         });
         html += '</tbody></table></div></div>';
+        }
 
         resultsArea.innerHTML = html;
       }
@@ -365,12 +451,15 @@
       }
 
       function resetPreview() {
-        state.fileName = '';
-        state.fileSize = 0;
+        state.csvFileName = '';
+        state.csvFileSize = 0;
         state.rawCsv = '';
+        state.positionsFileName = '';
+        state.positionsFileSize = 0;
+        state.rawPositionsText = '';
         csvFileEl.value = '';
-        fileMetaEl.textContent = 'No file selected.';
-        previewBtn.disabled = true;
+        positionsFileEl.value = '';
+        updateFileMeta();
         statusArea.innerHTML = '';
         resultsArea.innerHTML = '';
         google.script.run
@@ -381,35 +470,60 @@
       csvFileEl.addEventListener('change', function() {
         var file = csvFileEl.files && csvFileEl.files[0];
         if (!file) {
-          resetPreview();
+          state.csvFileName = '';
+          state.csvFileSize = 0;
+          state.rawCsv = '';
+          updateFileMeta();
           return;
         }
         var reader = new FileReader();
         reader.onload = function(ev) {
-          state.fileName = file.name;
-          state.fileSize = file.size;
+          state.csvFileName = file.name;
+          state.csvFileSize = file.size;
           state.rawCsv = String(ev.target.result || '');
-          fileMetaEl.textContent = state.fileName + ' — ' + formatBytes(state.fileSize);
-          previewBtn.disabled = !state.rawCsv.trim();
+          updateFileMeta();
         };
         reader.onerror = function() {
           state.rawCsv = '';
-          previewBtn.disabled = true;
-          fileMetaEl.textContent = 'Could not read file.';
+          updateFileMeta();
+        };
+        reader.readAsText(file);
+      });
+
+      positionsFileEl.addEventListener('change', function() {
+        var file = positionsFileEl.files && positionsFileEl.files[0];
+        if (!file) {
+          state.positionsFileName = '';
+          state.positionsFileSize = 0;
+          state.rawPositionsText = '';
+          updateFileMeta();
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function(ev) {
+          state.positionsFileName = file.name;
+          state.positionsFileSize = file.size;
+          state.rawPositionsText = String(ev.target.result || '');
+          updateFileMeta();
+        };
+        reader.onerror = function() {
+          state.rawPositionsText = '';
+          updateFileMeta();
         };
         reader.readAsText(file);
       });
 
       previewBtn.addEventListener('click', function() {
-        if (!state.rawCsv.trim()) return;
+        if (!state.rawCsv.trim() && !state.rawPositionsText.trim()) return;
         previewBtn.disabled = true;
         clearBtn.disabled = true;
-        setLoading(true, 'Parsing CSV in memory…');
+        setLoading(true, 'Parsing upload(s) in memory…');
         resultsArea.innerHTML = '';
 
         var source = document.getElementById('previewSource').value;
         var payload = {
           rawCsv: state.rawCsv,
+          rawPositionsText: state.rawPositionsText,
           source: source,
           stableAccountId: document.getElementById('stableAccountId').value,
           registrationType: document.getElementById('registrationType').value,
