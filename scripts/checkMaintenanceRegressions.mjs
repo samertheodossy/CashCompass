@@ -15,6 +15,7 @@ const names = [
   'donations.js',
   'house_values.js',
   'planner_helpers.js',
+  'quick_add_payment.js',
   'PROJECT_CONTEXT.md',
   'TODO.md',
   'agents/features/bills.md',
@@ -419,5 +420,12 @@ assert.match(files['test_harness_scenarios_maintenance.js'],
   'Bill lifecycle evidence must preserve linked Cash Flow history');
 assert.match(files['test_harness_scenarios.js'], /getHarnessDonationFullEditScenario_/,
   'Full donation edit scenario must be discoverable by the harness registry');
+
+assert.match(files['quick_add_payment.js'],
+  /restoreQuickAddPaymentWriteInSpreadsheet_[\s\S]*?isCashFlowInputSheet_\([\s\S]*?applyCashFlowMoneyFormat_\(restoreCell\)/,
+  'Quick Add restore must reapply canonical Cash Flow money format');
+assert.match(files['dashboard_data.js'],
+  /function writeDashboardBillValuePreserveFormat_[\s\S]*?applyCashFlowMoneyFormat_\(cell\)/,
+  'AutoPay value writer must finish with canonical Cash Flow money format');
 
 console.log('Maintenance regression checks passed.');

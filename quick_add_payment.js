@@ -928,7 +928,7 @@ function writeActivityOperationTargetStateInSpreadsheet_(ss, target, desiredStat
       sheet.getRange(rowInfo.row, 1, 1, restored.length).setValues([restored]);
       var restoredHeaderMap = getCashFlowHeaderMap_(sheet);
       var restoredMonthCol = getMonthColumnByDate_(sheet, entryDate, 1);
-      setCurrencyCellPreserveRowFormat_(
+      setCashFlowMoneyCellPreserveRowFormat_(
         sheet,
         rowInfo.row,
         restoredMonthCol,
@@ -945,7 +945,7 @@ function writeActivityOperationTargetStateInSpreadsheet_(ss, target, desiredStat
     if (!rowInfo) throw new Error('The Cash Flow row is no longer available.');
     var headerMap = getCashFlowHeaderMap_(sheet);
     var monthCol = getMonthColumnByDate_(sheet, entryDate, 1);
-    setCurrencyCellPreserveRowFormat_(
+    setCashFlowMoneyCellPreserveRowFormat_(
       sheet,
       rowInfo.row,
       monthCol,
@@ -1075,7 +1075,11 @@ function restoreQuickAddPaymentWriteInSpreadsheet_(ss, rawReceipt) {
     return refused;
   }
 
-  before.sheet.getRange(before.row, before.column).setValue(receipt.newValue);
+  var restoreCell = before.sheet.getRange(before.row, before.column);
+  restoreCell.setValue(receipt.newValue);
+  if (isCashFlowInputSheet_(before.sheet)) {
+    applyCashFlowMoneyFormat_(restoreCell);
+  }
   SpreadsheetApp.flush();
 
   var after = inspectQuickAddWriteInSpreadsheet_(ss, receipt);

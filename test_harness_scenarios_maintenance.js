@@ -390,11 +390,13 @@ function getHarnessBillsAutopayFormatScenario_() {
       state.value = Number(cell.getValue());
       state.numberFormat = cell.getNumberFormat();
       state.display = cell.getDisplayValue();
+      state.valueType = typeof cell.getValue();
     },
     expectedOutcome: function(ctx) {
       var state = ctx.billsAutopayFormat;
       var mod = 'Bill AutoPay Format';
       ctx.assert.equals('AutoPay writes the signed expense value', state.value, -75, { module: mod });
+      ctx.assert.equals('AutoPay stores a numeric amount', state.valueType, 'number', { module: mod });
       ctx.assert.equals('AutoPay applies canonical red-negative currency format', state.numberFormat, CASH_FLOW_MONEY_FORMAT_, { module: mod });
       ctx.assert.equals('AutoPay display retains currency and negative sign', state.display, '-$75.00', { module: mod });
     }
@@ -441,7 +443,9 @@ function getHarnessBillsWeekdayAutopayGuardScenario_() {
       var monthCol = getMonthColumnByDate_(state.cashFlow, new Date(2026, 7, 3), 1);
       var cell = state.cashFlow.getRange(state.cashFlowRow, monthCol);
       state.value = cell.getValue();
+      state.numberFormat = cell.getNumberFormat();
       state.display = cell.getDisplayValue();
+      state.valueType = typeof cell.getValue();
       state.invalidValue = state.cashFlow
         .getRange(state.invalidCashFlowRow, monthCol)
         .getValue();
@@ -467,6 +471,9 @@ function getHarnessBillsWeekdayAutopayGuardScenario_() {
       var state = ctx.billsWeekdayAutopayGuard;
       var mod = 'Bill Weekly AutoPay Guard';
       ctx.assert.equals('Sunday occurrence writes exactly once', Number(state.value), -75, { module: mod });
+      ctx.assert.equals('Sunday occurrence stores a numeric amount', state.valueType, 'number', { module: mod });
+      ctx.assert.equals('Sunday occurrence applies canonical red-negative currency format',
+        state.numberFormat, CASH_FLOW_MONEY_FORMAT_, { module: mod });
       ctx.assert.equals('Sunday occurrence keeps canonical display', state.display, '-$75.00', { module: mod });
       ctx.assert.equals('Activity stores the calendar Sunday without timezone drift', state.autopayDates.join(','), '2026-08-02', { module: mod });
       ctx.assert.equals('Monday recurrence starts on August 3 rather than Due Day 1', state.mondayCandidates[0], '2026-08-03', { module: mod });

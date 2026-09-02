@@ -3870,6 +3870,11 @@ function writeDashboardBillValuePreserveFormat_(sheet, row, col, value) {
     .setHorizontalAlignment(horizontalAlignment)
     .setVerticalAlignment(verticalAlignment)
     .setWrap(wrap);
+
+  // AutoPay is the sole caller. Blank month cells carry General formatting, so
+  // preserving their number format would leave bare values like -75. Finish
+  // with the canonical Cash Flow red-negative currency mask every time.
+  applyCashFlowMoneyFormat_(cell);
 }
 
 /**
@@ -4209,8 +4214,9 @@ function skipDashboardBill(skipKey) {
       // canonical currency format only when the row has no populated sibling
       // yet (e.g. a brand-new row).
       if (!copyNearestAmountFormatInRow_(info.sheet, info.row, info.col)) {
-        cell.setNumberFormat('$#,##0.00;-$#,##0.00');
+        // Fall through to canonical Cash Flow money format below.
       }
+      applyCashFlowMoneyFormat_(cell);
     }
   }
 

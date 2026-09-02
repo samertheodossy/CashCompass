@@ -373,6 +373,14 @@ function addCurrencyToCellPreserveRowFormat_(sheet, row, col, amount, firstDataC
  */
 var CASH_FLOW_MONEY_FORMAT_ = '$#,##0.00;[Red]-$#,##0.00';
 
+function isCashFlowInputSheet_(sheet) {
+  try {
+    return String(sheet.getName() || '').indexOf('INPUT - Cash Flow ') === 0;
+  } catch (_sheetNameErr) {
+    return false;
+  }
+}
+
 function applyCashFlowMoneyFormat_(range) {
   range.setNumberFormat(CASH_FLOW_MONEY_FORMAT_);
 }
