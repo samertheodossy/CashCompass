@@ -92,7 +92,8 @@ assert(bridge.includes('plaidImportEnsureIdentityFoundationForConnected_') &&
   bridge.includes('ensureFinancialIdentityFoundationForConnectedAccounts_') &&
   bridge.includes('FINANCIAL_IDENTITY_REVIEW_REQUIRED') &&
   bridge.includes('PLAID_IMPORT_IDENTITY_REVIEW_ERROR_') &&
-  bridge.includes('runPlaidImportIdentitySelfInitDiagnostic'),
+  bridge.includes('runPlaidImportIdentitySelfInitDiagnostic') &&
+  !/plaidImportEnsureIdentityReadyForConnected_[\s\S]{0,400}registry\.accounts \|\| \[\]\)\.length/.test(bridge),
   'Connected path does not self-init identity foundation safely');
 assert(!/appendRow|setValue|setValues|appendFinancialFact|runDebtPlanner/i.test(bridge),
   'bridge file must not contain direct workbook or Planning writers');

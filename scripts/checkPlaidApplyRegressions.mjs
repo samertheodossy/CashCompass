@@ -163,6 +163,11 @@ assert(client.includes('plaidMainPatchAccountCard_') &&
   /plaidMainApplySelectedUpdates_[\s\S]{0,1800}plaidMainPatchAccountCard_/.test(client),
   'Import and Apply must patch only the affected account card and defer planner refresh');
 
+assert(bridge.includes('function plaidImportInvalidateAppliedAccountCaches_') &&
+  /plaidImportRefreshPreviewAccountAfterApply_[\s\S]{0,1200}plaidImportInvalidateAppliedAccountCaches_/.test(bridge) &&
+  /plaidImportRefreshPreviewAccountAfterApply_[\s\S]{0,800}plaidImportExistingFacts_/.test(bridge),
+  'post-Apply preview refresh must invalidate cached legacy facts before rebuilding review state');
+
 assert(bridge.includes('plaidImportAccountReviewObservedAt_') &&
   bridge.includes('targetProtectedAccountKey') &&
   /plaidImportFetchPreviewMappedCore_[\s\S]{0,2500}targetProtectedAccountKey/.test(bridge) &&

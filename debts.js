@@ -1296,12 +1296,16 @@ function updateDebtField(payload) {
     newRawForLog = rawValue;
   }
 
-  recalcDebtPctAvailForRow_(sheet, targetRow, {
+  const pctCols = {
     creditLimitCol: headerMap.creditLimitColZero,
     creditLeftCol: headerMap.creditLeftColZero,
     balanceCol: headerMap.balanceColZero,
     pctAvailCol: headerMap.pctAvailColZero
-  });
+  };
+  if (fieldName === 'Account Balance' || fieldName === 'Credit Limit') {
+    recalcCreditLeftFromLimitBalance_(sheet, targetRow, pctCols);
+  }
+  recalcDebtPctAvailForRow_(sheet, targetRow, pctCols);
 
   // Activity log: field-edit event. Non-monetary (Amount renders "—") —
   // the action label carries the new value in context (e.g. "Updated
@@ -1368,6 +1372,35 @@ function updateDebtField(payload) {
     ok: true,
     message: 'Debt saved.'
   };
+}
+
+function recalcCreditLeftFromLimitBalance_(sheet, row, cols) {
+  if (
+    cols.creditLimitCol === -1 ||
+    cols.creditLeftCol === -1 ||
+    cols.balanceCol === -1
+  ) {
+    return;
+  }
+
+  const creditLimit = toNumber_(sheet.getRange(row, cols.creditLimitCol + 1).getValue());
+  const balance = toNumber_(sheet.getRange(row, cols.balanceCol + 1).getValue());
+  const creditLeft = round2_(creditLimit - balance);
+  const cell = sheet.getRange(row, cols.creditLeftCol + 1);
+  copyNeighborFormatInRow_(sheet, row, cols.creditLeftCol + 1, 1);
+  cell.setValue(creditLeft);
+  applyCurrencyFormat_(cell);
+}
+
+function recalcDebtDerivedCreditFieldsForRow_(sheet, row, headerMap) {
+  const cols = {
+    creditLimitCol: headerMap.creditLimitColZero,
+    creditLeftCol: headerMap.creditLeftColZero,
+    balanceCol: headerMap.balanceColZero,
+    pctAvailCol: headerMap.pctAvailColZero
+  };
+  recalcCreditLeftFromLimitBalance_(sheet, row, cols);
+  recalcDebtPctAvailForRow_(sheet, row, cols);
 }
 
 function recalcDebtPctAvailForRow_(sheet, row, cols) {

@@ -320,8 +320,10 @@ function setDebtPanelMode(mode) {
     // count, e.g. "Show inactive debts (2)".
     if (typeof refreshInactiveDebts_ === 'function') refreshInactiveDebts_();
   }
-  if (mode === 'connected' && typeof loadPlaidConnectedAccounts_ === 'function') {
-    loadPlaidConnectedAccounts_(false, 'DEBT');
+  if (mode === 'connected' && typeof plaidMainReloadConnectedCatalog_ === 'function') {
+    plaidMainReloadConnectedCatalog_('DEBT');
+  } else if (mode === 'connected' && typeof loadPlaidConnectedAccounts_ === 'function') {
+    loadPlaidConnectedAccounts_(true, 'DEBT');
   }
 }
 
@@ -1273,6 +1275,9 @@ function createDebtAccount() {
       // to pick it up without requiring a full app reload.
       if (typeof loadDashboardActionSections === 'function') {
         loadDashboardActionSections();
+      }
+      if (typeof plaidMainInvalidateMetadataCache_ === 'function') {
+        plaidMainInvalidateMetadataCache_('DEBT');
       }
     })
     .withFailureHandler(function(err) {

@@ -66,9 +66,9 @@ assert(assetsClient.includes("if (connectedMode && typeof loadPlaidConnectedAcco
   assetsClient.includes("loadPlaidConnectedAccounts_(false, 'CASH')") &&
   assetsClient.includes("if (m === 'connected' && typeof loadPlaidConnectedAccounts_ === 'function')") &&
   assetsClient.includes("loadPlaidConnectedAccounts_(false, 'INVESTMENT')") &&
-  debtsClient.includes("if (mode === 'connected' && typeof loadPlaidConnectedAccounts_ === 'function')") &&
-  debtsClient.includes("loadPlaidConnectedAccounts_(false, 'DEBT')"),
-  'Connected data is not loaded only when its contextual panel is selected');
+  debtsClient.includes("if (mode === 'connected' && typeof plaidMainReloadConnectedCatalog_ === 'function')") &&
+  debtsClient.includes("plaidMainReloadConnectedCatalog_('DEBT')"),
+  'Debt Connected tab must force-refresh the authoritative catalog when selected');
 assert(trackedEditorsClient.includes('function currentTrackedEditorMode_(') &&
   assetsClient.includes("currentTrackedEditorMode_('bank', ['update', 'add', 'manage', 'connected']) === 'update'") &&
   assetsClient.includes("currentTrackedEditorMode_('inv', ['update', 'add', 'manage', 'connected']) === 'update'") &&
@@ -115,6 +115,8 @@ assert(client.includes('plaidMainSaveAprPreference_') &&
   'APR source preference and Credit Left derivation contract are missing');
 assert(client.includes('PLAID_MAIN_DEBT_CANONICAL_') &&
   client.includes('Credit Left') && client.includes('CREDIT_LEFT_DERIVED') &&
+  client.includes('plaidMainProviderAvailableCreditInconsistent_') &&
+  client.includes('Exceeds CashCompass credit limit'),
   client.includes('NEXT_PAYMENT_DATE') && client.includes('Due Date') &&
   client.includes('reviewAnchorDate') &&
   !/plaidMainBuildDueDateRow_[\s\S]{0,400}toLocaleString/.test(client),

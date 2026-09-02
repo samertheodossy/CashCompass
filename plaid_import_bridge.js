@@ -48,8 +48,9 @@ var PLAID_IMPORT_APR_SOURCE_SEMANTICS_ = {
  *   CREDIT_LIMIT → Credit Limit
  *   MINIMUM_PAYMENT → Minimum Payment
  *   NEXT_PAYMENT_DATE → Due Date (recurring day-of-month)
- *   AVAILABLE_CREDIT → Provider Available Credit (informational only)
- *   Credit Left review value is derived as Credit Limit − Account Balance
+ *   AVAILABLE_CREDIT → Provider Available Credit (informational only; never Credit Left)
+ *   Credit Left review value is derived as CashCompass Credit Limit − imported balance
+ *   Canonical Credit Left on INPUT - Debts is Credit Limit − Account Balance
  *   Int Rate → selected Plaid APR sourceSemantic after explicit user choice
  * Statement Balance / Statement Date remain informational until separately approved.
  */
@@ -537,6 +538,14 @@ function plaidImportComparisonTargets() {
   });
 }
 
+function plaidImportInvalidateAppliedAccountCaches_(stableAccountId) {
+  var session = PLAID_IMPORT_REQUEST_SESSION_;
+  if (!session) return;
+  delete session.existingFactsCache[String(stableAccountId || '')];
+  session.debtLegacyIndex = null;
+  session.cashLegacyIndex = null;
+}
+
 function plaidImportExistingFacts_(stableAccountId) {
   var cacheKey = String(stableAccountId || '');
   var session = PLAID_IMPORT_REQUEST_SESSION_;
@@ -825,8 +834,6 @@ function plaidImportNormalizeConnectedDomain_(domain) {
 
 function plaidImportEnsureIdentityReadyForConnected_(ss) {
   var workbook = ss || plaidImportWorkbook_();
-  var registry = financialIdentityReadRegistry_(workbook);
-  if ((registry.accounts || []).length > 0) return registry;
   plaidImportEnsureIdentityFoundationForConnected_(workbook);
   return financialIdentityReadRegistry_(workbook);
 }
@@ -1081,6 +1088,7 @@ function plaidImportRefreshPreviewAccountAfterApply_(previewResult, connectionKe
   if (!account) return previewResult;
   var aprPref = accountPreview.aprSourcePreference || null;
   var reviewDomain = plaidImportReviewDomainForStableAccount_(stableAccountId, account);
+  plaidImportInvalidateAppliedAccountCaches_(stableAccountId);
   accountPreview.cashCompassLegacy = plaidImportExistingFacts_(stableAccountId);
   if (reviewDomain === 'CASH') {
     plaidImportEnrichCashApplyContext_(accountPreview, previewResult);
@@ -1616,6 +1624,11 @@ function plaidImportApplyDebtUpdates_(payload) {
             stageTimingMs: timing.finish()
           };
         }
+      }
+      var writeSession = plaidImportDebtApplyWriteSession_();
+      if (writeSession) {
+        recalcDebtDerivedCreditFieldsForRow_(writeSession.sheet, writeSession.targetRow,
+          writeSession.headerMap);
       }
     } finally {
       plaidImportEndDebtApplyWriteSession_();

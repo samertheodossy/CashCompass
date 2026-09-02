@@ -287,6 +287,11 @@ function plaidMainSyncActiveMetadataCache_(domain) {
   plaidMainState_.metadataByDomain[key] = plaidMainState_.data;
 }
 
+function plaidMainReloadConnectedCatalog_(domain) {
+  plaidMainInvalidateMetadataCache_(domain);
+  loadPlaidConnectedAccounts_(true, domain);
+}
+
 function loadPlaidConnectedAccounts_(force, domain) {
   plaidMainEnsureStyles_();
   var targetDomain = plaidMainDomain_(domain);
@@ -587,8 +592,18 @@ function plaidMainDerivedCreditLeft_(limit, balance) {
   return Math.round((limit - balance) * 100) / 100;
 }
 
+function plaidMainAuthoritativeCreditLimit_(legacy, limitRow) {
+  var ccLimit = Number(plaidMainLegacyValue_(legacy, 'CREDIT_LIMIT'));
+  if (Number.isFinite(ccLimit)) return ccLimit;
+  if (limitRow && limitRow.candidate) {
+    var candidateLimit = Number(limitRow.candidate.numericValue);
+    if (Number.isFinite(candidateLimit)) return candidateLimit;
+  }
+  return NaN;
+}
+
 function plaidMainExistingCreditLeft_(legacy) {
-  var stored = plaidMainLegacyValue_(legacy, 'AVAILABLE_CREDIT');
+  var stored = plaidMainLegacyValue_(legacy, 'CREDIT_LEFT');
   if (stored !== null && stored !== '') return Number(stored);
   return plaidMainDerivedCreditLeft_(
     Number(plaidMainLegacyValue_(legacy, 'CREDIT_LIMIT')),
@@ -685,10 +700,12 @@ function plaidMainBuildDueDateRow_(previewRow, legacy, preview) {
 function plaidMainBuildDerivedCreditLeftRow_(byType, legacy) {
   var balanceRow = byType.CURRENT_BALANCE;
   var limitRow = byType.CREDIT_LIMIT;
-  if (!balanceRow || !limitRow || !balanceRow.candidate || !limitRow.candidate) return null;
+  if (!balanceRow || !balanceRow.candidate) return null;
   var importedBalance = Number(balanceRow.candidate.numericValue);
-  var importedLimit = Number(limitRow.candidate.numericValue);
-  var importedDerived = plaidMainDerivedCreditLeft_(importedLimit, importedBalance);
+  if (!Number.isFinite(importedBalance)) return null;
+  var authoritativeLimit = plaidMainAuthoritativeCreditLimit_(legacy, limitRow);
+  if (!Number.isFinite(authoritativeLimit)) return null;
+  var importedDerived = plaidMainDerivedCreditLeft_(authoritativeLimit, importedBalance);
   if (!Number.isFinite(importedDerived)) return null;
   var existingNum = plaidMainExistingCreditLeft_(legacy);
   var currency = balanceRow.candidate.currencyOrUnit || balanceRow.candidate.currency || 'USD';
@@ -703,21 +720,31 @@ function plaidMainBuildDerivedCreditLeftRow_(byType, legacy) {
   };
 }
 
+function plaidMainProviderAvailableCreditInconsistent_(importedNum, legacy) {
+  if (!Number.isFinite(importedNum)) return '';
+  var ccLimit = Number(plaidMainLegacyValue_(legacy, 'CREDIT_LIMIT'));
+  if (Number.isFinite(ccLimit) && importedNum > ccLimit) {
+    return 'Exceeds CashCompass credit limit';
+  }
+  var derivedLeft = plaidMainDerivedCreditLeft_(
+    Number(plaidMainLegacyValue_(legacy, 'CREDIT_LIMIT')),
+    Number(plaidMainLegacyValue_(legacy, 'CURRENT_BALANCE')));
+  if (Number.isFinite(derivedLeft) && Math.abs(importedNum - derivedLeft) > 0.009) {
+    return 'Inconsistent with Credit Limit − Balance';
+  }
+  return '';
+}
+
 function plaidMainBuildProviderAvailableCreditRow_(previewRow, legacy) {
   if (!previewRow || !previewRow.candidate) return null;
-  var existingRaw = plaidMainLegacyValue_(legacy, 'AVAILABLE_CREDIT');
-  var existingNum = existingRaw === null || existingRaw === '' ? NaN : Number(existingRaw);
   var importedNum = Number(previewRow.candidate.numericValue);
   var currency = previewRow.candidate.currencyOrUnit || previewRow.candidate.currency || 'USD';
-  var change = 'New';
-  if (Number.isFinite(existingNum)) {
-    change = importedNum === existingNum ? 'Same' : 'Changed';
-  }
+  var inconsistency = plaidMainProviderAvailableCreditInconsistent_(importedNum, legacy);
   return {
     item: 'Provider Available Credit',
     cashCompass: PLAID_MAIN_MISSING_,
     imported: plaidMainFormatMoney_(importedNum, currency),
-    change: change,
+    change: inconsistency ? ('Needs review — ' + inconsistency) : 'Informational',
     informational: true,
     factType: 'AVAILABLE_CREDIT',
     technical: previewRow
@@ -1698,10 +1725,9 @@ function plaidMainSaveMapping_(domain, connection, account, stableAccountId, sta
       result.mapping, stableAccountId, status);
     plaidMainState_.associationEditing[plaidMainAssociationKey_(connection, account)] = false;
     plaidMainClearAccountReviewState_(connection, account);
-    plaidMainSyncActiveMetadataCache_(domain);
+    plaidMainReloadConnectedCatalog_(domain);
     plaidMainSetAccountMessage_(connection, account,
       status === 'IGNORED' ? 'Provider account ignored.' : 'CashCompass account associated.', false, false);
-    plaidMainRenderDomain_(domain);
   }, function(err) {
     plaidMainSetAccountMessage_(connection, account, plaidMainUserMessage_(err), true, false);
     plaidMainRenderDomain_(domain);

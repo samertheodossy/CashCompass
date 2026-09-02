@@ -771,7 +771,7 @@ function debtImportLegacyIndex_(ss, accounts) {
   var cols = { name: headers.indexOf('Account Name'), balance: headers.indexOf('Account Balance'),
     apr: headers.indexOf('Int Rate'), minimum: headers.indexOf('Minimum Payment'),
     due: headers.indexOf('Due Date'), limit: headers.indexOf('Credit Limit'),
-    available: headers.indexOf('Credit Left') };
+    creditLeft: headers.indexOf('Credit Left') };
   var byName = {};
   for (var r = 1; r < display.length; r++) {
     var name = cols.name === -1 ? '' : String(display[r][cols.name] || '').trim();
@@ -781,7 +781,7 @@ function debtImportLegacyIndex_(ss, accounts) {
       MINIMUM_PAYMENT: debtImportCellNumber_(values[r], cols.minimum),
       NEXT_PAYMENT_DATE: cols.due === -1 ? null : String(display[r][cols.due] || '').trim(),
       CREDIT_LIMIT: debtImportCellNumber_(values[r], cols.limit),
-      AVAILABLE_CREDIT: debtImportCellNumber_(values[r], cols.available) };
+      CREDIT_LEFT: debtImportCellNumber_(values[r], cols.creditLeft) };
   }
   (accounts || []).forEach(function(account) {
     if (account.legacyDomain === 'INPUT_DEBTS' && account.legacyKey && byName[account.legacyKey]) {
