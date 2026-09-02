@@ -59,9 +59,12 @@ function buildPlanningDataReadinessModel_(ss, asOf) {
       planningUsesNormalizedData: false,
       status: 'SHADOW_ONLY',
       customerState: overall.code,
-      headline: authority.headline,
+      planSourceHeadline: authority.planSourceHeadline,
+      planSourceSupporting: authority.planSourceSupporting,
+      importReadinessHeadline: authority.importReadinessHeadline,
+      headline: authority.importReadinessHeadline,
       supporting: authority.supporting,
-      customerMessage: 'Cash Compass is comparing imported data with the values your weekly plan currently uses. Your plan has not switched to imported data yet.'
+      customerMessage: 'Cash Compass is comparing imported evidence with the values your weekly plan currently uses. Your plan has not switched to imported data yet.'
     },
     summary: {
       status: overall.code,
@@ -113,9 +116,9 @@ function dataReadinessCashRow_(account, links, factIndex, legacyIndex, asOf) {
     planningValue: legacy, normalizedValue: normalized,
     difference: difference, differenceStatus: reconciliation.exactStatus,
     fact: fact, source: dataReadinessSource_(selection.fact),
-    identity: identity, ready: !!(selection.fact && selection.freshness.safeToAct &&
+    identity: identity,     ready: !!(selection.fact && selection.freshness.safeToAct &&
       identity.status === 'VERIFIED'), needsAttention: needsAttention,
-    reviewStatus: needsAttention ? 'Review data' : 'Ready',
+    reviewStatus: needsAttention ? 'Imported evidence needs review' : 'Imported evidence ready',
     refreshMethod: link ? 'Imported evidence available' : 'Refresh method not yet available',
     advanced: dataReadinessAdvanced_(selection, account)
   };
@@ -161,7 +164,8 @@ function dataReadinessDebtRow_(account, links, factIndex, legacyIndex, asOf) {
     },
     ready: quality.safeToAct && identity.status === 'VERIFIED',
     needsAttention: needsAttention,
-    reviewStatus: quality.safeToAct ? 'Data ready' : dataReadinessDebtReviewLabel_(diagnostics, facts),
+    reviewStatus: quality.safeToAct ? 'Imported evidence ready' :
+      dataReadinessDebtReviewLabel_(diagnostics, facts),
     identity: identity,
     refreshMethod: link ? 'Imported evidence available' : 'Refresh method not yet available',
     advanced: dataReadinessDebtAdvanced_(comparisons, diagnostics, account)
@@ -339,7 +343,7 @@ function dataReadinessWeeklyPresentation_(readiness, cashAccountCount, debtAccou
 
 function dataReadinessDimensionLabel_(status) {
   return status === 'NOT_CONNECTED' ? 'Not connected' :
-    status === 'READY' ? 'Ready' : status === 'PARTIAL' ? 'Partly ready' : 'Not ready';
+    status === 'READY' ? 'Imported evidence ready' : status === 'PARTIAL' ? 'Partly ready' : 'Not ready';
 }
 
 function dataReadinessCustomerState_(cashAccountCount, debtAccountCount, readiness, attention) {
@@ -373,9 +377,9 @@ function dataReadinessCustomerState_(cashAccountCount, debtAccountCount, readine
         ' review.' : 'Connected data still needs review.',
       overviewHeadline: issueCount ? issueCount + ' item' + (issueCount === 1 ? ' needs' : 's need') +
         ' review' : 'Data needs review',
-      overviewMessage: 'Review connected cash and credit-card data before it can support the weekly plan.',
-      planStatusLabel: 'Needs review',
-      planMessage: 'Connected cash and credit-card data has issues that must be reviewed before normalized data can support Planning.',
+      overviewMessage: 'Imported cash and credit-card evidence needs review. Your weekly plan continues using CashCompass sheet values.',
+      planStatusLabel: 'Imported data needs review',
+      planMessage: 'Imported evidence has open review items. Planning still uses CashCompass INPUT and SYS sheet values until you explicitly apply reviewed changes.',
       attentionEmptyMessage: 'No imported items currently require review.' };
   }
   return { code: 'READY_FOR_REVIEW', label: 'Ready for review',
@@ -399,19 +403,39 @@ function dataReadinessDomainSummary_(domain, rows) {
   }
   var ready = accountRows.filter(function(row) { return row.ready; }).length;
   return { status: ready === accountRows.length ? 'READY' : 'NEEDS_REVIEW',
-    label: ready === accountRows.length ? 'Ready' : ready + ' / ' + accountRows.length + ' ready',
-    note: accountRows.length + ' normalized account' + (accountRows.length === 1 ? '' : 's'),
+    label: ready === accountRows.length ? 'Imported evidence ready'
+      : ready + ' / ' + accountRows.length + ' imported ready',
+    note: accountRows.length + ' account' + (accountRows.length === 1 ? '' : 's') +
+      ' · Planning uses CashCompass sheets',
     emptyMessage: '' };
 }
 
 function dataReadinessAuthorityPresentation_(state) {
+  var planSourceHeadline = 'Current plan source: CashCompass sheets';
+  var planSourceSupporting = 'Weekly Planning, Net Worth, Cash Flow, and debt calculations use your INPUT and SYS sheets until you explicitly apply reviewed imported changes.';
   if (state === 'NOT_CONNECTED') return {
-    headline: 'Imported data is not connected yet.',
+    planSourceHeadline: planSourceHeadline,
+    planSourceSupporting: planSourceSupporting,
+    importReadinessHeadline: 'Imported data readiness: Not connected yet',
+    headline: 'Imported data readiness: Not connected yet',
     supporting: 'Your current weekly plan still uses the existing Planning values.' };
   if (state === 'READY_FOR_REVIEW') return {
-    headline: 'Imported data is ready for review.',
+    planSourceHeadline: planSourceHeadline,
+    planSourceSupporting: planSourceSupporting,
+    importReadinessHeadline: 'Imported data readiness: Ready for review',
+    headline: 'Imported data readiness: Ready for review',
     supporting: 'Your current weekly plan still uses the existing Planning values until a separately approved authority switch occurs.' };
-  return { headline: 'Imported data is being reviewed.',
+  if (state === 'MORE_DATA_NEEDED') return {
+    planSourceHeadline: planSourceHeadline,
+    planSourceSupporting: planSourceSupporting,
+    importReadinessHeadline: 'Imported data readiness: More data needed',
+    headline: 'Imported data readiness: More data needed',
+    supporting: 'Your current weekly plan still uses the existing Planning values.' };
+  return {
+    planSourceHeadline: planSourceHeadline,
+    planSourceSupporting: planSourceSupporting,
+    importReadinessHeadline: 'Imported data readiness: Needs review',
+    headline: 'Imported data readiness: Needs review',
     supporting: 'Your current weekly plan still uses the existing Planning values.' };
 }
 

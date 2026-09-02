@@ -1,0 +1,14 @@
+---
+description: Never clasp push or deploy — owner alone runs all Apps Script source/deployment mutations
+alwaysApply: true
+---
+
+# Apps Script — no autonomous clasp push or deploy
+
+- **Never** run `clasp push`, `clasp deploy`, `clasp undeploy`, `./push-central.sh`, or any other source/deployment mutation against **Central or bounded** Apps Script projects. The owner alone performs every clasp push and deployment.
+- Task wording such as “test in Central,” “deploy Beta,” or “push the fix” does **not** authorize clasp. Prepare source, run local regressions, and give the owner the exact next clasp step.
+- Do **not** clasp “to be helpful,” after tests pass, or because the change “should be live.” **No clasp without explicit owner instruction for that clasp action.**
+- If unsure, **stop after local validation** and tell the user what to run (for example `./push-central.sh` for Central).
+- Bounded workbook mutation and Harness writers against the bounded/mapped-user workbook remain forbidden regardless.
+
+See also **`WORKING_RULES.md`** and **`AGENTS.md` → Hard Stops**.

@@ -56,17 +56,18 @@ function renderPlanningDataReadiness_(model) {
 function planningDataReadinessOverviewShellHtml_() {
   return '<section class="capital-allocation-overview-status data-readiness-overview-card" ' +
     'id="capital_allocation_data_status_card" aria-live="polite">' +
-    '<div><div class="capital-allocation-preview-kicker">Data status</div>' +
-    '<strong>Checking imported data…</strong></div></section>';
+    '<div><div class="capital-allocation-preview-kicker">Imported data readiness</div>' +
+    '<strong>Checking imported evidence…</strong></div></section>';
 }
 
 function planningDataReadinessOverviewHtml_(model) {
   var summary = model.summary || {};
   return '<div class="data-readiness-overview-copy"><div>' +
-    '<div class="capital-allocation-preview-kicker">Data status</div><strong>' +
-    escapeCapitalAllocationHtml_(summary.overviewHeadline || summary.label || 'Review data') + '</strong>' +
+    '<div class="capital-allocation-preview-kicker">Imported data readiness</div><strong>' +
+    escapeCapitalAllocationHtml_(summary.overviewHeadline || summary.label || 'Review imported evidence') + '</strong>' +
     '<p>' + escapeCapitalAllocationHtml_(planningDataReadinessCustomerText_(
-      summary.overviewMessage || summary.message || '')) + '</p></div>' +
+      summary.overviewMessage || summary.message || '')) + '</p>' +
+    '<p class="muted"><strong>Current plan source:</strong> CashCompass sheets</p></div>' +
     '<div class="data-readiness-overview-action"><span class="data-readiness-status-chip data-readiness-status--' +
     planningDataReadinessStatusClass_(summary.status) + '">' +
     escapeCapitalAllocationHtml_(summary.label || 'Needs review') + '</span>' +
@@ -83,8 +84,8 @@ function planningDataReadinessDetailHtml_(model) {
   var sectionTabs = planningDataReadinessSectionTabsHtml_(model);
   return '<section class="data-readiness-view" aria-labelledby="data_readiness_title">' +
     '<div class="capital-allocation-section-head"><div>' +
-    '<div class="capital-allocation-preview-kicker">Data</div><h3 id="data_readiness_title">Data refresh and readiness</h3>' +
-    '<p class="muted">See what Cash Compass knows, when it was true, and what needs attention.</p></div>' +
+    '<div class="capital-allocation-preview-kicker">Imported evidence</div><h3 id="data_readiness_title">Imported data review</h3>' +
+    '<p class="muted">Compare imported provider evidence with the CashCompass sheet values Planning currently uses.</p></div>' +
     '<button type="button" class="small-btn" onclick="loadPlanningDataReadiness_({force:true})">Refresh status</button></div>' +
     planningDataReadinessAuthorityHtml_(model.authority || {}) +
     planningDataReadinessSummaryHtml_(model) + sectionTabs +
@@ -136,9 +137,15 @@ function setPlanningDataReadinessSection_(section) {
 }
 
 function planningDataReadinessAuthorityHtml_(authority) {
-  return '<div class="data-readiness-authority-banner" role="note"><strong>' +
-    escapeCapitalAllocationHtml_(planningDataReadinessCustomerText_(
-      authority.headline || 'Imported data is being reviewed.')) + '</strong>' +
+  return '<div class="data-readiness-authority-banner" role="note">' +
+    '<p><strong>' + escapeCapitalAllocationHtml_(planningDataReadinessCustomerText_(
+      authority.planSourceHeadline || 'Current plan source: CashCompass sheets')) + '</strong></p>' +
+    '<p>' + escapeCapitalAllocationHtml_(planningDataReadinessCustomerText_(
+      authority.planSourceSupporting ||
+      'Weekly Planning, Net Worth, Cash Flow, and debt calculations use your INPUT and SYS sheets until you explicitly apply reviewed imported changes.')) + '</p>' +
+    '<p><strong>' + escapeCapitalAllocationHtml_(planningDataReadinessCustomerText_(
+      authority.importReadinessHeadline || authority.headline ||
+      'Imported data readiness: Needs review')) + '</strong></p>' +
     '<p>' + escapeCapitalAllocationHtml_(planningDataReadinessCustomerText_(authority.supporting ||
       'Your current weekly plan still uses the existing Planning values.')) + '</p>' +
     '<small>' + escapeCapitalAllocationHtml_(planningDataReadinessCustomerText_(
@@ -154,12 +161,12 @@ function planningDataReadinessSummaryHtml_(model) {
     planningDataReadinessStatusClass_(summary.status) + '">' +
     escapeCapitalAllocationHtml_(summary.label || 'Needs review') + '</span></div>' +
     '<div class="data-readiness-summary-grid">' +
-    planningDataReadinessDomainMetricHtml_('Cash', summary.cashPresentation || {}) +
-    planningDataReadinessDomainMetricHtml_('Credit cards', summary.cardPresentation || {}) +
-    planningDataReadinessMetricHtml_('Needs attention', summary.attentionCount, null, 'items') +
-    '<div class="data-readiness-metric"><span>Plan data readiness</span><strong>' +
-    escapeCapitalAllocationHtml_(weekly.statusLabel || 'Needs updates') +
-    '</strong><small>Planning still uses existing values</small></div>' +
+    planningDataReadinessDomainMetricHtml_('Imported cash evidence', summary.cashPresentation || {}) +
+    planningDataReadinessDomainMetricHtml_('Imported card evidence', summary.cardPresentation || {}) +
+    planningDataReadinessMetricHtml_('Imported evidence issues', summary.attentionCount, null, 'items') +
+    '<div class="data-readiness-metric"><span>Imported data readiness</span><strong>' +
+    escapeCapitalAllocationHtml_(weekly.statusLabel || 'Needs review') +
+    '</strong><small>Planning still uses CashCompass sheets</small></div>' +
     '</div></section>';
 }
 
@@ -194,7 +201,7 @@ function planningDataReadinessAttentionHtml_(issues, emptyMessage) {
       escapeCapitalAllocationHtml_(planningDataReadinessCustomerText_(issue.message || '')) +
       '</p></div><span class="data-readiness-status-chip ' +
       (issue.blocksReadiness ? 'data-readiness-status--incomplete' : 'data-readiness-status--review') + '">' +
-      (issue.blocksReadiness ? 'Blocks readiness' : 'Review') + '</span></div>';
+      (issue.blocksReadiness ? 'Blocks imported readiness' : 'Review') + '</span></div>';
   });
   return html + '</div></section>';
 }
@@ -224,7 +231,7 @@ function planningDataReadinessCashRowHtml_(row) {
   return '<details class="data-readiness-account-row"><summary><span class="data-readiness-account-name"><strong>' +
     escapeCapitalAllocationHtml_(row.displayName) + '</strong><small>' +
     escapeCapitalAllocationHtml_(planningDataReadinessAccountMeta_(row)) + '</small></span>' +
-    planningDataReadinessPrimaryValueHtml_(row.normalizedValue, 'Balance', row.fact,
+    planningDataReadinessPrimaryValueHtml_(row.planningValue, 'Balance', row.fact,
       row.difference, row.differenceStatus) + planningDataReadinessFactStatusChip_(row.fact) +
     '</summary><div class="data-readiness-account-body">' +
     planningDataReadinessComparisonHtml_(row.planningValue, row.normalizedValue, row.difference,
@@ -246,7 +253,7 @@ function planningDataReadinessDebtRowHtml_(row) {
   return '<details class="data-readiness-account-row"><summary><span class="data-readiness-account-name"><strong>' +
     escapeCapitalAllocationHtml_(row.displayName) + '</strong><small>' +
     escapeCapitalAllocationHtml_(planningDataReadinessAccountMeta_(row)) + '</small></span>' +
-    planningDataReadinessPrimaryValueHtml_(balance.normalizedValue, 'Balance', balance,
+    planningDataReadinessPrimaryValueHtml_(balance.planningValue, 'Balance', balance,
       balance.difference, balance.differenceStatus) +
     '<span class="data-readiness-status-chip data-readiness-status--' + (row.ready ? 'current' : 'incomplete') + '">' +
     escapeCapitalAllocationHtml_(row.reviewStatus) + '</span></summary><div class="data-readiness-account-body">' +
@@ -259,8 +266,8 @@ function planningDataReadinessDebtRowHtml_(row) {
 function planningDataReadinessComparisonHtml_(planningValue, normalizedValue, difference,
     differenceStatus, label, fact) {
   return '<div class="data-readiness-comparison">' +
-    planningDataReadinessValueHtml_('Planning currently uses', planningValue, label) +
-    planningDataReadinessValueHtml_('Latest imported value', normalizedValue, label) +
+    planningDataReadinessValueHtml_('Planning currently uses', planningValue, label, 'planning') +
+    planningDataReadinessValueHtml_('Latest imported value', normalizedValue, label, 'imported') +
     planningDataReadinessDifferenceHtml_(difference, differenceStatus, label) + '</div>' +
     '<div class="data-readiness-asof"><strong>' + escapeCapitalAllocationHtml_(fact.statusLabel) + '</strong>' +
     (fact.effectiveAsOf ? ' · As of ' + escapeCapitalAllocationHtml_(planningDataReadinessDate_(fact.effectiveAsOf)) :
@@ -268,23 +275,21 @@ function planningDataReadinessComparisonHtml_(planningValue, normalizedValue, di
 }
 
 function planningDataReadinessPrimaryValueHtml_(value, label, fact, difference, differenceStatus) {
-  var asOf = fact && fact.effectiveAsOf
-    ? planningDataReadinessDate_(fact.effectiveAsOf) : 'Date not verified';
   var differenceText = differenceStatus === 'DIFFERENCE_DETECTED'
-    ? ' · differs ' + planningDataReadinessSignedValue_(difference, label) : '';
+    ? ' · imported evidence differs ' + planningDataReadinessSignedValue_(difference, label) : '';
   return '<span class="data-readiness-primary-value"><strong>' +
-    escapeCapitalAllocationHtml_(planningDataReadinessValue_(value, label)) + '</strong><small>As of ' +
-    escapeCapitalAllocationHtml_(asOf + differenceText) + '</small></span>';
+    escapeCapitalAllocationHtml_(planningDataReadinessValue_(value, label, 'planning')) + '</strong><small>' +
+    escapeCapitalAllocationHtml_('Used by Planning' + differenceText) + '</small></span>';
 }
 
-function planningDataReadinessValueHtml_(label, value, factLabel) {
+function planningDataReadinessValueHtml_(label, value, factLabel, role) {
   return '<div><span>' + escapeCapitalAllocationHtml_(label) + '</span><strong>' +
-    escapeCapitalAllocationHtml_(planningDataReadinessValue_(value, factLabel)) + '</strong></div>';
+    escapeCapitalAllocationHtml_(planningDataReadinessValue_(value, factLabel, role)) + '</strong></div>';
 }
 
 function planningDataReadinessDifferenceHtml_(difference, status, factLabel) {
   var value = status === 'UNAVAILABLE' || difference === null || typeof difference === 'undefined'
-    ? 'Unavailable' : status === 'MATCHED' ? 'Exact match' :
+    ? 'Not comparable yet' : status === 'MATCHED' ? 'Exact match' :
       planningDataReadinessSignedValue_(difference, factLabel);
   return '<div><span>Difference</span><strong>' + escapeCapitalAllocationHtml_(value) + '</strong>' +
     (status === 'DIFFERENCE_DETECTED' ? '<small>Difference detected</small>' : '') + '</div>';
@@ -379,7 +384,7 @@ function planningDataReadinessWeeklyHtml_(weekly) {
       '</div>';
   }).join('');
   return '<section class="data-readiness-section" aria-labelledby="data_readiness_weekly_title">' +
-    '<div class="capital-allocation-section-head"><h3 id="data_readiness_weekly_title">Weekly plan readiness</h3>' +
+    '<div class="capital-allocation-section-head"><h3 id="data_readiness_weekly_title">Imported evidence checklist</h3>' +
     '<span class="data-readiness-status-chip data-readiness-status--' +
     (weekly.status === 'READY_FOR_REVIEW' ? 'current' : 'incomplete') + '">' +
     escapeCapitalAllocationHtml_(weekly.statusLabel || 'Needs updates') + '</span></div>' +
@@ -448,8 +453,10 @@ function planningDataReadinessDate_(value) {
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-function planningDataReadinessValue_(value, label) {
-  if (value === null || typeof value === 'undefined' || value === '') return 'Unavailable';
+function planningDataReadinessValue_(value, label, role) {
+  if (value === null || typeof value === 'undefined' || value === '') {
+    return role === 'imported' ? 'Not imported yet' : 'Not in Planning sheets';
+  }
   if (label === 'APR') return Number(value).toFixed(2) + '%';
   if (label === 'Due date') return planningDataReadinessDate_(value);
   return formatCapitalAllocationMoney_(Number(value));

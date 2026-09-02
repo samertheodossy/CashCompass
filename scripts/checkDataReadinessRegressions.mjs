@@ -23,8 +23,17 @@ assert.match(serverSource, /evaluateWeeklyPlanDataReadinessFromState_\(/,
   'view model must reuse already-loaded state instead of rereading facts');
 assert.match(serverSource, /planningUsesNormalizedData:\s*false/);
 assert.match(serverSource, /SHADOW_ONLY/);
-assert.doesNotMatch(planningSource, /buildPlanningDataReadinessModel_|DATA_READINESS_VIEW_V1/,
-  'Part 1 Planning math must not consume the shadow readiness model');
+assert.match(serverSource, /planSourceHeadline/);
+assert.match(serverSource, /importReadinessHeadline/);
+assert.match(serverSource, /Imported evidence needs review/);
+assert.doesNotMatch(planningSource, /readFinancialFacts_|getPlanningDataReadinessFromDashboard/,
+  'Part 1 Planning math must not read Financial Facts or the readiness RPC');
+assert.doesNotMatch(read('debts.js'), /readFinancialFacts_|buildPlanningDataReadinessModel_/,
+  'Debt planning must not consume Financial Facts readiness projection');
+assert.doesNotMatch(read('bank_accounts.js'), /readFinancialFacts_|buildPlanningDataReadinessModel_/,
+  'Bank account writers must not consume Financial Facts readiness projection');
+assert.doesNotMatch(read('dashboard_data.js'), /buildPlanningDataReadinessModel_|getPlanningDataReadinessFromDashboard/,
+  'Dashboard loaders must not gate on imported readiness projection');
 assert.doesNotMatch(serverSource.slice(serverSource.indexOf('var DATA_READINESS_DEBT_FACTS_'),
   serverSource.indexOf('function getPlanningDataReadinessFromDashboard')),
   /STATEMENT_BALANCE/,
@@ -82,7 +91,14 @@ vm.createContext(context);
 vm.runInContext(clientSource, context, { filename: 'Dashboard_Script_PlanningDataReadiness.html' });
 
 const model = {
-  authority: { customerMessage: 'Shadow-only comparison.' },
+  authority: {
+    planSourceHeadline: 'Current plan source: CashCompass sheets',
+    planSourceSupporting: 'Weekly Planning uses INPUT and SYS sheets.',
+    importReadinessHeadline: 'Imported data readiness: Needs review',
+    headline: 'Imported data readiness: Needs review',
+    supporting: 'Your current weekly plan still uses the existing Planning values.',
+    customerMessage: 'Shadow-only comparison.'
+  },
   summary: { status: 'NEEDS_REVIEW', label: 'Needs review', blockingCount: 1,
     attentionCount: 1, overviewHeadline: '1 item needs review',
     overviewMessage: 'Review connected cash and credit-card data before it can support the weekly plan.',
@@ -126,27 +142,31 @@ const model = {
 };
 
 const overview = context.planningDataReadinessOverviewHtml_(model);
-assert.match(overview, /Data status/);
+assert.match(overview, /Imported data readiness/);
 assert.match(overview, /1 item needs review/);
-assert.match(overview, /Review connected cash and credit-card data/);
+assert.match(overview, /Current plan source:<\/strong> CashCompass sheets/);
 assert.match(overview, /Review data/);
 assert.doesNotMatch(overview, /Samer Ally|CitiAA/,
   'compact Overview card must contain no account rows');
 
 const detail = context.planningDataReadinessDetailHtml_(model);
-assert.match(detail, /Imported data is being reviewed/);
+assert.match(detail, /Current plan source: CashCompass sheets/);
+assert.match(detail, /Imported data readiness: Needs review/);
 assert.match(detail, /weekly plan still uses the existing Planning values/i);
 assert.match(detail, /Needs attention \(1\)/);
 assert.match(detail, /Cash data \(1\)/);
 assert.match(detail, /Credit-card data \(1\)/);
 assert.match(detail, /Samer Ally/);
+assert.match(detail, /\$30,411\.00/);
+assert.match(detail, /Used by Planning/);
 assert.match(detail, /\$29,850\.00/);
-assert.match(detail, /differs -\$561\.00/);
+assert.match(detail, /imported evidence differs/);
 assert.match(detail, /CitiAA/);
 assert.match(detail, /Enter the APR that applies to the carried balance/);
 assert.match(detail, /Planning currently uses/);
 assert.match(detail, /Latest imported value/);
-assert.match(detail, /Planning still uses existing values/);
+assert.match(detail, /Planning still uses CashCompass sheets/);
+assert.match(detail, /Imported evidence checklist/);
 assert.doesNotMatch(detail, /Checking normalized|No normalized|Latest normalized|Authority has not switched/i,
   'the primary Data view must use customer language instead of implementation terminology');
 assert.match(detail, /Difference detected/);
@@ -156,9 +176,14 @@ assert.doesNotMatch(detail, /material|significant/i,
   'exact differences must not be labeled financially material');
 
 const emptyModel = {
-  authority: { headline: 'Imported data is not connected yet.',
+  authority: {
+    planSourceHeadline: 'Current plan source: CashCompass sheets',
+    planSourceSupporting: 'Weekly Planning uses INPUT and SYS sheets.',
+    importReadinessHeadline: 'Imported data readiness: Not connected yet',
+    headline: 'Imported data readiness: Not connected yet',
     supporting: 'Your current weekly plan still uses the existing Planning values.',
-    customerMessage: 'Shadow-only comparison.' },
+    customerMessage: 'Shadow-only comparison.'
+  },
   summary: { status: noDataState.code, label: noDataState.label,
     message: noDataState.message, overviewHeadline: noDataState.overviewHeadline,
     overviewMessage: noDataState.overviewMessage,
@@ -173,7 +198,7 @@ const emptyDetail = context.planningDataReadinessDetailHtml_(emptyModel);
 assert.match(emptyOverview, /Not connected yet/);
 assert.match(emptyOverview, /Cash and credit-card data still need to be added or verified/);
 assert.doesNotMatch(emptyOverview, /No blocking updates|Needs review/);
-assert.match(emptyDetail, /Imported data is not connected yet/);
+assert.match(emptyDetail, /Imported data readiness: Not connected yet/);
 assert.match(emptyDetail, /Cash data has not been connected yet/);
 assert.match(emptyDetail, /Credit-card data has not been connected yet/);
 assert.match(emptyDetail, /No imported items currently require review/);

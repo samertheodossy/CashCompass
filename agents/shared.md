@@ -46,13 +46,12 @@ These rules apply to every AI agent working in this repository.
 
 ## Git and Deploy Safety
 
-- Do not ask repeatedly for permission. Ordinary in-scope inspection, file edits, tests, and self-review never require approval. Once the user authorizes an otherwise gated action such as isolated deployment, commit, or push, execute it without seeking the same approval again. Stop only at a genuinely new, still-unauthorized boundary or material product decision.
+- Do not ask repeatedly for permission. Ordinary in-scope inspection, file edits, tests, and self-review never require approval. Once the user authorizes an otherwise gated action such as disposable runtime validation (after the owner has pushed Central when needed), commit, or push, execute it without seeking the same approval again. Stop only at a genuinely new, still-unauthorized boundary or material product decision. **Clasp push/deploy is never in this set.**
 - Do not commit unless explicitly approved.
 - Do not push unless explicitly approved.
 - Do not deploy unless explicitly approved.
-- Never push, deploy, undeploy, or otherwise mutate the bounded Apps Script project. Bounded `clasp` operations are permanently owner-operated; Codex may prepare and locally validate convergent source, then hand the exact bounded step to the owner.
+- Never run `clasp push`, `clasp deploy`, `clasp undeploy`, `./push-central.sh`, or any other Apps Script source/deployment mutation. Central and bounded `clasp` operations are permanently owner-operated; agents may prepare and locally validate convergent source, then hand the exact clasp step to the owner (for example `./push-central.sh` for Central).
 - Never switch `.clasp` project identity casually.
-- Central push uses `./push-central.sh`.
 
 ## Required Output
 
