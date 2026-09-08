@@ -160,8 +160,10 @@ assert(/plaidMainImportData_[\s\S]{0,600}protectedAccountKey/.test(client),
 assert(client.includes('plaidMainPatchAccountCard_') &&
   client.includes('plaidMainDeferPlannerRefresh_') &&
   /plaidMainImportData_[\s\S]{0,900}plaidMainPatchAccountCard_/.test(client) &&
-  /plaidMainApplySelectedUpdates_[\s\S]{0,1800}plaidMainPatchAccountCard_/.test(client),
-  'Import and Apply must patch only the affected account card and defer planner refresh');
+  /plaidMainApplySelectedUpdates_[\s\S]{0,1800}plaidMainPatchAccountCard_/.test(client) &&
+  /plaidMainApplySelectedUpdates_[\s\S]{0,2200}refreshMonthlyCheckinAfterDebtMutation_/.test(client) &&
+  /accountDomain === 'DEBT' && typeof refreshMonthlyCheckinAfterDebtMutation_/.test(client),
+  'Debt Apply success must patch the account card, defer planner refresh, and refresh Monthly Review');
 
 assert(bridge.includes('function plaidImportInvalidateAppliedAccountCaches_') &&
   /plaidImportRefreshPreviewAccountAfterApply_[\s\S]{0,1200}plaidImportInvalidateAppliedAccountCaches_/.test(bridge) &&

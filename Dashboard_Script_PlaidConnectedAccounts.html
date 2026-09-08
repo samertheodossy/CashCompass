@@ -1258,6 +1258,9 @@ function plaidMainApplySelectedUpdates_(domain, connection, account, accountPrev
       plaidMainSetAccountMessage_(connection, account, result.refreshNotice, false, false);
     }
     plaidMainPatchAccountCard_(domain, connection, account);
+    if (accountDomain === 'DEBT' && typeof refreshMonthlyCheckinAfterDebtMutation_ === 'function') {
+      refreshMonthlyCheckinAfterDebtMutation_();
+    }
     plaidMainDeferPlannerRefresh_();
   }, function(err) {
     if (!plaidMainFinishApplyRequest_(connection, account, requestId)) return;

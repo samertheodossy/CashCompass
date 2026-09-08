@@ -10,6 +10,10 @@
     <div class="top-actions">
       <div class="top-actions-buttons">
         <button type="button" class="btn-help-prominent" onclick="showPage('help')">Help</button>
+        <div id="ov_monthly_review_entry" class="overview-monthly-review-entry" hidden>
+          <button type="button" id="ov_monthly_review_btn" class="overview-monthly-review-btn"
+                  onclick="openMonthlyReviewScreen_()">Monthly Review</button>
+        </div>
         <button type="button" class="btn-setup-topbar" onclick="showPage('onboarding')">Setup / Review</button>
         <button type="button" id="planner_refresh_btn" class="btn-planner-run" onclick="runPlannerNow()">Refresh financial plan</button>
       </div>
@@ -2570,6 +2574,22 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
     error names are ever shown. Display-only: no reconnect / create / admin
     actions and no writes.
   -->
+  <div id="page_monthly_review" class="workspace-page">
+    <div class="workspace-page-intro monthly-review-intro">
+      <div class="workspace-page-intro-row">
+        <button type="button" class="btn-setup-back" onclick="showPage('overview')">&larr; Back to Overview</button>
+      </div>
+      <h2 id="monthly_review_title">Monthly review</h2>
+      <p id="monthly_review_subtitle" class="subtle monthly-review-subtitle"></p>
+    </div>
+    <div id="monthly_review_summary" class="monthly-review-summary" aria-live="polite"></div>
+    <div id="monthly_review_domains" class="monthly-review-domains"></div>
+    <section id="monthly_review_identity" class="monthly-review-identity" hidden aria-labelledby="monthly_review_identity_title">
+      <h3 id="monthly_review_identity_title" class="overview-section-title">Identity needs repair</h3>
+      <div id="monthly_review_identity_list" class="monthly-review-identity-list"></div>
+    </section>
+  </div>
+
   <div id="page_recovery" class="workspace-page">
     <div class="onboarding-view onboarding-view-welcome">
       <div class="onboarding-welcome-card">

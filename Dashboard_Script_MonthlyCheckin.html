@@ -1,0 +1,467 @@
+/* Monthly review entry point and dedicated review screen (read-only). */
+
+var __monthlyCheckinModel = null;
+var __monthlyCheckinLoading = false;
+var __monthlyCheckinStale = false;
+var overviewMonthlyCheckinRequestId_ = 0;
+var MONTHLY_CHECKIN_DOMAIN_UI_ = [
+  { key: 'bank', label: 'Bank accounts', page: 'assets', tab: 'bank' },
+  { key: 'houses', label: 'Houses', page: 'assets', tab: 'houses' },
+  { key: 'investments', label: 'Investments', page: 'assets', tab: 'investments' },
+  { key: 'debts', label: 'Debts', page: 'assets', tab: 'debts' }
+];
+
+function monthlyCheckinOverviewShouldLoad_() {
+  if (typeof document === 'undefined' || !document.body) return false;
+  if (document.body.classList && document.body.classList.contains('startup-gated')) return false;
+  var onboarding = document.getElementById('page_onboarding');
+  if (onboarding && onboarding.classList.contains('active')) return false;
+  var overview = document.getElementById('page_overview');
+  var review = document.getElementById('page_monthly_review');
+  var overviewActive = overview && overview.classList.contains('active');
+  var reviewActive = review && review.classList.contains('active');
+  return overviewActive || reviewActive;
+}
+
+function monthlyCheckinFormatCycleLabel_(cycleKey) {
+  var parts = String(cycleKey || '').split('-');
+  if (parts.length !== 2) return String(cycleKey || '');
+  var year = Number(parts[0]);
+  var month = Number(parts[1]);
+  if (!year || !month) return String(cycleKey || '');
+  var date = new Date(Date.UTC(year, month - 1, 1));
+  return date.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+
+function monthlyCheckinPriorCycleKey_(cycleKey) {
+  var parts = String(cycleKey || '').trim().split('-');
+  if (parts.length !== 2) return '';
+  var year = Number(parts[0]);
+  var month = Number(parts[1]);
+  if (!year || !month) return '';
+  if (month === 1) return String(year - 1) + '-12';
+  var priorMonth = month - 1;
+  return String(year) + '-' + (priorMonth < 10 ? '0' : '') + priorMonth;
+}
+
+function monthlyCheckinShortMonthLabel_(cycleKey) {
+  var parts = String(cycleKey || '').split('-');
+  if (parts.length !== 2) return '';
+  var year = Number(parts[0]);
+  var month = Number(parts[1]);
+  if (!year || !month) return '';
+  var date = new Date(Date.UTC(year, month - 1, 1));
+  var monthPart = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+  return monthPart + '-' + String(year).slice(-2);
+}
+
+function monthlyCheckinEscape_(value) {
+  if (typeof escapeHtml === 'function') return escapeHtml(value);
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function monthlyCheckinFormatMoney_(value) {
+  if (value === '' || value === null || value === undefined) return '—';
+  if (typeof formatCurrency === 'function') return formatCurrency(value);
+  var num = Number(value);
+  if (!isFinite(num)) return '—';
+  return '$' + num.toFixed(2);
+}
+
+function monthlyCheckinProjectionUi_(model) {
+  return model && model.projection && model.projection.ui ? model.projection.ui : null;
+}
+
+function monthlyCheckinNeedsAttention_(model) {
+  var ui = monthlyCheckinProjectionUi_(model);
+  if (!ui) return false;
+  return Number(ui.needsReviewCount || 0) > 0;
+}
+
+function renderMonthlyCheckinOverviewEntry_(model) {
+  var entry = document.getElementById('ov_monthly_review_entry');
+  if (!entry) return;
+  if (!model || model.available !== true || !model.projection) {
+    entry.hidden = true;
+    return;
+  }
+  entry.hidden = !monthlyCheckinNeedsAttention_(model);
+}
+
+function monthlyCheckinDomainStatusLine_(section) {
+  var row = section || {};
+  if (row.domainKind === 'debt_acknowledgement' || row.domain === 'debts') {
+    return Number(row.currentCount || row.reviewedCount || 0) + ' of ' +
+      Number(row.activeCount || 0) + ' current';
+  }
+  return Number(row.currentMonthValueCount || 0) + ' of ' + Number(row.activeCount || 0) + ' current';
+}
+
+function monthlyCheckinDomainSummaryLine_(section, cycleKey) {
+  var row = section || {};
+  if (row.domainKind === 'debt_acknowledgement' || row.domain === 'debts') {
+    return Number(row.currentCount || row.reviewedCount || 0) + ' of ' +
+      Number(row.activeCount || 0) + ' current';
+  }
+  var monthName = monthlyCheckinFormatCycleLabel_(cycleKey).split(' ')[0] || 'current-month';
+  return Number(row.currentMonthValueCount || 0) + ' of ' + Number(row.activeCount || 0) +
+    ' ' + monthName + ' values present';
+}
+
+function monthlyCheckinNeedsMonthValueShortReason_(cycleKey) {
+  var monthName = monthlyCheckinFormatCycleLabel_(cycleKey).split(' ')[0] || '';
+  return monthName ? ('Needs ' + monthName + ' value') : 'Needs current-month value';
+}
+
+function monthlyCheckinDomainNavLabel_(domainKey) {
+  for (var i = 0; i < MONTHLY_CHECKIN_DOMAIN_UI_.length; i++) {
+    if (MONTHLY_CHECKIN_DOMAIN_UI_[i].key === domainKey) {
+      return MONTHLY_CHECKIN_DOMAIN_UI_[i].label;
+    }
+  }
+  return domainKey;
+}
+
+function monthlyCheckinSectionNavLabel_(label) {
+  var text = String(label || '').trim();
+  if (!text) return 'Open';
+  return 'Open ' + text.replace(/\b\w/g, function(ch) { return ch.toUpperCase(); });
+}
+
+function monthlyCheckinDomainAttentionCount_(section) {
+  var records = Array.isArray(section && section.records) ? section.records : [];
+  return records.filter(function(record) { return record && record.needsAttention; }).length;
+}
+
+function monthlyCheckinFormatLastUpdatedDate_(isoDateOnly) {
+  var parts = String(isoDateOnly || '').trim().split('-');
+  if (parts.length !== 3) return '';
+  var year = Number(parts[0]);
+  var month = Number(parts[1]);
+  var day = Number(parts[2]);
+  if (!year || !month || !day) return '';
+  var date = new Date(Date.UTC(year, month - 1, day));
+  return date.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
+function monthlyCheckinEnrichDomainRecord_(record, section) {
+  var row = section || {};
+  return {
+    domain: row.domain,
+    accountKey: record && record.accountKey,
+    navigatePage: (record && record.navigatePage) || row.navigatePage || '',
+    navigateTab: (record && record.navigateTab) || row.navigateTab || '',
+    domainLabel: (record && record.domainLabel) || row.label || '',
+    displayName: record && record.displayName,
+    needsAttention: !!(record && record.needsAttention),
+    reason: record && record.reason,
+    currentStatusLabel: record && record.currentStatusLabel,
+    lastUpdated: record && record.lastUpdated,
+    hasPriorMonthValue: record && record.hasPriorMonthValue,
+    priorMonthValue: record && record.priorMonthValue,
+    currentValue: record && record.currentValue,
+    debtType: record && record.debtType
+  };
+}
+
+function monthlyCheckinDebtLastUpdatedLineHtml_(record) {
+  var row = record || {};
+  if (!row.lastUpdated) return '';
+  var displayDate = monthlyCheckinFormatLastUpdatedDate_(row.lastUpdated);
+  if (!displayDate) return '';
+  return '<div class="monthly-review-card-meta-line">Last Updated: ' +
+    monthlyCheckinEscape_(displayDate) + '</div>';
+}
+
+function monthlyCheckinMonthValueAttentionCardHtml_(record, cycleKey) {
+  var row = record || {};
+  var priorLabel = monthlyCheckinShortMonthLabel_(monthlyCheckinPriorCycleKey_(cycleKey));
+  var currentLabel = monthlyCheckinShortMonthLabel_(cycleKey);
+  var priorValueText = row.hasPriorMonthValue
+    ? monthlyCheckinFormatMoney_(row.priorMonthValue)
+    : 'No prior value';
+  return '<article class="monthly-review-card monthly-review-card--attention">' +
+    '<header class="monthly-review-card-head">' +
+    '<strong class="monthly-review-card-title">' + monthlyCheckinEscape_(row.displayName || 'Account') + '</strong>' +
+    '</header>' +
+    '<div class="monthly-review-card-values">' +
+    '<div class="monthly-review-card-value-line">' +
+    monthlyCheckinEscape_(priorLabel) + ': ' + monthlyCheckinEscape_(priorValueText) +
+    '</div>' +
+    '<div class="monthly-review-card-value-line">' +
+    monthlyCheckinEscape_(currentLabel) + ': ' +
+    '<span class="monthly-review-card-value-amount--missing">Not entered</span>' +
+    '</div>' +
+    '</div>' +
+    '<p class="monthly-review-card-reason">' +
+    monthlyCheckinEscape_(row.reason || monthlyCheckinNeedsMonthValueShortReason_(cycleKey)) + '</p>' +
+    '</article>';
+}
+
+function monthlyCheckinDebtAttentionCardHtml_(record) {
+  var row = record || {};
+  var typeLine = row.debtType
+    ? '<div class="monthly-review-card-meta-line">Type: ' + monthlyCheckinEscape_(row.debtType) + '</div>'
+    : '';
+  return '<article class="monthly-review-card monthly-review-card--attention">' +
+    '<header class="monthly-review-card-head">' +
+    '<strong class="monthly-review-card-title">' + monthlyCheckinEscape_(row.displayName || 'Debt') + '</strong>' +
+    '</header>' +
+    typeLine +
+    '<div class="monthly-review-card-meta-line">Balance: ' +
+    monthlyCheckinEscape_(monthlyCheckinFormatMoney_(row.currentValue)) + '</div>' +
+    monthlyCheckinDebtLastUpdatedLineHtml_(row) +
+    '<p class="monthly-review-card-reason">' +
+    monthlyCheckinEscape_(row.reason || 'Needs current-cycle update') + '</p>' +
+    '</article>';
+}
+
+function monthlyCheckinAttentionCardHtml_(record, cycleKey) {
+  if (record && record.domain === 'debts') {
+    return monthlyCheckinDebtAttentionCardHtml_(record);
+  }
+  return monthlyCheckinMonthValueAttentionCardHtml_(record, cycleKey);
+}
+
+function monthlyCheckinCurrentCardHtml_(record, cycleKey, section) {
+  var row = record || {};
+  var sec = section || {};
+  if (sec.domain === 'debts' || sec.domainKind === 'debt_acknowledgement') {
+    var debtTypeLine = row.debtType
+      ? '<div class="monthly-review-card-meta-line">Type: ' + monthlyCheckinEscape_(row.debtType) + '</div>'
+      : '';
+    return '<article class="monthly-review-card monthly-review-card--current">' +
+      '<header class="monthly-review-card-head">' +
+      '<strong class="monthly-review-card-title">' + monthlyCheckinEscape_(row.displayName || 'Debt') + '</strong>' +
+      '</header>' +
+      debtTypeLine +
+      '<div class="monthly-review-card-meta-line">Balance: ' +
+      monthlyCheckinEscape_(monthlyCheckinFormatMoney_(row.currentValue)) + '</div>' +
+      monthlyCheckinDebtLastUpdatedLineHtml_(row) +
+      '<p class="monthly-review-card-status monthly-review-card-status--current">' +
+      monthlyCheckinEscape_(row.currentStatusLabel || 'Current') + '</p>' +
+      '</article>';
+  }
+  var currentLabel = monthlyCheckinShortMonthLabel_(cycleKey);
+  return '<article class="monthly-review-card monthly-review-card--current">' +
+    '<header class="monthly-review-card-head">' +
+    '<strong class="monthly-review-card-title">' + monthlyCheckinEscape_(row.displayName || 'Account') + '</strong>' +
+    '</header>' +
+    '<div class="monthly-review-card-value-line">' +
+    monthlyCheckinEscape_(currentLabel) + ': ' +
+    monthlyCheckinEscape_(monthlyCheckinFormatMoney_(row.currentValue)) +
+    '</div>' +
+    '<p class="monthly-review-card-status monthly-review-card-status--current">Current</p>' +
+    '</article>';
+}
+
+function monthlyCheckinIdentityCardHtml_(item) {
+  var row = item || {};
+  return '<article class="monthly-review-card monthly-review-card--identity">' +
+    '<header class="monthly-review-card-head">' +
+    '<strong class="monthly-review-card-title">' + monthlyCheckinEscape_(row.displayName || 'Unknown account') + '</strong>' +
+    '<span class="monthly-review-card-domain">' + monthlyCheckinEscape_(monthlyCheckinDomainNavLabel_(row.domain)) + '</span>' +
+    '</header>' +
+    '<p class="monthly-review-card-reason monthly-review-card-reason--identity">' +
+    monthlyCheckinEscape_(row.message || row.code || 'Identity unresolved') + '</p>' +
+    '</article>';
+}
+
+function monthlyCheckinDomainSectionHtml_(section, cycleKey) {
+  var row = section || {};
+  var records = Array.isArray(row.records) ? row.records : [];
+  if (records.length === 0) return '';
+
+  var attentionRecords = records.filter(function(record) { return record && record.needsAttention; });
+  var currentRecords = records.filter(function(record) { return record && !record.needsAttention; });
+  var hasAttention = attentionRecords.length > 0;
+  var attentionCount = attentionRecords.length;
+  var summaryLine = monthlyCheckinDomainSummaryLine_(row, cycleKey);
+  var statusLine = monthlyCheckinDomainStatusLine_(row);
+  var navLabel = monthlyCheckinSectionNavLabel_(row.label);
+  var foldClass = 'monthly-review-domain-fold' +
+    (hasAttention ? ' monthly-review-domain-fold--attention' : ' monthly-review-domain-fold--current');
+  var openAttr = hasAttention ? ' open' : '';
+  var statusHint = hasAttention
+    ? (attentionCount + ' need attention')
+    : statusLine;
+
+  var cardsHtml = attentionRecords.concat(currentRecords).map(function(record) {
+    var cardRecord = monthlyCheckinEnrichDomainRecord_(record, row);
+    if (cardRecord.needsAttention) {
+      return monthlyCheckinAttentionCardHtml_(cardRecord, cycleKey);
+    }
+    return monthlyCheckinCurrentCardHtml_(cardRecord, cycleKey, row);
+  }).join('');
+
+  return '<details id="monthly_review_domain_' + row.domain + '" class="' + foldClass + '"' + openAttr +
+    ' aria-labelledby="monthly_review_domain_' + row.domain + '_title">' +
+    '<summary class="monthly-review-domain-summary-row" id="monthly_review_domain_' + row.domain + '_title">' +
+    '<span class="monthly-review-domain-fold-indicator" aria-hidden="true"></span>' +
+    '<span class="monthly-review-domain-summary-copy">' +
+    '<span class="monthly-review-domain-summary-title">' + monthlyCheckinEscape_(row.label) + '</span>' +
+    '<span class="monthly-review-domain-summary-line">' + monthlyCheckinEscape_(summaryLine) + '</span>' +
+    '</span>' +
+    '<span class="monthly-review-domain-status' + (hasAttention ? ' monthly-review-domain-status--attention' : ' monthly-review-domain-status--current') + '">' +
+    monthlyCheckinEscape_(statusHint) + '</span>' +
+    '<button type="button" class="small-btn monthly-review-domain-nav" onclick="event.preventDefault(); event.stopPropagation(); monthlyCheckinNavigateToDomain_(\'' +
+    row.navigatePage + '\', \'' + row.navigateTab + '\')">' +
+    monthlyCheckinEscape_(navLabel) + '</button>' +
+    '</summary>' +
+    '<div class="monthly-review-domain-body">' +
+    '<div class="monthly-review-cards-grid">' + cardsHtml + '</div>' +
+    '</div>' +
+    '</details>';
+}
+
+function renderMonthlyReviewScreen_(model) {
+  var subtitle = document.getElementById('monthly_review_subtitle');
+  var summary = document.getElementById('monthly_review_summary');
+  var domainsHost = document.getElementById('monthly_review_domains');
+  var identitySection = document.getElementById('monthly_review_identity');
+  var identityList = document.getElementById('monthly_review_identity_list');
+  if (!subtitle || !summary || !domainsHost) return;
+
+  if (!model || model.available !== true || !model.projection) {
+    subtitle.textContent = '';
+    summary.innerHTML = typeof loadingIndicatorHtml === 'function'
+      ? loadingIndicatorHtml('Loading monthly review…')
+      : '<p class="muted">Loading monthly review…</p>';
+    domainsHost.innerHTML = '';
+    if (identitySection) identitySection.hidden = true;
+    if (identityList) identityList.innerHTML = '';
+    return;
+  }
+
+  var projection = model.projection;
+  var ui = projection.ui || {};
+  var cycleKey = model.cycleKey || projection.cycleKey || '';
+  var cycleLabel = monthlyCheckinFormatCycleLabel_(cycleKey);
+  subtitle.textContent = 'Review active accounts and values for ' + cycleLabel + '.';
+
+  var sections = Array.isArray(ui.domainSections) ? ui.domainSections.slice() : [];
+
+  var areasSummaryHtml = sections.map(function(section) {
+    return '<div class="monthly-review-areas-item"><span>' + monthlyCheckinEscape_(section.label) +
+      '</span><strong>' + monthlyCheckinEscape_(monthlyCheckinDomainStatusLine_(section)) + '</strong></div>';
+  }).join('');
+
+  summary.innerHTML =
+    '<div class="monthly-review-summary-grid">' +
+    '<div class="monthly-review-summary-item"><span>Areas current</span><strong>' +
+    monthlyCheckinEscape_(String(ui.areasCurrent || 0)) + ' of 4</strong></div>' +
+    '<div class="monthly-review-summary-item"><span>Active items</span><strong>' +
+    monthlyCheckinEscape_(String(ui.totalActiveCount || 0)) + '</strong></div>' +
+    '<div class="monthly-review-summary-item"><span>Items needing action</span><strong>' +
+    monthlyCheckinEscape_(String(ui.attentionCount || 0)) + '</strong></div>' +
+    '</div>' +
+    '<div class="monthly-review-areas-summary">' + areasSummaryHtml + '</div>';
+
+  domainsHost.innerHTML = sections.map(function(section) {
+    return monthlyCheckinDomainSectionHtml_(section, cycleKey);
+  }).join('');
+
+  var identityItems = Array.isArray(ui.identityRepairItems) ? ui.identityRepairItems : [];
+  if (identitySection && identityList) {
+    identitySection.hidden = identityItems.length === 0;
+    identityList.innerHTML = identityItems.length > 0
+      ? '<div class="monthly-review-cards-grid">' +
+        identityItems.map(monthlyCheckinIdentityCardHtml_).join('') +
+        '</div>'
+      : '';
+  }
+}
+
+function monthlyCheckinNavigateToDomain_(page, tab) {
+  if (typeof showWorkspacePage === 'function') {
+    showWorkspacePage(page);
+  } else if (typeof showPage === 'function') {
+    showPage(page);
+  }
+  if (typeof showTab === 'function') showTab(tab);
+}
+
+function openMonthlyReviewScreen_() {
+  if (typeof showPage === 'function') showPage('monthly_review');
+  else {
+    renderMonthlyReviewScreen_(__monthlyCheckinModel);
+    loadMonthlyCheckinOverview_();
+  }
+}
+
+function refreshMonthlyCheckinIfStale_() {
+  if (!__monthlyCheckinStale) return;
+  loadMonthlyCheckinOverview_(true);
+}
+
+function refreshMonthlyCheckinAfterDebtMutation_() {
+  loadMonthlyCheckinOverview_(true);
+}
+
+function renderMonthlyCheckinUi_(model) {
+  __monthlyCheckinModel = model || null;
+  renderMonthlyCheckinOverviewEntry_(model);
+  var reviewPage = document.getElementById('page_monthly_review');
+  if (reviewPage && reviewPage.classList.contains('active')) {
+    renderMonthlyReviewScreen_(model);
+  }
+}
+
+function loadMonthlyCheckinOverview_(forceReload) {
+  var shouldLoadNow = monthlyCheckinOverviewShouldLoad_();
+  if (!shouldLoadNow) {
+    if (forceReload) __monthlyCheckinStale = true;
+    return;
+  }
+  if (__monthlyCheckinLoading && !forceReload) return;
+  var requestId = ++overviewMonthlyCheckinRequestId_;
+  var isCurrent = function() {
+    return requestId === overviewMonthlyCheckinRequestId_;
+  };
+  __monthlyCheckinLoading = true;
+
+  var reviewPage = document.getElementById('page_monthly_review');
+  if (reviewPage && reviewPage.classList.contains('active')) {
+    renderMonthlyReviewScreen_(null);
+  }
+
+  if (typeof runReadOnlyRpcWithRetry_ !== 'function') {
+    __monthlyCheckinLoading = false;
+    renderMonthlyCheckinUi_(null);
+    return;
+  }
+  runReadOnlyRpcWithRetry_({
+    isCurrent: isCurrent,
+    onSuccess: function(model) {
+      __monthlyCheckinLoading = false;
+      if (!isCurrent()) return;
+      __monthlyCheckinStale = false;
+      renderMonthlyCheckinUi_(model);
+    },
+    onFailure: function() {
+      __monthlyCheckinLoading = false;
+      if (!isCurrent()) return;
+      renderMonthlyCheckinUi_(null);
+    },
+    invoke: function(success, failure) {
+      google.script.run
+        .withSuccessHandler(success)
+        .withFailureHandler(failure)
+        .getMonthlyCheckinFromDashboard({});
+    }
+  });
+}
+
+function requestMonthlyCheckinOverviewAfterPaint_() {
+  var start = function() { loadMonthlyCheckinOverview_(); };
+  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+    window.requestAnimationFrame(start);
+    return;
+  }
+  setTimeout(start, 0);
+}

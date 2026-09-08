@@ -323,7 +323,8 @@ function showPage(name) {
     // 'recovery' (Phase 6D.1) is a focused dead-end like 'onboarding':
     // hide the section nav so the user isn't pulled into dashboard
     // surfaces that can't load until the workbook is reconnected.
-    if (name === 'onboarding' || name === 'recovery') {
+    // monthly_review is a focused drill-down from Overview.
+    if (name === 'onboarding' || name === 'recovery' || name === 'monthly_review') {
       document.body.classList.add('setup-mode');
     } else {
       document.body.classList.remove('setup-mode');
@@ -336,6 +337,19 @@ function showPage(name) {
 
   if (name === 'onboarding' && typeof loadOnboardingSection === 'function') {
     loadOnboardingSection();
+  }
+
+  if (name === 'monthly_review') {
+    if (typeof renderMonthlyReviewScreen_ === 'function') {
+      renderMonthlyReviewScreen_(typeof __monthlyCheckinModel !== 'undefined' ? __monthlyCheckinModel : null);
+    }
+    if (typeof loadMonthlyCheckinOverview_ === 'function') {
+      loadMonthlyCheckinOverview_(__monthlyCheckinStale);
+    }
+  }
+
+  if (name === 'overview' && typeof refreshMonthlyCheckinIfStale_ === 'function') {
+    refreshMonthlyCheckinIfStale_();
   }
 
   // Sub-tab panels share one global `.panel.active` state. After a user
@@ -1673,6 +1687,7 @@ function refreshSnapshot(options) {
         applyOverviewCoreSnapshot_(data);
         requestDashboardOverviewDetailsAfterPaint_(requestId, data && data.continuationId);
         requestOverviewOperationalSummariesAfterPaint_();
+        requestMonthlyCheckinOverviewAfterPaint_();
       } else {
         applySnapshot(data);
       }

@@ -30,6 +30,7 @@ var DEBTS_RESERVED_ROW_NAMES_ = {
 };
 
 var DEBTS_LINKED_PROPERTY_HEADER_ = 'Linked Property';
+var DEBTS_LAST_UPDATED_HEADER_ = 'Last Updated';
 var DEBTS_REQUIRED_HEADERS_ = [
   'Account Name',
   'Type',
@@ -54,7 +55,8 @@ var DEBTS_CANONICAL_WIDTHS_ = {
   'Int Rate': 110,
   'Acct PCT Avail': 190,
   'Active': 90,
-  'Linked Property': 220
+  'Linked Property': 220,
+  'Last Updated': 130
 };
 
 /**
@@ -219,6 +221,14 @@ function getActiveDebtsForManagementFromDashboard() {
   }
   if (display.length < 2) return [];
 
+  try {
+    ensureDebtsLastUpdatedColumn_(sheet, ss);
+    display = sheet.getDataRange().getDisplayValues();
+    values = sheet.getDataRange().getValues();
+  } catch (ensureErr) {
+    Logger.log('getActiveDebtsForManagementFromDashboard ensureDebtsLastUpdatedColumn_: ' + ensureErr);
+  }
+
   let headerMap;
   try {
     headerMap = getDebtsHeaderMap_(sheet, display);
@@ -259,7 +269,9 @@ function getActiveDebtsForManagementFromDashboard() {
       intRate: disp(headerMap.intRateColZero),
       acctPctAvail: disp(headerMap.pctAvailColZero),
       linkedProperty: disp(headerMap.linkedPropertyColZero),
-      active: disp(headerMap.activeColZero) || 'Yes'
+      active: disp(headerMap.activeColZero) || 'Yes',
+      lastUpdated: debtNormalizeLastUpdatedIso_(
+        headerMap.lastUpdatedColZero === -1 ? '' : valueRow[headerMap.lastUpdatedColZero])
     });
   }
 
@@ -425,7 +437,7 @@ function updateTrackedDebtFromDashboard(payload) {
     throw new Error('This debt is not currently tracked. Restore it before editing.');
   }
 
-  const headerMap = ensureDebtsLinkedPropertyColumn_(sheet, ss);
+  const headerMap = ensureDebtsLastUpdatedColumn_(sheet, ss);
   const lastCol = Math.max(sheet.getLastColumn(), 1);
   const rowValues = sheet.getRange(sheetRow, 1, 1, lastCol).getValues()[0];
   const rowDisplay = sheet.getRange(sheetRow, 1, 1, lastCol).getDisplayValues()[0];
@@ -593,6 +605,10 @@ function updateTrackedDebtFromDashboard(payload) {
   }
 
   touchDashboardSourceUpdated_('debts');
+
+  if (debtChangedFieldsIncludeFinancial_(changedFields)) {
+    touchDebtLastUpdatedForActiveRow_(sheet, sheetRow, headerMap, ss);
+  }
 
   fitContentColumnsToContents_(
     debtColumnFitTargets,
@@ -923,7 +939,7 @@ function saveTrackedDebtFromDashboard(payload) {
 
     // Complete validation and additive column evolution before any user data
     // changes. A validation failure therefore cannot leave a partial rename.
-    const headerMap = ensureDebtsLinkedPropertyColumn_(sheet, ss);
+    const headerMap = ensureDebtsLastUpdatedColumn_(sheet, ss);
     const rowDisplay = sheet.getRange(
       sheetRow, 1, 1, Math.max(sheet.getLastColumn(), 1)).getDisplayValues()[0];
     const finalType = typeof payload.type === 'undefined'
@@ -1217,6 +1233,10 @@ function updateDebtField(payload) {
   const ss = reuseApplySession ? applySession.ss : getUserSpreadsheet_();
   const sheet = reuseApplySession ? applySession.sheet : getSheet_(ss, 'DEBTS');
 
+  if (!reuseApplySession) {
+    ensureDebtsLastUpdatedColumn_(sheet, ss);
+  }
+
   const display = reuseApplySession ? applySession.display : sheet.getDataRange().getDisplayValues();
   if (display.length < 2) throw new Error('Debts list is empty.');
 
@@ -1259,6 +1279,7 @@ function updateDebtField(payload) {
     }
   } catch (_e) { /* best-effort */ }
 
+  let valueChanged = false;
   let fieldKind = 'text';
   let newRawForLog = rawValue;
 
@@ -1273,12 +1294,15 @@ function updateDebtField(payload) {
   // edited column) looking identical to its neighbors after an update.
   if (currencyFields[fieldName]) {
     const num = toNumber_(rawValue);
-    cell.setValue(round2_(num));
+    const rounded = round2_(num);
+    valueChanged = round2_(toNumber_(previousRaw)) !== rounded;
+    cell.setValue(rounded);
     applyCurrencyFormat_(cell);
     fieldKind = 'currency';
     newRawForLog = num;
   } else if (percentFields[fieldName]) {
     const num = round2_(toNumber_(rawValue));
+    valueChanged = round2_(toNumber_(previousRaw)) !== num;
     cell.setValue(num);
     cell.setNumberFormat('0.00');
     fieldKind = 'percent';
@@ -1286,11 +1310,15 @@ function updateDebtField(payload) {
   } else if (integerFields[fieldName]) {
     const num = parseInt(String(rawValue).trim(), 10);
     if (isNaN(num)) throw new Error(fieldName + ' must be a whole number.');
+    const curNum = parseInt(String(previousDisplay || previousRaw || '').trim(), 10);
+    valueChanged = isNaN(curNum) ? true : curNum !== num;
     cell.setValue(num);
     cell.setNumberFormat('0');
     fieldKind = 'integer';
     newRawForLog = num;
   } else {
+    const newText = rawValue;
+    valueChanged = String(previousRaw == null ? '' : previousRaw) !== String(newText == null ? '' : newText);
     cell.setValue(rawValue);
     fieldKind = 'text';
     newRawForLog = rawValue;
@@ -1351,6 +1379,17 @@ function updateDebtField(payload) {
   }
 
   touchDashboardSourceUpdated_('debts');
+
+  if (valueChanged) {
+    const values = reuseApplySession && Array.isArray(applySession.values)
+      ? applySession.values
+      : sheet.getDataRange().getValues();
+    const rowDisplayRow = display[targetRow - 1] || [];
+    const rowValueRow = values[targetRow - 1] || [];
+    if (!isDebtRowInactive_(rowDisplayRow, rowValueRow, headerMap)) {
+      touchDebtLastUpdatedForActiveRow_(sheet, targetRow, headerMap, ss);
+    }
+  }
 
   var debtFieldFitTargets = [{ sheet: sheet, col: targetCol }];
   if (headerMap.pctAvailCol !== -1) {
@@ -1608,7 +1647,7 @@ function addDebtFromDashboard(payload) {
   const creditLeft = round2_(creditLimit - balance);
 
   const sheet = getSheet_(ss, 'DEBTS');
-  const headerMap = ensureDebtsLinkedPropertyColumn_(sheet, ss);
+  const headerMap = ensureDebtsLastUpdatedColumn_(sheet, ss);
 
   const headerDisplay = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0] || [];
   const numCols = headerDisplay.length;
@@ -1907,6 +1946,12 @@ function addDebtFromDashboard(payload) {
     Logger.log('addDebtFromDashboard activity log: ' + logErr);
   }
 
+  try {
+    touchDebtLastUpdatedForActiveRow_(sheet, appendedRow, headerMap, ss);
+  } catch (touchErr) {
+    Logger.log('addDebtFromDashboard touchDebtLastUpdatedForActiveRow_: ' + touchErr);
+  }
+
   fitContentColumnsToContents_(debtFitTargets, 'addDebtFromDashboard changed-column fit');
 
   // Status line is one short sentence; the Cash-Flow-seed details remain
@@ -2165,6 +2210,7 @@ function getDebtsHeaderMap_(sheet, optionalDisplay) {
   const pctAvailColZero = headers.indexOf('Acct PCT Avail');
   const activeColZero = headers.indexOf('Active');
   const linkedPropertyColZero = headers.indexOf(DEBTS_LINKED_PROPERTY_HEADER_);
+  const lastUpdatedColZero = headers.indexOf(DEBTS_LAST_UPDATED_HEADER_);
 
   if (nameColZero === -1) throw new Error('Debts sheet must contain Account Name.');
   if (typeColZero === -1) throw new Error('Debts sheet must contain Type.');
@@ -2181,6 +2227,7 @@ function getDebtsHeaderMap_(sheet, optionalDisplay) {
     pctAvailColZero: pctAvailColZero,
     activeColZero: activeColZero,
     linkedPropertyColZero: linkedPropertyColZero,
+    lastUpdatedColZero: lastUpdatedColZero,
     nameCol: nameColZero + 1,
     typeCol: typeColZero + 1,
     balanceCol: balanceColZero === -1 ? -1 : balanceColZero + 1,
@@ -2191,7 +2238,8 @@ function getDebtsHeaderMap_(sheet, optionalDisplay) {
     intRateCol: intRateColZero === -1 ? -1 : intRateColZero + 1,
     pctAvailCol: pctAvailColZero === -1 ? -1 : pctAvailColZero + 1,
     activeCol: activeColZero === -1 ? -1 : activeColZero + 1,
-    linkedPropertyCol: linkedPropertyColZero === -1 ? -1 : linkedPropertyColZero + 1
+    linkedPropertyCol: linkedPropertyColZero === -1 ? -1 : linkedPropertyColZero + 1,
+    lastUpdatedCol: lastUpdatedColZero === -1 ? -1 : lastUpdatedColZero + 1
   };
 }
 
@@ -2262,8 +2310,8 @@ function ensureDebtsLinkedPropertyColumn_(sheet, optionalSs) {
   if (linkedCount > 1) {
     throw new Error('Debts sheet contains more than one Linked Property column. No changes were made.');
   }
-  if (linkedColZero !== -1 && linkedColZero !== lastMeaningfulZero) {
-    throw new Error('Linked Property must be the final Debts column. No columns were moved.');
+  if (!debtsLinkedPropertyColumnPositionIsValid_(headers)) {
+    throw new Error('Linked Property must be the final Debts column or immediately before Last Updated. No columns were moved.');
   }
 
   if (linkedColZero === -1) {
@@ -2287,6 +2335,153 @@ function ensureDebtsLinkedPropertyColumn_(sheet, optionalSs) {
   const refreshed = getDebtsHeaderMap_(sheet);
   applyDebtLinkedPropertyValidation_(sheet, optionalSs, refreshed);
   return refreshed;
+}
+
+function debtsLinkedPropertyColumnPositionIsValid_(headers) {
+  const row = headers || [];
+  let linkedColZero = -1;
+  let linkedCount = 0;
+  let lastUpdatedColZero = -1;
+  let lastUpdatedCount = 0;
+  let lastMeaningfulZero = -1;
+  for (let c = 0; c < row.length; c++) {
+    const label = String(row[c] || '').trim();
+    if (label) lastMeaningfulZero = c;
+    if (label === DEBTS_LINKED_PROPERTY_HEADER_) {
+      linkedCount++;
+      if (linkedColZero === -1) linkedColZero = c;
+    }
+    if (label === DEBTS_LAST_UPDATED_HEADER_) {
+      lastUpdatedCount++;
+      if (lastUpdatedColZero === -1) lastUpdatedColZero = c;
+    }
+  }
+  if (linkedCount > 1 || lastUpdatedCount > 1) return false;
+  if (linkedColZero === -1) return true;
+  if (lastUpdatedColZero !== -1) {
+    return lastUpdatedColZero === lastMeaningfulZero &&
+      linkedColZero === lastUpdatedColZero - 1;
+  }
+  return linkedColZero === lastMeaningfulZero;
+}
+
+/**
+ * Additive schema evolution for INPUT - Debts Last Updated column. Active and
+ * Linked Property are established first; Last Updated is appended as the final
+ * meaningful column when missing. Existing cells and columns are never moved.
+ */
+function ensureDebtsLastUpdatedColumn_(sheet, optionalSs) {
+  const preliminary = getDebtsHeaderMap_(sheet);
+  if (preliminary.lastUpdatedColZero !== -1) return preliminary;
+
+  const headerMap = ensureDebtsLinkedPropertyColumn_(sheet, optionalSs);
+  if (headerMap.lastUpdatedColZero !== -1) return headerMap;
+
+  const lastCol = Math.max(sheet.getLastColumn(), 1);
+  const headers = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0] || [];
+  let lastMeaningfulZero = -1;
+  for (let c = 0; c < headers.length; c++) {
+    if (String(headers[c] || '').trim()) lastMeaningfulZero = c;
+  }
+  if (lastMeaningfulZero !== -1 &&
+      String(headers[lastMeaningfulZero] || '').trim() !== DEBTS_LINKED_PROPERTY_HEADER_) {
+    throw new Error('Last Updated must be appended after Linked Property. No columns were moved.');
+  }
+
+  const targetCol = lastCol + 1;
+  sheet.getRange(1, targetCol).setValue(DEBTS_LAST_UPDATED_HEADER_);
+  try {
+    if (headerMap.linkedPropertyCol !== -1) {
+      sheet.getRange(1, headerMap.linkedPropertyCol, sheet.getMaxRows(), 1).copyTo(
+        sheet.getRange(1, targetCol, sheet.getMaxRows(), 1),
+        SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+        false
+      );
+      sheet.getRange(1, targetCol).setValue(DEBTS_LAST_UPDATED_HEADER_);
+    }
+    sheet.setColumnWidth(targetCol, DEBTS_CANONICAL_WIDTHS_[DEBTS_LAST_UPDATED_HEADER_]);
+  } catch (styleErr) {
+    Logger.log('ensureDebtsLastUpdatedColumn_ style: ' + styleErr);
+  }
+  return getDebtsHeaderMap_(sheet);
+}
+
+function debtParseLastUpdatedDate_(rawValue) {
+  if (rawValue === null || rawValue === undefined || rawValue === '') return null;
+  if (rawValue instanceof Date) {
+    return isNaN(rawValue.getTime()) ? null : stripTime_(rawValue);
+  }
+  const text = String(rawValue || '').trim();
+  if (!text) return null;
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const year = Number(isoMatch[1]);
+    const month = Number(isoMatch[2]);
+    const day = Number(isoMatch[3]);
+    if (!year || !month || !day) return null;
+    const parsed = new Date(year, month - 1, day);
+    return isNaN(parsed.getTime()) ? null : stripTime_(parsed);
+  }
+  const parsed = new Date(text);
+  return isNaN(parsed.getTime()) ? null : stripTime_(parsed);
+}
+
+function debtNormalizeLastUpdatedIso_(rawValue) {
+  const date = debtParseLastUpdatedDate_(rawValue);
+  if (!date) return '';
+  return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+function debtTodayLastUpdatedDate_() {
+  return stripTime_(new Date());
+}
+
+function debtChangedFieldsIncludeFinancial_(changedFields) {
+  return (changedFields || []).some(function(label) {
+    return DEBT_EDITABLE_FIELDS_.indexOf(label) !== -1;
+  });
+}
+
+function debtFieldValueChangedForLastUpdated_(fieldName, previousRaw, newRaw) {
+  const label = String(fieldName || '').trim();
+  if (DEBT_EDITABLE_FIELDS_.indexOf(label) === -1) return false;
+  if (label === 'Account Balance' || label === 'Minimum Payment' ||
+      label === 'Credit Limit' || label === 'Credit Left') {
+    return round2_(toNumber_(previousRaw)) !== round2_(toNumber_(newRaw));
+  }
+  if (label === 'Int Rate') {
+    return round2_(toNumber_(previousRaw)) !== round2_(toNumber_(newRaw));
+  }
+  if (label === 'Due Date') {
+    const prev = parseInt(String(previousRaw || '').trim(), 10);
+    const next = parseInt(String(newRaw || '').trim(), 10);
+    return (isNaN(prev) ? '' : prev) !== (isNaN(next) ? '' : next);
+  }
+  return String(previousRaw == null ? '' : previousRaw) !== String(newRaw == null ? '' : newRaw);
+}
+
+/**
+ * Writes today's date to Last Updated for an active debt row only. Returns the
+ * normalized yyyy-MM-dd value, or '' when the row is inactive or the write is
+ * skipped.
+ */
+function touchDebtLastUpdatedForActiveRow_(sheet, sheetRow, optionalHeaderMap, optionalSs) {
+  if (!sheet || sheetRow < 2) return '';
+
+  const preliminary = optionalHeaderMap || getDebtsHeaderMap_(sheet);
+  const lastCol = Math.max(sheet.getLastColumn(), 1);
+  const rowDisplay = sheet.getRange(sheetRow, 1, 1, lastCol).getDisplayValues()[0] || [];
+  const rowValues = sheet.getRange(sheetRow, 1, 1, lastCol).getValues()[0] || [];
+  if (preliminary.activeCol !== -1 &&
+      isDebtRowInactive_(rowDisplay, rowValues, preliminary)) {
+    return '';
+  }
+
+  const headerMap = ensureDebtsLastUpdatedColumn_(sheet, optionalSs);
+  if (headerMap.lastUpdatedCol === -1) return '';
+  const dateValue = debtTodayLastUpdatedDate_();
+  sheet.getRange(sheetRow, headerMap.lastUpdatedCol).setValue(dateValue);
+  return debtNormalizeLastUpdatedIso_(dateValue);
 }
 
 function applyDebtLinkedPropertyValidation_(sheet, optionalSs, optionalHeaderMap) {

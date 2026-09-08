@@ -1139,7 +1139,9 @@ function plaidImportBeginDebtApplyWriteSession_(accountName) {
   const sheet = getSheet_(ss, 'DEBTS');
   var display = sheet.getDataRange().getDisplayValues();
   if (display.length < 2) throw new Error('Debts list is empty.');
-  var headerMap = getDebtsHeaderMap_(sheet);
+  var headerMap = ensureDebtsLastUpdatedColumn_(sheet, ss);
+  display = sheet.getDataRange().getDisplayValues();
+  var values = sheet.getDataRange().getValues();
   var targetRow = findDebtRow_(sheet, accountName);
   if (targetRow === -1) throw new Error('Debt account not found: ' + accountName);
   PLAID_IMPORT_DEBT_APPLY_WRITE_SESSION_ = {
@@ -1147,6 +1149,7 @@ function plaidImportBeginDebtApplyWriteSession_(accountName) {
     ss: ss,
     sheet: sheet,
     display: display,
+    values: values,
     headerMap: headerMap,
     targetRow: targetRow
   };
@@ -1629,6 +1632,14 @@ function plaidImportApplyDebtUpdates_(payload) {
       if (writeSession) {
         recalcDebtDerivedCreditFieldsForRow_(writeSession.sheet, writeSession.targetRow,
           writeSession.headerMap);
+        if (applied.length > 0) {
+          try {
+            touchDebtLastUpdatedForActiveRow_(writeSession.sheet, writeSession.targetRow,
+              null, writeSession.ss);
+          } catch (touchErr) {
+            Logger.log('plaidImportApplyDebtUpdates_ touchDebtLastUpdatedForActiveRow_: ' + touchErr);
+          }
+        }
       }
     } finally {
       plaidImportEndDebtApplyWriteSession_();
