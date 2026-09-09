@@ -1,0 +1,11 @@
+# Synthetic E*TRADE Positions PDF — headers only (no open-lot children)
+Refresh: Aug 15, 2025 04:30 PM ET
+Account: TEST-ACCT-POS-2
+Net Account Value: $50,000.00
+Viewing 2 of 2 positions
+
+Symbol / CUSIP | Type | Last Price $ | Change $ | Change % | Qty # | Price Paid $ | Day's Gain $ | Total Gain $ | Total Gain % | Value $
+SYNAAA | Trade | $150.00 | $2.00 | 1.35% | 30 | | $60.00 | | | $4,500.00
+SYNETF | Trade | $50.00 | ($0.50) | -1.00% | 100 | $4,800.00 | ($50.00) | $200.00 | 4.17% | $5,000.00
+Cash | Transfer money | — | — | — | — | — | — | — | — | $1,234.56
+Total | | | | | | | | | | $10,734.56

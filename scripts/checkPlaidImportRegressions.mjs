@@ -275,7 +275,19 @@ assert(bridge.includes('plaidImportSafeConnection_') &&
   });
   assert(generic.ok === false && !generic.connectionErrorCode,
     'non-allowlisted backend failures must not expose raw codes');
+  const saveFailed = ctx.plaidImportSafeConnection_(() => {
+    throw new Error('Plaid import request failed: CONNECTION_SAVE_FAILED');
+  });
+  assert(saveFailed.connectionErrorCode === 'CONNECTION_SAVE_FAILED',
+    'CONNECTION_SAVE_FAILED must pass allowlisted code');
 }
+
+assert(bridge.includes('function plaidImportAdminDiagnoseLinkCompletion') &&
+  bridge.includes('function plaidImportAdminReconcileLinkCompletion') &&
+  bridge.includes("'/v1/admin/link-completion/diagnose'") &&
+  bridge.includes("'/v1/admin/link-completion/reconcile'") &&
+  bridge.includes('plaidImportDiagnosticAssertAdmin_'),
+  'admin-only link completion diagnostics must stay behind administrator gate');
 
 new vm.Script(bridge);
 new vm.Script(client);

@@ -290,50 +290,73 @@ assert(reviewSafe.ok === false &&
   'identity review failures must surface a dedicated user-facing message');
 
 assert(client.includes('PLAID_MAIN_CONNECT_PROGRESS_') &&
+  client.includes('PLAID_MAIN_CONNECT_OPENING_') &&
+  client.includes('PLAID_MAIN_CONNECT_EXCHANGE_TIMEOUT_MS_') &&
+  client.includes('PLAID_MAIN_CONNECT_RECOVERY_MESSAGE_') &&
   client.includes('Creating secure connection session. This may take up to 60 seconds.') &&
   client.includes('PLAID_MAIN_CONNECT_ERROR_CODES_') &&
   client.includes('plaidMainConnectErrorMessage_') &&
+  client.includes('plaidMainConnectReferenceMessage_') &&
+  client.includes('plaidMainFinalizeConnect_') &&
+  client.includes('plaidMainClearExchangeTimer_') &&
+  client.includes('onEvent:') &&
   client.includes('plaidMainIsConnectInFlight_') &&
   client.includes('plaidMainBeginConnect_') &&
   client.includes('plaidMainEndConnect_') &&
   client.includes('plaidMainSetConnectBusy_') &&
   client.includes('connectingByDomain') &&
-  client.includes('connectRequestSeq'),
+  client.includes('connectRequestSeq') &&
+  client.includes('connectCorrelationByDomain'),
   'connect concurrency UX helpers are missing');
 
-assert(/function plaidMainConnect_[\s\S]{0,220}plaidMainIsConnectInFlight_/.test(client) &&
-  /function plaidMainConnect_[\s\S]{0,500}return;[\s\S]{0,120}plaidMainBeginConnect_/.test(client),
+assert(/function plaidMainConnect_[\s\S]{0,320}plaidMainIsConnectInFlight_/.test(client) &&
+  /function plaidMainConnect_[\s\S]{0,320}plaidMainIsConnectInFlight_[\s\S]{0,1800}plaidMainBeginConnect_/.test(client),
   'Connect must ignore duplicate clicks while a request is in flight');
 
-assert(/function plaidMainConnect_[\s\S]{0,900}PLAID_MAIN_CONNECT_PROGRESS_/.test(client) &&
-  /function plaidMainConnect_[\s\S]{0,1200}connectRequestSeq\[targetDomain\] !== requestId/.test(client),
+assert(/function plaidMainConnect_[\s\S]{0,1200}PLAID_MAIN_CONNECT_PROGRESS_/.test(client) &&
+  /function plaidMainConnect_[\s\S]{0,1600}connectRequestSeq\[targetDomain\] !== requestId/.test(client),
   'Connect must show slow-session progress and ignore stale responses');
 
-assert(/function plaidMainConnect_[\s\S]{0,2200}plaidMainConnectErrorMessage_\(err\)/.test(client) &&
+assert(/function plaidMainConnect_[\s\S]{0,5200}plaidMainConnectErrorMessage_\(err\)/.test(client) &&
   client.includes('CONNECT_IN_PROGRESS: \'A connection is already in progress. Please wait before trying again.\'') &&
-  client.includes('LINK_COMPLETION_REVIEW_REQUIRED: \'A previous connection attempt requires administrator review.\''),
+  client.includes('LINK_COMPLETION_REVIEW_REQUIRED: \'A previous connection attempt requires administrator review.\'') &&
+  client.includes('CONNECTION_SAVE_FAILED: PLAID_MAIN_CONNECT_RECOVERY_MESSAGE_'),
   'Connect must map allowlisted backend codes to safe user messages');
 
 assert(/function plaidMainConnectErrorMessage_[\s\S]{0,260}PLAID_MAIN_UNAVAILABLE_/.test(client),
   'Connect must fall back to the generic unavailable message for other failures');
 
-assert(/function plaidMainConnect_[\s\S]{0,2800}plaidMainEndConnect_\(targetDomain\)[\s\S]{0,220}plaidMainSetStatus_\(targetDomain, plaidMainConnectErrorMessage_\(err\), true\)/.test(client) &&
-  !/function plaidMainConnect_[\s\S]{0,2800}plaidMainConnectErrorMessage_\(err\), true\)[\s\S]{0,120}loadPlaidConnectedAccounts_/.test(client) &&
-  !/function plaidMainConnect_[\s\S]{0,2800}plaidMainConnectErrorMessage_\(err\), true\)[\s\S]{0,120}plaidMainRenderDomain_/.test(client),
-  'new-connect failure must not reload or replace existing connection cards');
+{
+  const connectStart = client.indexOf('function plaidMainConnect_');
+  const connectEnd = client.indexOf('function plaidMainReconnect_', connectStart);
+  const connectSource = client.slice(connectStart, connectEnd < 0 ? client.length : connectEnd);
+  assert(/plaidMainFinalizeConnect_\(targetDomain, requestId, \{[\s\S]{0,400}isError: true/.test(connectSource) &&
+    !/plaidMainConnectErrorMessage_\(err\), true\)[\s\S]{0,120}loadPlaidConnectedAccounts_/.test(connectSource) &&
+    !/plaidMainConnectErrorMessage_\(err\), true\)[\s\S]{0,120}plaidMainRenderDomain_/.test(connectSource) &&
+    /connectionErrorCode === 'CONNECTION_SAVE_FAILED'[\s\S]{0,600}refresh: err && err\.connectionErrorCode === 'CONNECTION_SAVE_FAILED'/.test(connectSource),
+    'new-connect failure must not replace existing cards except targeted save-failure refresh');
 
-assert(/function plaidMainConnect_[\s\S]{0,3200}handler\.open\(\)/.test(client) &&
-  !/function plaidMainConnect_[\s\S]{0,3200}plaidImportInitializeConnection[\s\S]{0,400}plaidImportInitializeConnection/.test(client),
-  'successful link-token response must open Plaid Link once without auto-retry');
+  assert(/handler\.open\(\)/.test(connectSource) &&
+    !/plaidImportInitializeConnection[\s\S]{0,400}plaidImportInitializeConnection/.test(connectSource),
+    'successful link-token response must open Plaid Link once without auto-retry');
 
-assert(!/function plaidMainConnect_[\s\S]{0,4000}plaidImportPreviewMapped/.test(client) &&
-  !/function plaidMainConnect_[\s\S]{0,4000}plaidImportApplyDebtUpdates/.test(client) &&
-  !/function plaidMainConnect_[\s\S]{0,4000}plaidImportApplyCashUpdates/.test(client),
-  'Connect must not invoke Import Data or Apply flows');
+  assert(!/plaidImportPreviewMapped/.test(connectSource) &&
+    !/plaidImportApplyDebtUpdates/.test(connectSource) &&
+    !/plaidImportApplyCashUpdates/.test(connectSource),
+    'Connect must not invoke Import Data or Apply flows');
 
-assert(/function plaidMainConnect_[\s\S]{0,4000}PLAID_MAIN_CONNECT_TIMEOUT_MS_/.test(client) &&
-  /function plaidMainConnect_[\s\S]{0,4000}Connection session timed out/.test(client),
-  'Connect must handle client timeout and re-enable the button');
+  assert(/PLAID_MAIN_CONNECT_TIMEOUT_MS_/.test(connectSource) &&
+    /Connection session timed out/.test(connectSource) &&
+    /plaidMainAbandonPendingConnect_\(correlationId/.test(connectSource),
+    'Connect must handle client timeout with abandon cleanup and re-enable the button');
+
+  assert(/PLAID_MAIN_CONNECT_EXCHANGE_TIMEOUT_MS_/.test(connectSource) &&
+    /PLAID_MAIN_CONNECT_RECOVERY_MESSAGE_/.test(connectSource),
+    'Connect must recover from exchange timeout with a reload message');
+  assert(/if \(options\.refresh\)[\s\S]{0,160}loadPlaidConnectedAccounts_\(true, targetDomain\)/.test(client) &&
+    /statusMessage: 'Institution connected\.'[\s\S]{0,120}refresh: true/.test(connectSource),
+    'successful connect must refresh Connected metadata without a full browser reload');
+}
 
 assert(/function plaidMainAbandonPendingConnect_[\s\S]{0,500}plaidImportAbandonConnection/.test(client) &&
   /function plaidMainConnect_[\s\S]{0,4200}plaidMainAbandonPendingConnect_\(result\.correlationId/.test(client),

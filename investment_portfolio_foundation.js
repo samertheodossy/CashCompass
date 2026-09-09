@@ -12,7 +12,9 @@ var INVESTMENT_PORTFOLIO_SOURCES_ = {
   ROBINHOOD_CSV: true,
   ETRADE_CSV: true,
   ETRADE_PACKAGE: true,
+  ETRADE_POSITIONS_PDF: true,
   M1_CSV: true,
+  M1_STATEMENT_PDF: true,
   SCHWAB_CSV: true,
   RETIREMENT_PLAN_CSV: true,
   PLAID_INVESTMENTS: true,
@@ -81,7 +83,9 @@ var INVESTMENT_PORTFOLIO_ACTIVITY_SUBTYPES_ = {
 var INVESTMENT_PORTFOLIO_CANONICAL_SUBTYPE_SOURCES_ = {
   ETRADE_CSV: true,
   ETRADE_PACKAGE: true,
+  ETRADE_POSITIONS_PDF: true,
   M1_CSV: true,
+  M1_STATEMENT_PDF: true,
   SCHWAB_CSV: true,
   RETIREMENT_PLAN_CSV: true,
   PLAID_INVESTMENTS: true,
@@ -179,6 +183,56 @@ var INVESTMENT_PORTFOLIO_DATA_QUALITY_ = {
   NORMALIZED: true,
   INFERRED: true,
   UNKNOWN: true
+};
+
+var PORTFOLIO_INTELLIGENCE_HOLDINGS_CONTRACT_VERSION_ = 'PORTFOLIO_INTELLIGENCE_HOLDINGS_V1';
+
+var INVESTMENT_PORTFOLIO_ASSET_CLASSES_ = {
+  US_EQUITY: true,
+  INTL_EQUITY: true,
+  FIXED_INCOME: true,
+  CASH: true,
+  ALTERNATIVE: true,
+  UNKNOWN: true
+};
+
+var INVESTMENT_PORTFOLIO_DISTRIBUTION_CLASSIFICATIONS_ = {
+  QUALIFIED_DIVIDEND: true,
+  ORDINARY_DIVIDEND: true,
+  NON_QUALIFIED_DIVIDEND: true,
+  INTEREST: true,
+  RETURN_OF_CAPITAL: true,
+  REINVESTMENT: true,
+  CAPITAL_GAIN_DISTRIBUTION: true,
+  UNKNOWN: true
+};
+
+var INVESTMENT_PORTFOLIO_DATA_FRESHNESS_ = {
+  CURRENT: true,
+  RECENT: true,
+  AGING: true,
+  STALE: true,
+  UNKNOWN: true
+};
+
+var INVESTMENT_PORTFOLIO_DATA_CONFIDENCE_ = {
+  HIGH: true,
+  MEDIUM: true,
+  LOW: true
+};
+
+var INVESTMENT_PORTFOLIO_TAX_STATUS_ = {
+  TAXABLE: true,
+  RETIREMENT: true
+};
+
+var INVESTMENT_PORTFOLIO_ACCOUNT_MATCH_STATUS_ = {
+  EXACT_LINK: true,
+  EXPLICIT_MATCH: true,
+  REVIEW_REQUIRED: true,
+  AMBIGUOUS: true,
+  CONFLICT: true,
+  NO_MATCH: true
 };
 
 /** Append-only extensions; base Robinhood columns remain authoritative for legacy rows. */
@@ -779,6 +833,237 @@ function investmentPortfolioSummarizeReplay_(incomingRows, existingRows, options
     else if (outcome === 'CONFLICT') summary.conflicts += 1;
   });
   return summary;
+}
+
+function investmentPortfolioResolveTaxStatus_(registrationType) {
+  var normalized = investmentPortfolioNormalizeRegistrationType_(registrationType);
+  if (investmentPortfolioRegistrationTaxAuthoritative_(normalized) &&
+      INVESTMENT_PORTFOLIO_RETIREMENT_REGISTRATIONS_[normalized]) {
+    return 'RETIREMENT';
+  }
+  if (normalized === 'TAXABLE') return 'TAXABLE';
+  if (INVESTMENT_PORTFOLIO_RETIREMENT_REGISTRATIONS_[normalized]) return 'RETIREMENT';
+  return 'TAXABLE';
+}
+
+function investmentPortfolioValidateUnifiedSecurityIdentity_(security) {
+  var row = security || {};
+  var errors = [];
+  if (!String(row.stableSecurityId || '').trim()) errors.push('stableSecurityId');
+  var type = String(row.securityType || 'UNKNOWN').trim().toUpperCase();
+  if (!INVESTMENT_PORTFOLIO_SECURITY_TYPES_[type]) errors.push('securityType');
+  var assetClass = String(row.assetClass || 'UNKNOWN').trim().toUpperCase();
+  if (row.assetClass && !INVESTMENT_PORTFOLIO_ASSET_CLASSES_[assetClass]) errors.push('assetClass');
+  var cusip = String(row.cusip || '').trim();
+  var isin = String(row.isin || '').trim();
+  var sourceSecurityKey = String(row.sourceSecurityKey || '').trim();
+  var ticker = String(row.ticker || '').trim();
+  if (!cusip && !isin && !sourceSecurityKey) {
+    if (!ticker) errors.push('securityIdentity');
+    else errors.push('sourceSecurityKeyRequiredWithoutCusip');
+  }
+  return { ok: errors.length === 0, errors: errors };
+}
+
+function investmentPortfolioValidateUnifiedHoldingRow_(row) {
+  var holding = row || {};
+  var errors = [];
+  if (!String(holding.stableAccountId || '').trim()) errors.push('stableAccountId');
+  if (!String(holding.stableSecurityId || '').trim()) errors.push('stableSecurityId');
+  if (holding.shares === null || typeof holding.shares === 'undefined' || holding.shares === '') {
+    errors.push('shares');
+  } else if (!isFinite(Number(holding.shares))) errors.push('shares');
+  var authority = String(holding.authority || '').trim().toUpperCase();
+  if (!INVESTMENT_PORTFOLIO_HOLDINGS_AUTHORITY_[authority]) errors.push('authority');
+  var quality = String(holding.costBasisQuality || '').trim().toUpperCase();
+  if (holding.costBasisQuality && !INVESTMENT_PORTFOLIO_COST_BASIS_QUALITY_[quality]) {
+    errors.push('costBasisQuality');
+  }
+  if (!String(holding.source || '').trim()) errors.push('source');
+  if (!String(holding.sourceSnapshotKey || '').trim()) errors.push('sourceSnapshotKey');
+  if (!String(holding.sourceAsOf || '').trim()) errors.push('sourceAsOf');
+  var hasPrice = holding.price !== null && typeof holding.price !== 'undefined' && holding.price !== '';
+  var hasMarketValue = holding.marketValue !== null &&
+    typeof holding.marketValue !== 'undefined' && holding.marketValue !== '';
+  if (!hasMarketValue && !hasPrice) errors.push('marketValueOrPrice');
+  if (hasPrice && !String(holding.priceAsOf || '').trim()) errors.push('priceAsOf');
+  return { ok: errors.length === 0, errors: errors };
+}
+
+function investmentPortfolioValidateUnifiedDistributionRow_(row) {
+  var distribution = row || {};
+  var errors = [];
+  if (!String(distribution.stableAccountId || '').trim()) errors.push('stableAccountId');
+  if (distribution.amount === null || typeof distribution.amount === 'undefined' ||
+      distribution.amount === '' || !isFinite(Number(distribution.amount))) {
+    errors.push('amount');
+  }
+  if (!String(distribution.distributionDate || '').trim()) errors.push('distributionDate');
+  if (!String(distribution.sourceRecordKey || '').trim()) errors.push('sourceRecordKey');
+  var classification = String(distribution.classification || '').trim().toUpperCase();
+  if (classification && !INVESTMENT_PORTFOLIO_DISTRIBUTION_CLASSIFICATIONS_[classification]) {
+    errors.push('classification');
+  }
+  return { ok: errors.length === 0, errors: errors };
+}
+
+function investmentPortfolioBuildEmptyHoldingsPreview_(options) {
+  options = options || {};
+  var preview = {
+    contractVersion: PORTFOLIO_INTELLIGENCE_HOLDINGS_CONTRACT_VERSION_,
+    schemaVersion: INVESTMENT_PORTFOLIO_SCHEMA_VERSION_,
+    previewOnly: true,
+    asOf: String(options.asOf || ''),
+    observedAt: String(options.observedAt || ''),
+    source: investmentPortfolioNormalizeSource_(options.source),
+    parserVersion: String(options.parserVersion || ''),
+    sourceFiles: Array.isArray(options.sourceFiles) ? options.sourceFiles.slice() : [],
+    capabilities: {
+      activities: false,
+      holdings: false,
+      taxLots: false,
+      accountSnapshot: false,
+      dividendHistory: false,
+      realizedGainLoss: false
+    },
+    accounts: [],
+    securities: [],
+    holdings: [],
+    taxLots: [],
+    realizedGainLoss: [],
+    distributions: [],
+    accountSnapshots: [],
+    activities: [],
+    importSummary: investmentPortfolioBuildImportPreviewSummary_({
+      source: options.source,
+      parserVersion: options.parserVersion
+    }),
+    recommendationReadiness: {
+      trustedForHoldingsVisibility: false,
+      trustedForIncomeAnalysis: false,
+      trustedForTaxLotSalePlanning: false,
+      blockingReasons: ['SOURCE_INCOMPLETE']
+    },
+    warnings: [],
+    unsupportedRows: []
+  };
+  return preview;
+}
+
+function investmentPortfolioBuildHoldingsSnapshotReplayKey_(row) {
+  var holding = row || {};
+  var source = investmentPortfolioNormalizeSource_(holding.source) ||
+    String(holding.source || '').trim().toUpperCase();
+  return investmentPortfolioDigest_([
+    'HOLDINGS_SNAPSHOT_V1',
+    source,
+    String(holding.sourceAccountKey || holding.stableAccountId || '').trim(),
+    String(holding.sourceSnapshotKey || '').trim(),
+    String(holding.stableSecurityId || '').trim(),
+    holding.shares,
+    holding.marketValue,
+    holding.providerCostBasis,
+    holding.unrealizedGainLoss,
+    String(holding.sourceAsOf || '').trim()
+  ]);
+}
+
+function investmentPortfolioBuildDistributionReplayKey_(row) {
+  var distribution = row || {};
+  var source = investmentPortfolioNormalizeSource_(distribution.source) ||
+    String(distribution.source || '').trim().toUpperCase();
+  return investmentPortfolioDigest_([
+    'DISTRIBUTION_V1',
+    source,
+    String(distribution.sourceAccountKey || distribution.stableAccountId || '').trim(),
+    String(distribution.sourceRecordKey || '').trim(),
+    String(distribution.stableSecurityId || '').trim(),
+    distribution.amount,
+    String(distribution.distributionDate || '').trim(),
+    String(distribution.classification || '').trim().toUpperCase()
+  ]);
+}
+
+function investmentPortfolioHoldingsEquivalent_(left, right) {
+  var a = left || {};
+  var b = right || {};
+  return String(a.stableAccountId || '') === String(b.stableAccountId || '') &&
+    String(a.stableSecurityId || '') === String(b.stableSecurityId || '') &&
+    Number(a.shares || 0) === Number(b.shares || 0) &&
+    Number(a.marketValue || 0) === Number(b.marketValue || 0) &&
+    Number(a.providerCostBasis || 0) === Number(b.providerCostBasis || 0) &&
+    Number(a.unrealizedGainLoss || 0) === Number(b.unrealizedGainLoss || 0) &&
+    String(a.sourceAsOf || '') === String(b.sourceAsOf || '');
+}
+
+function investmentPortfolioEvaluateRecommendationReadiness_(preview) {
+  var model = preview || {};
+  var blocking = [];
+  var holdings = Array.isArray(model.holdings) ? model.holdings : [];
+  var distributions = Array.isArray(model.distributions) ? model.distributions : [];
+  var taxLots = Array.isArray(model.taxLots) ? model.taxLots : [];
+  var accounts = Array.isArray(model.accounts) ? model.accounts : [];
+  var hasConflict = holdings.some(function(row) {
+    return String(row.replayOutcome || '').toUpperCase() === 'CONFLICT';
+  }) || distributions.some(function(row) {
+    return String(row.replayOutcome || '').toUpperCase() === 'CONFLICT';
+  });
+  if (hasConflict) blocking.push('REPLAY_CONFLICT');
+  var unresolvedAccounts = accounts.filter(function(account) {
+    var status = String(account.matchStatus || '').toUpperCase();
+    return ['AMBIGUOUS', 'CONFLICT', 'REVIEW_REQUIRED', 'NO_MATCH'].indexOf(status) !== -1;
+  });
+  if (unresolvedAccounts.length) blocking.push('ACCOUNT_IDENTITY_REVIEW_REQUIRED');
+  var trustedHoldings = holdings.filter(function(row) {
+    return investmentPortfolioValidateUnifiedHoldingRow_(row).ok &&
+      String(row.freshness || '').toUpperCase() !== 'STALE' &&
+      String(row.confidence || '').toUpperCase() !== 'LOW';
+  });
+  var trustedIncome = distributions.filter(function(row) {
+    return investmentPortfolioValidateUnifiedDistributionRow_(row).ok &&
+      String(row.classification || '').toUpperCase() !== 'UNKNOWN' &&
+      ['STALE', 'UNKNOWN'].indexOf(String(row.freshness || '').toUpperCase()) === -1;
+  });
+  var trustedLots = taxLots.filter(function(row) {
+    var authority = String(row.lotAuthority || '').trim().toUpperCase();
+    return authority === 'PROVIDER_REPORTED' &&
+      String(row.acquisitionDate || '').trim() &&
+      isFinite(Number(row.remainingQuantity)) &&
+      String(row.sourceLotKey || '').trim();
+  });
+  return {
+    trustedForHoldingsVisibility: trustedHoldings.length > 0 && !hasConflict &&
+      !unresolvedAccounts.length,
+    trustedForIncomeAnalysis: trustedIncome.length > 0 && !hasConflict,
+    trustedForTaxLotSalePlanning: trustedLots.length > 0 && !hasConflict &&
+      !unresolvedAccounts.length,
+    blockingReasons: blocking.length ? blocking.slice() : (
+      trustedHoldings.length ? [] : ['SOURCE_INCOMPLETE']
+    )
+  };
+}
+
+function investmentPortfolioValidateUnifiedHoldingsPreview_(preview) {
+  var model = preview || {};
+  var errors = [];
+  if (model.previewOnly !== true) errors.push('previewOnly');
+  if (model.contractVersion !== PORTFOLIO_INTELLIGENCE_HOLDINGS_CONTRACT_VERSION_) {
+    errors.push('contractVersion');
+  }
+  if (model.schemaVersion !== INVESTMENT_PORTFOLIO_SCHEMA_VERSION_) errors.push('schemaVersion');
+  (model.securities || []).forEach(function(security, index) {
+    var result = investmentPortfolioValidateUnifiedSecurityIdentity_(security);
+    if (!result.ok) errors.push('securities[' + index + ']:' + result.errors.join(','));
+  });
+  (model.holdings || []).forEach(function(row, index) {
+    var result = investmentPortfolioValidateUnifiedHoldingRow_(row);
+    if (!result.ok) errors.push('holdings[' + index + ']:' + result.errors.join(','));
+  });
+  (model.distributions || []).forEach(function(row, index) {
+    var result = investmentPortfolioValidateUnifiedDistributionRow_(row);
+    if (!result.ok) errors.push('distributions[' + index + ']:' + result.errors.join(','));
+  });
+  return { ok: errors.length === 0, errors: errors };
 }
 
 function investmentPortfolioValidateActivity_(activity) {

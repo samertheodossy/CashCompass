@@ -63,6 +63,36 @@ var INVESTMENT_ADAPTER_REGISTRY_ = {
     detect: investmentEtradeDetectTxnCsv_,
     preview: investmentAdapterPreviewEtradeCsv_,
     normalize: investmentAdapterNormalizeEtradeCsv_
+  },
+  ETRADE_POSITIONS_PDF: {
+    source: 'ETRADE_POSITIONS_PDF',
+    parserVersion: ETRADE_POSITIONS_PDF_PARSER_VERSION_,
+    capabilities: {
+      activities: false,
+      holdings: true,
+      taxLots: true,
+      accountSnapshot: true,
+      dividendHistory: false,
+      realizedGainLoss: false
+    },
+    detect: investmentEtradeDetectPositionsPdf_,
+    preview: investmentAdapterPreviewEtradePositionsPdf_,
+    normalize: investmentAdapterNormalizeEtradePositionsPdf_
+  },
+  M1_STATEMENT_PDF: {
+    source: 'M1_STATEMENT_PDF',
+    parserVersion: M1_STATEMENT_PDF_PARSER_VERSION_,
+    capabilities: {
+      activities: false,
+      holdings: true,
+      taxLots: false,
+      accountSnapshot: true,
+      dividendHistory: false,
+      realizedGainLoss: false
+    },
+    detect: investmentM1DetectStatementPdf_,
+    preview: investmentAdapterPreviewM1StatementPdf_,
+    normalize: investmentAdapterNormalizeM1StatementPdf_
   }
 };
 
@@ -159,6 +189,30 @@ function investmentAdapterPreviewEtradeCsv_(input, optionalSs) {
 
 function investmentAdapterNormalizeEtradeCsv_(input, optionalSs) {
   var preview = investmentAdapterPreviewEtradeCsv_(input, optionalSs);
+  if (!preview.ok) return preview;
+  return preview.normalized;
+}
+
+function investmentAdapterPreviewEtradePositionsPdf_(input, optionalSs) {
+  var payload = input || {};
+  payload.source = investmentPortfolioNormalizeSource_(payload.source) || 'ETRADE_POSITIONS_PDF';
+  return investmentEtradePreviewPositionsPdfUnifiedHoldings_(payload);
+}
+
+function investmentAdapterNormalizeEtradePositionsPdf_(input, optionalSs) {
+  var preview = investmentAdapterPreviewEtradePositionsPdf_(input, optionalSs);
+  if (!preview.ok) return preview;
+  return preview.normalized;
+}
+
+function investmentAdapterPreviewM1StatementPdf_(input, optionalSs) {
+  var payload = input || {};
+  payload.source = investmentPortfolioNormalizeSource_(payload.source) || 'M1_STATEMENT_PDF';
+  return investmentM1PreviewStatementPdfUnifiedHoldings_(payload);
+}
+
+function investmentAdapterNormalizeM1StatementPdf_(input, optionalSs) {
+  var preview = investmentAdapterPreviewM1StatementPdf_(input, optionalSs);
   if (!preview.ok) return preview;
   return preview.normalized;
 }

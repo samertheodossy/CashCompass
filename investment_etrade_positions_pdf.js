@@ -70,6 +70,129 @@ function investmentEtradeParsePositionsPreamble_(lines, headerIndex) {
   };
 }
 
+var ETRADE_POSITIONS_MONTHS_ = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+};
+
+function investmentEtradeParsePositionsIdentityColumn_(identity) {
+  var text = String(identity || '').trim();
+  var corporateEventMarker = /[*!]/.test(text);
+  var cleaned = text.replace(/[*!]/g, '').trim();
+  if (!cleaned) {
+    return { raw: text, symbol: '', cusip: '', corporateEventMarker: corporateEventMarker };
+  }
+  if (/^[0-9A-Z]{9}$/.test(cleaned) && !/^[A-Z]{1,5}$/.test(cleaned)) {
+    return { raw: text, symbol: '', cusip: cleaned.toUpperCase(), corporateEventMarker: corporateEventMarker };
+  }
+  return {
+    raw: text,
+    symbol: cleaned.toUpperCase(),
+    cusip: '',
+    corporateEventMarker: corporateEventMarker
+  };
+}
+
+function investmentEtradeBuildPositionsSourceSecurityKey_(symbol, typeLabel, cusip) {
+  var cusipText = String(cusip || '').trim().toUpperCase();
+  if (cusipText) return 'CUSIP:' + cusipText;
+  return 'ETRADE|' + String(symbol || '').trim().toUpperCase() + '|' +
+    String(typeLabel || 'Trade').trim();
+}
+
+function investmentEtradeMapPositionsSecurityType_(typeLabel, symbol) {
+  var label = String(typeLabel || '').trim().toLowerCase();
+  if (/etf/i.test(label) || /etf/i.test(symbol)) return 'ETF';
+  if (/mutual/i.test(label)) return 'MUTUAL_FUND';
+  if (/bond/i.test(label)) return 'BOND';
+  if (/option/i.test(label)) return 'OPTION';
+  return 'UNKNOWN';
+}
+
+function investmentEtradeNormalizePositionsRefreshAt_(refreshRaw) {
+  var text = String(refreshRaw || '').trim();
+  if (!text) return '';
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text;
+  var match = text.match(/^([A-Za-z]{3,9})\s+(\d{1,2}),\s+(\d{4})(?:\s+(\d{1,2}):(\d{2})\s*(AM|PM)\s*(ET|EST|EDT)?)?/i);
+  if (!match) return text;
+  var monthKey = match[1].slice(0, 3).toLowerCase();
+  var month = ETRADE_POSITIONS_MONTHS_[monthKey];
+  if (typeof month !== 'number') return text;
+  var day = ('0' + match[2]).slice(-2);
+  var year = match[3];
+  var isoDate = year + '-' + ('0' + (month + 1)).slice(-2) + '-' + day;
+  if (!match[4]) return isoDate + 'T00:00:00.000Z';
+  var hour = Number(match[4]) % 12;
+  if (String(match[6] || '').toUpperCase() === 'PM') hour += 12;
+  var minute = ('0' + match[5]).slice(-2);
+  var hourText = ('0' + hour).slice(-2);
+  return isoDate + 'T' + hourText + ':' + minute + ':00.000Z';
+}
+
+function investmentEtradeExtractPositionsCashBalance_(noiseRows) {
+  var cashRow = (noiseRows || []).filter(function(row) {
+    return row.reason === 'CASH_ROW';
+  })[0];
+  if (!cashRow || !cashRow.cells) return null;
+  var value = investmentEtradeSafeParsePositionsMoney_(cashRow.cells[10]);
+  return isFinite(value) ? value : null;
+}
+
+function investmentEtradeResolvePositionsAccountMatch_(input, accountResolution) {
+  input = input || {};
+  accountResolution = accountResolution || {};
+  var accountMeta = input.accountMeta || {};
+  var stableAccountId = String(accountMeta.stableAccountId || '').trim();
+  var explicitMatch = input.explicitAccountMatch === true || accountMeta.explicitAccountMatch === true;
+  var active = accountMeta.active !== false;
+  if (!accountResolution.ok) {
+    return {
+      ok: false,
+      stableAccountId: stableAccountId,
+      sourceAccountKey: '',
+      matchStatus: 'NO_MATCH',
+      error: accountResolution.error || 'Account identity unresolved.'
+    };
+  }
+  if (!stableAccountId) {
+    return {
+      ok: true,
+      stableAccountId: '',
+      sourceAccountKey: accountResolution.sourceAccountKey,
+      matchStatus: accountResolution.reviewRequired ? 'REVIEW_REQUIRED' : 'AMBIGUOUS',
+      reviewRequired: true,
+      warning: accountResolution.warning || 'stableAccountId is required for durable account identity.'
+    };
+  }
+  if (!active) {
+    return {
+      ok: true,
+      stableAccountId: stableAccountId,
+      sourceAccountKey: stableAccountId,
+      matchStatus: 'AMBIGUOUS',
+      reviewRequired: true,
+      warning: 'Inactive account cannot be associated automatically.'
+    };
+  }
+  if (!explicitMatch) {
+    return {
+      ok: true,
+      stableAccountId: stableAccountId,
+      sourceAccountKey: stableAccountId,
+      matchStatus: 'REVIEW_REQUIRED',
+      reviewRequired: true,
+      warning: 'Explicit owner account match is required before trusting holdings preview.'
+    };
+  }
+  return {
+    ok: true,
+    stableAccountId: stableAccountId,
+    sourceAccountKey: stableAccountId,
+    matchStatus: 'EXPLICIT_MATCH',
+    reviewRequired: false
+  };
+}
+
 function investmentEtradeParsePositionsAcquisitionDate_(identity) {
   var text = String(identity || '').trim();
   var match = text.match(/^(\d{1,2}\/\d{1,2}\/\d{4})(?:\s+WS)?$/i);
@@ -101,10 +224,15 @@ function investmentEtradeClassifyPositionsRow_(cells) {
     return { kind: 'OPEN_LOT', lotDate: lotDate };
   }
   if (/^trade$/i.test(typeLabel) && /^[A-Z][A-Z0-9.\-]{0,11}$/i.test(identity.replace(/[*!]/g, ''))) {
+    var parsedIdentity = investmentEtradeParsePositionsIdentityColumn_(identity);
+    if (!parsedIdentity.symbol && !parsedIdentity.cusip) {
+      return { kind: 'UNKNOWN', identity: identity };
+    }
     return {
       kind: 'POSITION_HEADER',
-      symbol: identity.replace(/[*!]/g, '').toUpperCase(),
-      corporateEventMarker: /[*!]/.test(identity)
+      symbol: parsedIdentity.symbol || parsedIdentity.cusip,
+      cusip: parsedIdentity.cusip,
+      corporateEventMarker: parsedIdentity.corporateEventMarker
     };
   }
   return { kind: 'UNKNOWN', identity: identity };
@@ -174,13 +302,18 @@ function investmentEtradeSafeParsePositionsNumber_(text) {
   }
 }
 
+function investmentEtradeHasPositionsMoney_(value) {
+  return value !== null && typeof value !== 'undefined' && value !== '' && isFinite(value);
+}
+
 function investmentEtradeExtractPositionsNumericFields_(cells) {
+  var pricePaidText = String(cells[6] || '').trim();
   return {
     lastPrice: investmentEtradeSafeParsePositionsMoney_(cells[2]),
     changeDollar: investmentEtradeSafeParsePositionsMoney_(cells[3]),
     changePercent: investmentEtradeSafeParsePositionsNumber_(String(cells[4] || '').replace(/%/g, '')),
     quantity: investmentEtradeSafeParsePositionsNumber_(cells[5]),
-    pricePaid: investmentEtradeSafeParsePositionsMoney_(cells[6]),
+    pricePaid: pricePaidText ? investmentEtradeSafeParsePositionsMoney_(cells[6]) : NaN,
     daysGain: investmentEtradeSafeParsePositionsMoney_(cells[7]),
     totalGain: investmentEtradeSafeParsePositionsMoney_(cells[8]),
     totalGainPercent: investmentEtradeSafeParsePositionsNumber_(String(cells[9] || '').replace(/%/g, '')),
@@ -253,7 +386,6 @@ function investmentEtradeNormalizePositionsHeader_(row, context) {
   if (!isFinite(nums.quantity)) errors.push('quantity');
   if (!isFinite(nums.lastPrice)) errors.push('lastPrice');
   if (!isFinite(nums.marketValue)) errors.push('marketValue');
-  if (!isFinite(nums.pricePaid)) errors.push('pricePaid');
   if (errors.length) {
     return {
       ok: false,
@@ -263,24 +395,28 @@ function investmentEtradeNormalizePositionsHeader_(row, context) {
       errors: errors
     };
   }
-  var symbol = row.classified.symbol;
-  var stableSecurityId = investmentPortfolioHashOpaqueKey_('SEC', symbol);
+  var typeLabel = String(row.cells[1] || 'Trade').trim();
+  var symbol = String(row.classified.symbol || '').trim().toUpperCase();
+  var cusip = String(row.classified.cusip || '').trim().toUpperCase();
+  var sourceSecurityKey = investmentEtradeBuildPositionsSourceSecurityKey_(symbol, typeLabel, cusip);
+  var stableSecurityId = investmentPortfolioHashOpaqueKey_('SEC', sourceSecurityKey);
   var reviewRequired = !!row.classified.corporateEventMarker;
   return {
     ok: true,
     reviewRequired: reviewRequired,
     header: {
       symbol: symbol,
+      cusip: cusip,
       stableSecurityId: stableSecurityId,
-      sourceSecurityKey: symbol,
-      securityTypeLabel: String(row.cells[1] || 'Trade').trim(),
-      securityType: 'UNKNOWN',
+      sourceSecurityKey: sourceSecurityKey,
+      securityTypeLabel: typeLabel,
+      securityType: investmentEtradeMapPositionsSecurityType_(typeLabel, symbol),
       sourceRowIndex: row.rowIndex,
       lastPrice: nums.lastPrice,
       changeDollar: nums.changeDollar,
       changePercent: nums.changePercent,
       quantity: nums.quantity,
-      pricePaid: nums.pricePaid,
+      pricePaid: investmentEtradeHasPositionsMoney_(nums.pricePaid) ? nums.pricePaid : null,
       daysGain: nums.daysGain,
       totalGain: nums.totalGain,
       totalGainPercent: nums.totalGainPercent,
@@ -349,8 +485,8 @@ function investmentEtradeBuildHoldingsSnapshotRecord_(header, context) {
     quantity: header.quantity,
     currentPrice: header.lastPrice,
     marketValue: header.marketValue,
-    providerCostBasis: header.pricePaid,
-    costBasisQuality: 'PROVIDER_AGGREGATE',
+    providerCostBasis: investmentEtradeHasPositionsMoney_(header.pricePaid) ? header.pricePaid : null,
+    costBasisQuality: investmentEtradeHasPositionsMoney_(header.pricePaid) ? 'PROVIDER_AGGREGATE' : 'UNKNOWN',
     unrealizedGain: header.totalGain,
     unrealizedGainPercent: header.totalGainPercent,
     authority: 'PROVIDER_REPORTED',
@@ -401,6 +537,205 @@ function investmentEtradeBuildOpenLotRecord_(lot, context) {
   };
 }
 
+function investmentEtradeBuildUnifiedHoldingsPreviewFromPositions_(input, legacyPreview, parseResult, accountMatch) {
+  input = input || {};
+  legacyPreview = legacyPreview || {};
+  parseResult = parseResult || {};
+  accountMatch = accountMatch || {};
+  var normalized = legacyPreview.normalized || {};
+  var accountMeta = input.accountMeta || {};
+  var preamble = parseResult.preamble || normalized.preamble || {};
+  var sourceAsOf = investmentEtradeNormalizePositionsRefreshAt_(preamble.refreshAt || '');
+  var registrationType = investmentPortfolioNormalizeRegistrationType_(
+    accountMeta.registrationType || 'TAXABLE');
+  var taxStatus = investmentPortfolioResolveTaxStatus_(registrationType);
+  var fingerprint = normalized.sourceFileFingerprint ||
+    investmentEtradeBuildPositionsFileFingerprint_(investmentEtradeExtractHoldingsContent_(input));
+  var stableAccountId = String(accountMatch.stableAccountId || '').trim();
+  var matchStatus = String(accountMatch.matchStatus || 'REVIEW_REQUIRED').toUpperCase();
+  var confidence = matchStatus === 'EXPLICIT_MATCH' ? 'HIGH' : 'MEDIUM';
+  if (['AMBIGUOUS', 'CONFLICT', 'NO_MATCH', 'REVIEW_REQUIRED'].indexOf(matchStatus) !== -1) {
+    confidence = 'LOW';
+  }
+
+  var preview = investmentPortfolioBuildEmptyHoldingsPreview_({
+    source: 'ETRADE_POSITIONS_PDF',
+    parserVersion: legacyPreview.parserVersion || ETRADE_POSITIONS_PDF_PARSER_VERSION_,
+    asOf: sourceAsOf,
+    observedAt: String(input.observedAt || '')
+  });
+  preview.source = 'ETRADE_POSITIONS_PDF';
+  preview.parserVersion = legacyPreview.parserVersion || ETRADE_POSITIONS_PDF_PARSER_VERSION_;
+  preview.sourceFiles = [{
+    role: 'HOLDINGS',
+    fileName: String(input.fileName || 'etrade-positions.pdf').trim() || 'etrade-positions.pdf',
+    sourceFileFingerprint: fingerprint,
+    sourceAsOf: sourceAsOf,
+    parserVersion: ETRADE_POSITIONS_PDF_PARSER_VERSION_
+  }];
+  preview.capabilities = {
+    activities: false,
+    holdings: (normalized.holdingsSnapshots || []).length > 0,
+    taxLots: (normalized.taxLots || []).length > 0,
+    accountSnapshot: !!(preamble.netAccountValue || investmentEtradeExtractPositionsCashBalance_(parseResult.noiseRows)),
+    dividendHistory: false,
+    realizedGainLoss: false
+  };
+  preview.accounts = [{
+    investmentId: String(input.investmentId || accountMeta.investmentId || ''),
+    stableAccountId: stableAccountId,
+    institution: 'E*TRADE',
+    displayName: String(accountMeta.accountName || preamble.accountLabel || '').trim(),
+    accountType: String(accountMeta.accountType || 'Brokerage').trim() || 'Brokerage',
+    registrationType: registrationType,
+    domain: investmentPortfolioResolveDomainForRegistration_(registrationType),
+    taxStatus: taxStatus,
+    portfolioRoles: investmentPortfolioResolvePortfolioRoles_(accountMeta),
+    active: accountMeta.active !== false,
+    matchStatus: matchStatus,
+    sourceAccountKey: String(accountMatch.sourceAccountKey || normalized.sourceAccountKey || '').trim()
+  }];
+  preview.securities = (normalized.securities || []).map(function(security) {
+    return {
+      stableSecurityId: security.stableSecurityId,
+      ticker: security.ticker || '',
+      cusip: security.cusip || '',
+      securityName: security.securityName || '',
+      securityType: security.securityType || 'UNKNOWN',
+      assetClass: 'UNKNOWN',
+      primarySource: 'ETRADE_POSITIONS_PDF',
+      sourceSecurityKey: security.sourceSecurityKey
+    };
+  });
+  preview.holdings = (normalized.holdingsSnapshots || []).map(function(row) {
+    var holding = {
+      stableAccountId: stableAccountId || String(row.stableAccountId || ''),
+      stableSecurityId: row.stableSecurityId,
+      ticker: row.ticker || '',
+      shares: row.quantity,
+      price: row.currentPrice,
+      priceAsOf: sourceAsOf,
+      marketValue: row.marketValue,
+      providerCostBasis: row.providerCostBasis,
+      costBasisQuality: row.costBasisQuality || 'UNKNOWN',
+      unrealizedGainLoss: row.unrealizedGain,
+      authority: row.authority || 'PROVIDER_REPORTED',
+      source: 'ETRADE_POSITIONS_PDF',
+      sourceSnapshotKey: fingerprint,
+      sourceAsOf: sourceAsOf,
+      sourceFileFingerprint: fingerprint,
+      dataQuality: row.dataQuality || 'PROVIDER_REPORTED',
+      freshness: sourceAsOf ? 'CURRENT' : 'UNKNOWN',
+      confidence: confidence,
+      reviewRequired: !!row.reviewRequired
+    };
+    holding.replayKey = investmentPortfolioBuildHoldingsSnapshotReplayKey_({
+      source: holding.source,
+      sourceAccountKey: accountMatch.sourceAccountKey || stableAccountId,
+      sourceSnapshotKey: holding.sourceSnapshotKey,
+      stableSecurityId: holding.stableSecurityId,
+      shares: holding.shares,
+      marketValue: holding.marketValue,
+      providerCostBasis: holding.providerCostBasis,
+      unrealizedGainLoss: holding.unrealizedGainLoss,
+      sourceAsOf: holding.sourceAsOf
+    });
+    return holding;
+  }).filter(function(row, index, rows) {
+    return rows.findIndex(function(other) {
+      return other.stableSecurityId === row.stableSecurityId &&
+        other.stableAccountId === row.stableAccountId;
+    }) === index;
+  });
+  preview.taxLots = (normalized.taxLots || []).map(function(lot) {
+    return {
+      stableLotId: lot.stableLotId,
+      stableAccountId: stableAccountId || lot.stableAccountId,
+      stableSecurityId: lot.stableSecurityId,
+      ticker: lot.ticker || '',
+      acquisitionDate: lot.acquisitionDate,
+      originalQuantity: lot.originalQuantity,
+      remainingQuantity: lot.remainingQuantity,
+      costPerShare: lot.costPerShare,
+      originalCostBasis: lot.originalCostBasis,
+      adjustedCostBasis: lot.adjustedCostBasis,
+      costBasisQuality: lot.costBasisQuality || 'PROVIDER_LOT',
+      lotAuthority: lot.lotAuthority || 'PROVIDER_REPORTED',
+      currentPrice: lot.currentPrice,
+      currentValue: lot.currentValue,
+      unrealizedGainLoss: lot.unrealizedGain,
+      washSaleAdjusted: !!lot.washSaleAdjusted,
+      sourceLotKey: lot.sourceLotKey,
+      sourceAsOf: sourceAsOf,
+      source: 'ETRADE_POSITIONS_PDF'
+    };
+  });
+  preview.realizedGainLoss = [];
+  preview.distributions = [];
+  preview.activities = [];
+  var cashBalance = investmentEtradeExtractPositionsCashBalance_(parseResult.noiseRows);
+  if (preamble.netAccountValue || cashBalance !== null) {
+    preview.accountSnapshots = [{
+      stableAccountId: stableAccountId || String(accountMatch.sourceAccountKey || ''),
+      snapshotType: cashBalance !== null ? 'CASH' : 'RETIREMENT_BALANCE',
+      marketValue: preamble.netAccountValue,
+      cashBalance: cashBalance,
+      asOf: sourceAsOf,
+      authority: 'PROVIDER_REPORTED',
+      sourceSnapshotKey: fingerprint,
+      sourceAsOf: sourceAsOf,
+      source: 'ETRADE_POSITIONS_PDF'
+    }];
+  }
+  preview.importSummary = investmentPortfolioBuildImportPreviewSummary_({
+    source: 'ETRADE_POSITIONS_PDF',
+    parserVersion: preview.parserVersion,
+    reportedHoldings: preview.holdings.length,
+    providerLots: preview.taxLots.length,
+    excludedActivities: (normalized.unsupportedRows || []).length,
+    account: accountMeta.accountName || preamble.accountLabel,
+    warnings: normalized.warnings || [],
+    capabilities: preview.capabilities
+  });
+  preview.warnings = (normalized.warnings || []).slice();
+  preview.unsupportedRows = (normalized.unsupportedRows || []).slice();
+  preview.recommendationReadiness = investmentPortfolioEvaluateRecommendationReadiness_(preview);
+  if (preview.capabilities.realizedGainLoss === false &&
+      !preview.recommendationReadiness.blockingReasons.length &&
+      preview.recommendationReadiness.trustedForHoldingsVisibility) {
+    preview.recommendationReadiness.trustedForIncomeAnalysis = false;
+    preview.recommendationReadiness.trustedForTaxLotSalePlanning =
+      preview.taxLots.length > 0 && preview.recommendationReadiness.trustedForTaxLotSalePlanning;
+  }
+  return preview;
+}
+
+function investmentEtradePreviewPositionsPdfUnifiedHoldings_(input) {
+  input = input || {};
+  var legacyPreview = investmentEtradePreviewPositionsPdf_(input);
+  if (!legacyPreview.ok) return legacyPreview;
+  var rawText = investmentEtradeExtractHoldingsContent_(input);
+  var parseResult = investmentEtradeParsePositionsPdfText_(rawText);
+  var accountMeta = input.accountMeta || {};
+  var accountResolution = investmentEtradeResolvePositionsSourceAccountKey_(parseResult, accountMeta);
+  var accountMatch = investmentEtradeResolvePositionsAccountMatch_(input, accountResolution);
+  var unified = investmentEtradeBuildUnifiedHoldingsPreviewFromPositions_(
+    input, legacyPreview, parseResult, accountMatch);
+  var reviewRequired = legacyPreview.reviewRequired ||
+    !unified.recommendationReadiness.trustedForHoldingsVisibility;
+  return {
+    ok: true,
+    reviewRequired: reviewRequired,
+    source: 'ETRADE_POSITIONS_PDF',
+    parserVersion: legacyPreview.parserVersion,
+    schemaVersion: INVESTMENT_PORTFOLIO_SCHEMA_VERSION_,
+    contractVersion: PORTFOLIO_INTELLIGENCE_HOLDINGS_CONTRACT_VERSION_,
+    capabilities: unified.capabilities,
+    normalized: unified,
+    legacyNormalized: legacyPreview.normalized
+  };
+}
+
 function investmentEtradePreviewPositionsPdf_(input) {
   input = input || {};
   var source = investmentPortfolioNormalizeSource_(input.source) || 'ETRADE_PACKAGE';
@@ -432,13 +767,30 @@ function investmentEtradePreviewPositionsPdf_(input) {
       error: accountResolution.error
     };
   }
-  var context = investmentEtradeBuildPositionsContext_(input, parseResult, accountResolution);
+  var accountMatch = investmentEtradeResolvePositionsAccountMatch_(input, accountResolution);
+  if (!accountMatch.ok) {
+    return {
+      ok: false,
+      reviewRequired: true,
+      source: source,
+      error: accountMatch.error
+    };
+  }
+  var context = investmentEtradeBuildPositionsContext_(input, parseResult, {
+    sourceAccountKey: accountMatch.sourceAccountKey,
+    reviewRequired: accountMatch.reviewRequired,
+    warning: accountMatch.warning
+  });
+  context.stableAccountId = accountMatch.stableAccountId || context.stableAccountId;
   var headersBySymbol = {};
   var headerOrder = [];
   var currentHeader = null;
   var excluded = [];
   var warnings = [];
-  if (accountResolution.warning) warnings.push(accountResolution.warning);
+  if (accountMatch.warning) warnings.push(accountMatch.warning);
+  if (accountResolution.warning && accountResolution.warning !== accountMatch.warning) {
+    warnings.push(accountResolution.warning);
+  }
 
   parseResult.parsedRows.forEach(function(row) {
     if (row.classified.kind === 'POSITION_HEADER') {
@@ -502,10 +854,6 @@ function investmentEtradePreviewPositionsPdf_(input) {
       warnings.push('Quantity mismatch for ' + symbol + ': header ' + header.quantity +
         ' vs open lots ' + lotQtySum + '.');
     }
-    if (header.openLots.length === 0) {
-      header.reviewRequired = true;
-      warnings.push('Position ' + symbol + ' has no open-lot children in export.');
-    }
     holdingsSnapshots.push(investmentEtradeBuildHoldingsSnapshotRecord_(header, context));
     header.openLots.forEach(function(lot) {
       taxLots.push(investmentEtradeBuildOpenLotRecord_(lot, context));
@@ -513,9 +861,10 @@ function investmentEtradePreviewPositionsPdf_(input) {
     securities.push({
       stableSecurityId: header.stableSecurityId,
       ticker: header.symbol,
+      cusip: header.cusip || '',
       securityName: '',
       securityType: header.securityType,
-      primarySource: context.source,
+      primarySource: 'ETRADE_POSITIONS_PDF',
       sourceSecurityKey: header.sourceSecurityKey
     });
   });
@@ -534,9 +883,9 @@ function investmentEtradePreviewPositionsPdf_(input) {
   }
 
   var reviewRequired = excluded.length > 0 || warnings.some(function(text) {
-    return /mismatch|no open-lot|review/i.test(text);
+    return /mismatch|review/i.test(text);
   }) || holdingsSnapshots.some(function(row) { return row.reviewRequired; }) ||
-    accountResolution.reviewRequired === true;
+    accountMatch.reviewRequired === true;
 
   var normalized = {
     source: source,
@@ -591,6 +940,15 @@ function investmentEtradePreviewPositionsPdf_(input) {
       warnings.push('Tax lot validation failed at row ' + lot.sourceRowIndex + '.');
     }
   });
+
+  normalized.portfolioIntelligenceHoldings = investmentEtradeBuildUnifiedHoldingsPreviewFromPositions_(
+    input,
+    { ok: true, parserVersion: ETRADE_POSITIONS_PDF_PARSER_VERSION_, normalized: normalized },
+    parseResult,
+    accountMatch
+  );
+  normalized.capabilities.accountSnapshot =
+    (normalized.portfolioIntelligenceHoldings.accountSnapshots || []).length > 0;
 
   return {
     ok: true,

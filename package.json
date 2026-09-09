@@ -14,10 +14,16 @@
     "test:dashboard-ux": "node scripts/checkDashboardUxRegressions.mjs",
     "test:rfp-metadata": "node scripts/checkRfpMetadataRegressions.mjs",
     "test:rfp-capital-allocation": "node scripts/checkRfpCapitalAllocationRegressions.mjs",
-    "test:portfolio-foundation": "node scripts/checkPortfolioFoundationRegressions.mjs",
+    "test:portfolio-foundation": "node scripts/checkPortfolioFoundationRegressions.mjs && node scripts/checkPortfolioIntelligenceHoldingsContractRegressions.mjs",
     "test:etrade-adapter": "node scripts/checkEtradeAdapterRegressions.mjs",
-    "test:etrade-positions-pdf": "node scripts/checkEtradePositionsPdfRegressions.mjs",
+    "test:etrade-positions-pdf": "node scripts/checkEtradePositionsPdfRegressions.mjs && node scripts/checkEtradePositionsPdfUnifiedHoldingsRegressions.mjs",
     "test:etrade-preview-lab": "node scripts/checkEtradePreviewLabRegressions.mjs",
+    "test:holdings-preview-lab": "node scripts/checkHoldingsPreviewLabRegressions.mjs",
+    "test:bounded-holdings-preview": "node scripts/checkBoundedHoldingsPreviewRegressions.mjs && node scripts/checkBoundedHoldingsPreviewGroupedRegressions.mjs && node scripts/checkBoundedHoldingsPreviewIdentitySetupRegressions.mjs && node scripts/checkBoundedHoldingsPreviewPdfClientRegressions.mjs",
+    "test:bounded-holdings-preview-route": "node scripts/checkBoundedHoldingsPreviewRouteRegressions.mjs",
+    "test:bounded-holdings-preview-pdf-client": "node scripts/checkBoundedHoldingsPreviewPdfClientRegressions.mjs",
+    "test:bounded-holdings-preview-identity-setup": "node scripts/checkBoundedHoldingsPreviewIdentitySetupRegressions.mjs",
+    "test:m1-statement-pdf": "node scripts/checkM1StatementPdfRegressions.mjs",
     "test:financial-identity": "node scripts/checkFinancialIdentityRegressions.mjs",
     "test:financial-facts": "node scripts/checkFinancialFactsRegressions.mjs",
     "test:cash-import": "node scripts/checkCashImportRegressions.mjs",
@@ -34,6 +40,7 @@
     "test:production-paths": "node scripts/checkTestProductionPaths.mjs"
   },
   "dependencies": {
+    "pdfjs-dist": "^3.11.174",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

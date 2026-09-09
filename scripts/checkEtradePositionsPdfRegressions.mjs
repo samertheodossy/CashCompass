@@ -52,6 +52,7 @@ vm.runInContext(`
 `, context, { filename: 'investment_activity_partial.js' });
 vm.runInContext(etradeCsvSource, context, { filename: 'investment_etrade_csv.js' });
 vm.runInContext(etradePositionsSource, context, { filename: 'investment_etrade_positions_pdf.js' });
+vm.runInContext(read('investment_m1_statement_pdf.js'), context, { filename: 'investment_m1_statement_pdf.js' });
 vm.runInContext(adaptersSource, context, { filename: 'investment_adapters.js' });
 
 const positionsFixture = fixture('synthetic_etrade_positions_minimal.txt');

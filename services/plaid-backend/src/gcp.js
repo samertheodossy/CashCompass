@@ -401,6 +401,32 @@ export class FirestoreConnectionStore {
       .set({ status, updatedAt: new Date(nowMs) }, { merge: true });
   }
 
+  async getLinkSession(userKey, correlationId) {
+    const snapshot = await this.user(userKey).collection('linkSessions').doc(correlationId).get();
+    if (!snapshot.exists) fail(404, 'LINK_SESSION_NOT_FOUND', 'Link session was not found.');
+    return { correlationId, ...snapshot.data() };
+  }
+
+  async updateLinkSession(userKey, correlationId, fields, nowMs = Date.now()) {
+    await this.user(userKey).collection('linkSessions').doc(correlationId)
+      .set({ ...fields, updatedAt: new Date(nowMs) }, { merge: true });
+  }
+
+  async getConnection(userKey, connectionKey) {
+    const snapshot = await this.user(userKey).collection('connections').doc(connectionKey).get();
+    if (!snapshot.exists) return null;
+    const value = snapshot.data();
+    const accountDocs = await snapshot.ref.collection('accounts').get();
+    return {
+      connectionKey,
+      institutionName: value.institutionName || '',
+      lifecycleStatus: value.lifecycleStatus,
+      lastObservedAt: value.lastObservedAt?.toDate
+        ? value.lastObservedAt.toDate().toISOString() : '',
+      accounts: accountDocs.docs.map(account => account.data())
+    };
+  }
+
   async createConnection(userKey, connection, accounts, nowMs = Date.now()) {
     const ref = this.user(userKey).collection('connections').doc(connection.connectionKey);
     await this.db.runTransaction(async tx => {

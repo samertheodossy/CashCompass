@@ -1,0 +1,37 @@
+# Synthetic M1 Brokerage Statement PDF.js text extract — structure only (no real balances)
+Statement
+Statement  period:  08/01/2026  to  08/31/2026
+Account  number:  XXXX5678
+Account:  Synthetic M1 Joint Brokerage Account
+Account type:  Margin
+Account title:  SYNTHETIC OWNER A & SYNTHETIC OWNER B / JTWROS
+
+Account value
+Total account value / 1-month change
+$10,000.00 / $500.00 [5.26%]
+
+Account breakdown
+Description   Last period   Current period   Change
+07/31/2026   08/31/2026
+Cash   $5.00   $5.00   $0.00
+Equities   $9,000.00   $9,500.00   $500.00
+Total portfolio   $9,005.00   $9,505.00   $500.00
+
+Activity summary
+Description   Current period   Year to date
+Paid dividends   $0.00   $2.50
+
+-- 1 of 4 --
+
+Symbol   Quantity   Price   Market value   Cost basis   Unrealized P/L
+SYNA   57.65199   $100.00   $5,765.20   $2,000.00   $3,765.20
+SYNB   165.44571   $20.00   $3,308.91   $3,400.00   ($91.09)
+Total   $9,505.00   $5,400.00   $4,105.00
+
+Financial instrument information
+Symbol   Share class   Description   Exchange
+SYNA   Class A   SYNTHETIC ALPHA INC COM   NASD
+SYNB   Class A   SYNTHETIC BETA INC COM NEW   NASD
+
+M1 Finance LLC
+Terms and conditions apply.

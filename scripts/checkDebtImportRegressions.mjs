@@ -234,7 +234,7 @@ assert.equal(preview.accounts[0].facts.CURRENT_BALANCE.materialityStatus, 'NOT_Y
 assert.equal(preview.accounts[0].facts.NEXT_PAYMENT_DATE.reconciliationStatus, 'UNAVAILABLE',
   'legacy due-day must not be falsely equated to a full authoritative date');
 const applied = context.applyAuthoritativeDebtImport_(fakeSs, adapter, {}, preview.previewDigest, asOf);
-assert.equal(applied.appendedFacts, 7);
+assert.equal(applied.appendedFacts, 6);
 assert.equal(JSON.stringify(fakeSs.getSheetByName(context.getSheetNames_().DEBTS).rows[1]), policyBefore,
   'import must not overwrite Part 1 debt configuration');
 const manualDecisions = { [manual.accounts[0].sourceAccountKey]: {
@@ -340,5 +340,107 @@ assert.match(suiteSource, /function testRunPart2aAuthoritativeDebtSuite\(options
   'isolated Central must expose an argument-free guarded suite runner');
 assert.match(suiteSource, /requested\.dispositionMode = 'trash'/,
   'argument-free Part 2A debt suite runs must default to Trash cleanup');
+
+const chaseRawAccount = 'CHASE-SW-9012';
+const chaseOfx = `OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+
+<OFX><SIGNONMSGSRSV1><SONRS><FI><ORG>B1</ORG><FID>10898</FID></FI></SONRS></SIGNONMSGSRSV1>
+<CREDITCARDMSGSRSV1><CCSTMTTRNRS><CCSTMTRS><CURDEF>USD
+<CCACCTFROM><ACCTID>${chaseRawAccount}</CCACCTFROM>
+<LEDGERBAL><BALAMT>32947.12<DTASOF>20260815090000[-5:EST]</LEDGERBAL>
+<AVAILBAL><BALAMT>17052.88<DTASOF>20260815090000[-5:EST]</AVAILBAL>
+<MINPMTDUE>988.41<CREDITLIMIT>50000.00<APR>20.24<AVAILCREDIT>99999.00
+</CCSTMTRS></CCSTMTTRNRS></CREDITCARDMSGSRSV1></OFX>`;
+const chaseAdapter = context.adaptOfxRevolvingDebtEvidence_(chaseOfx, {
+  observedAt: asOf, ownerId: 'SAMER', registrationType: 'INDIVIDUAL',
+  displayName: 'Credit Card - Southwest'
+});
+assert.equal(chaseAdapter.sourceType, 'QFX');
+assert.equal(chaseAdapter.sourceSystem, 'CHASE_QFX_FID_10898_V1');
+assert.equal(chaseAdapter.accounts[0].facts.length, 2,
+  'Chase QFX must emit only CURRENT_BALANCE and supplemental AVAILABLE_CREDIT');
+assert.equal(chaseAdapter.accounts[0].facts.some((f) => f.factType === 'MINIMUM_PAYMENT'), false,
+  'Chase QFX must not promote statement-only facts from QFX tags');
+assert.equal(chaseAdapter.accounts[0].facts.some((f) => f.factType === 'CREDIT_LIMIT'), false,
+  'CashCompass Credit Limit remains authoritative; Chase QFX must not emit CREDIT_LIMIT');
+assert.equal(chaseAdapter.accounts[0].facts.some((f) => f.factType === 'APR'), false,
+  'Chase QFX must not promote canonical APR');
+assert.equal(chaseAdapter.accounts[0].facts.find((f) => f.factType === 'AVAILABLE_CREDIT').numericValue,
+  17052.88, 'Chase AVAILABLE_CREDIT must come from AVAILBAL, not AVAILCREDIT');
+assert.throws(() => context.adaptOfxRevolvingDebtEvidence_(chaseOfx.replace('<ORG>B1</ORG>', '<ORG>WRONG</ORG>'), {}),
+  /unsupported ORG/);
+assert.throws(() => context.adaptOfxRevolvingDebtEvidence_(ofx.replace(
+  '<LEDGERBAL><BALAMT>9000.00<DTASOF>20260816090000[-5:EST]</LEDGERBAL>',
+  '<LEDGERBAL><BALAMT>9000.00</LEDGERBAL>'), {}), /DTASOF/,
+  'CURRENT_BALANCE requires authoritative balance effective date');
+assert.equal(adapter.accounts[0].facts.some((f) => f.factType === 'AVAILABLE_CREDIT'), false,
+  'generic OFX must not map AVAILCREDIT to AVAILABLE_CREDIT outside Chase profile');
+
+const southwestAccount = { stableAccountId: 'DEBT-SWA', domain: 'DEBT', displayName: 'Southwest',
+  institution: 'Chase', accountType: 'Credit Card', ownerId: 'SAMER',
+  registrationType: 'INDIVIDUAL', last4: '9012', legacyDomain: 'INPUT_DEBTS',
+  legacyKey: 'Southwest', active: 'Yes' };
+const chaseLink = { stableAccountId: southwestAccount.stableAccountId,
+  sourceSystem: chaseAdapter.sourceSystem,
+  sourceAccountKey: chaseAdapter.accounts[0].sourceAccountKey, linkStatus: 'VERIFIED' };
+assert.equal(context.debtImportMatchRecord_(chaseAdapter.accounts[0], [southwestAccount], [chaseLink], {}).outcome,
+  'EXACT_LINK', 'exact active verified revolving identity must match Chase QFX');
+const mortgageAccount = { ...southwestAccount, stableAccountId: 'DEBT-MORT', accountType: 'Mortgage' };
+assert.equal(context.debtImportMatchRecord_(chaseAdapter.accounts[0], [mortgageAccount], [], {
+  action: 'MATCH', stableAccountId: mortgageAccount.stableAccountId
+}).reason, 'UNSUPPORTED_ACCOUNT_TYPE');
+assert.equal(context.debtImportPreviewAction_(
+  context.debtImportMatchRecord_(chaseAdapter.accounts[0], [southwestAccount], [], {}), {}, chaseAdapter.accounts[0]
+), 'REVIEW_REQUIRED', 'preview remains non-mutating without explicit user selection');
+
+const chaseDebtRows = [[
+  'Account Name', 'Type', 'Account Balance', 'Due Date', 'Credit Limit',
+  'Minimum Payment', 'Credit Left', 'Int Rate', 'Acct PCT Avail', 'Active', 'Linked Property'
+], ['Southwest', 'Credit Card', 33000, 22, 50000, 988.41, 17000, 20.24, 34, 'Yes', '']];
+const chaseSs = new FakeSpreadsheet([
+  new FakeSheet(context.getSheetNames_().FINANCIAL_ACCOUNTS, [context.FINANCIAL_ACCOUNT_HEADERS_, [
+    southwestAccount.stableAccountId, 'DEBT', southwestAccount.displayName, southwestAccount.institution,
+    southwestAccount.accountType, 'REVOLVING', 'SAMER', 'INDIVIDUAL', 'USD', '9012', 'Yes', 'VERIFIED',
+    'INPUT_DEBTS', 'Southwest', asOf, asOf
+  ]]),
+  new FakeSheet(context.getSheetNames_().ACCOUNT_SOURCE_LINKS, [context.ACCOUNT_SOURCE_LINK_HEADERS_, [
+    'LINK-CHASE', southwestAccount.stableAccountId, 'QFX', chaseAdapter.sourceSystem,
+    chaseAdapter.accounts[0].sourceAccountKey, '••••9012', 'Chase', 'Credit Card',
+    'VERIFIED', asOf, asOf
+  ]]),
+  new FakeSheet(context.getSheetNames_().DEBTS, chaseDebtRows)
+]);
+const chasePolicyBefore = JSON.stringify(chaseDebtRows[1]);
+const chasePreview = context.previewAuthoritativeDebtImport_(chaseSs, chaseAdapter, {}, asOf);
+assert.equal(chasePreview.accounts[0].facts.CURRENT_BALANCE.legacyValue, 33000);
+assert.equal(chasePreview.accounts[0].facts.CREDIT_LIMIT.legacyValue, 50000,
+  'CashCompass Credit Limit remains the legacy authority for comparison');
+assert.equal(Object.prototype.hasOwnProperty.call(chasePreview.accounts[0].facts, 'CREDIT_LEFT'), false,
+  'provider Available Credit must never target CashCompass Credit Left');
+const chaseApplied = context.applyAuthoritativeDebtImport_(chaseSs, chaseAdapter, {}, chasePreview.previewDigest, asOf);
+assert.equal(chaseApplied.appendedFacts, 2);
+assert.equal(JSON.stringify(chaseSs.getSheetByName(context.getSheetNames_().DEBTS).rows[1]), chasePolicyBefore,
+  'Chase QFX apply must not overwrite INPUT - Debts Credit Limit or Credit Left');
+const chaseReplay = context.applyAuthoritativeDebtImport_(chaseSs, chaseAdapter, {}, chasePreview.previewDigest, asOf);
+assert.equal(chaseReplay.status, 'DUPLICATE_NOOP');
+assert.equal(chaseReplay.appendedFacts, 0, 'duplicate observation replay must noop');
+const chaseFactKey = context.debtImportFactSourceRecordKey_(chaseAdapter.accounts[0],
+  chaseAdapter.accounts[0].facts[0], false);
+const chaseFactKeyLater = context.debtImportFactSourceRecordKey_(chaseAdapter.accounts[0],
+  { ...chaseAdapter.accounts[0].facts[0], observedAt: '2026-08-17T10:00:00.000Z' }, false);
+assert.equal(chaseFactKey, chaseFactKeyLater,
+  'QFX observation replay identity must exclude Observed At');
+const chaseConflict = context.prepareFinancialFactAppend_(
+  context.readFinancialFacts_(chaseSs),
+  [context.normalizeFinancialFact_(context.debtImportFinancialFact_(
+    chaseAdapter.accounts[0],
+    { ...chaseAdapter.accounts[0].facts[0], numericValue: 33000.01 },
+    southwestAccount.stableAccountId, 'IMPORT-CONFLICT', false), { asOf, defaultCreatedAt: asOf })],
+  { asOf }
+);
+assert.equal(chaseConflict.appended[0].reconciliationStatus, 'CONFLICT',
+  'conflicting replay for the same QFX observation cycle must append as conflict');
 
 console.log('Debt import regressions passed.');

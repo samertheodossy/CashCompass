@@ -1,5 +1,5 @@
 import { decodeCredentialBlob, encodeCredentialBlob, protectedKey, sha256 } from './crypto.js';
-import { fail } from './errors.js';
+import { fail, ServiceError } from './errors.js';
 import { PlaidError, asProviderServiceError } from './plaid.js';
 import { buildReadOnlyPreview, normalizePlaidMixedAccounts } from './liabilities_adapter.js';
 
@@ -305,10 +305,6 @@ export class PlaidConnectionService {
       const identitySecret = await this.credentials.getIdentityHmac();
       const claimedInstitutionKey = protectedKey(identitySecret, this.config.environment,
         `${this.config.providerProfile}|INSTITUTION`, linkInstitutionId);
-      // Plaid supplies institutionId in Link onSuccess metadata. The browser
-      // forwards it only for a pre-exchange duplicate check; discovery below
-      // must prove the same institution before anything is persisted.
-      await this.store.assertNoReusableInstitution(userKey, claimedInstitutionKey);
       const exchange = await this.plaid.exchangePublicToken(publicToken);
       accessToken = requiredString(exchange.access_token, 'provider credential', 4096);
       const itemId = requiredString(exchange.item_id, 'provider item identity', 512);
@@ -319,6 +315,11 @@ export class PlaidConnectionService {
         `${this.config.providerProfile}|ITEM`,
         itemId
       );
+      await this.store.updateLinkSession(userKey, correlationId, {
+        protectedItemKey,
+        protectedInstitutionKey: claimedInstitutionKey,
+        exchangeReached: true
+      }, this.now());
       const institutionId = safeText(discovery.item?.institution_id, 256);
       const protectedInstitutionKey = institutionId ? protectedKey(identitySecret,
         this.config.environment, `${this.config.providerProfile}|INSTITUTION`, institutionId) : '';
@@ -353,7 +354,8 @@ export class PlaidConnectionService {
         await this.store.createConnection(userKey, connection, accounts, this.now());
         connectionPersisted = true;
       } catch (error) {
-        throw error;
+        if (error instanceof ServiceError && error.code === 'DUPLICATE_CONNECTION') throw error;
+        fail(409, 'CONNECTION_SAVE_FAILED', 'Connection could not be saved.');
       }
       try {
         await this.store.markLinkSession(userKey, correlationId, 'COMPLETED', this.now());
@@ -367,9 +369,94 @@ export class PlaidConnectionService {
       if (accessToken && !connectionPersisted) {
         try { await this.plaid.removeItem(accessToken); } catch (_removeError) {}
       }
-      try { await this.store.markLinkSession(userKey, correlationId, 'FAILED', this.now()); } catch (_sessionError) {}
+      try {
+        await this.store.updateLinkSession(userKey, correlationId, {
+          failureReasonCode: error instanceof ServiceError ? error.code : 'INTERNAL_ERROR',
+          exchangeReached: !!accessToken
+        }, this.now());
+        await this.store.markLinkSession(userKey, correlationId, 'FAILED', this.now());
+      } catch (_sessionError) {}
       throw asProviderServiceError(error);
     }
+  }
+
+  assertAdminIdentity_(identity) {
+    if (String(identity?.userEmail || '').trim().toLowerCase() !== SOLE_ADMIN_EMAIL) {
+      fail(403, 'ADMIN_FORBIDDEN', 'Administrator access is required.');
+    }
+  }
+
+  async diagnoseLinkCompletion(userKey, input, identity) {
+    this.assertAdminIdentity_(identity);
+    const correlationId = requiredString(input?.correlationId, 'correlation ID', 128);
+    const session = await this.store.getLinkSession(userKey, correlationId);
+    const protectedItemKey = String(session.protectedItemKey || '').trim();
+    let connection = null;
+    if (/^[a-f0-9]{64}$/.test(protectedItemKey)) {
+      connection = await this.store.getConnection(userKey, protectedItemKey);
+    }
+    const sessionStatus = String(session.status || '');
+    let recommendation = 'REVIEW';
+    let orphanRisk = 'UNKNOWN';
+    if (connection && ['ACTIVE', 'REAUTH_REQUIRED'].includes(connection.lifecycleStatus)) {
+      recommendation = sessionStatus === 'COMPLETED' ? 'ALREADY_CONNECTED' : 'RECONCILE_COMPLETE';
+      orphanRisk = 'NONE';
+    } else if (sessionStatus === 'FAILED' && !session.exchangeReached) {
+      recommendation = 'RECONNECT';
+      orphanRisk = 'NONE';
+    } else if (sessionStatus === 'FAILED' && session.exchangeReached) {
+      recommendation = 'PLAID_ITEM_ORPHANED';
+      orphanRisk = 'POSSIBLE';
+    } else if (sessionStatus === 'EXCHANGING' || sessionStatus === 'COMPLETION_REVIEW_REQUIRED') {
+      recommendation = 'RECONCILE_FAIL_OR_COMPLETE';
+      orphanRisk = 'POSSIBLE';
+    }
+    return {
+      ok: true,
+      environment: this.config.environment,
+      correlationId,
+      sessionStatus,
+      protectedItemKey,
+      connectionPresent: !!connection,
+      connectionLifecycleStatus: connection ? String(connection.lifecycleStatus || '') : '',
+      exchangeReached: !!session.exchangeReached,
+      failureReasonCode: String(session.failureReasonCode || ''),
+      recommendation,
+      orphanRisk
+    };
+  }
+
+  async reconcileLinkCompletion(userKey, input, identity) {
+    this.assertAdminIdentity_(identity);
+    const correlationId = requiredString(input?.correlationId, 'correlation ID', 128);
+    const resolution = requiredString(input?.resolution, 'resolution', 32).toUpperCase();
+    if (!['COMPLETE', 'FAIL'].includes(resolution)) {
+      fail(400, 'INVALID_REQUEST', 'Resolution is invalid.');
+    }
+    const session = await this.store.getLinkSession(userKey, correlationId);
+    if (resolution === 'COMPLETE') {
+      const protectedItemKey = String(session.protectedItemKey || '').trim();
+      if (!/^[a-f0-9]{64}$/.test(protectedItemKey)) {
+        fail(409, 'RECONCILE_UNAVAILABLE', 'No item identity is recorded for this session.');
+      }
+      const connection = await this.store.getConnection(userKey, protectedItemKey);
+      if (!connection || !['ACTIVE', 'REAUTH_REQUIRED'].includes(connection.lifecycleStatus)) {
+        fail(404, 'CONNECTION_NOT_FOUND', 'Persisted connection was not found for reconciliation.');
+      }
+      await this.store.markLinkSession(userKey, correlationId, 'COMPLETED', this.now());
+      return {
+        ok: true,
+        environment: this.config.environment,
+        correlationId,
+        resolution,
+        connection: publicConnection({ ...connection, environment: this.config.environment })
+      };
+    }
+    if (!['EXCHANGING', 'COMPLETION_REVIEW_REQUIRED', 'FAILED'].includes(String(session.status || ''))) {
+      fail(409, 'LINK_SESSION_REPLAY', 'Link session cannot be cleared.');
+    }
+    await this.store.markLinkSession(userKey, correlationId, 'FAILED', this.now());
+    return { ok: true, environment: this.config.environment, correlationId, resolution };
   }
 
   async list(userKey) {

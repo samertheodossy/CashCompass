@@ -1,7 +1,10 @@
 # Multi-Broker Portfolio Intelligence — Architecture Direction
 
-**Status:** ROADMAP ONLY — **do not implement** until the current Connected
-Accounts / Plaid / Apply milestone cluster is complete and committed.
+**Status:** Step 1 unified holdings contract defined in
+`PORTFOLIO_INTELLIGENCE_HOLDINGS_CONTRACT.md` (preview-only, read-only). Implementation
+of parsers, persistence, and recommendations remains future work. Do not implement
+recommendations or broker parsers until Connected Accounts / Apply cluster and owner
+review gates are satisfied.
 
 **Purpose:** Preserve product direction across chat and tool transitions. This
 document is architecture and sequencing guidance, not a schema specification.
@@ -301,8 +304,8 @@ debt/cash authority work or reopen frozen Planning UX.
 
 ## Related documents
 
-- `ROADMAP.md` — priority stack and milestone ordering
-- `PROJECT_CONTEXT.md` — current implementation priority
+- `PORTFOLIO_INTELLIGENCE_HOLDINGS_CONTRACT.md` — Step 1 unified read-only holdings contract
+- `MULTI_BROKER_PORTFOLIO_DATA_MODEL.md` — Foundation v1 infrastructure
 - `ROLLING_FINANCIAL_PLAN_DECISION_CONTRACT.md` — RFP-6/RFP-7 data expectations
 - `PART_2A_FINANCIAL_FACTS_CONTRACT.md` — long-term import lifecycle
 - `FULL_BETA_REMAINING_PLAN.md` — RFP-6a/6b/7 estimates

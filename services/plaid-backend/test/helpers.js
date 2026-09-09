@@ -190,6 +190,21 @@ export class FakeStore {
     const session = this.sessions.get(this.key(user, id));
     if (session) session.status = status;
   }
+  async getLinkSession(user, correlationId) {
+    const session = this.sessions.get(this.key(user, correlationId));
+    if (!session) throw new ServiceError(404, 'LINK_SESSION_NOT_FOUND', 'not found');
+    return { correlationId, ...session };
+  }
+  async updateLinkSession(user, correlationId, fields) {
+    const session = this.sessions.get(this.key(user, correlationId));
+    if (!session) throw new ServiceError(404, 'LINK_SESSION_NOT_FOUND', 'not found');
+    Object.assign(session, fields);
+  }
+  async getConnection(user, connectionKey) {
+    const value = this.connections.get(this.key(user, connectionKey));
+    if (!value) return null;
+    return JSON.parse(JSON.stringify({ connectionKey, ...value }));
+  }
   async createConnection(user, connection, accounts) {
     const key = this.key(user, connection.connectionKey);
     const existing = this.connections.get(key);

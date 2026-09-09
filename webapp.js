@@ -51,6 +51,24 @@ function doGet(e) {
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 
+  // Holdings Preview Lab: /exec?view=holdings-preview-lab. Admin-gated, Central-only
+  // unified holdings preview for E*TRADE Positions PDF and M1 Statement PDF text.
+  if (view === 'holdings-preview-lab' && isAdminUser_()) {
+    return HtmlService.createTemplateFromFile('HoldingsPreviewLabUI')
+      .evaluate()
+      .setTitle('CashCompass — Holdings Preview Lab')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
+  // Portfolio Holdings Preview: /exec?view=portfolio-holdings-preview. Owner-accessible
+  // bounded-app preview against the caller's workbook. Central callers use the admin lab.
+  if (view === 'portfolio-holdings-preview' && !isCentralModeEnabled_()) {
+    return HtmlService.createTemplateFromFile('BoundedHoldingsPreviewUI')
+      .evaluate()
+      .setTitle('CashCompass — Portfolio Holdings Preview')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
   // Plaid P1 Sandbox connectivity proof. This is a guarded execution adapter,
   // not a customer dashboard or second operator inventory. It is registered in
   // the Validation console and is visible only to the permanent non-admin

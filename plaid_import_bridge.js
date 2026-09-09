@@ -60,7 +60,10 @@ var PLAID_IMPORT_IDENTITY_REVIEW_ERROR_ =
 var PLAID_IMPORT_SOLE_ADMIN_EMAIL_ = 'samertheodossy@gmail.com';
 var PLAID_IMPORT_ALLOWLISTED_CONNECTION_ERROR_CODES_ = {
   CONNECT_IN_PROGRESS: true,
-  LINK_COMPLETION_REVIEW_REQUIRED: true
+  LINK_COMPLETION_REVIEW_REQUIRED: true,
+  CONNECTION_SAVE_FAILED: true,
+  LINK_EXCHANGE_FAILED: true,
+  DUPLICATE_CONNECTION: true
 };
 
 function plaidImportSafe_(fn) {
@@ -390,7 +393,31 @@ function plaidImportExchangePublicToken(payload) {
       publicToken: String(input.publicToken || ''), correlationId: String(input.correlationId || ''),
       institutionId: String(input.institutionId || '')
     });
-    return { ok: true, connection: plaidImportSanitizeConnection_(result) };
+    return { ok: true, connection: plaidImportSanitizeConnection_(result),
+      correlationId: String(input.correlationId || '') };
+  });
+}
+
+function plaidImportAdminDiagnoseLinkCompletion(payload) {
+  return plaidImportSafe_(function() {
+    plaidImportDiagnosticAssertAdmin_();
+    var input = payload && typeof payload === 'object' ? payload : {};
+    plaidImportRejectBrowserAuthority_(input);
+    return plaidImportRequest_('POST', '/v1/admin/link-completion/diagnose', 'LINK_COMPLETION_DIAGNOSE', {
+      correlationId: String(input.correlationId || '')
+    });
+  });
+}
+
+function plaidImportAdminReconcileLinkCompletion(payload) {
+  return plaidImportSafe_(function() {
+    plaidImportDiagnosticAssertAdmin_();
+    var input = payload && typeof payload === 'object' ? payload : {};
+    plaidImportRejectBrowserAuthority_(input);
+    return plaidImportRequest_('POST', '/v1/admin/link-completion/reconcile', 'LINK_COMPLETION_RECONCILE', {
+      correlationId: String(input.correlationId || ''),
+      resolution: String(input.resolution || '').trim().toUpperCase()
+    });
   });
 }
 

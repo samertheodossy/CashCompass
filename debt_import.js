@@ -69,6 +69,120 @@ function validateChaseShadowImportV1FactSet_(sourceKind, facts) {
   });
 }
 
+function debtImportIsChaseQfxProfile_(fid) {
+  return String(fid || '').trim() === CHASE_SHADOW_IMPORT_V1_CONTRACT_.qfxProfile.fid;
+}
+
+function debtImportAssertChaseQfxHeader_(org, fid) {
+  if (!debtImportIsChaseQfxProfile_(fid)) return false;
+  var normalizedOrg = String(org || '').trim().toUpperCase();
+  if (normalizedOrg && normalizedOrg !== String(CHASE_SHADOW_IMPORT_V1_CONTRACT_.qfxProfile.org || '').toUpperCase()) {
+    throw new Error('Chase QFX profile mismatch: unsupported ORG.');
+  }
+  return true;
+}
+
+function debtImportPushChaseAvailBalFact_(facts, block, currency) {
+  var available = cashImportOfxAggregate_(block, 'AVAILBAL');
+  if (!available) return;
+  var amount = cashImportStrictNumber_(cashImportOfxTag_(available, 'BALAMT'));
+  var availableAsOf = cashImportOfxDate_(cashImportOfxTag_(available, 'DTASOF'));
+  if (amount === null || !availableAsOf) {
+    throw new Error('Chase QFX AVAILABLE_CREDIT requires AVAILBAL/BALAMT and AVAILBAL/DTASOF.');
+  }
+  facts.push(debtImportNumericFact_('AVAILABLE_CREDIT', amount, currency, availableAsOf));
+}
+
+function debtImportParseChaseQfxCreditBlock_(block, index, headerOpts) {
+  var accountBlock = cashImportOfxAggregate_(block, 'CCACCTFROM');
+  var externalId = cashImportOfxTag_(accountBlock, 'ACCTID');
+  if (!externalId) throw new Error('Chase QFX account ' + (index + 1) + ' has no source account identifier.');
+  var currency = cashImportOfxTag_(block, 'CURDEF').toUpperCase() || 'USD';
+  var ledger = cashImportOfxAggregate_(block, 'LEDGERBAL');
+  var balance = cashImportStrictNumber_(cashImportOfxTag_(ledger, 'BALAMT'));
+  if (balance === null) throw new Error('Chase QFX account ' + (index + 1) +
+    ' has no authoritative ledger balance.');
+  var balanceAsOf = cashImportOfxDate_(cashImportOfxTag_(ledger, 'DTASOF'));
+  if (!balanceAsOf) throw new Error('Chase QFX account ' + (index + 1) +
+    ' requires LEDGERBAL/DTASOF for CURRENT_BALANCE.');
+  var facts = [debtImportNumericFact_('CURRENT_BALANCE', balance, currency, balanceAsOf)];
+  debtImportPushChaseAvailBalFact_(facts, block, currency);
+  facts = validateChaseShadowImportV1FactSet_('QFX', facts);
+  var profile = CHASE_SHADOW_IMPORT_V1_CONTRACT_.qfxProfile;
+  return normalizeDebtEvidenceRecord_({
+    sourceSystem: 'CHASE_QFX_FID_10898_V1',
+    sourceType: 'QFX',
+    externalAccountId: externalId,
+    last4: String(externalId).replace(/[^A-Za-z0-9]/g, '').slice(-4),
+    institution: String(headerOpts.institution || 'Chase').trim(),
+    displayName: String(headerOpts.displayName || 'Credit Card - Southwest').trim(),
+    accountType: 'CREDIT_CARD',
+    currency: currency,
+    ownerId: headerOpts.ownerId || 'UNKNOWN_REVIEW_REQUIRED',
+    registrationType: headerOpts.registrationType || 'UNKNOWN',
+    observedAt: headerOpts.observedAt,
+    sourceRecordKey: cashImportDigest_([profile.profileVersion, externalId, balanceAsOf,
+      JSON.stringify(facts)].join('\n')),
+    facts: facts,
+    importEvidence: {
+      adapterId: 'OFX_QFX_REVOLVING_DEBT',
+      adapterVersion: DEBT_IMPORT_OFX_ADAPTER_VERSION_,
+      qfxProfileVersion: profile.profileVersion,
+      qfxFid: profile.fid
+    }
+  });
+}
+
+function debtImportParseGenericOfxCreditBlock_(block, index, headerOpts) {
+  var accountBlock = cashImportOfxAggregate_(block, 'CCACCTFROM');
+  var externalId = cashImportOfxTag_(accountBlock, 'ACCTID');
+  if (!externalId) throw new Error('Credit-card account ' + (index + 1) + ' has no source account identifier.');
+  var currency = cashImportOfxTag_(block, 'CURDEF').toUpperCase() || 'USD';
+  var ledger = cashImportOfxAggregate_(block, 'LEDGERBAL');
+  var balance = cashImportStrictNumber_(cashImportOfxTag_(ledger, 'BALAMT'));
+  if (balance === null) throw new Error('Credit-card account ' + (index + 1) +
+    ' has no authoritative ledger balance. Transaction rows are not a balance.');
+  var balanceAsOf = cashImportOfxDate_(cashImportOfxTag_(ledger, 'DTASOF'));
+  if (!balanceAsOf) throw new Error('Credit-card account ' + (index + 1) +
+    ' requires LEDGERBAL/DTASOF for CURRENT_BALANCE.');
+  var statementAsOf = balanceAsOf || cashImportOfxDate_(cashImportOfxTag_(block, 'DTEND'));
+  var facts = [debtImportNumericFact_('CURRENT_BALANCE', balance, currency, balanceAsOf)];
+  debtImportPushNumericTagFact_(facts, block, 'MINPMTDUE', 'MINIMUM_PAYMENT', currency, statementAsOf);
+  debtImportPushNumericTagFact_(facts, block, 'NEXTPMTAMT', 'NEXT_PAYMENT_AMOUNT', currency, statementAsOf);
+  debtImportPushDateTagFact_(facts, block, 'DTPMTDUE', 'NEXT_PAYMENT_DATE', statementAsOf);
+  debtImportPushNumericTagFact_(facts, block, 'CREDITLIMIT', 'CREDIT_LIMIT', currency, statementAsOf);
+  // AVAILCREDIT and AVAILBAL → AVAILABLE_CREDIT are prohibited outside the reviewed Chase profile.
+  var rateFacts = debtImportOfxRateFacts_(block, statementAsOf);
+  facts = facts.concat(rateFacts.facts);
+  debtImportPushDateTagFact_(facts, block, 'PROMOEXPDATE', 'PROMOTIONAL_APR_EXPIRATION', statementAsOf);
+  var deferred = String(cashImportOfxTag_(block, 'DEFERREDINTEREST') || '').trim().toUpperCase();
+  if (deferred) facts.push({ factType: 'DEFERRED_INTEREST_STATUS', textValue: deferred,
+    currencyOrUnit: 'STATUS', effectiveAsOf: statementAsOf });
+  debtImportPushDateTagFact_(facts, block, 'DEFERREDEXPDATE', 'DEFERRED_INTEREST_EXPIRATION', statementAsOf);
+  return normalizeDebtEvidenceRecord_({
+    sourceSystem: headerOpts.sourceSystem,
+    sourceType: 'FILE_IMPORT',
+    externalAccountId: externalId,
+    last4: String(externalId).replace(/[^A-Za-z0-9]/g, '').slice(-4),
+    institution: headerOpts.institution,
+    displayName: String(headerOpts.displayName || headerOpts.institution ||
+      'Imported revolving account').trim(),
+    accountType: 'CREDIT_CARD',
+    currency: currency,
+    ownerId: headerOpts.ownerId || 'UNKNOWN_REVIEW_REQUIRED',
+    registrationType: headerOpts.registrationType || 'UNKNOWN',
+    observedAt: headerOpts.observedAt,
+    sourceRecordKey: cashImportDigest_([headerOpts.sourceSystem, externalId, statementAsOf,
+      JSON.stringify(facts)].join('\n')),
+    facts: facts,
+    aprReviewStatus: rateFacts.reviewStatus,
+    importEvidence: {
+      adapterId: 'OFX_QFX_REVOLVING_DEBT',
+      adapterVersion: DEBT_IMPORT_OFX_ADAPTER_VERSION_
+    }
+  });
+}
+
 /** Parse explicit account-level aggregates from OFX/QFX credit-card statements. */
 function adaptOfxRevolvingDebtEvidence_(rawText, options) {
   var opts = options || {};
@@ -80,53 +194,28 @@ function adaptOfxRevolvingDebtEvidence_(rawText, options) {
   var body = raw.slice(ofxStart);
   var org = cashImportOfxTag_(body, 'ORG');
   var fid = cashImportOfxTag_(body, 'FID');
-  var sourceSystem = String(opts.sourceSystem || (fid ? 'OFX_FID_' + fid : '') || org || 'OFX_FILE').trim();
-  var institution = String(opts.institution || org || '').trim();
+  debtImportAssertChaseQfxHeader_(org, fid);
+  var isChaseQfx = debtImportIsChaseQfxProfile_(fid);
+  var sourceSystem = isChaseQfx ? 'CHASE_QFX_FID_10898_V1'
+    : String(opts.sourceSystem || (fid ? 'OFX_FID_' + fid : '') || org || 'OFX_FILE').trim();
+  var institution = String(opts.institution || (isChaseQfx ? 'Chase' : org) || '').trim();
   var observedAt = financialFactIso_(opts.observedAt || new Date(), 'observedAt');
   var blocks = cashImportOfxAggregates_(body, 'CCSTMTRS');
   if (!blocks.length) throw new Error('No credit-card statement account was found in the OFX/QFX file.');
+  var headerOpts = {
+    sourceSystem: sourceSystem,
+    institution: institution,
+    displayName: opts.displayName,
+    ownerId: opts.ownerId,
+    registrationType: opts.registrationType,
+    observedAt: observedAt
+  };
   var records = blocks.map(function(block, index) {
-    var accountBlock = cashImportOfxAggregate_(block, 'CCACCTFROM');
-    var externalId = cashImportOfxTag_(accountBlock, 'ACCTID');
-    if (!externalId) throw new Error('Credit-card account ' + (index + 1) + ' has no source account identifier.');
-    var currency = cashImportOfxTag_(block, 'CURDEF').toUpperCase() || 'USD';
-    var ledger = cashImportOfxAggregate_(block, 'LEDGERBAL');
-    var balance = cashImportStrictNumber_(cashImportOfxTag_(ledger, 'BALAMT'));
-    if (balance === null) throw new Error('Credit-card account ' + (index + 1) +
-      ' has no authoritative ledger balance. Transaction rows are not a balance.');
-    var balanceAsOf = cashImportOfxDate_(cashImportOfxTag_(ledger, 'DTASOF'));
-    var statementAsOf = balanceAsOf || cashImportOfxDate_(cashImportOfxTag_(block, 'DTEND'));
-    var facts = [debtImportNumericFact_('CURRENT_BALANCE', balance, currency, balanceAsOf)];
-    debtImportPushNumericTagFact_(facts, block, 'MINPMTDUE', 'MINIMUM_PAYMENT', currency, statementAsOf);
-    debtImportPushNumericTagFact_(facts, block, 'NEXTPMTAMT', 'NEXT_PAYMENT_AMOUNT', currency, statementAsOf);
-    debtImportPushDateTagFact_(facts, block, 'DTPMTDUE', 'NEXT_PAYMENT_DATE', statementAsOf);
-    debtImportPushNumericTagFact_(facts, block, 'CREDITLIMIT', 'CREDIT_LIMIT', currency, statementAsOf);
-    debtImportPushNumericTagFact_(facts, block, 'AVAILCREDIT', 'AVAILABLE_CREDIT', currency, statementAsOf);
-    // OFX rate tags are component disclosures. Caller options cannot establish
-    // which rate is economically applicable to the carried balance.
-    var rateFacts = debtImportOfxRateFacts_(block, statementAsOf);
-    facts = facts.concat(rateFacts.facts);
-    debtImportPushDateTagFact_(facts, block, 'PROMOEXPDATE', 'PROMOTIONAL_APR_EXPIRATION', statementAsOf);
-    var deferred = String(cashImportOfxTag_(block, 'DEFERREDINTEREST') || '').trim().toUpperCase();
-    if (deferred) facts.push({ factType: 'DEFERRED_INTEREST_STATUS', textValue: deferred,
-      currencyOrUnit: 'STATUS', effectiveAsOf: statementAsOf });
-    debtImportPushDateTagFact_(facts, block, 'DEFERREDEXPDATE', 'DEFERRED_INTEREST_EXPIRATION', statementAsOf);
-    return normalizeDebtEvidenceRecord_({
-      sourceSystem: sourceSystem, sourceType: 'FILE_IMPORT', externalAccountId: externalId,
-      last4: String(externalId).replace(/[^A-Za-z0-9]/g, '').slice(-4),
-      institution: institution, displayName: String(opts.displayName || institution ||
-        'Imported revolving account').trim(), accountType: 'CREDIT_CARD', currency: currency,
-      ownerId: opts.ownerId || 'UNKNOWN_REVIEW_REQUIRED',
-      registrationType: opts.registrationType || 'UNKNOWN', observedAt: observedAt,
-      sourceRecordKey: cashImportDigest_([sourceSystem, externalId, statementAsOf,
-        JSON.stringify(facts)].join('\n')), facts: facts,
-      aprReviewStatus: rateFacts.reviewStatus,
-      importEvidence: { adapterId: 'OFX_QFX_REVOLVING_DEBT',
-        adapterVersion: DEBT_IMPORT_OFX_ADAPTER_VERSION_ }
-    });
+    if (isChaseQfx) return debtImportParseChaseQfxCreditBlock_(block, index, headerOpts);
+    return debtImportParseGenericOfxCreditBlock_(block, index, headerOpts);
   });
   return debtImportAdapterOutput_('OFX_QFX_REVOLVING_DEBT',
-    DEBT_IMPORT_OFX_ADAPTER_VERSION_, 'FILE_IMPORT', sourceSystem, observedAt, records);
+    DEBT_IMPORT_OFX_ADAPTER_VERSION_, isChaseQfx ? 'QFX' : 'FILE_IMPORT', sourceSystem, observedAt, records);
 }
 
 /** Source-neutral structured snapshot seam for reviewed CSV/export mappings. */
@@ -709,6 +798,10 @@ function debtImportValidateExplicitMatch_(record, stableId, accounts, verifiedLi
   if (String(account.domain || '').toUpperCase() !== 'DEBT') {
     return { outcome: 'CONFLICT', reason: 'DOMAIN_MISMATCH', candidates: [account.stableAccountId] };
   }
+  if (!debtImportIsRevolvingType_(account.accountType)) {
+    return { outcome: 'CONFLICT', reason: 'UNSUPPORTED_ACCOUNT_TYPE',
+      candidates: [account.stableAccountId] };
+  }
   var incomingOwner = financialIdentityNormalizeOwnerId_(record.ownerId);
   var targetOwner = financialIdentityNormalizeOwnerId_(account.ownerId);
   if (incomingOwner !== 'UNKNOWN_REVIEW_REQUIRED' && targetOwner !== 'UNKNOWN_REVIEW_REQUIRED' &&
@@ -745,15 +838,37 @@ function debtImportCreateAccount_(ss, record, now) {
   return stableId;
 }
 
+function debtImportFactSourceRecordKey_(record, fact, manual) {
+  if (!manual && record.importEvidence && record.importEvidence.qfxProfileVersion) {
+    return financialFactQfxObservationKey_({
+      profileVersion: record.importEvidence.qfxProfileVersion,
+      protectedQfxAccountKey: record.sourceAccountKey,
+      factType: fact.factType,
+      numericValue: fact.numericValue,
+      textValue: fact.textValue,
+      currencyOrUnit: fact.currencyOrUnit,
+      sourceEffectiveAsOf: fact.effectiveAsOf
+    });
+  }
+  return cashImportDigest_([record.sourceRecordKey, fact.factType,
+    fact.numericValue, fact.textValue, fact.effectiveAsOf].join('\n'));
+}
+
+function debtImportFinancialFactSourceType_(sourceType) {
+  var normalized = String(sourceType || '').trim().toUpperCase();
+  if (normalized === 'QFX' || normalized === 'OFX') return 'FILE_IMPORT';
+  return normalized;
+}
+
 function debtImportFinancialFact_(record, fact, stableId, importRunId, manual) {
   var hasEffective = !!fact.effectiveAsOf;
   return { stableInternalAccountId: stableId, factType: fact.factType,
     numericValue: fact.numericValue, textValue: fact.textValue,
     currencyOrUnit: fact.currencyOrUnit, effectiveAsOf: fact.effectiveAsOf,
-    observedAt: record.observedAt, sourceType: manual ? 'MANUAL' : record.sourceType,
+    observedAt: record.observedAt,
+    sourceType: manual ? 'MANUAL' : debtImportFinancialFactSourceType_(record.sourceType),
     sourceSystem: record.sourceSystem, importRunId: importRunId,
-    sourceRecordKey: cashImportDigest_([record.sourceRecordKey, fact.factType,
-      fact.numericValue, fact.textValue, fact.effectiveAsOf].join('\n')),
+    sourceRecordKey: debtImportFactSourceRecordKey_(record, fact, manual),
     authorityClass: manual ? 'USER_VERIFIED_MANUAL' :
       (hasEffective ? 'INSTITUTION_AUTHORITATIVE' : 'FILE_IMPORTED'),
     verificationStatus: hasEffective ? 'VERIFIED' : 'REVIEW_REQUIRED',

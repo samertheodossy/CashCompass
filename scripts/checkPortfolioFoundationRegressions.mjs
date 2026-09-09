@@ -57,12 +57,13 @@ vm.runInContext(`
 `, context, { filename: 'investment_activity_partial.js' });
 vm.runInContext(etradeSource, context, { filename: 'investment_etrade_csv.js' });
 vm.runInContext(etradePositionsSource, context, { filename: 'investment_etrade_positions_pdf.js' });
+vm.runInContext(read('investment_m1_statement_pdf.js'), context, { filename: 'investment_m1_statement_pdf.js' });
 vm.runInContext(adaptersSource, context, { filename: 'investment_adapters.js' });
 
 // --- Source enum / adapter registry ---
-assert.deepEqual(context.listInvestmentAdapterSources_(), [
-  'ETRADE_CSV', 'ETRADE_PACKAGE', 'ROBINHOOD_CSV'
-], 'Foundation implements Robinhood and preview-only E*TRADE adapters');
+assert.deepEqual(context.listInvestmentAdapterSources_().sort(), [
+  'ETRADE_CSV', 'ETRADE_PACKAGE', 'ETRADE_POSITIONS_PDF', 'M1_STATEMENT_PDF', 'ROBINHOOD_CSV'
+], 'Foundation implements Robinhood and preview-only E*TRADE/M1 adapters');
 assert.throws(() => context.getInvestmentAdapter_('M1_CSV'),
   /not implemented/, 'Future broker adapters must not be stubbed as live');
 assert.equal(context.getInvestmentAdapter_('ETRADE_PACKAGE').source, 'ETRADE_PACKAGE');

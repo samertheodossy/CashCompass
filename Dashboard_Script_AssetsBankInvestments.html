@@ -1169,6 +1169,17 @@ function fillInvestmentAccountDropdownFromData_(data) {
   if (typeof populateInvestmentActivityImportAccounts_ === 'function') {
     populateInvestmentActivityImportAccounts_(data);
   }
+  var holdingsPreviewBtn = document.getElementById('inv_holdings_preview_btn');
+  if (holdingsPreviewBtn) {
+    var previewUrl = String(data && data.boundedHoldingsPreviewUrl || '').trim();
+    var showPreview = !!(data && data.boundedHoldingsPreviewAvailable && previewUrl);
+    holdingsPreviewBtn.style.display = showPreview ? '' : 'none';
+    if (showPreview) {
+      holdingsPreviewBtn.dataset.launchUrl = previewUrl;
+    } else {
+      delete holdingsPreviewBtn.dataset.launchUrl;
+    }
+  }
   populateInvestmentAddDatalists_(data);
   updateInvestmentUpdateAvailability_();
   renderInvestmentManageList_();
@@ -1315,6 +1326,47 @@ function setInvestmentPanelMode(mode) {
   if (m === 'connected' && typeof loadPlaidConnectedAccounts_ === 'function') {
     loadPlaidConnectedAccounts_(false, 'INVESTMENT');
   }
+}
+
+function boundedHoldingsPreviewNavigateTop_(url) {
+  url = String(url || '').trim();
+  if (!url || /userCodeAppPanel/i.test(url)) {
+    setStatus('inv_status', 'Portfolio Holdings Preview URL is unavailable. Refresh and try again.', true);
+    return;
+  }
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec\?view=portfolio-holdings-preview(?:&|$)/i.test(url)) {
+    setStatus('inv_status', 'Portfolio Holdings Preview URL is invalid. Refresh and try again.', true);
+    return;
+  }
+  try {
+    window.top.location.href = url;
+  } catch (_e) {
+    window.location.href = url;
+  }
+}
+
+function openBoundedHoldingsPreview_() {
+  var btn = document.getElementById('inv_holdings_preview_btn');
+  var url = String(btn && btn.dataset && btn.dataset.launchUrl || '').trim();
+  if (url) {
+    boundedHoldingsPreviewNavigateTop_(url);
+    return;
+  }
+  setStatusLoading('inv_status', 'Opening Portfolio Holdings Preview…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('inv_status', '', false);
+      if (!res || !res.ok || !res.url) {
+        setStatus('inv_status', (res && res.error) || 'Could not open Portfolio Holdings Preview.', true);
+        return;
+      }
+      if (btn) btn.dataset.launchUrl = res.url;
+      boundedHoldingsPreviewNavigateTop_(res.url);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_status', err && err.message ? err.message : String(err), true);
+    })
+    .getBoundedHoldingsPreviewLaunchUrlFromDashboard();
 }
 
 function installInvestmentPortfolioDrawerKeyHandler_() {

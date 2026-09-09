@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base target="_top">
+  <title>CashCompass — Portfolio Holdings Preview</title>
+  <style>
+    :root {
+      --ink: #1f2933;
+      --ink-soft: #52606d;
+      --line: #e1e5ea;
+      --bg: #f5f7fa;
+      --card: #fff;
+      --blue: #2563eb;
+      --warn-bg: #fff4d6;
+      --warn-border: #f0c200;
+      --warn-fg: #723b13;
+      --ok-fg: #03543f;
+      --bad-fg: #9b1c1c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      margin: 0;
+      padding: 24px 16px 64px;
+      background: var(--bg);
+      line-height: 1.5;
+    }
+    .wrap { max-width: 1180px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+         color: var(--ink-soft); margin: 0 0 10px; }
+    h3 { font-size: 14px; margin: 16px 0 8px; }
+    .sub { color: var(--ink-soft); font-size: 13px; margin: 0 0 16px; }
+    .banner-warn {
+      background: var(--warn-bg);
+      border: 2px solid var(--warn-border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--warn-fg);
+      margin: 0 0 18px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 18px;
+      margin: 0 0 16px;
+    }
+    label { display: block; font-size: 12px; color: var(--ink-soft); margin: 0 0 4px; }
+    input[type=text], input[type=file], select, textarea {
+      width: 100%;
+      padding: 9px 11px;
+      font-size: 13px;
+      border: 1px solid #cbd2d9;
+      border-radius: 8px;
+      margin: 0 0 12px;
+    }
+    textarea { min-height: 120px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+    .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+    button {
+      font-size: 13px;
+      padding: 9px 16px;
+      border-radius: 8px;
+      border: 1px solid #cbd2d9;
+      background: #fff;
+      cursor: pointer;
+    }
+    button.primary {
+      background: var(--blue);
+      border-color: var(--blue);
+      color: #fff;
+      font-weight: 600;
+    }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .file-meta { font-size: 12px; color: var(--ink-soft); margin: -6px 0 12px; }
+    table { border-collapse: collapse; width: 100%; font-size: 12px; }
+    th, td {
+      text-align: left;
+      padding: 6px 8px;
+      border-bottom: 1px solid #eceff2;
+      vertical-align: top;
+    }
+    th { background: #fafbfc; color: var(--ink-soft); font-weight: 600; }
+    .num { text-align: right; white-space: nowrap; }
+    .pill {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .pill-ok { background: #def7ec; color: var(--ok-fg); }
+    .pill-warn { background: #fdf6b2; color: var(--warn-fg); }
+    .pill-bad { background: #fde8e8; color: var(--bad-fg); }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      gap: 10px;
+    }
+    .stat {
+      border: 1px solid #eceff2;
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #fafbfc;
+    }
+    .stat .label { font-size: 11px; color: var(--ink-soft); }
+    .stat .value { font-size: 16px; font-weight: 600; margin-top: 2px; }
+    .error-box {
+      background: #fde8e8;
+      border: 1px solid #f8b4b4;
+      color: var(--bad-fg);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      margin: 0 0 16px;
+    }
+    .muted { color: var(--ink-soft); font-size: 12px; }
+    .obs-list { margin: 0; padding-left: 18px; font-size: 13px; }
+    .child-list { margin: 0; padding: 0; list-style: none; }
+    .child-list li {
+      border: 1px solid #eceff2;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin: 0 0 8px;
+      background: #fafbfc;
+    }
+    .confirm-box {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin: 0 0 12px;
+      font-size: 13px;
+    }
+    .dash-loading { display: inline-flex; align-items: center; gap: 10px; }
+    .dash-loading-spinner {
+      width: 16px; height: 16px;
+      border: 2px solid #e2e8f0;
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.72s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .dash-loading-spinner { animation: none; }
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    if (typeof pdfjsLib !== 'undefined') {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+  </script>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Portfolio Holdings Preview</h1>
+      <p class="sub">One PDF text extract per investment account — against your CashCompass workbook.
+        <a href="#" id="boundedPreviewDashboardLink" style="color:#2563eb;text-decoration:none;">← Back to CashCompass</a>
+      </p>
+    </header>
+
+    <div class="banner-warn" role="status" id="previewBanner">
+      Preview only — not loaded into CashCompass.
+    </div>
+
+    <div id="setupArea"></div>
+
+    <div class="card" id="formCard" hidden>
+      <label for="selectedAccount">CashCompass investment account (required)</label>
+      <select id="selectedAccount">
+        <option value="">Select an investment account…</option>
+      </select>
+      <div id="accountIdentityHint" class="muted" style="margin:-6px 0 12px;"></div>
+
+      <label for="documentFile">Statement file (.pdf or .txt)</label>
+      <input type="file" id="documentFile" accept=".pdf,.txt,application/pdf,text/plain">
+      <div class="file-meta" id="fileMeta">No file selected.</div>
+
+      <label for="rawDocumentText">Or paste PDF text extract</label>
+      <textarea id="rawDocumentText" placeholder="Paste one account statement or positions PDF text extract…"></textarea>
+
+      <label for="registrationType">Registration type (required)</label>
+      <select id="registrationType">
+        <option value="">Select registration type…</option>
+        <option value="TAXABLE">TAXABLE</option>
+        <option value="TRADITIONAL_IRA">TRADITIONAL_IRA</option>
+        <option value="ROTH_IRA">ROTH_IRA</option>
+        <option value="401K">401K</option>
+        <option value="HSA">HSA</option>
+      </select>
+      <div id="registrationHint" class="muted" style="margin:-6px 0 12px;"></div>
+
+      <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--ink);">
+        <input type="checkbox" id="explicitAccountMatch" style="width:auto;margin-top:3px;">
+        <span id="explicitAccountMatchText">I confirm this document belongs to the selected CashCompass investment account.</span>
+      </label>
+
+      <div id="workflowSingle" hidden>
+        <h2>Single account statement</h2>
+        <label for="previewSource">Source</label>
+        <select id="previewSource">
+          <option value="ETRADE_POSITIONS_PDF">ETRADE_POSITIONS_PDF</option>
+          <option value="M1_STATEMENT_PDF">M1_STATEMENT_PDF</option>
+        </select>
+        <div class="btn-row">
+          <button type="button" class="primary" id="previewBtn" disabled>Preview holdings</button>
+          <button type="button" id="clearBtn">Clear</button>
+        </div>
+      </div>
+
+      <div id="workflowGrouped" hidden>
+        <h2>M1 grouped statements</h2>
+        <p class="muted" id="groupedIntro">
+          Load M1 statement previews under this visible group account.
+          Each distinct child account is tracked separately, and duplicate statements are ignored.
+          The parent total is a control total only — child statements stay separate in preview.
+        </p>
+
+        <div id="groupedConfirmBox" class="confirm-box" hidden>
+          <p id="groupedConfirmPrompt" style="margin:0 0 10px;"></p>
+          <button type="button" class="primary" id="groupedConfirmBtn">Add child account and preview</button>
+          <button type="button" id="groupedCancelConfirmBtn">Cancel</button>
+        </div>
+
+        <div class="btn-row">
+          <button type="button" class="primary" id="groupedPreviewBtn" disabled>Preview M1 statement</button>
+          <button type="button" id="groupedClearBtn">Clear session</button>
+        </div>
+
+        <div id="groupedStatusArea"></div>
+        <div id="groupedChildrenArea"></div>
+        <div id="groupedChildDetailArea"></div>
+        <div id="groupedReconciliationArea"></div>
+        <div id="groupedAggregateArea"></div>
+      </div>
+
+      <p class="muted" style="margin:12px 0 0;">
+        Registration type is never inferred from Margin, joint ownership, or account title alone.
+        CashCompass saves internal identity automatically on your first confirmed preview.
+        Masked account numbers are not durable identity.
+      </p>
+    </div>
+
+    <div id="statusArea"></div>
+    <div id="resultsArea"></div>
+  </div>
+
+  <script>
+    <?!= boundedHoldingsPreviewIncludePdfClient_('bounded_holdings_preview_pdf_client_include.html') ?>
+  </script>
+  <script>
+    (function() {
+      var documentFileEl = document.getElementById('documentFile');
+      var rawTextEl = document.getElementById('rawDocumentText');
+      var fileMetaEl = document.getElementById('fileMeta');
+      var previewBtn = document.getElementById('previewBtn');
+      var clearBtn = document.getElementById('clearBtn');
+      var statusArea = document.getElementById('statusArea');
+      var resultsArea = document.getElementById('resultsArea');
+      var setupArea = document.getElementById('setupArea');
+      var formCard = document.getElementById('formCard');
+      var selectedAccountEl = document.getElementById('selectedAccount');
+      var accountIdentityHintEl = document.getElementById('accountIdentityHint');
+      var registrationHintEl = document.getElementById('registrationHint');
+      var workflowSingleEl = document.getElementById('workflowSingle');
+      var workflowGroupedEl = document.getElementById('workflowGrouped');
+      var groupedPreviewBtn = document.getElementById('groupedPreviewBtn');
+      var groupedClearBtn = document.getElementById('groupedClearBtn');
+      var groupedConfirmBox = document.getElementById('groupedConfirmBox');
+      var groupedConfirmPrompt = document.getElementById('groupedConfirmPrompt');
+      var groupedConfirmBtn = document.getElementById('groupedConfirmBtn');
+      var groupedCancelConfirmBtn = document.getElementById('groupedCancelConfirmBtn');
+      var groupedStatusArea = document.getElementById('groupedStatusArea');
+      var groupedChildrenArea = document.getElementById('groupedChildrenArea');
+      var groupedChildDetailArea = document.getElementById('groupedChildDetailArea');
+      var groupedReconciliationArea = document.getElementById('groupedReconciliationArea');
+      var groupedAggregateArea = document.getElementById('groupedAggregateArea');
+      var explicitAccountMatchTextEl = document.getElementById('explicitAccountMatchText');
+      var suppressDocumentTextSync_ = false;
+
+      var state = {
+        fileName: '',
+        fileSize: 0,
+        fileSizeLabel: '',
+        extractionStatus: '',
+        extractedTextLength: 0,
+        extractionError: '',
+        pastedTextLength: 0,
+        pastedSpacingNormalized: false,
+        documentKind: '',
+        registrationTouched: false,
+        confirmedRegistrationByPicker: {},
+        accounts: [],
+        selectedAccount: null,
+        groupedSession: {
+          children: [],
+          previews: [],
+          pendingInspect: null
+        }
+      };
+
+      function currentText() {
+        return String(rawTextEl.value || '').trim();
+      }
+
+      function isGroupedMode() {
+        return !!(state.selectedAccount && state.selectedAccount.previewMode === 'GROUPED_PROVIDER');
+      }
+
+      function singleReady() {
+        return !!state.selectedAccount && !isGroupedMode() &&
+          !!String(document.getElementById('registrationType').value || '').trim() &&
+          document.getElementById('explicitAccountMatch').checked;
+      }
+
+      function groupedReady() {
+        return isGroupedMode() &&
+          !!currentText() &&
+          !!String(document.getElementById('registrationType').value || '').trim() &&
+          document.getElementById('explicitAccountMatch').checked;
+      }
+
+      function identityReady() {
+        return isGroupedMode() ? groupedReady() : singleReady();
+      }
+
+      function currentPickerValue_() {
+        return String((state.selectedAccount && state.selectedAccount.pickerValue) ||
+          selectedAccountEl.value || '').trim();
+      }
+
+      function rememberRegistrationForAccount_(registrationType) {
+        var pickerValue = currentPickerValue_();
+        if (!pickerValue || !registrationType) return;
+        state.confirmedRegistrationByPicker[pickerValue] = registrationType;
+      }
+
+      function applyRegistrationSuggestion_() {
+        if (!registrationHintEl) return;
+        var pickerValue = currentPickerValue_();
+        if (pickerValue && state.confirmedRegistrationByPicker[pickerValue]) {
+          if (!state.registrationTouched) {
+            document.getElementById('registrationType').value =
+              state.confirmedRegistrationByPicker[pickerValue];
+          }
+          registrationHintEl.textContent =
+            'Using your previously confirmed registration type for this account.';
+          updateControls();
+          return;
+        }
+        if (state.registrationTouched) {
+          registrationHintEl.textContent = '';
+          return;
+        }
+        var text = currentText();
+        if (!text || !state.selectedAccount) {
+          registrationHintEl.textContent = '';
+          return;
+        }
+        var source = isGroupedMode() ? 'M1_STATEMENT_PDF' :
+          String(document.getElementById('previewSource').value || '').trim();
+        google.script.run
+          .withSuccessHandler(function(res) {
+            if (!res || !res.ok || state.registrationTouched) return;
+            if (res.suggested &&
+                (res.confidence === 'HIGH' ||
+                 (res.confidence === 'MEDIUM' && res.suggested === 'TAXABLE'))) {
+              document.getElementById('registrationType').value = res.suggested;
+              registrationHintEl.textContent = res.confidence === 'HIGH'
+                ? 'Registration type suggested from statement labels. Confirm or change before previewing.'
+                : 'Regular brokerage statement detected — TAXABLE suggested. Confirm or change before previewing.';
+            } else if (res.confidence === 'MEDIUM' && res.suggested) {
+              registrationHintEl.textContent =
+                'Registration type may apply — please confirm before previewing.';
+            } else {
+              registrationHintEl.textContent = '';
+            }
+            updateControls();
+          })
+          .withFailureHandler(function() {
+            registrationHintEl.textContent = '';
+          })
+          .boundedHoldingsPreviewSuggestRegistrationFromDashboard({
+            rawDocumentText: text,
+            source: source
+          });
+      }
+
+      function formatDocumentFileMetaLocal_(metaState) {
+        metaState = metaState || {};
+        if (metaState.extractionError) {
+          return 'File: ' + String(metaState.fileName || 'unknown') + ' — extraction failed: ' +
+            String(metaState.extractionError);
+        }
+        if (metaState.fileName) {
+          var meta = 'File: ' + metaState.fileName + ' (' + String(metaState.fileSizeLabel || '') + ')';
+          if (metaState.extractionStatus) {
+            meta += ' · ' + metaState.extractionStatus;
+          }
+          if (isFinite(Number(metaState.extractedTextLength)) && Number(metaState.extractedTextLength) > 0) {
+            meta += ' · extracted text length ' + Number(metaState.extractedTextLength);
+          }
+          return meta;
+        }
+        if (isFinite(Number(metaState.pastedTextLength)) && Number(metaState.pastedTextLength) > 0) {
+          var pastedPrefix = metaState.pastedSpacingNormalized
+            ? 'Pasted text · spacing normalized for readability · length '
+            : 'Pasted text ready · length ';
+          return pastedPrefix + Number(metaState.pastedTextLength);
+        }
+        return 'No file selected.';
+      }
+
+      function buildDocumentFileMetaState_() {
+        return {
+          fileName: state.fileName,
+          fileSizeLabel: state.fileSizeLabel || formatBytes(state.fileSize),
+          extractionStatus: state.extractionStatus,
+          extractedTextLength: state.extractedTextLength,
+          extractionError: state.extractionError,
+          pastedTextLength: state.fileName ? 0 : state.pastedTextLength,
+          pastedSpacingNormalized: state.fileName ? false : state.pastedSpacingNormalized
+        };
+      }
+
+      function renderDocumentFileMeta_() {
+        if (!fileMetaEl) return;
+        var metaState = buildDocumentFileMetaState_();
+        if (typeof boundedHoldingsPreviewFormatFileMeta_ === 'function') {
+          fileMetaEl.textContent = boundedHoldingsPreviewFormatFileMeta_(metaState);
+        } else {
+          fileMetaEl.textContent = formatDocumentFileMetaLocal_(metaState);
+        }
+      }
+
+      function setDocumentTextareaValue_(value) {
+        suppressDocumentTextSync_ = true;
+        rawTextEl.value = String(value || '');
+        suppressDocumentTextSync_ = false;
+      }
+
+      function clearDocumentFileState_(clearInput) {
+        state.fileName = '';
+        state.fileSize = 0;
+        state.fileSizeLabel = '';
+        state.extractionStatus = '';
+        state.extractedTextLength = 0;
+        state.extractionError = '';
+        state.documentKind = '';
+        state.pastedSpacingNormalized = false;
+        if (clearInput !== false) {
+          documentFileEl.value = '';
+        }
+      }
+
+      function beginDocumentFileSelection_(file) {
+        state.fileName = String(file && file.name ? file.name : '').trim() || 'selected file';
+        state.fileSize = file && isFinite(Number(file.size)) ? Number(file.size) : 0;
+        state.fileSizeLabel = formatBytes(state.fileSize);
+        state.extractionError = '';
+        state.extractionStatus = 'extracting…';
+        state.extractedTextLength = 0;
+        state.pastedTextLength = 0;
+        state.pastedSpacingNormalized = false;
+        state.documentKind = '';
+        renderDocumentFileMeta_();
+        if (typeof boundedHoldingsPreviewPdfFileKind_ === 'function') {
+          state.documentKind = boundedHoldingsPreviewPdfFileKind_(file.name, file.type);
+        }
+      }
+
+      function normalizePastedDocumentText_() {
+        if (typeof boundedHoldingsPreviewReadableExtractText_ !== 'function') return;
+        var pasted = currentText();
+        if (!pasted) return;
+        var readable = boundedHoldingsPreviewReadableExtractText_(pasted);
+        if (!readable || !readable.normalized || readable.text === pasted) return;
+        suppressDocumentTextSync_ = true;
+        setDocumentTextareaValue_(readable.text);
+        suppressDocumentTextSync_ = false;
+        state.pastedTextLength = readable.text.length;
+        state.pastedSpacingNormalized = true;
+        renderDocumentFileMeta_();
+      }
+
+      function applyDocumentFileLoadResult_(result) {
+        state.extractionStatus = result.extractionStatus;
+        state.extractedTextLength = result.extractedTextLength;
+        state.extractionError = '';
+        state.documentKind = result.kind;
+        setDocumentTextareaValue_(result.text);
+        renderDocumentFileMeta_();
+        applyRegistrationSuggestion_();
+        updateControls();
+      }
+
+      function applyDocumentFileLoadError_(err) {
+        state.extractionError = (err && err.message) ? String(err.message) : String(err);
+        state.extractionStatus = '';
+        state.extractedTextLength = 0;
+        setDocumentTextareaValue_('');
+        renderDocumentFileMeta_();
+        updateControls();
+      }
+
+      function updateControls() {
+        var hasText = !!currentText() && !state.extractionError;
+        var extracting = !!state.fileName && state.extractionStatus === 'extracting…';
+        renderDocumentFileMeta_();
+        if (workflowSingleEl) {
+          workflowSingleEl.hidden = !state.selectedAccount || isGroupedMode();
+        }
+        if (workflowGroupedEl) {
+          workflowGroupedEl.hidden = !isGroupedMode();
+        }
+        previewBtn.disabled = !(hasText && singleReady() && !extracting);
+        if (groupedPreviewBtn) {
+          groupedPreviewBtn.disabled = !(groupedReady() && !extracting);
+        }
+        if (formCard && isGroupedMode()) {
+          document.getElementById('previewSource').value = 'M1_STATEMENT_PDF';
+        }
+      }
+
+      function formatBytes(n) {
+        if (!n) return '0 B';
+        if (n < 1024) return n + ' B';
+        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+        return (n / (1024 * 1024)).toFixed(2) + ' MB';
+      }
+
+      function escapeHtml(text) {
+        return String(text)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function formatMoney(value) {
+        if (value === null || typeof value === 'undefined' || value === '') return '—';
+        var num = Number(value);
+        if (!isFinite(num)) return '—';
+        return '$' + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+
+      function setLoading(on, label) {
+        statusArea.innerHTML = on
+          ? ('<div class="card"><div class="dash-loading"><div class="dash-loading-spinner"></div>' +
+             '<span>' + escapeHtml(label || 'Running preview…') + '</span></div></div>')
+          : '';
+      }
+
+      function pill(review) {
+        return review
+          ? '<span class="pill pill-warn">review required</span>'
+          : '<span class="pill pill-ok">ok</span>';
+      }
+
+      function stat(label, value) {
+        return '<div class="stat"><div class="label">' + escapeHtml(label) +
+          '</div><div class="value">' + value + '</div></div>';
+      }
+
+      function applySelectedAccount() {
+        var pickerValue = String(selectedAccountEl.value || '').trim();
+        var previousMode = state.selectedAccount ? state.selectedAccount.previewMode : '';
+        state.selectedAccount = null;
+        document.getElementById('registrationType').value = '';
+        document.getElementById('explicitAccountMatch').checked = false;
+        state.registrationTouched = false;
+        accountIdentityHintEl.innerHTML = '';
+        if (registrationHintEl) registrationHintEl.textContent = '';
+
+        if (!pickerValue) {
+          updateControls();
+          return;
+        }
+
+        var match = state.accounts.filter(function(row) {
+          return String(row.pickerValue || row.investmentId || '') === pickerValue;
+        })[0];
+        if (!match) {
+          accountIdentityHintEl.innerHTML = '<span class="error-box" style="display:inline-block;padding:4px 8px;">Unknown account.</span>';
+          updateControls();
+          return;
+        }
+        if (previousMode && previousMode !== match.previewMode) {
+          resetPreviewFields();
+          state.groupedSession = { children: [], previews: [], pendingInspect: null };
+          groupedConfirmBox.hidden = true;
+          groupedStatusArea.innerHTML = '';
+          groupedChildrenArea.innerHTML = '';
+          groupedChildDetailArea.innerHTML = '';
+          groupedReconciliationArea.innerHTML = '';
+          groupedAggregateArea.innerHTML = '';
+          statusArea.innerHTML = '';
+          resultsArea.innerHTML = '';
+        }
+        state.selectedAccount = match;
+        if (match.previewMode === 'GROUPED_PROVIDER') {
+          if (!previousMode || previousMode !== match.previewMode) {
+            state.groupedSession = { children: [], previews: [], pendingInspect: null };
+            groupedConfirmBox.hidden = true;
+            groupedStatusArea.innerHTML = '';
+            groupedChildrenArea.innerHTML = '';
+          groupedChildDetailArea.innerHTML = '';
+            groupedReconciliationArea.innerHTML = '';
+            groupedAggregateArea.innerHTML = '';
+          }
+          document.getElementById('groupedIntro').textContent =
+            'Load M1 statement previews under ' +
+            (match.groupProviderLabel || match.accountName) +
+            '. Each distinct child account is tracked separately, and duplicate statements are ignored. ' +
+            'The parent total is a control total only; child statements stay separate in preview.';
+          document.getElementById('previewSource').value = 'M1_STATEMENT_PDF';
+          if (!match.investmentId) {
+            accountIdentityHintEl.textContent =
+              'CashCompass will save internal identity automatically on your first confirmed preview for ' +
+              (match.groupProviderLabel || match.accountName) + '.';
+          } else {
+            accountIdentityHintEl.textContent =
+              (match.groupProviderLabel || match.accountName) +
+              ' · parent control total ' + formatMoney(match.currentBalance) +
+              ' · child statements stay separate in preview.';
+          }
+        } else if (!match.investmentId) {
+          accountIdentityHintEl.textContent =
+            match.identityMessage ||
+            'CashCompass will assign internal identity automatically on your first confirmed preview for ' +
+            match.accountName + '.';
+        } else if (match.needsAutoIdentity) {
+          accountIdentityHintEl.textContent =
+            'CashCompass will save internal identity automatically on your first confirmed preview for ' +
+            match.accountName + '.';
+        } else {
+          accountIdentityHintEl.textContent = 'Ready to preview for ' + match.accountName + '.';
+        }
+        if (match.suggestedRegistrationType && !state.registrationTouched) {
+          document.getElementById('registrationType').value = match.suggestedRegistrationType;
+        }
+        explicitAccountMatchTextEl.textContent = isGroupedMode()
+          ? ('I confirm each statement belongs under ' +
+            (match.groupProviderLabel || match.accountName) +
+            '. The parent total is a control total only; child statements are tracked separately.')
+          : ('I confirm this document belongs to ' + (match.accountName || 'the selected account') + '.');
+        applyRegistrationSuggestion_();
+        updateControls();
+      }
+
+      function buildGroupedPayload(extra) {
+        var selected = state.selectedAccount || {};
+        var payload = {
+          pickerValue: String(selected.pickerValue || selectedAccountEl.value || '').trim(),
+          sysAssetsRow: selected.sysAssetsRow,
+          accountName: selected.accountName || '',
+          source: 'M1_STATEMENT_PDF',
+          rawDocumentText: currentText(),
+          registrationType: document.getElementById('registrationType').value,
+          explicitAccountMatch: document.getElementById('explicitAccountMatch').checked,
+          sessionChildren: state.groupedSession.children,
+          sessionPreviews: state.groupedSession.previews.map(function(row) {
+            return {
+              childPartitionId: row.childPartitionId,
+              recognitionLabel: row.recognitionLabel,
+              maskedAccountSignal: row.maskedAccountSignal,
+              statementPeriodEnd: row.statementPeriodEnd,
+              statementPeriodStart: row.statementPeriodStart,
+              documentFingerprint: row.documentFingerprint,
+              contentFingerprint: row.contentFingerprint,
+              source: row.source,
+              replayOutcome: row.replayOutcome,
+              totalAccountValue: row.totalAccountValue,
+              cashBalance: row.cashBalance,
+              equitiesSubtotal: row.equitiesSubtotal,
+              cashPlusEquitiesReconciles: row.cashPlusEquitiesReconciles,
+              statementAccountLabel: row.statementAccountLabel,
+              statementAccountTitle: row.statementAccountTitle,
+              statementAccountType: row.statementAccountType,
+              statementSourceMaskedAccountNumber: row.statementSourceMaskedAccountNumber,
+              parentGroupLabel: row.parentGroupLabel,
+              holdingsCount: row.holdingsCount,
+              matchStatus: row.matchStatus
+            };
+          })
+        };
+        if (extra) {
+          Object.keys(extra).forEach(function(key) { payload[key] = extra[key]; });
+        }
+        return payload;
+      }
+
+      function renderGroupedReplayPill(outcome) {
+        if (outcome === 'DUPLICATE_NOOP') {
+          return '<span class="pill pill-warn">duplicate — no change</span>';
+        }
+        if (outcome === 'CONFLICT_REVIEW_REQUIRED') {
+          return '<span class="pill pill-bad">conflict — review required</span>';
+        }
+        if (outcome === 'IDENTITY_REVIEW_REQUIRED') {
+          return '<span class="pill pill-bad">identity review required</span>';
+        }
+        return '<span class="pill pill-ok">accepted</span>';
+      }
+
+      function renderGroupedChildDetail(row) {
+        if (!row || !isGroupedMode()) {
+          groupedChildDetailArea.innerHTML = '';
+          return;
+        }
+        var preview = row.preview || {};
+        var analysis = preview.analysis || {};
+        var html = '<div class="card" style="margin-top:12px;padding:14px;"><h3>Child preview detail</h3>' +
+          '<p class="muted">CashCompass label: <strong>' + escapeHtml(row.recognitionLabel || 'Account') +
+          '</strong> · parent group: <strong>' +
+          escapeHtml(row.parentGroupLabel || state.selectedAccount.accountName || '') + '</strong></p>' +
+          '<div class="stat-grid">' +
+          stat('Statement period end', escapeHtml(row.statementPeriodEnd || '—')) +
+          stat('Total account value', formatMoney(row.totalAccountValue)) +
+          stat('Cash balance', formatMoney(row.cashBalance)) +
+          stat('Cash %', (analysis.cashPercent != null ? analysis.cashPercent + '%' : '—')) +
+          stat('Equities subtotal', formatMoney(row.equitiesSubtotal)) +
+          stat('Cash + equities reconciles', row.cashPlusEquitiesReconciles === true ? 'yes' :
+            (row.cashPlusEquitiesReconciles === false ? 'no' : '—')) +
+          '</div>' +
+          '<h3>Statement source (verification only)</h3>' +
+          '<ul class="obs-list">' +
+          '<li>Statement account label: ' + escapeHtml(row.statementAccountLabel || '—') + '</li>' +
+          '<li>Statement account title: ' + escapeHtml(row.statementAccountTitle || '—') + '</li>' +
+          '<li>Statement account type: ' + escapeHtml(row.statementAccountType || '—') + '</li>' +
+          '<li>Masked account number (matching signal only): ' +
+          escapeHtml(row.statementSourceMaskedAccountNumber || row.maskedAccountSignal || '—') + '</li>' +
+          '</ul>' +
+          '<p class="muted">Statement titles and masked numbers are not used as CashCompass account names.</p>' +
+          '</div>';
+        groupedChildDetailArea.innerHTML = html;
+      }
+
+      function renderGroupedSession() {
+        if (!isGroupedMode()) return;
+        var html = '';
+        if (state.groupedSession.previews.length) {
+          html += '<h3>Child statements in this session</h3><ul class="child-list">';
+          state.groupedSession.previews.forEach(function(row) {
+            var cashPct = row.preview && row.preview.analysis && row.preview.analysis.cashPercent != null
+              ? row.preview.analysis.cashPercent + '%' : '—';
+            html += '<li><strong>' + escapeHtml(row.recognitionLabel || 'Account') + '</strong> · ' +
+              escapeHtml(row.statementPeriodEnd || '—') + ' · ' + formatMoney(row.totalAccountValue) +
+              ' · cash ' + formatMoney(row.cashBalance) + ' (' + escapeHtml(cashPct) + ') · ' +
+              escapeHtml(String(row.holdingsCount || 0)) + ' holdings · ' +
+              renderGroupedReplayPill(row.replayOutcome) +
+              ' <button type="button" data-remove-preview="' +
+              escapeHtml(row.childPartitionId + '|' + row.documentFingerprint) +
+              '">Remove</button></li>';
+          });
+          html += '</ul>';
+        } else {
+          html += '<p class="muted">No child statement previews loaded yet.</p>';
+        }
+        groupedChildrenArea.innerHTML = html;
+        groupedChildrenArea.querySelectorAll('[data-remove-preview]').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var parts = String(btn.getAttribute('data-remove-preview') || '').split('|');
+            var childId = parts[0];
+            var fingerprint = parts.slice(1).join('|');
+            state.groupedSession.previews = state.groupedSession.previews.filter(function(row) {
+              return !(String(row.childPartitionId) === childId &&
+                String(row.documentFingerprint) === fingerprint);
+            });
+            renderGroupedSession();
+            renderGroupedChildDetail(state.groupedSession.previews.length
+              ? state.groupedSession.previews[state.groupedSession.previews.length - 1] : null);
+            refreshGroupedAggregate();
+          });
+        });
+      }
+
+      function renderGroupedReconciliation(reconciliation) {
+        if (!reconciliation) {
+          groupedReconciliationArea.innerHTML = '';
+          return;
+        }
+        var html = '<div class="card" style="margin-top:12px;padding:14px;"><h3>Reconciliation</h3>' +
+          '<p class="muted"><strong>' + escapeHtml(reconciliation.label || '') + '</strong></p>' +
+          '<div class="stat-grid">' +
+          stat('M1 Gmail aggregate (workbook)', formatMoney(reconciliation.parentAggregateValue)) +
+          stat('Sum of previewed child values', formatMoney(reconciliation.childPreviewedValueSum)) +
+          stat('Difference', formatMoney(reconciliation.difference)) +
+          stat('Child accounts observed', escapeHtml(String(reconciliation.distinctChildAccountsObserved || 0))) +
+          stat('Statements loaded', escapeHtml(String(reconciliation.statementPreviewsLoaded || 0))) +
+          '</div>';
+        html += '<p class="muted">Additional child accounts are added when their statements are confirmed.</p>';
+        html += '<p class="muted">Parent aggregate is excluded from child preview totals.</p></div>';
+        groupedReconciliationArea.innerHTML = html;
+      }
+
+      function renderGroupedAggregate(aggregate, reconciliation) {
+        if (!aggregate) {
+          groupedAggregateArea.innerHTML = '';
+          return;
+        }
+        var html = '<div class="card" style="margin-top:12px;padding:14px;"><h3>Portfolio analysis</h3>' +
+          '<p class="muted"><strong>' + escapeHtml(aggregate.scopeLabel || 'Previewed accounts only.') + '</strong></p>' +
+          '<div class="stat-grid">' +
+          stat('Total child-account value', formatMoney(aggregate.totalPreviewedValue)) +
+          stat('Total cash', formatMoney(aggregate.totalCash)) +
+          stat('Cash %', (aggregate.cashPercent != null ? aggregate.cashPercent + '%' : '—')) +
+          stat('Child previews', escapeHtml(String(aggregate.accountCount || 0))) +
+          '</div>';
+        if ((aggregate.topHoldingsAcrossAccounts || []).length) {
+          html += '<h3>Top holdings across child previews</h3><table><thead><tr>' +
+            '<th>Symbol</th><th class="num">Market value</th><th class="num">% of preview</th><th>Accounts</th></tr></thead><tbody>';
+          aggregate.topHoldingsAcrossAccounts.forEach(function(row) {
+            html += '<tr><td>' + escapeHtml(row.symbol) + '</td><td class="num">' +
+              formatMoney(row.marketValue) + '</td><td class="num">' + escapeHtml(row.percentOfSession) +
+              '%</td><td>' + escapeHtml(String(row.accountCount || 1)) + '</td></tr>';
+          });
+          html += '</tbody></table>';
+        }
+        if ((aggregate.crossAccountSymbolOverlap || []).length) {
+          html += '<h3>Repeated-symbol overlap</h3><ul class="obs-list">';
+          aggregate.crossAccountSymbolOverlap.forEach(function(row) {
+            html += '<li>' + escapeHtml(row.symbol) + ': ' + escapeHtml(row.observation) + '</li>';
+          });
+          html += '</ul>';
+        }
+        if ((aggregate.concentrationObservations || []).length) {
+          html += '<h3>Concentration</h3><ul class="obs-list">';
+          aggregate.concentrationObservations.forEach(function(line) {
+            html += '<li>' + escapeHtml(line) + '</li>';
+          });
+          html += '</ul>';
+        }
+        html += '</div>';
+        groupedAggregateArea.innerHTML = html;
+        renderGroupedReconciliation(reconciliation);
+      }
+
+      function refreshGroupedAggregate() {
+        if (!isGroupedMode() || !state.groupedSession.previews.length) {
+          renderGroupedAggregate(null, null);
+          return;
+        }
+        google.script.run
+          .withSuccessHandler(function(res) {
+            if (res && res.ok) {
+              renderGroupedAggregate(res.aggregate, res.reconciliation);
+            }
+          })
+          .withFailureHandler(function() {})
+          .boundedHoldingsPreviewAggregateGroupedFromDashboard(buildGroupedPayload());
+      }
+
+      function handleGroupedRunResult(res) {
+        groupedConfirmBox.hidden = true;
+        state.groupedSession.pendingInspect = null;
+        if (!res || !res.ok) {
+          if (res && res.requiresConfirmation && res.childMatch) {
+            state.groupedSession.pendingInspect = res.childMatch;
+            groupedConfirmPrompt.textContent = res.childMatch.prompt ||
+              res.error || 'Confirm adding this child account.';
+            groupedConfirmBox.hidden = false;
+            groupedStatusArea.innerHTML = '';
+            updateControls();
+            return;
+          }
+          groupedStatusArea.innerHTML = '<div class="error-box">' +
+            escapeHtml(res && res.error ? res.error : 'Grouped preview failed.') +
+            (res && res.replayMessage ? (' ' + escapeHtml(res.replayMessage)) : '') + '</div>';
+          updateControls();
+          return;
+        }
+        if (res.sessionChildren) state.groupedSession.children = res.sessionChildren;
+        rememberRegistrationForAccount_(document.getElementById('registrationType').value);
+        if (res.duplicateNoop) {
+          groupedStatusArea.innerHTML = '<div class="card muted">' +
+            escapeHtml(res.replayMessage || 'Duplicate document — no change.') + '</div>';
+        } else if (res.sessionPreview) {
+          state.groupedSession.previews.push(res.sessionPreview);
+          groupedStatusArea.innerHTML = '<div class="card">' +
+            renderGroupedReplayPill(res.replayOutcome) + ' ' +
+            escapeHtml(res.childPartition.recognitionLabel || 'Child account') + ' · ' +
+            escapeHtml(res.sessionPreview.statementPeriodEnd || '') + '</div>';
+        }
+        renderGroupedSession();
+        renderGroupedChildDetail(res.sessionPreview || (state.groupedSession.previews.length
+          ? state.groupedSession.previews[state.groupedSession.previews.length - 1] : null));
+        renderGroupedAggregate(res.aggregate, res.reconciliation);
+        updateControls();
+      }
+
+      function runGroupedPreview(extra) {
+        groupedPreviewBtn.disabled = true;
+        groupedStatusArea.innerHTML = '<div class="dash-loading"><div class="dash-loading-spinner"></div>' +
+          '<span>Previewing M1 statement in memory…</span></div>';
+        google.script.run
+          .withSuccessHandler(function(res) {
+            groupedPreviewBtn.disabled = false;
+            handleGroupedRunResult(res);
+          })
+          .withFailureHandler(function(err) {
+            groupedPreviewBtn.disabled = false;
+            groupedStatusArea.innerHTML = '<div class="error-box">' +
+              escapeHtml(err && err.message ? err.message : String(err)) + '</div>';
+            updateControls();
+          })
+          .boundedHoldingsPreviewRunGroupedChildFromDashboard(buildGroupedPayload(extra || {}));
+      }
+
+      function renderSetup(res) {
+        if (!res || !res.ok) {
+          setupArea.innerHTML = '<div class="error-box">' +
+            escapeHtml(res && res.error ? res.error : 'Could not load investment accounts.') + '</div>';
+          formCard.hidden = true;
+          return;
+        }
+        if (res.previewLabel) {
+          document.getElementById('previewBanner').textContent = res.previewLabel;
+        }
+        var dashboardLink = document.getElementById('boundedPreviewDashboardLink');
+        var dashboardUrl = String(res.dashboardUrl || '').trim();
+        if (dashboardLink && dashboardUrl && !/userCodeAppPanel/i.test(dashboardUrl)) {
+          dashboardLink.href = dashboardUrl;
+          dashboardLink.onclick = function(event) {
+            event.preventDefault();
+            try {
+              window.top.location.href = dashboardUrl;
+            } catch (_e) {
+              window.location.href = dashboardUrl;
+            }
+          };
+        }
+        state.accounts = res.accounts || [];
+        selectedAccountEl.innerHTML = '<option value="">Select an investment account…</option>';
+        state.accounts.forEach(function(row) {
+          var opt = document.createElement('option');
+          opt.value = row.pickerValue || row.investmentId || ('__row__:' + row.sysAssetsRow);
+          opt.textContent = row.accountName + (row.type ? (' · ' + row.type) : '');
+          selectedAccountEl.appendChild(opt);
+        });
+        if (!state.accounts.length) {
+          setupArea.innerHTML = '<div class="card muted">No active investment accounts in this workbook. Add one from Assets → Investments first.</div>';
+          formCard.hidden = true;
+          return;
+        }
+        setupArea.innerHTML = '';
+        formCard.hidden = false;
+        updateControls();
+      }
+
+      function renderResults(data) {
+        if (!data || !data.ok) {
+          resultsArea.innerHTML = '<div class="error-box">' +
+            escapeHtml(data && data.error ? data.error : 'Preview failed.') + '</div>';
+          updateControls();
+          return;
+        }
+        rememberRegistrationForAccount_(document.getElementById('registrationType').value);
+        updateControls();
+
+        var analysis = data.analysis || {};
+        var html = '<div class="card"><h2>Normalized preview</h2>';
+        html += '<p class="muted"><strong>Preview only — not loaded into CashCompass.</strong></p>';
+        html += '<div class="stat-grid">';
+        html += stat('Source', escapeHtml(data.source));
+        html += stat('Status', pill(data.reviewRequired));
+        html += stat('Parser', escapeHtml(data.parserVersion || '—'));
+        html += stat('As-of', escapeHtml(data.asOf || '—'));
+        html += stat('Match status', escapeHtml(data.account.matchStatus || '—'));
+        html += stat('Total account value', formatMoney(data.totalAccountValue));
+        if (analysis.parsedScopeTotal != null &&
+            data.totalAccountValue != null &&
+            Math.abs(Number(analysis.parsedScopeTotal) - Number(data.totalAccountValue)) > 0.01) {
+          html += stat('Allocation scope total', formatMoney(analysis.parsedScopeTotal));
+        }
+        html += stat('Cash balance', formatMoney(data.cashBalance));
+        html += stat('Cash %', (analysis.cashPercent != null ? analysis.cashPercent + '%' : '—'));
+        html += stat('Registration', escapeHtml(data.account.registrationType));
+        html += stat('Holdings visibility', data.readiness.trustedForHoldingsVisibility ? 'ready' : 'not ready');
+        html += stat('Income analysis', data.readiness.trustedForIncomeAnalysis ? 'ready' : 'not ready');
+        html += stat('Tax-lot planning', data.readiness.trustedForTaxLotSalePlanning ? 'ready' : 'not ready');
+        html += '</div>';
+
+        html += '<p class="muted" style="margin-top:12px;">Account: <strong>' +
+          escapeHtml(data.account.displayName) + '</strong></p>';
+
+        if ((analysis.topFiveHoldings || []).length) {
+          html += '<h3>Top holdings</h3><table><thead><tr>' +
+            '<th>Symbol</th><th class="num">Market value</th><th class="num">% of preview</th></tr></thead><tbody>';
+          analysis.topFiveHoldings.forEach(function(row) {
+            html += '<tr><td>' + escapeHtml(row.symbol || row.label) + '</td>' +
+              '<td class="num">' + formatMoney(row.marketValue) + '</td>' +
+              '<td class="num">' + escapeHtml(row.percent) + '%</td></tr>';
+          });
+          html += '</tbody></table>';
+        }
+
+        if ((analysis.concentrationObservations || []).length) {
+          html += '<h3>Concentration observations</h3><ul class="obs-list">';
+          analysis.concentrationObservations.forEach(function(line) {
+            html += '<li>' + escapeHtml(line) + '</li>';
+          });
+          html += '</ul>';
+        }
+        if ((analysis.repeatedSymbolObservations || []).length) {
+          html += '<h3>Repeated symbols</h3><ul class="obs-list">';
+          analysis.repeatedSymbolObservations.forEach(function(line) {
+            html += '<li>' + escapeHtml(line) + '</li>';
+          });
+          html += '</ul>';
+        }
+        if ((analysis.readinessObservations || []).length) {
+          html += '<h3>Readiness observations</h3><ul class="obs-list">';
+          analysis.readinessObservations.forEach(function(line) {
+            html += '<li>' + escapeHtml(line) + '</li>';
+          });
+          html += '</ul>';
+        }
+        if ((data.unavailableFields || []).length) {
+          html += '<p class="muted">Unavailable in this document: ' +
+            escapeHtml(data.unavailableFields.join(', ')) + '</p>';
+        }
+        if ((data.warnings || []).length) {
+          html += '<h3>Parser warnings</h3><ul class="obs-list">';
+          data.warnings.forEach(function(w) { html += '<li>' + escapeHtml(w) + '</li>'; });
+          html += '</ul>';
+        }
+        html += '</div>';
+
+        html += '<div class="card"><h2>Allocation by holding</h2><table><thead><tr>' +
+          '<th>Symbol</th><th class="num">Market value</th><th class="num">% of preview</th></tr></thead><tbody>';
+        (analysis.allocationByHolding || []).forEach(function(row) {
+          html += '<tr><td>' + escapeHtml(row.symbol || row.label) + '</td>' +
+            '<td class="num">' + formatMoney(row.marketValue) + '</td>' +
+            '<td class="num">' + escapeHtml(row.percent) + '%</td></tr>';
+        });
+        html += '</tbody></table></div>';
+
+        html += '<div class="card"><h2>Holdings</h2><div style="overflow-x:auto;"><table><thead><tr>' +
+          '<th>Source security key</th><th>Symbol</th><th>Description</th><th>Share class</th><th>Exchange</th>' +
+          '<th class="num">Qty</th><th class="num">Price</th><th class="num">Market value</th>' +
+          '<th class="num">Cost basis</th><th class="num">Unrealized G/L</th><th>Unavailable</th>' +
+          '</tr></thead><tbody>';
+        (data.holdingsRows || []).forEach(function(row) {
+          html += '<tr>' +
+            '<td>' + escapeHtml(row.sourceSecurityKey) + '</td>' +
+            '<td>' + escapeHtml(row.symbol) + '</td>' +
+            '<td>' + escapeHtml(row.description) + '</td>' +
+            '<td>' + escapeHtml(row.shareClass) + '</td>' +
+            '<td>' + escapeHtml(row.exchange) + '</td>' +
+            '<td class="num">' + escapeHtml(row.quantity) + '</td>' +
+            '<td class="num">' + formatMoney(row.price) + '</td>' +
+            '<td class="num">' + formatMoney(row.marketValue) + '</td>' +
+            '<td class="num">' + formatMoney(row.costBasis) + '</td>' +
+            '<td class="num">' + formatMoney(row.unrealizedGainLoss) + '</td>' +
+            '<td>' + escapeHtml((row.unavailableFields || []).join(', ')) + '</td>' +
+            '</tr>';
+        });
+        html += '</tbody></table>';
+        if (data.holdingsTruncated) {
+          html += '<p class="muted">Showing first ' + data.holdingsRows.length + ' of ' +
+            data.holdingsTotal + ' holdings.</p>';
+        }
+        html += '</div></div>';
+
+        resultsArea.innerHTML = html;
+      }
+
+      function buildPayload() {
+        var selected = state.selectedAccount || {};
+        return {
+          pickerValue: String(selected.pickerValue || selectedAccountEl.value || '').trim(),
+          sysAssetsRow: selected.sysAssetsRow,
+          source: document.getElementById('previewSource').value,
+          rawDocumentText: currentText(),
+          accountName: selected.accountName || '',
+          registrationType: document.getElementById('registrationType').value,
+          explicitAccountMatch: document.getElementById('explicitAccountMatch').checked
+        };
+      }
+
+      function resetPreviewFields() {
+        clearDocumentFileState_(true);
+        state.pastedTextLength = 0;
+        state.pastedSpacingNormalized = false;
+        setDocumentTextareaValue_('');
+        document.getElementById('explicitAccountMatch').checked = false;
+        resultsArea.innerHTML = '';
+        updateControls();
+      }
+
+      function resetAll() {
+        resetPreviewFields();
+        selectedAccountEl.value = '';
+        state.selectedAccount = null;
+        state.groupedSession = { children: [], previews: [], pendingInspect: null };
+        groupedConfirmBox.hidden = true;
+        groupedStatusArea.innerHTML = '';
+        groupedChildrenArea.innerHTML = '';
+        groupedChildDetailArea.innerHTML = '';
+        groupedReconciliationArea.innerHTML = '';
+        groupedAggregateArea.innerHTML = '';
+        statusArea.innerHTML = '';
+        updateControls();
+        google.script.run
+          .withFailureHandler(function() {})
+          .boundedHoldingsPreviewClearFromDashboard();
+      }
+
+      documentFileEl.addEventListener('change', function() {
+        var file = documentFileEl.files && documentFileEl.files[0];
+        if (!file) {
+          clearDocumentFileState_(false);
+          setDocumentTextareaValue_('');
+          state.pastedTextLength = 0;
+          renderDocumentFileMeta_();
+          updateControls();
+          return;
+        }
+        setDocumentTextareaValue_('');
+        state.pastedTextLength = 0;
+        beginDocumentFileSelection_(file);
+        updateControls();
+        if (typeof boundedHoldingsPreviewLoadDocumentTextFromFile_ !== 'function') {
+          applyDocumentFileLoadError_(new Error('PDF text extraction helpers are unavailable.'));
+          return;
+        }
+        boundedHoldingsPreviewLoadDocumentTextFromFile_(
+          file,
+          typeof pdfjsLib !== 'undefined' ? pdfjsLib : null
+        ).then(applyDocumentFileLoadResult_).catch(applyDocumentFileLoadError_);
+      });
+
+      selectedAccountEl.addEventListener('change', function() {
+        resetPreviewFields();
+        applySelectedAccount();
+      });
+
+      ['input', 'change'].forEach(function(evt) {
+        rawTextEl.addEventListener(evt, function() {
+          if (suppressDocumentTextSync_) return;
+          var pasted = currentText();
+          if (pasted) {
+            clearDocumentFileState_(true);
+            normalizePastedDocumentText_();
+            state.pastedTextLength = currentText().length;
+            state.extractionError = '';
+          } else {
+            state.pastedTextLength = 0;
+            state.pastedSpacingNormalized = false;
+          }
+          renderDocumentFileMeta_();
+          applyRegistrationSuggestion_();
+          updateControls();
+        });
+        document.getElementById('registrationType').addEventListener(evt, function() {
+          state.registrationTouched = true;
+          if (registrationHintEl) registrationHintEl.textContent = '';
+          updateControls();
+        });
+        document.getElementById('explicitAccountMatch').addEventListener(evt, updateControls);
+        document.getElementById('previewSource').addEventListener(evt, function() {
+          applyRegistrationSuggestion_();
+          updateControls();
+        });
+      });
+
+      groupedPreviewBtn.addEventListener('click', function() {
+        runGroupedPreview();
+      });
+
+      groupedConfirmBtn.addEventListener('click', function() {
+        var pending = state.groupedSession.pendingInspect || {};
+        runGroupedPreview({
+          confirmNewChild: true,
+          confirmationToken: pending.confirmationToken
+        });
+      });
+
+      groupedCancelConfirmBtn.addEventListener('click', function() {
+        groupedConfirmBox.hidden = true;
+        state.groupedSession.pendingInspect = null;
+        updateControls();
+      });
+
+      groupedClearBtn.addEventListener('click', function() {
+        state.groupedSession = { children: [], previews: [], pendingInspect: null };
+        groupedConfirmBox.hidden = true;
+        groupedStatusArea.innerHTML = '';
+        groupedChildrenArea.innerHTML = '';
+        groupedChildDetailArea.innerHTML = '';
+        groupedReconciliationArea.innerHTML = '';
+        groupedAggregateArea.innerHTML = '';
+        resetPreviewFields();
+        updateControls();
+      });
+
+      previewBtn.addEventListener('click', function() {
+        previewBtn.disabled = true;
+        setLoading(true, 'Parsing document in memory…');
+        resultsArea.innerHTML = '';
+        google.script.run
+          .withSuccessHandler(function(res) {
+            setLoading(false);
+            updateControls();
+            renderResults(res);
+          })
+          .withFailureHandler(function(err) {
+            setLoading(false);
+            updateControls();
+            resultsArea.innerHTML = '<div class="error-box">' +
+              escapeHtml(err && err.message ? err.message : String(err)) + '</div>';
+          })
+          .boundedHoldingsPreviewRunFromDashboard(buildPayload());
+      });
+
+      clearBtn.addEventListener('click', resetAll);
+
+      setupArea.innerHTML = '<div class="card"><div class="dash-loading"><div class="dash-loading-spinner"></div>' +
+        '<span>Loading investment accounts…</span></div></div>';
+      google.script.run
+        .withSuccessHandler(renderSetup)
+        .withFailureHandler(function(err) {
+          setupArea.innerHTML = '<div class="error-box">' +
+            escapeHtml(err && err.message ? err.message : String(err)) + '</div>';
+        })
+        .getBoundedHoldingsPreviewSetupFromDashboard();
+    })();
+  </script>
+</body>
+</html>

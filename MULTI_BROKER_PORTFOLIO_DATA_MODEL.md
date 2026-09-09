@@ -4,6 +4,8 @@ CSV-first canonical investment infrastructure for CashCompass. This document des
 
 **Status:** Foundation infrastructure. Robinhood production import remains in `investment_activity.js`. E*TRADE Phase A preview-only Transactions CSV adapter is implemented locally (not committed). M1 and Schwab adapters are not implemented.
 
+**Portfolio Intelligence Step 1:** unified read-only holdings preview contract — see `PORTFOLIO_INTELLIGENCE_HOLDINGS_CONTRACT.md` and `investmentPortfolioValidateUnifiedHoldingsPreview_()` in this module.
+
 ---
 
 ## Strategy: CSV-first, multi-file capable

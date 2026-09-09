@@ -421,7 +421,10 @@ function getInvestmentUiData() {
       accounts: [],
       managementAccounts: [],
       inactiveAccounts: [],
-      typeOptions: []
+      typeOptions: [],
+      boundedHoldingsPreviewAvailable: !isCentralModeEnabled_(),
+      boundedHoldingsPreviewUrl: typeof boundedHoldingsPreviewLaunchUrl_ === 'function'
+        ? boundedHoldingsPreviewLaunchUrl_() : ''
     };
   }
 
@@ -541,7 +544,10 @@ function getInvestmentUiData() {
     accounts: activeAccounts,
     managementAccounts: managementAccounts,
     inactiveAccounts: inactiveAccounts,
-    typeOptions: typeOpts
+    typeOptions: typeOpts,
+    boundedHoldingsPreviewAvailable: !isCentralModeEnabled_(),
+    boundedHoldingsPreviewUrl: typeof boundedHoldingsPreviewLaunchUrl_ === 'function'
+      ? boundedHoldingsPreviewLaunchUrl_() : ''
   };
 }
 

@@ -16,7 +16,11 @@ const ROUTES = new Map([
   ['POST /v1/mappings/resolve', { action: 'MAPPING_RESOLVE', invoke: (service, userKey, body, identity) => service.resolveMapping(userKey, body, identity) }],
   ['POST /v1/mappings/migrate', { action: 'MAPPINGS_MIGRATE', invoke: (service, userKey, body, identity) => service.migrateMappings(userKey, body, identity) }],
   ['POST /v1/disconnect', { action: 'DISCONNECT', invoke: (service, userKey, body) => service.disconnect(userKey, body) }],
-  ['POST /v1/runtime-status', { action: 'RUNTIME_STATUS', invoke: service => service.runtimeStatus() }]
+  ['POST /v1/runtime-status', { action: 'RUNTIME_STATUS', invoke: service => service.runtimeStatus() }],
+  ['POST /v1/admin/link-completion/diagnose', { action: 'LINK_COMPLETION_DIAGNOSE',
+    invoke: (service, userKey, body, identity) => service.diagnoseLinkCompletion(userKey, body, identity) }],
+  ['POST /v1/admin/link-completion/reconcile', { action: 'LINK_COMPLETION_RECONCILE',
+    invoke: (service, userKey, body, identity) => service.reconcileLinkCompletion(userKey, body, identity) }]
 ]);
 
 function writeJson(response, status, body) {

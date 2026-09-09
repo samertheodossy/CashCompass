@@ -255,15 +255,38 @@ test('unresolved exchange blocks another provider Link call across reloads or ta
   assert.equal(calls, 0);
 });
 
-test('duplicate institution is rejected before public-token exchange consumes another Item', async () => {
+test('second connection at the same institution succeeds when item identity differs', async () => {
+  const { service, store, plaid, dto } = await connected();
+  const originalExchange = plaid.exchangePublicToken.bind(plaid);
+  plaid.exchangePublicToken = async token => {
+    await originalExchange(token);
+    return {
+      access_token: 'access-token-second-private',
+      item_id: 'raw-item-id-second-private'
+    };
+  };
+  const secondLink = await service.createLinkToken('opaque-user-a');
+  const second = await service.exchange('opaque-user-a', {
+    correlationId: secondLink.correlationId,
+    publicToken: 'second-public',
+    institutionId: 'raw-institution-id'
+  });
+  assert.notEqual(second.protectedConnectionKey, dto.protectedConnectionKey);
+  assert.equal(store.connections.size, 2);
+  assert.equal(plaid.exchangeCalls, 2);
+});
+
+test('duplicate item identity is rejected without overwriting an existing connection', async () => {
   const { service, store, plaid } = await connected();
-  store.sessions.set('opaque-user-a|second-correlation', { status: 'PENDING', mode: 'CREATE',
+  store.sessions.set('opaque-user-a|duplicate-item-correlation', { status: 'PENDING', mode: 'CREATE',
     connectionKey: '', expiresAtMs: Date.now() + 60000 });
-  await assert.rejects(service.exchange('opaque-user-a', { correlationId: 'second-correlation',
-    publicToken: 'second-public', institutionId: 'raw-institution-id' }),
-  error => error.code === 'REUSABLE_INSTITUTION_EXISTS');
-  assert.equal(plaid.exchangeCalls, 1);
-  assert.deepEqual(plaid.removedTokens, []);
+  await assert.rejects(service.exchange('opaque-user-a', {
+    correlationId: 'duplicate-item-correlation',
+    publicToken: 'duplicate-public',
+    institutionId: 'raw-institution-id'
+  }), error => error.code === 'DUPLICATE_CONNECTION');
+  assert.equal(plaid.exchangeCalls, 2);
+  assert.equal(store.connections.size, 1);
 });
 
 test('provider-rejected replayed public token cannot create a connection', async () => {
@@ -518,6 +541,46 @@ test('shared mapping authority isolates users and supports ignore remap invalida
   }, identity);
   await assert.rejects(f.service.resolveMapping('opaque-user-a', base, identity),
     error => error.code === 'MAPPING_NOT_RESOLVED');
+});
+
+test('admin diagnose reports reconnect when exchange failed before provider item creation', async () => {
+  const { service, store } = fixture();
+  store.sessions.set('opaque-user-a|failed-before-exchange', {
+    status: 'FAILED', mode: 'CREATE', connectionKey: '', expiresAtMs: Date.now() + 60000,
+    failureReasonCode: 'REUSABLE_INSTITUTION_EXISTS', exchangeReached: false
+  });
+  const identity = { userEmail: 'samertheodossy@gmail.com' };
+  const result = await service.diagnoseLinkCompletion('opaque-user-a', {
+    correlationId: 'failed-before-exchange'
+  }, identity);
+  assert.equal(result.recommendation, 'RECONNECT');
+  assert.equal(result.orphanRisk, 'NONE');
+  assert.equal(result.connectionPresent, false);
+});
+
+test('admin diagnose and reconcile complete a persisted connection with stale session state', async () => {
+  const { service, store, dto } = await connected();
+  const correlationId = 'stale-session-correlation';
+  store.sessions.set(`opaque-user-a|${correlationId}`, {
+    status: 'EXCHANGING', mode: 'CREATE', connectionKey: '', expiresAtMs: Date.now() + 60000,
+    protectedItemKey: dto.protectedConnectionKey, exchangeReached: true
+  });
+  const identity = { userEmail: 'samertheodossy@gmail.com' };
+  const diagnosis = await service.diagnoseLinkCompletion('opaque-user-a', { correlationId }, identity);
+  assert.equal(diagnosis.recommendation, 'RECONCILE_COMPLETE');
+  assert.equal(diagnosis.connectionPresent, true);
+  const reconciled = await service.reconcileLinkCompletion('opaque-user-a', {
+    correlationId, resolution: 'COMPLETE'
+  }, identity);
+  assert.equal(reconciled.resolution, 'COMPLETE');
+  assert.equal(store.sessions.get(`opaque-user-a|${correlationId}`).status, 'COMPLETED');
+});
+
+test('admin link completion tools reject non-admin callers', async () => {
+  const { service } = fixture();
+  await assert.rejects(service.diagnoseLinkCompletion('opaque-user-a', {
+    correlationId: 'any'
+  }, { userEmail: 'not-the-admin@example.com' }), error => error.code === 'ADMIN_FORBIDDEN');
 });
 
 test('legacy mapping migration fails closed on owner or source conflict', async () => {
