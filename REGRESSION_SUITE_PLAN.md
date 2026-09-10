@@ -60,6 +60,19 @@ an automatically repeatable guard.
 | Financial Integrity Option A | Pure inclusion/summary/full-snapshot, Planner/Rolling/Dashboard, five read-only audits, canonical History capture/freshness, and release-inventory checks | Isolated Validation `@156` suite `20260722-164849-6081` passed 53/53 plus all safety gates and verified Trash. | Preserve as a required release regression; never target the bounded workbook. |
 | Activity action truth (`REG-020`) | Dynamic UI contract, eligible Donation action, unsupported-row no-action rendering, and server rejection of forged non-Donation removal | Local full suite plus isolated `@196` read-only interactive PASS | Retain in Dashboard UX/server packs and exact-candidate Activity browser evidence. |
 
+### Portfolio + SYS audit static regressions (2026-09-09, local)
+
+These are **repository/static** packs — not disposable Harness scenarios. They guard the bounded Unified Apply slice and read-only SYS audit tooling without opening a workbook in CI.
+
+| Pack | Command | Guards |
+|---|---|---|
+| Portfolio foundation + holdings contract | `npm run test:portfolio-foundation` | Adapter registry, Robinhood path unchanged, holdings contract constants |
+| Bounded Unified Holdings Apply | `npm run test:bounded-holdings-preview-apply` | 19-column schema, diff/replay/Apply RPCs, cash column 14 currency, hidden audit cols |
+| SYS repository audit | `npm run test:sys-sheet-audit` | 16-sheet inventory completeness, read-only audit scripts, Robinhood trace, unified schema |
+| SYS runtime snapshot schema | `npm run test:sys-sheet-runtime-snapshot` | Read-only diagnostic module, output schema, privacy (no body values in JSON) |
+
+Fixtures: `test/fixtures/sys-sheet-audit-inventory.json`, `test/fixtures/sys-sheet-runtime-snapshot-schema.json`. Bounded runtime proof (`adminGetSysSheetRuntimeSnapshot()`, Apply on owner workbook) remains owner-operated after deploy.
+
 ### Isolated `@196` advocate regression expansion
 
 These are planned permanent homes for the newly confirmed findings. A fix is not

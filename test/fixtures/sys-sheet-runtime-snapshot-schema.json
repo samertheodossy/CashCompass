@@ -1,0 +1,100 @@
+{
+  "schemaVersion": "SYS_SHEET_RUNTIME_SNAPSHOT_V1",
+  "repositoryAuditVersion": "SYS_SHEET_AUDIT_V1",
+  "entryPoints": [
+    "adminGetSysSheetRuntimeSnapshot",
+    "adminGetSysSheetRuntimeSnapshotFocusSummary",
+    "adminUiGetSysSheetRuntimeSnapshot",
+    "buildSysSheetRuntimeSnapshot_",
+    "buildSysSheetRuntimeSnapshotFocusSummary_",
+    "vtRunSysSheetRuntimeSnapshot"
+  ],
+  "requiredTopLevelFields": [
+    "ok",
+    "readOnly",
+    "auditVersion",
+    "repositoryAuditVersion",
+    "generatedAt",
+    "spreadsheetId",
+    "expectedSheetCount",
+    "workbookSysSheetCount",
+    "sheets",
+    "focusSummaries",
+    "safety"
+  ],
+  "requiredSheetFields": [
+    "sheetName",
+    "exists",
+    "rowCount",
+    "columnCount",
+    "headerRow",
+    "dataRowCount",
+    "hasFormulas",
+    "lastPopulatedRow",
+    "lastPopulatedDate",
+    "dataPresence",
+    "dataMarkers",
+    "productionRefs",
+    "focusMetadata"
+  ],
+  "requiredDataMarkerFields": [
+    "robinhood",
+    "m1",
+    "etrade",
+    "identity",
+    "import",
+    "reserved"
+  ],
+  "requiredProductionRefFields": [
+    "hasProductionReaders",
+    "hasProductionWriters",
+    "recommendedStatus",
+    "inventoryKnown"
+  ],
+  "dataPresenceValues": ["MISSING", "EMPTY", "POPULATED"],
+  "focusSheets": [
+    "SYS - Investment Holdings",
+    "SYS - Investment Holdings Unified",
+    "SYS - Investment Activity",
+    "SYS - Assets",
+    "SYS - Financial Accounts",
+    "SYS - Account Source Links"
+  ],
+  "focusSummaryVersion": "SYS_SHEET_RUNTIME_FOCUS_SUMMARY_V1",
+  "requiredFocusSummarySheetFields": [
+    "sheetName",
+    "exists",
+    "rowCount",
+    "columnCount",
+    "dataRowCount",
+    "dataPresence",
+    "dataMarkers",
+    "recommendedStatus",
+    "focusMetadata"
+  ],
+  "forbiddenFocusSummarySheetFields": [
+    "headerRow",
+    "hasFormulas",
+    "lastPopulatedRow",
+    "lastPopulatedDate",
+    "productionRefs"
+  ],
+  "readOnlyForbiddenPatterns": [
+    "setValues",
+    "appendRow",
+    "clearContents",
+    "clearFormat",
+    "deleteSheet",
+    "insertSheet",
+    "setName",
+    "hideColumns",
+    "setNumberFormat",
+    "ensureSys",
+    "ensureInvestment",
+    "ensureFinancial",
+    "ensureImport",
+    "ensureCashImport",
+    "boundedHoldingsPreviewApplyEnsure",
+    "ensureSysMetaMarker_"
+  ]
+}

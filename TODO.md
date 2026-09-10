@@ -54,6 +54,20 @@ exit evidence.
 
 `ROADMAP.md` is authoritative for **priority and sequence**. The `## Product Maturity Stages` section below supplies detailed stages, tasks, dependencies, testing inventory, and history; `PROJECT_CONTEXT.md` is authoritative for current technical status. The older `## Launch Readiness Roadmap` (Phase 1–7) is retained further below as historical phase expansion; where it conflicts with current ordering, `ROADMAP.md` wins.
 
+### Portfolio Intelligence — bounded Apply + SYS audit (2026-09-09, local)
+
+| Item | Status | Notes |
+|---|---|---|
+| Bounded Unified Holdings Apply (M1 + E*TRADE → `SYS - Investment Holdings Unified`) | ✅ Local engineering | Preview read-only; explicit Apply only; `test:bounded-holdings-preview-apply`. Not committed/deployed. |
+| Unified sheet formatting (cash currency, hidden audit cols) | ✅ Local engineering | Column 14 currency; cols 4/5/6/16/19 hidden. |
+| SYS repository audit (16 sheets, cleanup classifications) | ✅ Local engineering | `test/fixtures/sys-sheet-audit-inventory.json`; `test:sys-sheet-audit`. Read-only. |
+| SYS runtime snapshot diagnostic | ✅ Local engineering | `sys_sheet_runtime_snapshot.js`; `test:sys-sheet-runtime-snapshot`; Validator `vtRunSysSheetRuntimeSnapshot`. |
+| Robinhood → Unified migration | ⏸ Not started | Production path unchanged; plan in audit fixture only. |
+| Bounded runtime proof (M1 rows, cash display, live counts) | ⏳ Pending | Owner push + `adminGetSysSheetRuntimeSnapshot()` after deploy. |
+| SYS sheet cleanup (delete/archive) | ⏸ Blocked | Audit-first; no deletion based on empty sheets alone. |
+
+Authoritative design: `PORTFOLIO_INTELLIGENCE_HOLDINGS_APPLY_DESIGN.md`, `PORTFOLIO_INTELLIGENCE_HOLDINGS_CONTRACT.md`, `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md`.
+
 **What is done (reconciled 2026-07-02).** The Central App is live and operational (CENTRAL_MODE routing, per-user provisioning, workbook mapping — runtime-validated) and family-beta capable. **Product Hardening (Stage 2) is complete**, delivering:
 
 - **Recovery — destructive/admin paths validated:** executed **Admin Clear**, **mapping removal**, **reverse-index removal**, **repair audit history**, **bootstrap reprovision**, **Welcome routing**, **empty-dashboard validation**, **recovery routing**, **Reconnect**, **Central admin validation**, **`ADMIN_EMAILS` validation**. (Recovery validation completed today.)

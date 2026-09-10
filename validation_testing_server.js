@@ -180,6 +180,32 @@ function vtRunWorkbookHealth(spreadsheetId) {
   });
 }
 
+/**
+ * Read-only SYS sheet runtime snapshot for an admin-selected workbook.
+ * Uses getSheetByName/getRange getters only — no ensure helpers or writes.
+ */
+function vtRunSysSheetRuntimeSnapshot(spreadsheetId) {
+  return vtSafe_(function() {
+    assertValidatorAllowed_();
+    var t = vtResolveTarget_(spreadsheetId);
+    var report = buildSysSheetRuntimeSnapshot_(t.ss);
+    return { ok: true, target: vtTargetInfo_(t), report: makeWireSafe_(report) };
+  });
+}
+
+/**
+ * Read-only Robinhood → Unified migration preview for an admin-selected workbook.
+ * Uses getSheetByName/getRange getters only — no ensure helpers or writes.
+ */
+function vtRunRobinhoodUnifiedMigrationPreview(spreadsheetId, options) {
+  return vtSafe_(function() {
+    assertValidatorAllowed_();
+    var t = vtResolveTarget_(spreadsheetId);
+    var report = buildRobinhoodUnifiedMigrationPreview_(t.ss, options || {});
+    return { ok: true, target: vtTargetInfo_(t), report: makeWireSafe_(report) };
+  });
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Dashboard read profile — selected-workbook, getter-only diagnostics        */
 /* -------------------------------------------------------------------------- */

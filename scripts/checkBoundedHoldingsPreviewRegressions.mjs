@@ -271,7 +271,6 @@ const investmentsSource = read('investments.js');
 const dashboardInvestments = read('Dashboard_Script_AssetsBankInvestments.html');
 const dashboardBody = read('Dashboard_Body.html');
 const labSource = read('central_holdings_preview_lab.js');
-const applyDesign = read('PORTFOLIO_INTELLIGENCE_HOLDINGS_APPLY_DESIGN.md');
 const portfolioFoundation = read('investment_portfolio_foundation.js');
 
 const ctx = buildContext({ central: false, admin: false });
@@ -497,12 +496,13 @@ assert.match(labSource, /assertHoldingsPreviewLabAllowed_/);
 assert.match(labSource, /Central mode only/);
 assert.match(webappSource, /view === 'holdings-preview-lab' && isAdminUser_\(\)/);
 
-// --- Apply design documented, not implemented ---
-assert.match(applyDesign, /Design only — \*\*not implemented\*\*/);
-assert.match(applyDesign, /INPUT - Investments/);
-assert.match(applyDesign, /unified holdings sheet/i);
-assert.match(applyDesign, /explicit confirmation required/i);
-assert.doesNotMatch(boundedSource, /boundedHoldingsPreviewApply/);
+// --- Apply workflow implemented in dedicated modules ---
+const applySource = read('bounded_holdings_preview_apply.js');
+assert.match(applySource, /boundedHoldingsPreviewApplyFromDashboard/);
+assert.match(applySource, /boundedHoldingsPreviewBuildApplyDiffFromDashboard/);
+assert.match(boundedHtml, /Review holdings changes/);
+assert.match(boundedHtml, /SYS - Investment Holdings Unified/);
+assert.doesNotMatch(boundedSource, /boundedHoldingsPreviewApplyFromDashboard/);
 
 // --- Fixtures remain synthetic ---
 assert.ok(m1Fixture.includes('Synthetic'));

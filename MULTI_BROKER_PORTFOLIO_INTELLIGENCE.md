@@ -248,7 +248,7 @@ dividend, price, or market value.
 
 | Phase | Scope | Implementation |
 |---|---|---|
-| **1 — Multi-Broker Data Foundation** | Inspect Robinhood canonical model; define Activity / Holdings / Tax Lot contracts; identify gaps without breaking Robinhood; define adapter contract | **Next Investment milestone after Connected/Apply** |
+| **1 — Multi-Broker Data Foundation** | Inspect Robinhood canonical model; define Activity / Holdings / Tax Lot contracts; identify gaps without breaking Robinhood; define adapter contract | **In progress locally (2026-09-09):** Foundation v1 + bounded preview + **Unified Apply** for M1/E*TRADE statement snapshots (`SYS - Investment Holdings Unified`); **Robinhood → Unified migration not started**; owner push/runtime proof pending |
 | **2 — E*TRADE** | Best export/provider data (CSV if superior to Plaid); normalize activity, holdings, tax lots; reconcile totals; owner runtime validation | After Phase 1 |
 | **3 — M1** | Same normalized model and reconciliation discipline | After Phase 2 |
 | **4 — Schwab** | Same normalized model and reconciliation discipline | After Phase 3 |
@@ -259,16 +259,18 @@ dividend, price, or market value.
 
 ---
 
-## Current priority (do not start Phase 1 yet)
+## Current priority (do not start Robinhood migration yet)
 
 1. Finish and optimize **Plaid Debt Apply**
 2. Finish **Activity Log / provenance** validation
 3. Finish appropriate **Bank Account Apply**
-4. **Clean / commit** current Connected / Apply work
-5. **Then** begin Phase 1 — Multi-Broker Data Foundation
+4. **Clean / commit** current Connected / Apply work **and** bounded Unified Holdings Apply + SYS audit slices (local, uncommitted as of 2026-09-09)
+5. Owner push + bounded runtime proof for Unified Apply and `adminGetSysSheetRuntimeSnapshot()`
+6. **Then** continue Phase 1 — tax-lot/reserved SYS sheets, E*TRADE preview parsers, and approved Robinhood → Unified migration design
 
 Plaid Connected Accounts, Debt Apply, and Bank Apply remain the active cluster.
-This document does not authorize parallel implementation.
+Bounded Unified Holdings Apply is **local engineering** on the convergent source — not deployed.
+This document does not authorize parallel Robinhood migration or SYS sheet deletion.
 
 ---
 

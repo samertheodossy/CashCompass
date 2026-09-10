@@ -20,6 +20,7 @@
     "test:etrade-preview-lab": "node scripts/checkEtradePreviewLabRegressions.mjs",
     "test:holdings-preview-lab": "node scripts/checkHoldingsPreviewLabRegressions.mjs",
     "test:bounded-holdings-preview": "node scripts/checkBoundedHoldingsPreviewRegressions.mjs && node scripts/checkBoundedHoldingsPreviewGroupedRegressions.mjs && node scripts/checkBoundedHoldingsPreviewIdentitySetupRegressions.mjs && node scripts/checkBoundedHoldingsPreviewPdfClientRegressions.mjs",
+    "test:bounded-holdings-preview-apply": "node scripts/checkBoundedHoldingsPreviewApplyRegressions.mjs",
     "test:bounded-holdings-preview-route": "node scripts/checkBoundedHoldingsPreviewRouteRegressions.mjs",
     "test:bounded-holdings-preview-pdf-client": "node scripts/checkBoundedHoldingsPreviewPdfClientRegressions.mjs",
     "test:bounded-holdings-preview-identity-setup": "node scripts/checkBoundedHoldingsPreviewIdentitySetupRegressions.mjs",
@@ -37,7 +38,10 @@
     "test:performance-timing": "node scripts/checkPerformanceTimingRegressions.mjs",
     "test:populated-harness": "node scripts/checkPopulatedHarnessRegressions.mjs",
     "test:p1-evidence": "node scripts/checkP1EvidenceRegressions.mjs",
-    "test:production-paths": "node scripts/checkTestProductionPaths.mjs"
+    "test:production-paths": "node scripts/checkTestProductionPaths.mjs",
+    "test:sys-sheet-audit": "node scripts/checkSysSheetAuditRegressions.mjs",
+    "test:sys-sheet-runtime-snapshot": "node scripts/checkSysSheetRuntimeSnapshotRegressions.mjs",
+    "test:robinhood-unified-migration-preview": "node scripts/checkRobinhoodUnifiedMigrationPreviewRegressions.mjs"
   },
   "dependencies": {
     "pdfjs-dist": "^3.11.174",

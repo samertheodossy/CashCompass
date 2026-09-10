@@ -25,14 +25,21 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
 - **P0 Project Stabilization — ✅ complete 2026-07-20:** ProductDecision inventory, documentation synchronization, static Tier-2 Central resolver verification, Recovery Validation 6F, and the two-track isolated Central UX/runtime pass are closed. The source fixes were pushed to the Central project and only the isolated deployment was updated to `@114`; Beta remains `@106` and no bound deployment or owner/bounded workbook was touched. The representative populated fixture verified real Bank, Investment, House, and Debt rendering; selection/action gating; property equity; Setup/Help language; subtab retention; and broad navigation with a clean console. The Central-owned fixture was returned to Drive Trash after testing.
 - **Status snapshot (2026-08-07):** Central Architecture ~96%+; the major platform, recovery, financial-integrity, workbook, Validator, Harness, and Release Readiness foundations are shipped. The shared correction foundation `5h` and direct Quick Add/Donation correction `5i` remain committed foundations in `d040a34` and `16b6a8f`, with clean guarded isolated Central `@240` evidence. Bill occurrence correction (`5j`) is deferred for a later focused redesign. The completed page-UX slices are `3c` in `7c0e2ac` at isolated `@293`, `3a` in `be76bdb` at `@294`, and `3b` in `3e2db4f` at `@298`. Follow-up Bill reliability commit `433bfed` is user-verified at `@299`. Exact-owner Performance Planner evidence is ratified for `8aa4bf5` / isolated `@318`; `4d` cross-flow measurement is complete on `@319`; ordinary Save `4f` is closed on `@322` as a 41.0% p50 improvement with a documented strict-budget near-miss; Retirement `4g` is closed on `@328`; and money-format consistency `3n` / `REG-067` is committed and pushed as `d1278ef` after a 26/26 Populated V12 PASS on `@331`. Beta remains `@106`; bounded deployment and workbook control remain with the user.
 
-**Current implementation priority (2026-08-27):**
+**Current implementation priority (2026-09-09):**
 
 1. Finish and optimize **Plaid Debt Apply** (bounded-proven; latency work in progress)
 2. Finish **Activity Log / PLAID provenance** validation
 3. Finish appropriate **Bank Account Apply**
-4. **Clean / commit** Connected / Apply cluster
-5. **Then** begin **Multi-Broker Portfolio Intelligence Phase 1** — see
-   `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` (**implementation deferred**)
+4. **Clean / commit** Connected / Apply cluster **plus** local bounded Unified Holdings Apply + SYS audit work (uncommitted)
+5. Owner push + bounded runtime: Unified Apply proof and `adminGetSysSheetRuntimeSnapshot()`
+6. **Then** continue **Multi-Broker Portfolio Intelligence Phase 1** — E*TRADE preview parsers, reserved SYS schemas, approved Robinhood → Unified migration — see `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md`
+
+**Portfolio / SYS engineering checkpoint (2026-09-09, local — not deployed):**
+
+- **Bounded Unified Holdings Apply:** M1 + E*TRADE PDF → **`SYS - Investment Holdings Unified`** on explicit Apply only (`bounded_holdings_preview_apply*.js`, `BoundedHoldingsPreviewUI.html`). Preview/diff read-only; document lock, replay guard, rollback. Cash balance column 14 currency formatting; audit columns hidden. Regressions: `test:bounded-holdings-preview-apply`.
+- **SYS repository audit:** 16-sheet inventory, Robinhood trace, cleanup classifications in `test/fixtures/sys-sheet-audit-inventory.json`; `test:sys-sheet-audit`.
+- **SYS runtime snapshot:** read-only admin/Validator diagnostic `sys_sheet_runtime_snapshot.js`; `test:sys-sheet-runtime-snapshot`.
+- **Robinhood unchanged:** Activity + legacy **`SYS - Investment Holdings`** only; no Unified writes; migration documented, not implemented.
 
 Preserve the frozen Planning foundation. Connected evidence lives under Bank
 Accounts, Debts, and Investments. **Controlled Debt Apply** is runtime-proven on

@@ -1,6 +1,6 @@
 # Portfolio Intelligence — Unified Holdings Data Contract (Step 1)
 
-**Status:** Contract definition only — **preview-only, read-only, no persistence**.  
+**Status:** Contract definition — **preview contract shipped; bounded Apply to Unified holdings implemented locally (2026-09-09, not deployed).**
 **Version:** `PORTFOLIO_INTELLIGENCE_HOLDINGS_V1` (schema `1.0.0`)  
 **Extends:** `investment_portfolio_foundation.js`, `MULTI_BROKER_PORTFOLIO_DATA_MODEL.md`, `ETRADE_SOURCE_MAPPING.md`
 
@@ -27,7 +27,7 @@ This document defines the **minimal additive read model** required before CashCo
 |-------|--------|
 | Account identity | `SYS - Financial Accounts`, `Investment Id`, `stableAccountId`, `Registration Type`, `Domain` (`financial_identity.js`) |
 | Activity ledger | `SYS - Investment Activity` + extended provenance columns (Robinhood production path unchanged) |
-| Holdings rows | `SYS - Investment Holdings` legacy columns + `INVESTMENT_HOLDINGS_EXTENDED_HEADERS_` |
+| Holdings rows | `SYS - Investment Holdings` legacy columns + `INVESTMENT_HOLDINGS_EXTENDED_HEADERS_`; **`SYS - Investment Holdings Unified`** for bounded M1/E*TRADE statement Apply (19 columns — see `PORTFOLIO_INTELLIGENCE_HOLDINGS_APPLY_DESIGN.md`) |
 | Tax lots | `INVESTMENT_TAX_LOT_HEADERS_` (first-create only; not opened on dashboard load) |
 | Securities registry | `INVESTMENT_SECURITIES_HEADERS_` |
 | Financial Facts | Part 2A fact types for account **values** at planning boundaries — holdings contract does **not** replace `INPUT - Investments` Net Worth authority |
@@ -327,7 +327,13 @@ Stale or conflicting rows set `confidence: LOW` and add blocking reasons; they d
 | Settings persistence | Settings sheets |
 | Robinhood production import semantics | `investment_activity.js` path unchanged |
 
-Step 1 performs **zero workbook writes**.
+Step 1 preview performs **zero workbook writes**. **Bounded Apply (2026-09-09, local)** writes only to **`SYS - Investment Holdings Unified`** on explicit owner confirmation — see `bounded_holdings_preview_apply*.js`.
+
+---
+
+## SYS sheet audit (2026-09-09)
+
+Repository-only inventory of all `SYS -` sheets: `test/fixtures/sys-sheet-audit-inventory.json` (`npm run test:sys-sheet-audit`). Read-only runtime snapshot for bounded workbooks: `sys_sheet_runtime_snapshot.js` (`npm run test:sys-sheet-runtime-snapshot`). No cleanup deletes/migrations authorized by the audit alone; Robinhood → Unified migration remains a separate approved slice.
 
 ---
 

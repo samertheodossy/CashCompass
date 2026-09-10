@@ -252,6 +252,7 @@
 
     <div id="statusArea"></div>
     <div id="resultsArea"></div>
+    <div id="applyArea"></div>
   </div>
 
   <script>
@@ -284,6 +285,7 @@
       var groupedChildDetailArea = document.getElementById('groupedChildDetailArea');
       var groupedReconciliationArea = document.getElementById('groupedReconciliationArea');
       var groupedAggregateArea = document.getElementById('groupedAggregateArea');
+      var applyArea = document.getElementById('applyArea');
       var explicitAccountMatchTextEl = document.getElementById('explicitAccountMatchText');
       var suppressDocumentTextSync_ = false;
 
@@ -305,7 +307,13 @@
           children: [],
           previews: [],
           pendingInspect: null
-        }
+        },
+        lastSinglePreview: null,
+        lastPreviewDocumentText: '',
+        applyReviewed: false,
+        applyDiff: null,
+        applyDiffDigest: '',
+        applyStatusMessage: ''
       };
 
       function currentText() {
@@ -571,6 +579,215 @@
           '</div><div class="value">' + value + '</div></div>';
       }
 
+      function clearApplyState_(keepPreview) {
+        state.applyReviewed = false;
+        state.applyDiff = null;
+        state.applyDiffDigest = '';
+        state.applyStatusMessage = '';
+        if (!keepPreview) {
+          state.lastSinglePreview = null;
+          state.lastPreviewDocumentText = '';
+        }
+        renderApplySection();
+      }
+
+      function applyReady_() {
+        if (isGroupedMode()) {
+          return !!(state.groupedSession.previews && state.groupedSession.previews.length);
+        }
+        return !!state.lastSinglePreview;
+      }
+
+      function applyDocumentChanged_() {
+        if (isGroupedMode()) return false;
+        return !!state.lastPreviewDocumentText &&
+          state.lastPreviewDocumentText !== currentText();
+      }
+
+      function buildGroupedApplyPayload(extra) {
+        var payload = buildGroupedPayload(extra || {});
+        payload.sessionApplyItems = (state.groupedSession.previews || []).map(function(row) {
+          var preview = row.preview || {};
+          return {
+            childPartitionId: row.childPartitionId,
+            recognitionLabel: row.recognitionLabel,
+            maskedAccountSignal: row.maskedAccountSignal,
+            statementPeriodEnd: row.statementPeriodEnd,
+            statementPeriodStart: row.statementPeriodStart,
+            documentFingerprint: row.documentFingerprint,
+            contentFingerprint: row.contentFingerprint,
+            source: row.source,
+            previewAsOf: preview.asOf || row.statementPeriodEnd || '',
+            preview: preview
+          };
+        });
+        return payload;
+      }
+
+      function renderApplyDiffTable_(title, rows) {
+        if (!rows || !rows.length) return '';
+        var html = '<h3>' + escapeHtml(title) + ' (' + rows.length + ')</h3>' +
+          '<div style="overflow-x:auto;"><table><thead><tr>' +
+          '<th>Action</th><th>Child</th><th>Symbol</th><th>Source security key</th>' +
+          '<th class="num">Market value</th><th class="num">Cash</th><th class="num">Cost basis</th>' +
+          '<th>As-of</th></tr></thead><tbody>';
+        rows.forEach(function(row) {
+          html += '<tr><td>' + escapeHtml(row.action || '') + '</td>' +
+            '<td>' + escapeHtml(row.childPartitionLabel || row.childPartition || '—') + '</td>' +
+            '<td>' + escapeHtml(row.symbol || '') + '</td>' +
+            '<td>' + escapeHtml(row.sourceSecurityKey || '') + '</td>' +
+            '<td class="num">' + formatMoney(row.marketValue) + '</td>' +
+            '<td class="num">' + formatMoney(row.cashBalance) + '</td>' +
+            '<td class="num">' + (row.costBasisAvailable ? formatMoney(row.costBasis) : '—') + '</td>' +
+            '<td>' + escapeHtml(row.asOfDate || '—') + '</td></tr>';
+        });
+        html += '</tbody></table></div>';
+        return html;
+      }
+
+      function renderApplySection() {
+        if (!applyArea) return;
+        if (!applyReady_()) {
+          applyArea.innerHTML = '';
+          return;
+        }
+        var html = '<div class="card"><h2>Apply approved holdings</h2>' +
+          '<p class="muted"><strong>Writes only to SYS - Investment Holdings Unified.</strong> ' +
+          'INPUT - Investments monthly values, Net Worth, Cash Flow, and Planning are not changed.</p>';
+        if (applyDocumentChanged_()) {
+          html += '<div class="error-box">Document text changed since preview. Run preview again before Apply.</div>';
+        } else if (state.applyStatusMessage) {
+          html += '<div class="card muted">' + escapeHtml(state.applyStatusMessage) + '</div>';
+        }
+        if (state.applyDiff) {
+          var diff = state.applyDiff;
+          html += '<div class="stat-grid">' +
+            stat('Creates', escapeHtml(String((diff.summary && diff.summary.createCount) || 0))) +
+            stat('Updates', escapeHtml(String((diff.summary && diff.summary.updateCount) || 0))) +
+            stat('Unchanged', escapeHtml(String((diff.summary && diff.summary.unchangedCount) || 0))) +
+            stat('Conflicts', escapeHtml(String((diff.summary && diff.summary.conflictCount) || 0))) +
+            stat('Preview cash', formatMoney(diff.totals && diff.totals.cash)) +
+            stat('Preview market value', formatMoney(diff.totals && diff.totals.marketValue)) +
+            stat('Cost basis rows', escapeHtml(String(diff.totals && diff.totals.costBasisAvailableCount || 0))) +
+            '</div>';
+          if (diff.blocked) {
+            html += '<div class="error-box">' + escapeHtml(diff.blockReason ||
+              'Apply is blocked until conflicts are resolved.') + '</div>';
+          }
+          if (diff.duplicateNoop) {
+            html += '<div class="card muted">Duplicate document — Apply would make no changes.</div>';
+          }
+          html += renderApplyDiffTable_('Rows to create', diff.create);
+          html += renderApplyDiffTable_('Rows to update', diff.update);
+          html += renderApplyDiffTable_('Unchanged rows', diff.unchanged);
+          html += renderApplyDiffTable_('Conflicts or ambiguous rows', diff.conflicts);
+        } else {
+          html += '<p class="muted">Review the full holdings diff before confirming Apply.</p>';
+        }
+        html += '<div class="btn-row">' +
+          '<button type="button" class="primary" id="reviewApplyDiffBtn"' +
+          (applyDocumentChanged_() ? ' disabled' : '') + '>Review holdings changes</button>' +
+          '<button type="button" class="primary" id="confirmApplyBtn"' +
+          ((!state.applyReviewed || !state.applyDiffDigest || applyDocumentChanged_() ||
+            (state.applyDiff && (state.applyDiff.blocked || state.applyDiff.duplicateNoop ||
+              state.applyDiff.applyEligible === false))) ? ' disabled' : '') +
+          '>Apply approved holdings</button>' +
+          '<button type="button" id="cancelApplyBtn">Cancel</button>' +
+          '</div></div>';
+        applyArea.innerHTML = html;
+        var reviewBtn = document.getElementById('reviewApplyDiffBtn');
+        var confirmBtn = document.getElementById('confirmApplyBtn');
+        var cancelBtn = document.getElementById('cancelApplyBtn');
+        if (reviewBtn) reviewBtn.addEventListener('click', reviewApplyDiff);
+        if (confirmBtn) confirmBtn.addEventListener('click', confirmApply);
+        if (cancelBtn) cancelBtn.addEventListener('click', function() { clearApplyState_(true); });
+      }
+
+      function reviewApplyDiff() {
+        if (!applyReady_() || applyDocumentChanged_()) return;
+        state.applyStatusMessage = '';
+        setLoading(true, 'Building holdings diff…');
+        var successHandler = function(res) {
+          setLoading(false);
+          if (!res || !res.ok) {
+            state.applyReviewed = false;
+            state.applyDiff = null;
+            state.applyDiffDigest = '';
+            state.applyStatusMessage = res && res.error ? res.error :
+              (res && res.replayMessage ? res.replayMessage : 'Could not build Apply diff.');
+            renderApplySection();
+            return;
+          }
+          state.applyReviewed = true;
+          state.applyDiff = res.diff || null;
+          state.applyDiffDigest = res.diffDigest || '';
+          renderApplySection();
+        };
+        var failureHandler = function(err) {
+          setLoading(false);
+          state.applyStatusMessage = err && err.message ? err.message : String(err);
+          renderApplySection();
+        };
+        if (isGroupedMode()) {
+          google.script.run
+            .withSuccessHandler(successHandler)
+            .withFailureHandler(failureHandler)
+            .boundedHoldingsPreviewBuildGroupedApplyDiffFromDashboard(buildGroupedApplyPayload());
+        } else {
+          google.script.run
+            .withSuccessHandler(successHandler)
+            .withFailureHandler(failureHandler)
+            .boundedHoldingsPreviewBuildApplyDiffFromDashboard(buildPayload());
+        }
+      }
+
+      function confirmApply() {
+        if (!state.applyReviewed || !state.applyDiffDigest || applyDocumentChanged_()) return;
+        setLoading(true, 'Applying approved holdings…');
+        var payload = isGroupedMode() ? buildGroupedApplyPayload() : buildPayload();
+        payload.diffDigest = state.applyDiffDigest;
+        payload.explicitApplyConfirm = true;
+        var successHandler = function(res) {
+          setLoading(false);
+          if (!res || !res.ok) {
+            state.applyStatusMessage = res && res.error ? res.error : 'Apply failed.';
+            if (res && res.staleDiff) {
+              state.applyReviewed = false;
+              state.applyDiff = null;
+              state.applyDiffDigest = '';
+            }
+            renderApplySection();
+            return;
+          }
+          state.applyStatusMessage = res.message || (res.duplicateNoop
+            ? 'Duplicate document — no workbook changes.'
+            : 'Apply completed.');
+          if (res.importRunRef) {
+            state.applyStatusMessage += ' Import run/reference: ' + res.importRunRef + '.';
+          }
+          state.applyReviewed = false;
+          state.applyDiff = null;
+          state.applyDiffDigest = '';
+          renderApplySection();
+        };
+        var failureHandler = function(err) {
+          setLoading(false);
+          state.applyStatusMessage = err && err.message ? err.message : String(err);
+          renderApplySection();
+        };
+        if (isGroupedMode()) {
+          google.script.run
+            .withSuccessHandler(successHandler)
+            .withFailureHandler(failureHandler)
+            .boundedHoldingsPreviewApplyGroupedFromDashboard(payload);
+        } else {
+          google.script.run
+            .withSuccessHandler(successHandler)
+            .withFailureHandler(failureHandler)
+            .boundedHoldingsPreviewApplyFromDashboard(payload);
+        }
+      }
+
       function applySelectedAccount() {
         var pickerValue = String(selectedAccountEl.value || '').trim();
         var previousMode = state.selectedAccount ? state.selectedAccount.previewMode : '';
@@ -780,6 +997,8 @@
             renderGroupedChildDetail(state.groupedSession.previews.length
               ? state.groupedSession.previews[state.groupedSession.previews.length - 1] : null);
             refreshGroupedAggregate();
+            clearApplyState_(true);
+            renderApplySection();
           });
         });
       }
@@ -885,7 +1104,14 @@
           groupedStatusArea.innerHTML = '<div class="card muted">' +
             escapeHtml(res.replayMessage || 'Duplicate document — no change.') + '</div>';
         } else if (res.sessionPreview) {
-          state.groupedSession.previews.push(res.sessionPreview);
+          var incomingPreview = res.sessionPreview;
+          state.groupedSession.previews = (state.groupedSession.previews || []).filter(function(row) {
+            if (String(row.childPartitionId || '') !== String(incomingPreview.childPartitionId || '')) {
+              return true;
+            }
+            return String(row.statementPeriodEnd || '') !== String(incomingPreview.statementPeriodEnd || '');
+          });
+          state.groupedSession.previews.push(incomingPreview);
           groupedStatusArea.innerHTML = '<div class="card">' +
             renderGroupedReplayPill(res.replayOutcome) + ' ' +
             escapeHtml(res.childPartition.recognitionLabel || 'Child account') + ' · ' +
@@ -895,6 +1121,8 @@
         renderGroupedChildDetail(res.sessionPreview || (state.groupedSession.previews.length
           ? state.groupedSession.previews[state.groupedSession.previews.length - 1] : null));
         renderGroupedAggregate(res.aggregate, res.reconciliation);
+        if (!res.duplicateNoop) clearApplyState_(true);
+        renderApplySection();
         updateControls();
       }
 
@@ -1073,6 +1301,10 @@
         html += '</div></div>';
 
         resultsArea.innerHTML = html;
+        state.lastSinglePreview = data;
+        state.lastPreviewDocumentText = currentText();
+        clearApplyState_(true);
+        renderApplySection();
       }
 
       function buildPayload() {
@@ -1095,6 +1327,7 @@
         setDocumentTextareaValue_('');
         document.getElementById('explicitAccountMatch').checked = false;
         resultsArea.innerHTML = '';
+        clearApplyState_(false);
         updateControls();
       }
 
@@ -1201,6 +1434,7 @@
         groupedReconciliationArea.innerHTML = '';
         groupedAggregateArea.innerHTML = '';
         resetPreviewFields();
+        clearApplyState_(false);
         updateControls();
       });
 

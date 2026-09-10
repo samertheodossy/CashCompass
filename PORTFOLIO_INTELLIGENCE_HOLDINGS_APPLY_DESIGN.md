@@ -1,9 +1,8 @@
 # Portfolio Intelligence — Unified Holdings Apply (Future Design)
 
-**Status:** Design only — **not implemented**. Step 3/3B remain preview-only.
+**Status:** **Implemented locally (2026-09-09) — not deployed.** Preview remains read-only until explicit Apply. Owner clasp push + bounded runtime proof are required before treating Apply as production-ready.
 
 This document describes the smallest safe Apply path after bounded and Central preview validation.
-It does not authorize implementation without an explicit owner review gate.
 
 ---
 
@@ -20,43 +19,33 @@ Apply must never silently overwrite ambiguous accounts or infer registration typ
 
 ---
 
-## Target sheet: unified holdings (proposed name)
+## Target sheet: unified holdings
 
-**`SYS - Investment Holdings Unified`** (exact name subject to owner schema review; one sheet, not one per broker).
+**`SYS - Investment Holdings Unified`** — config key `INVESTMENT_HOLDINGS_UNIFIED` in `config.js`.
 
-Each row represents one security snapshot line for one account at one as-of instant.
+Each row represents one security snapshot line (or cash line) for one account at one as-of instant.
 
-### Required columns (minimum)
+### Implemented schema (19 columns)
 
-| Column | Purpose |
-|--------|---------|
-| Broker / Source | `ETRADE_POSITIONS_PDF`, `M1_STATEMENT_PDF`, `ROBINHOOD_CSV`, … |
-| stableAccountId | Durable CashCompass account identity |
-| Account Name | Display label at apply time |
-| sourceSecurityKey | Durable security identity within source |
-| Symbol | Ticker when present |
-| Shares | Quantity |
-| Price | Mark price when present |
-| Market Value | Position market value |
-| Cost Basis | When source provides it |
-| As-Of Date | Statement / positions snapshot date |
-| Import Status | e.g. `PREVIEWED`, `APPLIED`, `SUPERSEDED`, `REVIEW_REQUIRED` |
+Headers in `BOUNDED_HOLDINGS_UNIFIED_HEADERS_` (`bounded_holdings_preview_apply_sheet.js`):
 
-Optional additive columns may mirror `INVESTMENT_HOLDINGS_EXTENDED_HEADERS_` (share class, exchange, unrealized G/L) when the source supplies them.
+Source · Provider · Parent CashCompass account · Child account/partition · Investment Id · Source security key · Symbol · Security name · Shares · Price · Market value · Cost basis · Unrealized gain/loss · **Cash balance** · As-of date · Document fingerprint · Import status · Imported at · Import run/reference
 
-Robinhood activity-reconstructed holdings remain on the existing Robinhood path until an explicit migration slice is approved.
+Formatting: currency on columns 11–14 (cash at column 14); as-of `yyyy-mm-dd`; imported-at timestamp; audit columns 4, 5, 6, 16, 19 **hidden** (not deleted).
+
+Replay key: `source|accountIdentityKey|sourceSecurityKey|asOfDate`.
+
+Robinhood activity-reconstructed holdings remain on **`SYS - Investment Holdings`** until an explicit migration slice is approved.
 
 ---
 
 ## Apply workflow (explicit confirmation required)
 
-1. **Preview** — current Step 3/3B adapters produce `PORTFOLIO_INTELLIGENCE_HOLDINGS_V1` in memory only.
-2. **Diff** — show complete before/after for the selected `stableAccountId`:
-   - rows to add, update, mark superseded, or leave unchanged
-   - account-level total vs `INPUT - Investments` monthly value (informational; no auto-sync)
-3. **Confirm** — owner checks explicit account match again; registration type must match registry or an approved correction flow.
-4. **Write** — append/replace rows only on the unified holdings sheet for that account + as-of scope; log to Activity.
-5. **No auto-map** — if identity is ambiguous, Apply is blocked with the same fail-closed codes as preview.
+1. **Preview** — bounded preview adapters produce holdings in memory only (`bounded_holdings_preview.js` et al.).
+2. **Diff** — `boundedHoldingsPreviewBuildApplyDiffFromDashboard` / grouped variant builds create/update/unchanged/conflict + document replay classification.
+3. **Review** — `BoundedHoldingsPreviewUI.html` Apply section after successful preview.
+4. **Apply** — `boundedHoldingsPreviewApplyFromDashboard` / grouped variant under document lock; rollback on failed write.
+5. **No auto-map** — identity ambiguity blocks Apply (same fail-closed posture as preview).
 
 Apply must **not**:
 
@@ -67,9 +56,29 @@ Apply must **not**:
 
 ---
 
-## Next implementation slice (after preview sign-off)
+## Implementation map (local)
 
-1. First-create unified holdings sheet schema (empty workbook only; no migration wash).
-2. Read-only diff builder comparing preview envelope to existing unified rows for one `stableAccountId`.
-3. Explicit Apply RPC with lock, rollback, and disposable-workbook regression proof.
-4. Only then connect income/debt-payoff analysis to classified distribution adapters.
+| Module | Role |
+|--------|------|
+| `bounded_holdings_preview_apply_sheet.js` | Sheet I/O, 19-column schema, formatting, rollback helpers |
+| `bounded_holdings_preview_apply_diff.js` | Diff builder, replay outcomes, duplicate noop |
+| `bounded_holdings_preview_apply.js` | Apply RPCs from dashboard |
+| `BoundedHoldingsPreviewUI.html` | Review / Apply / Cancel UI |
+| `scripts/checkBoundedHoldingsPreviewApplyRegressions.mjs` | `npm run test:bounded-holdings-preview-apply` |
+
+---
+
+## Next gates (owner-operated)
+
+1. Review + commit local source.
+2. Owner `./push-central.sh` or bounded clasp push (whichever deployment target is approved).
+3. Bounded runtime Apply proof on owner workbook (M1 + E*TRADE); run `adminGetSysSheetRuntimeSnapshot()` to confirm Unified row counts and cash currency display.
+4. **Then** consider Robinhood → Unified migration design execution (separate approval — see audit fixture `robinhoodMigration`).
+
+---
+
+## Related audit artifacts
+
+- `test/fixtures/sys-sheet-audit-inventory.json` — repository SYS inventory + cleanup classifications
+- `test/fixtures/sys-sheet-runtime-snapshot-schema.json` — runtime diagnostic output schema
+- `sys_sheet_runtime_snapshot.js` — read-only bounded workbook SYS snapshot
