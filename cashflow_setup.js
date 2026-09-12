@@ -1011,6 +1011,41 @@ function applyCashFlowRowTypeColorRules_(sheet, layout) {
 }
 
 /**
+ * Align one Cash Flow month cell's font color with its row Type, using the
+ * same #38761d / #cc0000 language as applyCashFlowRowTypeColorRules_. Writers
+ * that PASTE_FORMAT from blank cells or from non-month columns (for example
+ * the Total column's black styling) can leave explicit black font that blocks
+ * conditional formatting, so expense zeros such as a skipped bill's $0.00
+ * render black unless the row type color is re-applied here.
+ *
+ * Cosmetic only — all failures are swallowed.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {number} row 1-based row
+ * @param {number} col 1-based month column
+ */
+function applyCashFlowRowTypeFontColor_(sheet, row, col) {
+  if (!sheet || !row || !col) return;
+  try {
+    if (!isCashFlowInputSheet_(sheet)) return;
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+    const layout = detectCashFlowLayout_(headers);
+    if (!layout || !(layout.firstMonthCol1 > 0) || !(layout.lastMonthCol1 >= layout.firstMonthCol1)) {
+      return;
+    }
+    if (col < layout.firstMonthCol1 || col > layout.lastMonthCol1) return;
+
+    const type = String(sheet.getRange(row, layout.typeCol1).getDisplayValue() || '').trim();
+    const cell = sheet.getRange(row, col);
+    if (type === 'Expense') {
+      cell.setFontColor(CASH_FLOW_HEALTH_COLOR_NEGATIVE_);
+    } else if (type === 'Income') {
+      cell.setFontColor(CASH_FLOW_HEALTH_COLOR_POSITIVE_);
+    }
+  } catch (_fontErr) { /* cosmetic only */ }
+}
+
+/**
  * Apply the Summary-row financial-health text colors — positive net → green,
  * negative net → red, zero → neutral (default black) — via CONDITIONAL
  * FORMATTING, matching the Income/Expense color language EXACTLY (shared

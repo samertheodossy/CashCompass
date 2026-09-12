@@ -4127,16 +4127,29 @@ function copyNearestAmountFormatInRow_(sheet, row, targetCol) {
     const lastCol = sheet.getLastColumn();
     if (lastCol < 1) return false;
 
-    const rowValues = sheet.getRange(row, 1, 1, lastCol).getValues()[0];
+    let firstMonthCol = 1;
+    let lastMonthCol = lastCol;
+    try {
+      const headers = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0];
+      const layout = detectCashFlowLayout_(headers);
+      if (layout && layout.firstMonthCol1 > 0 && layout.lastMonthCol1 >= layout.firstMonthCol1) {
+        firstMonthCol = layout.firstMonthCol1;
+        lastMonthCol = layout.lastMonthCol1;
+      }
+    } catch (_layoutErr) { /* fall back to whole-row search */ }
+
+    if (targetCol < firstMonthCol || targetCol > lastMonthCol) return false;
+
+    const rowValues = sheet.getRange(row, firstMonthCol, 1, lastMonthCol - firstMonthCol + 1).getValues()[0];
 
     let sourceCol = -1;
-    for (let c = targetCol - 1; c >= 1; c--) {
-      const v = rowValues[c - 1];
+    for (let c = targetCol - 1; c >= firstMonthCol; c--) {
+      const v = rowValues[c - firstMonthCol];
       if (typeof v === 'number' && isFinite(v)) { sourceCol = c; break; }
     }
     if (sourceCol === -1) {
-      for (let c = targetCol + 1; c <= lastCol; c++) {
-        const v = rowValues[c - 1];
+      for (let c = targetCol + 1; c <= lastMonthCol; c++) {
+        const v = rowValues[c - firstMonthCol];
         if (typeof v === 'number' && isFinite(v)) { sourceCol = c; break; }
       }
     }
@@ -4217,6 +4230,10 @@ function skipDashboardBill(skipKey) {
         // Fall through to canonical Cash Flow money format below.
       }
       applyCashFlowMoneyFormat_(cell);
+      // PASTE_FORMAT can copy explicit black (for example from the Total
+      // column before month-only scoping, or from a blank neighbor). Re-apply
+      // the row Type color so expense skips render red $0.00 like the row.
+      applyCashFlowRowTypeFontColor_(info.sheet, info.row, info.col);
     }
   }
 
