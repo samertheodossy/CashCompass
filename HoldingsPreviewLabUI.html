@@ -165,6 +165,7 @@
       <label for="previewSource">Source</label>
       <select id="previewSource">
         <option value="ETRADE_POSITIONS_PDF">ETRADE_POSITIONS_PDF</option>
+        <option value="ETRADE_CLIENT_STATEMENT_PDF">ETRADE_CLIENT_STATEMENT_PDF</option>
         <option value="M1_STATEMENT_PDF">M1_STATEMENT_PDF</option>
       </select>
 
@@ -427,6 +428,18 @@
         html += stat('Cash balance', formatMoney(data.cashBalance));
         html += stat('Cash %', (analysis.cashPercent != null ? analysis.cashPercent + '%' : '—'));
         html += stat('Registration', escapeHtml(data.account.registrationType));
+        if (data.extraction) {
+          html += stat('Extraction method', escapeHtml(data.extraction.method || '—'));
+          html += stat('Extraction quality', escapeHtml(data.extraction.quality || '—'));
+        }
+        if (data.reconciliation) {
+          html += stat('Statement reconciliation', data.reconciliation.ok ? 'matched' : 'failed');
+          html += stat('Computed total', formatMoney(data.reconciliation.computedTotal));
+          html += stat('Statement ending value', formatMoney(data.reconciliation.endingTotalValue));
+        }
+        if (data.accountKind) {
+          html += stat('Statement account kind', escapeHtml(data.accountKind));
+        }
         html += stat('Holdings visibility', data.readiness.trustedForHoldingsVisibility ? 'ready' : 'not ready');
         html += stat('Income analysis', data.readiness.trustedForIncomeAnalysis ? 'ready' : 'not ready');
         html += stat('Tax-lot planning', data.readiness.trustedForTaxLotSalePlanning ? 'ready' : 'not ready');

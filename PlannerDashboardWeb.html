@@ -149,7 +149,19 @@ window.onerror = function(message, source, lineno, colno) {
 </script>
 
 <script>
+  <?!= boundedHoldingsPreviewIncludePdfClient_('bounded_holdings_preview_pdf_client_include.html') ?>
+</script>
+
+<script>
   <?!= includeHtml_('Dashboard_Script_AssetsBankInvestments'); ?>
+</script>
+
+<script>
+  <?!= includeHtml_('Dashboard_Script_InvestmentPortfolioDrawerM1'); ?>
+</script>
+
+<script>
+  <?!= includeHtml_('Dashboard_Script_InvestmentPortfolioDrawer401k'); ?>
 </script>
 
 <script>

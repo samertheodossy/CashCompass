@@ -1,0 +1,14 @@
+E*TRADE Client Statement
+Morgan Stanley
+Self-Directed Brokerage Account
+Statement period: 8/1/2026 to 8/31/2026
+Account number: XXXX-MAIN-002
+Account title: Synthetic Reconciliation Fail
+
+Ending Total Value (as of 8/31/2026) $9,999.00
+
+Security Description Quantity Share Price Total Cost Market Value Unrealized Gain/Loss
+SYNA CORP (SYNA) Purchases 100.000 $10.00 $900.00 $950.00 $50.00
+Total 100.000 $10.00 $900.00 $950.00 $50.00
+
+Total Cash, Bank Deposit Program, and Money Market Funds $5,000.00

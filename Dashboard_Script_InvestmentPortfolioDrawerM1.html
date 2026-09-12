@@ -1,0 +1,530 @@
+/* Portfolio activity drawer — M1 statement PDF import (reuses bounded preview RPCs). */
+var __invDrawerM1SetupAccounts = null;
+var __invDrawerM1SetupPromise = null;
+var __invDrawerPdfJsPromise = null;
+var __invDrawerM1State = {
+  selectedAccount: null,
+  fileName: '',
+  extractionStatus: '',
+  extractedTextLength: 0,
+  extractionError: '',
+  trustedDocumentText: '',
+  documentFingerprint: '',
+  registrationTouched: false,
+  groupedSession: { children: [], previews: [], pendingInspect: null },
+  lastSinglePreview: null,
+  lastPreviewDocumentText: '',
+  applyReviewed: false,
+  applyDiff: null,
+  applyDiffDigest: '',
+  applyStatusMessage: ''
+};
+
+function invDrawerM1Escape_(value) {
+  return typeof escapeHtml === 'function' ? escapeHtml(value) : String(value || '');
+}
+
+function invDrawerM1CurrentText_() {
+  var el = document.getElementById('inv_m1_document_text');
+  return String(el && el.value || '').trim();
+}
+
+function invDrawerM1IsGrouped_() {
+  return !!(__invDrawerM1State.selectedAccount &&
+    __invDrawerM1State.selectedAccount.previewMode === 'GROUPED_PROVIDER');
+}
+
+function ensureInvDrawerPdfClientReady_(onReady, onError) {
+  if (typeof boundedHoldingsPreviewLoadDocumentTextFromFile_ !== 'function') {
+    onError(new Error('PDF import helpers are unavailable in this dashboard build.'));
+    return;
+  }
+  if (typeof pdfjsLib !== 'undefined' && pdfjsLib.getDocument) {
+    onReady();
+    return;
+  }
+  if (!__invDrawerPdfJsPromise) {
+    __invDrawerPdfJsPromise = new Promise(function(resolve, reject) {
+      var script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      script.onload = function() {
+        if (typeof pdfjsLib !== 'undefined') {
+          pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          resolve();
+        } else {
+          reject(new Error('PDF.js failed to load.'));
+        }
+      };
+      script.onerror = function() { reject(new Error('PDF.js failed to load.')); };
+      document.head.appendChild(script);
+    });
+  }
+  __invDrawerPdfJsPromise.then(onReady).catch(onError);
+}
+
+function ensureInvDrawerM1SetupAccounts_(onReady, onError) {
+  if (__invDrawerM1SetupAccounts) {
+    onReady(__invDrawerM1SetupAccounts);
+    return;
+  }
+  if (__invDrawerM1SetupPromise) {
+    __invDrawerM1SetupPromise.then(onReady).catch(onError);
+    return;
+  }
+  __invDrawerM1SetupPromise = new Promise(function(resolve, reject) {
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (!res || !res.ok) {
+          reject(new Error(res && res.error ? res.error : 'Could not load M1 import setup.'));
+          return;
+        }
+        __invDrawerM1SetupAccounts = res.accounts || [];
+        resolve(__invDrawerM1SetupAccounts);
+      })
+      .withFailureHandler(function(err) {
+        reject(new Error(err && err.message ? err.message : String(err)));
+      })
+      .getBoundedHoldingsPreviewSetupFromDashboard();
+  });
+  __invDrawerM1SetupPromise.then(onReady).catch(onError);
+}
+
+function resetInvestmentPortfolioDrawerM1Import_(keepAccount) {
+  __invDrawerM1State.fileName = '';
+  __invDrawerM1State.extractionStatus = '';
+  __invDrawerM1State.extractedTextLength = 0;
+  __invDrawerM1State.extractionError = '';
+  __invDrawerM1State.trustedDocumentText = '';
+  __invDrawerM1State.documentFingerprint = '';
+  __invDrawerM1State.groupedSession = { children: [], previews: [], pendingInspect: null };
+  __invDrawerM1State.lastSinglePreview = null;
+  __invDrawerM1State.lastPreviewDocumentText = '';
+  __invDrawerM1State.applyReviewed = false;
+  __invDrawerM1State.applyDiff = null;
+  __invDrawerM1State.applyDiffDigest = '';
+  __invDrawerM1State.applyStatusMessage = '';
+  if (!keepAccount) {
+    __invDrawerM1State.selectedAccount = null;
+    __invDrawerM1State.registrationTouched = false;
+  }
+  var fileEl = document.getElementById('inv_m1_document_file');
+  if (fileEl) fileEl.value = '';
+  var textEl = document.getElementById('inv_m1_document_text');
+  if (textEl) textEl.value = '';
+  var metaEl = document.getElementById('inv_m1_file_meta');
+  if (metaEl) metaEl.textContent = 'No file selected.';
+  var regEl = document.getElementById('inv_m1_registration_type');
+  if (regEl && !keepAccount) regEl.value = '';
+  var matchEl = document.getElementById('inv_m1_explicit_match');
+  if (matchEl) matchEl.checked = false;
+  var confirmBox = document.getElementById('inv_m1_grouped_confirm_box');
+  if (confirmBox) confirmBox.hidden = true;
+  ['inv_m1_results', 'inv_m1_grouped_status', 'inv_m1_grouped_children',
+    'inv_m1_grouped_detail', 'inv_m1_apply_area'].forEach(function(id) {
+    var node = document.getElementById(id);
+    if (node) node.innerHTML = '';
+  });
+  updateInvestmentPortfolioDrawerM1Controls_();
+}
+
+function initInvestmentPortfolioDrawerM1Import_(pickerValue, portfolioData) {
+  pickerValue = String(pickerValue || '').trim();
+  portfolioData = portfolioData || {};
+  resetInvestmentPortfolioDrawerM1Import_(false);
+  if (!pickerValue || !portfolioData.m1ImportAvailable) return;
+  ensureInvDrawerM1SetupAccounts_(function(accounts) {
+    var match = (accounts || []).filter(function(row) {
+      return String(row.pickerValue || row.investmentId || '') === pickerValue;
+    })[0];
+    if (!match) {
+      setStatus('inv_m1_status', 'M1 import setup could not resolve this account.', true);
+      return;
+    }
+    __invDrawerM1State.selectedAccount = match;
+    var hintEl = document.getElementById('inv_m1_account_hint');
+    if (hintEl) {
+      if (invDrawerM1IsGrouped_()) {
+        hintEl.textContent = (match.groupProviderLabel || match.accountName) +
+          ' · parent control total is excluded from child holdings preview.';
+      } else {
+        hintEl.textContent = match.identityMessage ||
+          ('Import one M1 monthly statement PDF for ' + match.accountName + '.');
+      }
+    }
+    var matchText = document.getElementById('inv_m1_explicit_match_text');
+    if (matchText) {
+      matchText.textContent = invDrawerM1IsGrouped_()
+        ? ('I confirm each statement belongs under ' + (match.groupProviderLabel || match.accountName) +
+          '. The parent total is a control total only; child statements are tracked separately.')
+        : ('I confirm this document belongs to ' + (match.accountName || 'the selected account') + '.');
+    }
+    if (match.suggestedRegistrationType && !__invDrawerM1State.registrationTouched) {
+      var regEl = document.getElementById('inv_m1_registration_type');
+      if (regEl) regEl.value = match.suggestedRegistrationType;
+    }
+    var groupedIntro = document.getElementById('inv_m1_grouped_intro');
+    if (groupedIntro) {
+      groupedIntro.hidden = !invDrawerM1IsGrouped_();
+      if (invDrawerM1IsGrouped_()) {
+        groupedIntro.textContent =
+          'Load M1 statement previews under ' + (match.groupProviderLabel || match.accountName) +
+          '. Each distinct child account is tracked separately, duplicate statements are ignored, ' +
+          'and the parent total is a control total only.';
+      }
+    }
+    updateInvestmentPortfolioDrawerM1Controls_();
+  }, function(err) {
+    setStatus('inv_m1_status', err.message || String(err), true);
+  });
+}
+
+function updateInvestmentPortfolioDrawerM1Controls_() {
+  var previewBtn = document.getElementById('inv_m1_preview_btn');
+  var hasText = !!invDrawerM1CurrentText_();
+  var reg = String(document.getElementById('inv_m1_registration_type') &&
+    document.getElementById('inv_m1_registration_type').value || '').trim();
+  var confirmed = !!(document.getElementById('inv_m1_explicit_match') &&
+    document.getElementById('inv_m1_explicit_match').checked);
+  var ready = !!__invDrawerM1State.selectedAccount && hasText && !!reg && confirmed;
+  if (previewBtn) previewBtn.disabled = !ready;
+}
+
+function onInvestmentPortfolioDrawerM1RegistrationChanged_() {
+  __invDrawerM1State.registrationTouched = true;
+  updateInvestmentPortfolioDrawerM1Controls_();
+}
+
+function onInvestmentPortfolioDrawerM1FileChanged_() {
+  var fileEl = document.getElementById('inv_m1_document_file');
+  var file = fileEl && fileEl.files && fileEl.files[0];
+  var metaEl = document.getElementById('inv_m1_file_meta');
+  var textEl = document.getElementById('inv_m1_document_text');
+  __invDrawerM1State.extractionError = '';
+  if (!file) {
+    if (metaEl) metaEl.textContent = 'No file selected.';
+    if (textEl) textEl.value = '';
+    updateInvestmentPortfolioDrawerM1Controls_();
+    return;
+  }
+  if (metaEl) metaEl.textContent = 'Reading ' + file.name + '…';
+  ensureInvDrawerPdfClientReady_(function() {
+    var account = __invDrawerM1State.selectedAccount || {};
+    boundedHoldingsPreviewLoadDocumentTextFromFile_(file, pdfjsLib, {
+      source: 'M1_STATEMENT_PDF',
+      groupedMode: invDrawerM1IsGrouped_(),
+      accountProvider: 'M1'
+    }).then(function(result) {
+      result = result || {};
+      __invDrawerM1State.fileName = file.name;
+      __invDrawerM1State.extractionStatus = result.extractionStatus || '';
+      __invDrawerM1State.extractedTextLength = Number(result.extractedTextLength || 0);
+      __invDrawerM1State.trustedDocumentText = String(result.text || '');
+      __invDrawerM1State.documentFingerprint = String(result.documentFingerprint || '');
+      if (textEl) textEl.value = result.displayTextInEditor === false ? '' : String(result.text || '');
+      if (metaEl) {
+        metaEl.textContent = file.name + ' · ' +
+          (__invDrawerM1State.extractedTextLength || invDrawerM1CurrentText_().length) + ' chars';
+      }
+      clearInvestmentPortfolioDrawerM1Apply_(true);
+      updateInvestmentPortfolioDrawerM1Controls_();
+    }).catch(function(err) {
+      __invDrawerM1State.extractionError = err && err.message ? err.message : String(err);
+      if (metaEl) metaEl.textContent = __invDrawerM1State.extractionError;
+      if (textEl) textEl.value = '';
+      updateInvestmentPortfolioDrawerM1Controls_();
+    });
+  }, function(err) {
+    if (metaEl) metaEl.textContent = err.message || String(err);
+  });
+}
+
+function buildInvDrawerM1Payload_(extra) {
+  var account = __invDrawerM1State.selectedAccount || {};
+  var payload = {
+    pickerValue: String(account.pickerValue || __investmentPortfolioSelectedId || '').trim(),
+    sysAssetsRow: account.sysAssetsRow,
+    accountName: account.accountName || '',
+    source: 'M1_STATEMENT_PDF',
+    rawDocumentText: invDrawerM1CurrentText_(),
+    extractionMeta: null,
+    documentFingerprint: String(__invDrawerM1State.documentFingerprint || '').trim(),
+    registrationType: document.getElementById('inv_m1_registration_type').value,
+    explicitAccountMatch: document.getElementById('inv_m1_explicit_match').checked,
+    statementProvider: 'M1',
+    previewMode: account.previewMode || 'SINGLE_ACCOUNT'
+  };
+  if (extra) Object.keys(extra).forEach(function(key) { payload[key] = extra[key]; });
+  return payload;
+}
+
+function buildInvDrawerM1GroupedPayload_(extra) {
+  var payload = buildInvDrawerM1Payload_(extra);
+  payload.source = 'M1_STATEMENT_PDF';
+  payload.sessionChildren = __invDrawerM1State.groupedSession.children;
+  payload.sessionPreviews = (__invDrawerM1State.groupedSession.previews || []).map(function(row) {
+    return {
+      childPartitionId: row.childPartitionId,
+      recognitionLabel: row.recognitionLabel,
+      maskedAccountSignal: row.maskedAccountSignal,
+      statementPeriodEnd: row.statementPeriodEnd,
+      statementPeriodStart: row.statementPeriodStart,
+      documentFingerprint: row.documentFingerprint,
+      contentFingerprint: row.contentFingerprint,
+      source: row.source,
+      replayOutcome: row.replayOutcome,
+      totalAccountValue: row.totalAccountValue,
+      cashBalance: row.cashBalance,
+      equitiesSubtotal: row.equitiesSubtotal,
+      cashPlusEquitiesReconciles: row.cashPlusEquitiesReconciles,
+      statementAccountLabel: row.statementAccountLabel,
+      statementAccountTitle: row.statementAccountTitle,
+      statementAccountType: row.statementAccountType,
+      statementSourceMaskedAccountNumber: row.statementSourceMaskedAccountNumber,
+      parentGroupLabel: row.parentGroupLabel,
+      holdingsCount: row.holdingsCount,
+      matchStatus: row.matchStatus
+    };
+  });
+  return payload;
+}
+
+function clearInvestmentPortfolioDrawerM1Apply_(keepPreview) {
+  __invDrawerM1State.applyReviewed = false;
+  __invDrawerM1State.applyDiff = null;
+  __invDrawerM1State.applyDiffDigest = '';
+  __invDrawerM1State.applyStatusMessage = '';
+  if (!keepPreview) {
+    __invDrawerM1State.lastSinglePreview = null;
+    __invDrawerM1State.lastPreviewDocumentText = '';
+  }
+  var applyArea = document.getElementById('inv_m1_apply_area');
+  if (applyArea) applyArea.innerHTML = '';
+}
+
+function renderInvDrawerM1SingleResults_(res) {
+  var host = document.getElementById('inv_m1_results');
+  if (!host) return;
+  if (!res || !res.ok) {
+    host.innerHTML = '<div class="error-box">' + invDrawerM1Escape_(res && res.error ? res.error : 'Preview failed.') + '</div>';
+    return;
+  }
+  __invDrawerM1State.lastSinglePreview = res.preview || null;
+  __invDrawerM1State.lastPreviewDocumentText = invDrawerM1CurrentText_();
+  clearInvestmentPortfolioDrawerM1Apply_(true);
+  var html = '<div class="card"><div class="pill pill-ok">M1 preview ready</div> ' +
+    invDrawerM1Escape_(res.preview && res.preview.asOf ? ('As-of ' + res.preview.asOf) : '') + '</div>';
+  host.innerHTML = html;
+  renderInvestmentPortfolioDrawerM1ApplySection_();
+}
+
+function handleInvDrawerM1GroupedResult_(res) {
+  var statusHost = document.getElementById('inv_m1_grouped_status');
+  var confirmBox = document.getElementById('inv_m1_grouped_confirm_box');
+  if (confirmBox) confirmBox.hidden = true;
+  if (!res || !res.ok) {
+    if (res && res.requiresConfirmation && res.childMatch) {
+      __invDrawerM1State.groupedSession.pendingInspect = res.childMatch;
+      var promptEl = document.getElementById('inv_m1_grouped_confirm_prompt');
+      if (promptEl) promptEl.textContent = res.childMatch.prompt || res.error || 'Confirm this child account.';
+      if (confirmBox) confirmBox.hidden = false;
+      return;
+    }
+    if (statusHost) {
+      statusHost.innerHTML = '<div class="error-box">' +
+        invDrawerM1Escape_(res && res.error ? res.error : 'Grouped preview failed.') + '</div>';
+    }
+    return;
+  }
+  if (res.sessionChildren) __invDrawerM1State.groupedSession.children = res.sessionChildren;
+  if (res.duplicateNoop) {
+    if (statusHost) {
+      statusHost.innerHTML = '<div class="card muted">' +
+        invDrawerM1Escape_(res.replayMessage || 'Duplicate document — no change.') + '</div>';
+    }
+  } else if (res.sessionPreview) {
+    var incoming = res.sessionPreview;
+    __invDrawerM1State.groupedSession.previews =
+      (__invDrawerM1State.groupedSession.previews || []).filter(function(row) {
+        if (String(row.childPartitionId || '') !== String(incoming.childPartitionId || '')) return true;
+        return String(row.statementPeriodEnd || '') !== String(incoming.statementPeriodEnd || '');
+      });
+    __invDrawerM1State.groupedSession.previews.push(incoming);
+    if (statusHost) {
+      statusHost.innerHTML = '<div class="card">' +
+        invDrawerM1Escape_((res.childPartition && res.childPartition.recognitionLabel) || 'Child account') +
+        ' · ' + invDrawerM1Escape_(incoming.statementPeriodEnd || '') + '</div>';
+    }
+  }
+  renderInvDrawerM1GroupedSession_();
+  clearInvestmentPortfolioDrawerM1Apply_(true);
+  renderInvestmentPortfolioDrawerM1ApplySection_();
+}
+
+function renderInvDrawerM1GroupedSession_() {
+  var host = document.getElementById('inv_m1_grouped_children');
+  if (!host) return;
+  var previews = __invDrawerM1State.groupedSession.previews || [];
+  if (!previews.length) {
+    host.innerHTML = '';
+    return;
+  }
+  var html = '<ul class="child-list">';
+  previews.forEach(function(row) {
+    html += '<li>' + invDrawerM1Escape_(row.recognitionLabel || row.childPartitionId || 'Child') +
+      ' · ' + invDrawerM1Escape_(row.statementPeriodEnd || '') + '</li>';
+  });
+  html += '</ul>';
+  host.innerHTML = html;
+}
+
+function previewInvestmentPortfolioDrawerM1_() {
+  if (invDrawerM1IsGrouped_()) {
+    runInvDrawerM1GroupedPreview_({});
+    return;
+  }
+  var btn = document.getElementById('inv_m1_preview_btn');
+  if (btn) btn.disabled = true;
+  setStatusLoading('inv_m1_status', 'Parsing M1 statement in memory…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (btn) btn.disabled = false;
+      setStatus('inv_m1_status', '', false);
+      renderInvDrawerM1SingleResults_(res);
+      updateInvestmentPortfolioDrawerM1Controls_();
+    })
+    .withFailureHandler(function(err) {
+      if (btn) btn.disabled = false;
+      setStatus('inv_m1_status', err.message || String(err), true);
+    })
+    .boundedHoldingsPreviewRunFromDashboard(buildInvDrawerM1Payload_());
+}
+
+function runInvDrawerM1GroupedPreview_(extra) {
+  var btn = document.getElementById('inv_m1_preview_btn');
+  if (btn) btn.disabled = true;
+  setStatusLoading('inv_m1_status', 'Previewing M1 statement in memory…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (btn) btn.disabled = false;
+      setStatus('inv_m1_status', '', false);
+      handleInvDrawerM1GroupedResult_(res);
+      updateInvestmentPortfolioDrawerM1Controls_();
+    })
+    .withFailureHandler(function(err) {
+      if (btn) btn.disabled = false;
+      setStatus('inv_m1_status', err.message || String(err), true);
+    })
+    .boundedHoldingsPreviewRunGroupedChildFromDashboard(buildInvDrawerM1GroupedPayload_(extra || {}));
+}
+
+function confirmInvDrawerM1GroupedChild_() {
+  runInvDrawerM1GroupedPreview_({ confirmNewChild: true });
+}
+
+function renderInvestmentPortfolioDrawerM1ApplySection_() {
+  var applyArea = document.getElementById('inv_m1_apply_area');
+  if (!applyArea) return;
+  var ready = invDrawerM1IsGrouped_()
+    ? !!(__invDrawerM1State.groupedSession.previews && __invDrawerM1State.groupedSession.previews.length)
+    : !!__invDrawerM1State.lastSinglePreview;
+  if (!ready) {
+    applyArea.innerHTML = '';
+    return;
+  }
+  applyArea.innerHTML = '<div class="card"><h3>Apply approved holdings</h3>' +
+    '<p class="muted">Review the diff, then apply to SYS - Investment Holdings Unified only.</p>' +
+    '<div class="investment-import-actions">' +
+    '<button type="button" class="small-btn" id="inv_m1_review_apply_btn">Review holdings changes</button>' +
+    '<button type="button" class="small-btn primary" id="inv_m1_confirm_apply_btn" disabled>Apply approved holdings</button>' +
+    '</div><div id="inv_m1_apply_message" class="muted"></div></div>';
+  var reviewBtn = document.getElementById('inv_m1_review_apply_btn');
+  var confirmBtn = document.getElementById('inv_m1_confirm_apply_btn');
+  if (reviewBtn) reviewBtn.onclick = reviewInvestmentPortfolioDrawerM1ApplyDiff_;
+  if (confirmBtn) confirmBtn.onclick = confirmInvestmentPortfolioDrawerM1Apply_;
+}
+
+function reviewInvestmentPortfolioDrawerM1ApplyDiff_() {
+  setStatusLoading('inv_m1_status', 'Building holdings diff…');
+  var successHandler = function(bundle) {
+    setStatus('inv_m1_status', '', false);
+    __invDrawerM1State.applyDiff = bundle && bundle.diffPreview ? bundle.diffPreview : null;
+    __invDrawerM1State.applyDiffDigest = bundle && bundle.diffDigest ? bundle.diffDigest : '';
+    __invDrawerM1State.applyReviewed = !!(bundle && bundle.ok && __invDrawerM1State.applyDiffDigest);
+    var msgEl = document.getElementById('inv_m1_apply_message');
+    var confirmBtn = document.getElementById('inv_m1_confirm_apply_btn');
+    if (!bundle || !bundle.ok) {
+      if (msgEl) msgEl.textContent = bundle && bundle.error ? bundle.error : 'Could not build diff.';
+      return;
+    }
+    if (msgEl) {
+      var diff = __invDrawerM1State.applyDiff || {};
+      msgEl.textContent = 'Creates: ' + String((diff.summary && diff.summary.createCount) || 0) +
+        ' · Updates: ' + String((diff.summary && diff.summary.updateCount) || 0) +
+        (diff.blocked ? (' · Blocked: ' + (diff.blockReason || 'review required')) : '');
+    }
+    if (confirmBtn) {
+      confirmBtn.disabled = !(__invDrawerM1State.applyReviewed &&
+        !(__invDrawerM1State.applyDiff && (__invDrawerM1State.applyDiff.blocked ||
+          __invDrawerM1State.applyDiff.duplicateNoop)));
+    }
+  };
+  if (invDrawerM1IsGrouped_()) {
+    google.script.run.withSuccessHandler(successHandler).withFailureHandler(function(err) {
+      setStatus('inv_m1_status', err.message || String(err), true);
+    }).boundedHoldingsPreviewBuildGroupedApplyDiffFromDashboard(buildInvDrawerM1GroupedApplyPayload_());
+  } else {
+    google.script.run.withSuccessHandler(successHandler).withFailureHandler(function(err) {
+      setStatus('inv_m1_status', err.message || String(err), true);
+    }).boundedHoldingsPreviewBuildApplyDiffFromDashboard(buildInvDrawerM1Payload_());
+  }
+}
+
+function buildInvDrawerM1GroupedApplyPayload_(extra) {
+  var payload = buildInvDrawerM1GroupedPayload_(extra || {});
+  payload.sessionApplyItems = (__invDrawerM1State.groupedSession.previews || []).map(function(row) {
+    var preview = row.preview || {};
+    return {
+      childPartitionId: row.childPartitionId,
+      recognitionLabel: row.recognitionLabel,
+      maskedAccountSignal: row.maskedAccountSignal,
+      statementPeriodEnd: row.statementPeriodEnd,
+      statementPeriodStart: row.statementPeriodStart,
+      documentFingerprint: row.documentFingerprint,
+      contentFingerprint: row.contentFingerprint,
+      source: row.source,
+      previewAsOf: preview.asOf || row.statementPeriodEnd || '',
+      preview: preview
+    };
+  });
+  return payload;
+}
+
+function confirmInvestmentPortfolioDrawerM1Apply_() {
+  if (!__invDrawerM1State.applyReviewed || !__invDrawerM1State.applyDiffDigest) return;
+  setStatusLoading('inv_m1_status', 'Applying approved holdings…');
+  var payload = invDrawerM1IsGrouped_()
+    ? buildInvDrawerM1GroupedApplyPayload_()
+    : buildInvDrawerM1Payload_();
+  payload.diffDigest = __invDrawerM1State.applyDiffDigest;
+  payload.explicitApplyConfirm = true;
+  var rpc = invDrawerM1IsGrouped_()
+    ? 'boundedHoldingsPreviewApplyGroupedFromDashboard'
+    : 'boundedHoldingsPreviewApplyFromDashboard';
+  var runner = google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('inv_m1_status', res && res.message ? res.message : 'Apply completed.', false);
+      clearInvestmentPortfolioDrawerM1Apply_(true);
+      var picker = __investmentPortfolioSelectedId;
+      if (picker) applyInvestmentPortfolioAccountChange_(
+        document.getElementById('inv_activity_account'), picker);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_m1_status', err.message || String(err), true);
+    });
+  if (invDrawerM1IsGrouped_()) {
+    runner.boundedHoldingsPreviewApplyGroupedFromDashboard(payload);
+  } else {
+    runner.boundedHoldingsPreviewApplyFromDashboard(payload);
+  }
+}

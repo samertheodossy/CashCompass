@@ -93,6 +93,36 @@ var INVESTMENT_ADAPTER_REGISTRY_ = {
     detect: investmentM1DetectStatementPdf_,
     preview: investmentAdapterPreviewM1StatementPdf_,
     normalize: investmentAdapterNormalizeM1StatementPdf_
+  },
+  ETRADE_CLIENT_STATEMENT_PDF: {
+    source: 'ETRADE_CLIENT_STATEMENT_PDF',
+    parserVersion: ETRADE_CLIENT_STATEMENT_PDF_PARSER_VERSION_,
+    capabilities: {
+      activities: false,
+      holdings: true,
+      taxLots: false,
+      accountSnapshot: true,
+      dividendHistory: false,
+      realizedGainLoss: false
+    },
+    detect: investmentEtradeClientStatementDetect_,
+    preview: investmentAdapterPreviewEtradeClientStatementPdf_,
+    normalize: investmentAdapterNormalizeEtradeClientStatementPdf_
+  },
+  FIDELITY_401K_STATEMENT_PDF: {
+    source: 'FIDELITY_401K_STATEMENT_PDF',
+    parserVersion: FIDELITY_401K_STATEMENT_PDF_PARSER_VERSION_,
+    capabilities: {
+      activities: false,
+      holdings: false,
+      taxLots: false,
+      accountSnapshot: true,
+      dividendHistory: false,
+      realizedGainLoss: false
+    },
+    detect: investmentAdapterDetectFidelity401kStatementPdf_,
+    preview: investmentAdapterPreviewFidelity401kStatementPdf_,
+    normalize: investmentAdapterNormalizeFidelity401kStatementPdf_
   }
 };
 
@@ -215,6 +245,32 @@ function investmentAdapterNormalizeM1StatementPdf_(input, optionalSs) {
   var preview = investmentAdapterPreviewM1StatementPdf_(input, optionalSs);
   if (!preview.ok) return preview;
   return preview.normalized;
+}
+
+function investmentAdapterPreviewEtradeClientStatementPdf_(input, optionalSs) {
+  var payload = input || {};
+  payload.source = investmentPortfolioNormalizeSource_(payload.source) ||
+    'ETRADE_CLIENT_STATEMENT_PDF';
+  return investmentEtradeClientStatementPreviewUnified_(payload);
+}
+
+function investmentAdapterNormalizeEtradeClientStatementPdf_(input, optionalSs) {
+  var preview = investmentAdapterPreviewEtradeClientStatementPdf_(input, optionalSs);
+  if (!preview.ok) return preview;
+  return preview.normalized;
+}
+
+function investmentAdapterPreviewFidelity401kStatementPdf_(input, optionalSs) {
+  var payload = input || {};
+  payload.source = investmentPortfolioNormalizeSource_(payload.source) ||
+    'FIDELITY_401K_STATEMENT_PDF';
+  return investmentFidelity401kStatementPreview_(payload);
+}
+
+function investmentAdapterNormalizeFidelity401kStatementPdf_(input, optionalSs) {
+  var preview = investmentAdapterPreviewFidelity401kStatementPdf_(input, optionalSs);
+  if (!preview.ok) return preview;
+  return preview.preview;
 }
 
 function investmentAdapterBuildPackagePreview_(input, optionalSs) {

@@ -57,6 +57,9 @@ function buildContext(overrides = {}) {
   vm.runInContext(read('investment_etrade_positions_pdf.js'), context, {
     filename: 'investment_etrade_positions_pdf.js'
   });
+  vm.runInContext(read('investment_etrade_client_statement_pdf.js'), context, {
+    filename: 'investment_etrade_client_statement_pdf.js'
+  });
   vm.runInContext(read('investment_m1_statement_pdf.js'), context, {
     filename: 'investment_m1_statement_pdf.js'
   });
@@ -68,6 +71,7 @@ function buildContext(overrides = {}) {
 }
 
 const etradeFixture = fixture('etrade', 'synthetic_etrade_positions_minimal.txt');
+const etradeStatementFixture = fixture('etrade', 'synthetic_etrade_client_statement_main.txt');
 const m1Fixture = fixture('m1', 'synthetic_m1_statement_minimal.txt');
 const labSource = read('central_holdings_preview_lab.js');
 const htmlSource = read('HoldingsPreviewLabUI.html');
@@ -164,6 +168,26 @@ assert.match(etradeSynaaa.sourceSecurityKey, /^ETRADE\|/);
 assert.notEqual(etradeSynaaa.sourceSecurityKey, etradeSynaaa.symbol);
 assert.equal(etradeSynaaa.costBasis, 3500);
 
+// --- E*TRADE Client Statement PDF source ---
+const etradeStatementPreview = ctx.adminUiHoldingsPreviewLabPreview({
+  source: 'ETRADE_CLIENT_STATEMENT_PDF',
+  rawDocumentText: etradeStatementFixture,
+  stableAccountId: 'INV-ET-STATEMENT-LAB',
+  accountName: 'E*TRADE Main Statement Lab',
+  registrationType: 'TAXABLE',
+  explicitAccountMatch: true,
+  extractionMeta: { method: 'TEXT_FILE', quality: 'USABLE', usable: true }
+});
+assert.equal(etradeStatementPreview.ok, true, etradeStatementPreview.error || 'statement preview failed');
+assert.equal(etradeStatementPreview.source, 'ETRADE_CLIENT_STATEMENT_PDF');
+assert.equal(etradeStatementPreview.provider, 'ETRADE');
+assert.equal(etradeStatementPreview.account.matchStatus, 'EXPLICIT_MATCH');
+assert.equal(etradeStatementPreview.holdingsRows.length, 2);
+assert.equal(etradeStatementPreview.cashBalance, 5000);
+assert.equal(etradeStatementPreview.reconciliation.ok, true);
+assert.equal(etradeStatementPreview.extraction.method, 'TEXT_FILE');
+assert.equal(etradeStatementPreview.accountKind, 'BROKERAGE');
+
 // --- M1 Statement PDF source ---
 const m1Preview = ctx.adminUiHoldingsPreviewLabPreview({
   source: 'M1_STATEMENT_PDF',
@@ -247,6 +271,7 @@ assert.match(webappSource, /HoldingsPreviewLabUI/);
 assert.match(adminDiagSource, /holdings-preview-lab/);
 assert.match(htmlSource, /adminUiHoldingsPreviewLabPreview/);
 assert.match(htmlSource, /adminUiHoldingsPreviewLabAggregateSession/);
+assert.match(htmlSource, /ETRADE_CLIENT_STATEMENT_PDF/);
 assert.match(htmlSource, /explicitAccountMatch/);
 assert.match(htmlSource, /Add to session preview/);
 assert.match(htmlSource, /scopeLabel/);

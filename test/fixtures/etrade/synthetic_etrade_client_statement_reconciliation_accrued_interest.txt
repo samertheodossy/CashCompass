@@ -1,0 +1,18 @@
+E*TRADE Client Statement
+Morgan Stanley
+Self-Directed Brokerage Account
+Statement period: 8/1/2026 to 8/31/2026
+Account number: XXXX-ACCR-001
+Account title: Synthetic Accrued Interest Match
+
+Ending Total Value (as of 8/31/2026) $7,025.00
+
+Security Description Quantity Share Price Total Cost Market Value Unrealized Gain/Loss
+SYNA CORP (SYNA) Purchases 100.000 $10.00 $900.00 $950.00 $50.00
+Reinvestments 5.000 $10.00 $50.00 $50.00 $0.00
+Total 105.000 $10.00 $950.00 $1,000.00 $50.00
+SYNB INC (SYNB) Purchases 50.000 $20.00 $900.00 $1,000.00 $100.00
+Total 50.000 $20.00 $900.00 $1,000.00 $100.00
+
+Total Cash, Bank Deposit Program, and Money Market Funds $5,000.00
+Accrued Interest $25.00

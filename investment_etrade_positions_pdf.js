@@ -748,6 +748,28 @@ function investmentEtradePreviewPositionsPdf_(input) {
       error: 'E*TRADE Positions PDF text content is required.'
     };
   }
+  if (typeof investmentEtradeClientStatementClassifyDocumentType_ === 'function') {
+    var docClass = investmentEtradeClientStatementClassifyDocumentType_(rawText);
+    if (docClass.documentType === 'ETRADE_CLIENT_STATEMENT_PDF') {
+      return {
+        ok: false,
+        reviewRequired: true,
+        source: source,
+        error: 'Document matches an E*TRADE monthly client statement. Use ETRADE_CLIENT_STATEMENT_PDF source.'
+      };
+    }
+  }
+  if (typeof investmentEtradeClientStatementAssessTextQuality_ === 'function') {
+    var stmtQuality = investmentEtradeClientStatementAssessTextQuality_(rawText);
+    if (stmtQuality.quality === 'ENCODING_FAILURE') {
+      return {
+        ok: false,
+        reviewRequired: true,
+        source: source,
+        error: 'Extracted PDF text is encoding-corrupt and cannot be parsed as Expanded Positions.'
+      };
+    }
+  }
   var parseResult = investmentEtradeParsePositionsPdfText_(rawText);
   if (!parseResult.ok) {
     return {

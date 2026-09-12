@@ -4,7 +4,7 @@
  * Never creates or writes the unified sheet. Compares proposed preview rows to existing sheet rows.
  */
 
-function boundedHoldingsPreviewApplyBuildDocumentFingerprint_(source, rawText) {
+function boundedHoldingsPreviewApplyBuildDocumentFingerprint_(source, rawText, documentFingerprint) {
   var normalizedSource = typeof investmentPortfolioNormalizeSource_ === 'function'
     ? investmentPortfolioNormalizeSource_(source || '')
     : String(source || '').trim().toUpperCase();
@@ -17,6 +17,13 @@ function boundedHoldingsPreviewApplyBuildDocumentFingerprint_(source, rawText) {
   if (normalizedSource === 'ETRADE_POSITIONS_PDF' &&
       typeof investmentEtradeBuildPositionsFileFingerprint_ === 'function') {
     return investmentEtradeBuildPositionsFileFingerprint_(raw);
+  }
+  if (normalizedSource === 'ETRADE_CLIENT_STATEMENT_PDF' &&
+      typeof investmentEtradeClientStatementResolveDocumentFingerprint_ === 'function') {
+    return investmentEtradeClientStatementResolveDocumentFingerprint_({
+      documentFingerprint: documentFingerprint,
+      rawStatementText: raw
+    });
   }
   return investmentPortfolioDigest_([normalizedSource, raw]);
 }

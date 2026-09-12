@@ -1,7 +1,8 @@
 /**
  * central_holdings_preview_lab.js — Admin-only Portfolio Intelligence Holdings Preview Lab (Central).
  *
- * Preview-only unified holdings for ETRADE_POSITIONS_PDF and M1_STATEMENT_PDF.
+ * Preview-only unified holdings for ETRADE_POSITIONS_PDF, ETRADE_CLIENT_STATEMENT_PDF,
+ * and M1_STATEMENT_PDF.
  * No workbook writes, persistence, or production import paths.
  */
 
@@ -9,6 +10,7 @@ var HOLDINGS_PREVIEW_LAB_MAX_TEXT_CHARS_ = 5000000;
 var HOLDINGS_PREVIEW_LAB_MAX_HOLDINGS_ROWS_ = 250;
 var HOLDINGS_PREVIEW_LAB_SUPPORTED_SOURCES_ = {
   ETRADE_POSITIONS_PDF: true,
+  ETRADE_CLIENT_STATEMENT_PDF: true,
   M1_STATEMENT_PDF: true
 };
 
@@ -158,15 +160,66 @@ function holdingsPreviewLabBuildPreview_(payload) {
       explicitAccountMatch: true
     }
   };
+  if (payload.extractionMeta) {
+    input.extractionMeta = payload.extractionMeta;
+  }
+  if (payload.documentFingerprint) {
+    input.documentFingerprint = payload.documentFingerprint;
+  }
   if (sourceResult.source === 'ETRADE_POSITIONS_PDF') {
+    if (typeof investmentEtradeClientStatementClassifyDocumentType_ === 'function') {
+      var docClass = investmentEtradeClientStatementClassifyDocumentType_(rawText);
+      if (docClass.documentType === 'ETRADE_CLIENT_STATEMENT_PDF') {
+        return {
+          ok: false,
+          error: 'Document matches an E*TRADE monthly client statement. Select ETRADE_CLIENT_STATEMENT_PDF source.',
+          source: sourceResult.source
+        };
+      }
+    }
+    if (typeof investmentEtradeClientStatementAssessTextQuality_ === 'function') {
+      var corruptQuality = investmentEtradeClientStatementAssessTextQuality_(rawText);
+      if (corruptQuality.quality === 'ENCODING_FAILURE') {
+        return {
+          ok: false,
+          error: 'Extracted PDF text is encoding-corrupt and cannot be parsed as Expanded Positions.',
+          source: sourceResult.source
+        };
+      }
+    }
     input.rawPositionsText = rawText;
   } else {
     input.rawStatementText = rawText;
   }
 
-  var preview = sourceResult.source === 'ETRADE_POSITIONS_PDF'
-    ? investmentAdapterPreviewEtradePositionsPdf_(input)
-    : investmentAdapterPreviewM1StatementPdf_(input);
+  var preview;
+  if (sourceResult.source === 'ETRADE_POSITIONS_PDF') {
+    preview = investmentAdapterPreviewEtradePositionsPdf_(input);
+  } else if (sourceResult.source === 'ETRADE_CLIENT_STATEMENT_PDF') {
+    preview = investmentAdapterPreviewEtradeClientStatementPdf_(input);
+  } else {
+    if (typeof investmentEtradeClientStatementClassifyDocumentType_ === 'function') {
+      var m1DocClass = investmentEtradeClientStatementClassifyDocumentType_(rawText);
+      if (m1DocClass.documentType === 'ETRADE_CLIENT_STATEMENT_PDF') {
+        return {
+          ok: false,
+          error: 'Document matches an E*TRADE monthly client statement. Select ETRADE_CLIENT_STATEMENT_PDF source.',
+          source: sourceResult.source
+        };
+      }
+    }
+    if (typeof investmentEtradeClientStatementAssessTextQuality_ === 'function') {
+      var m1CorruptQuality = investmentEtradeClientStatementAssessTextQuality_(rawText);
+      if (m1CorruptQuality.quality === 'ENCODING_FAILURE') {
+        return {
+          ok: false,
+          error: 'Extracted PDF text is encoding-corrupt. E*TRADE monthly client statement PDF is not currently supported for direct import.',
+          source: sourceResult.source
+        };
+      }
+    }
+    preview = investmentAdapterPreviewM1StatementPdf_(input);
+  }
 
   if (!preview || !preview.ok) {
     return {
@@ -207,12 +260,16 @@ function holdingsPreviewLabSanitizePreviewResponse_(preview, identity, source) {
   var analysis = holdingsPreviewLabBuildAccountAnalysis_(holdingsRows, cashBalance, totalAccountValue);
   analysis.readinessObservations = holdingsPreviewLabBuildReadinessObservations_(
     readiness, capabilities, normalized);
+  var statementMeta = normalized.statementParseMeta || {};
+  var reconciliation = statementMeta.reconciliation || null;
+  var extraction = statementMeta.extraction || null;
 
   return {
     ok: true,
     reviewRequired: !!preview.reviewRequired ||
       !readiness.trustedForHoldingsVisibility,
     source: source,
+    provider: source === 'ETRADE_CLIENT_STATEMENT_PDF' ? 'ETRADE' : '',
     parserVersion: preview.parserVersion || normalized.parserVersion || '',
     contractVersion: normalized.contractVersion || '',
     schemaVersion: normalized.schemaVersion || '',
@@ -246,7 +303,27 @@ function holdingsPreviewLabSanitizePreviewResponse_(preview, identity, source) {
     },
     warnings: warnings,
     unavailableFields: unavailableFields,
-    analysis: analysis
+    analysis: analysis,
+    extraction: extraction,
+    reconciliation: reconciliation ? {
+      ok: !!reconciliation.ok,
+      rule: String(reconciliation.rule || ''),
+      computedBase: holdingsPreviewLabNullableNumber_(reconciliation.computedBase),
+      computedTotal: holdingsPreviewLabNullableNumber_(reconciliation.computedTotal),
+      endingTotalValue: holdingsPreviewLabNullableNumber_(reconciliation.endingTotalValue),
+      holdingsMarketValueSum: holdingsPreviewLabNullableNumber_(reconciliation.holdingsMarketValueSum),
+      cashBalance: holdingsPreviewLabNullableNumber_(reconciliation.cashBalance),
+      accruedInterest: holdingsPreviewLabNullableNumber_(reconciliation.accruedInterest),
+      grossDifference: holdingsPreviewLabNullableNumber_(reconciliation.grossDifference),
+      difference: holdingsPreviewLabNullableNumber_(reconciliation.difference),
+      unexplainedDifference: holdingsPreviewLabNullableNumber_(reconciliation.unexplainedDifference),
+      tolerance: holdingsPreviewLabNullableNumber_(reconciliation.tolerance),
+      blockingReason: String(reconciliation.blockingReason || '')
+    } : null,
+    documentFingerprint: String(
+      (normalized.statementParseMeta && normalized.statementParseMeta.documentFingerprint) || ''
+    ).trim(),
+    accountKind: String(statementMeta.accountKind || '')
   };
 }
 

@@ -185,7 +185,7 @@
       <input type="file" id="documentFile" accept=".pdf,.txt,application/pdf,text/plain">
       <div class="file-meta" id="fileMeta">No file selected.</div>
 
-      <label for="rawDocumentText">Or paste PDF text extract</label>
+      <label for="rawDocumentText">Or paste PDF text extract (manual fallback only)</label>
       <textarea id="rawDocumentText" placeholder="Paste one account statement or positions PDF text extract…"></textarea>
 
       <label for="registrationType">Registration type (required)</label>
@@ -209,6 +209,7 @@
         <label for="previewSource">Source</label>
         <select id="previewSource">
           <option value="ETRADE_POSITIONS_PDF">ETRADE_POSITIONS_PDF</option>
+          <option value="ETRADE_CLIENT_STATEMENT_PDF">ETRADE_CLIENT_STATEMENT_PDF</option>
           <option value="M1_STATEMENT_PDF">M1_STATEMENT_PDF</option>
         </select>
         <div class="btn-row">
@@ -296,6 +297,13 @@
         extractionStatus: '',
         extractedTextLength: 0,
         extractionError: '',
+        extractionMeta: null,
+        documentFingerprint: '',
+        trustedDocumentText: '',
+        rawExtractedTextLength: 0,
+        ocrRequired: false,
+        clientStatementStatus: '',
+        ocrDiagnostics: null,
         pastedTextLength: 0,
         pastedSpacingNormalized: false,
         documentKind: '',
@@ -320,6 +328,80 @@
         return String(rawTextEl.value || '').trim();
       }
 
+      function previewDocumentText_() {
+        return String(state.trustedDocumentText || rawTextEl.value || '').trim();
+      }
+
+      function currentPreviewSource_() {
+        return String(document.getElementById('previewSource').value || '').trim();
+      }
+
+      function currentAccountProvider_() {
+        if (!state.selectedAccount) return '';
+        if (state.selectedAccount.statementProvider) {
+          return String(state.selectedAccount.statementProvider).trim().toUpperCase();
+        }
+        if (isGroupedMode()) return 'M1';
+        var name = String(state.selectedAccount.accountName || '').toLowerCase();
+        if (/\bm1\b/.test(name)) return 'M1';
+        if (/e\*?trade|etrade/.test(name)) return 'ETRADE';
+        return 'OTHER';
+      }
+
+      function allowedSourcesForAccount_() {
+        if (isGroupedMode()) return ['M1_STATEMENT_PDF'];
+        var provider = currentAccountProvider_();
+        if (provider === 'M1') return ['M1_STATEMENT_PDF'];
+        if (provider === 'ETRADE') {
+          return ['ETRADE_POSITIONS_PDF', 'ETRADE_CLIENT_STATEMENT_PDF'];
+        }
+        return ['ETRADE_POSITIONS_PDF', 'ETRADE_CLIENT_STATEMENT_PDF', 'M1_STATEMENT_PDF'];
+      }
+
+      function defaultSourceForAccount_() {
+        if (state.selectedAccount && state.selectedAccount.defaultPreviewSource) {
+          return String(state.selectedAccount.defaultPreviewSource).trim();
+        }
+        var allowed = allowedSourcesForAccount_();
+        return allowed[0] || 'ETRADE_POSITIONS_PDF';
+      }
+
+      function syncPreviewSourceOptions_() {
+        var select = document.getElementById('previewSource');
+        if (!select) return;
+        var allowed = allowedSourcesForAccount_();
+        Array.prototype.forEach.call(select.options, function(opt) {
+          var ok = allowed.indexOf(String(opt.value || '').trim()) >= 0;
+          opt.hidden = !ok;
+          opt.disabled = !ok;
+        });
+        if (allowed.indexOf(currentPreviewSource_()) < 0) {
+          select.value = defaultSourceForAccount_();
+        }
+      }
+
+      function applyAccountSourceDefaults_() {
+        syncPreviewSourceOptions_();
+        if (state.selectedAccount) {
+          document.getElementById('previewSource').value = defaultSourceForAccount_();
+        }
+      }
+
+      function etradeClientStatementExtractionReady_() {
+        if (currentPreviewSource_() !== 'ETRADE_CLIENT_STATEMENT_PDF') return true;
+        var meta = state.extractionMeta || {};
+        if (meta.usable !== true || meta.quality !== 'USABLE') return false;
+        if (state.ocrRequired) return false;
+        return !!previewDocumentText_();
+      }
+
+      function hasPreviewableDocumentText_() {
+        if (state.extractionError) return false;
+        if (isGroupedMode()) return !!previewDocumentText_();
+        if (state.ocrRequired) return false;
+        return !!previewDocumentText_();
+      }
+
       function isGroupedMode() {
         return !!(state.selectedAccount && state.selectedAccount.previewMode === 'GROUPED_PROVIDER');
       }
@@ -327,12 +409,40 @@
       function singleReady() {
         return !!state.selectedAccount && !isGroupedMode() &&
           !!String(document.getElementById('registrationType').value || '').trim() &&
-          document.getElementById('explicitAccountMatch').checked;
+          document.getElementById('explicitAccountMatch').checked &&
+          etradeClientStatementExtractionReady_();
+      }
+
+      function syncEtradeClientStatementExtractionMetaFromText_(text) {
+        text = String(text || '').trim();
+        if (isGroupedMode() ||
+            currentPreviewSource_() !== 'ETRADE_CLIENT_STATEMENT_PDF' ||
+            typeof investmentEtradeClientStatementAssessTextQuality_ !== 'function') {
+          state.extractionMeta = null;
+          state.clientStatementStatus = '';
+          return;
+        }
+        var quality = investmentEtradeClientStatementAssessTextQuality_(text);
+        state.extractionMeta = {
+          method: 'PASTE',
+          quality: quality.quality,
+          usable: quality.usable,
+          reason: quality.reason || ''
+        };
+        state.ocrRequired = false;
+        if (quality.usable) {
+          state.clientStatementStatus = '';
+        } else if (quality.quality === 'ENCODING_FAILURE') {
+          state.clientStatementStatus =
+            'E*TRADE monthly client statement PDF is not currently supported for direct import.';
+        } else {
+          state.clientStatementStatus = String(quality.reason || '');
+        }
       }
 
       function groupedReady() {
         return isGroupedMode() &&
-          !!currentText() &&
+          !!previewDocumentText_() &&
           !!String(document.getElementById('registrationType').value || '').trim() &&
           document.getElementById('explicitAccountMatch').checked;
       }
@@ -369,7 +479,7 @@
           registrationHintEl.textContent = '';
           return;
         }
-        var text = currentText();
+        var text = previewDocumentText_();
         if (!text || !state.selectedAccount) {
           registrationHintEl.textContent = '';
           return;
@@ -434,6 +544,8 @@
           fileSizeLabel: state.fileSizeLabel || formatBytes(state.fileSize),
           extractionStatus: state.extractionStatus,
           extractedTextLength: state.extractedTextLength,
+          rawExtractedTextLength: state.rawExtractedTextLength,
+          statusMessage: state.clientStatementStatus,
           extractionError: state.extractionError,
           pastedTextLength: state.fileName ? 0 : state.pastedTextLength,
           pastedSpacingNormalized: state.fileName ? false : state.pastedSpacingNormalized
@@ -463,7 +575,14 @@
         state.extractionStatus = '';
         state.extractedTextLength = 0;
         state.extractionError = '';
+        state.extractionMeta = null;
+        state.documentFingerprint = '';
         state.documentKind = '';
+        state.trustedDocumentText = '';
+        state.rawExtractedTextLength = 0;
+        state.ocrRequired = false;
+        state.clientStatementStatus = '';
+        state.ocrDiagnostics = null;
         state.pastedSpacingNormalized = false;
         if (clearInput !== false) {
           documentFileEl.value = '';
@@ -475,6 +594,13 @@
         state.fileSize = file && isFinite(Number(file.size)) ? Number(file.size) : 0;
         state.fileSizeLabel = formatBytes(state.fileSize);
         state.extractionError = '';
+        state.extractionMeta = null;
+        state.documentFingerprint = '';
+        state.trustedDocumentText = '';
+        state.rawExtractedTextLength = 0;
+        state.ocrRequired = false;
+        state.clientStatementStatus = '';
+        state.ocrDiagnostics = null;
         state.extractionStatus = 'extracting…';
         state.extractedTextLength = 0;
         state.pastedTextLength = 0;
@@ -503,9 +629,41 @@
       function applyDocumentFileLoadResult_(result) {
         state.extractionStatus = result.extractionStatus;
         state.extractedTextLength = result.extractedTextLength;
+        state.rawExtractedTextLength = Number(result.rawExtractedTextLength || 0);
         state.extractionError = '';
+        state.extractionMeta = result.extractionMeta || null;
+        state.documentFingerprint = String(result.documentFingerprint || '').trim();
         state.documentKind = result.kind;
-        setDocumentTextareaValue_(result.text);
+        state.ocrRequired = !!result.ocrRequired;
+        state.clientStatementStatus = String(result.statusMessage || '').trim();
+        state.ocrDiagnostics = result.ocrDiagnostics || null;
+        if (!isGroupedMode()) {
+          var allowed = allowedSourcesForAccount_();
+          var detected = String(result.effectiveSource || result.detectedSource || '').trim();
+          if (detected && allowed.indexOf(detected) >= 0) {
+            document.getElementById('previewSource').value = detected;
+          } else if (result.ocrErrorCode || result.ocrRequired) {
+            document.getElementById('previewSource').value = 'ETRADE_CLIENT_STATEMENT_PDF';
+          } else {
+            applyAccountSourceDefaults_();
+          }
+          syncPreviewSourceOptions_();
+        }
+        var trustedText = '';
+        if (result.displayTextInEditor !== false) {
+          trustedText = String(result.text || result.previewText || '').trim();
+        } else if (result.extractionMeta && result.extractionMeta.usable === true) {
+          trustedText = String(result.previewText || result.text || '').trim();
+        }
+        state.trustedDocumentText = trustedText;
+        if (result.displayTextInEditor === false) {
+          setDocumentTextareaValue_('');
+        } else {
+          setDocumentTextareaValue_(result.text);
+          if (!state.trustedDocumentText) {
+            state.trustedDocumentText = String(result.text || '').trim();
+          }
+        }
         renderDocumentFileMeta_();
         applyRegistrationSuggestion_();
         updateControls();
@@ -515,13 +673,18 @@
         state.extractionError = (err && err.message) ? String(err.message) : String(err);
         state.extractionStatus = '';
         state.extractedTextLength = 0;
+        state.rawExtractedTextLength = 0;
+        state.trustedDocumentText = '';
+        state.ocrRequired = false;
+        state.clientStatementStatus = '';
+        state.ocrDiagnostics = null;
         setDocumentTextareaValue_('');
         renderDocumentFileMeta_();
         updateControls();
       }
 
       function updateControls() {
-        var hasText = !!currentText() && !state.extractionError;
+        var hasText = hasPreviewableDocumentText_();
         var extracting = !!state.fileName && state.extractionStatus === 'extracting…';
         renderDocumentFileMeta_();
         if (workflowSingleEl) {
@@ -536,6 +699,8 @@
         }
         if (formCard && isGroupedMode()) {
           document.getElementById('previewSource').value = 'M1_STATEMENT_PDF';
+        } else {
+          syncPreviewSourceOptions_();
         }
       }
 
@@ -870,6 +1035,7 @@
             (match.groupProviderLabel || match.accountName) +
             '. The parent total is a control total only; child statements are tracked separately.')
           : ('I confirm this document belongs to ' + (match.accountName || 'the selected account') + '.');
+        applyAccountSourceDefaults_();
         applyRegistrationSuggestion_();
         updateControls();
       }
@@ -1213,6 +1379,26 @@
         html += stat('Cash balance', formatMoney(data.cashBalance));
         html += stat('Cash %', (analysis.cashPercent != null ? analysis.cashPercent + '%' : '—'));
         html += stat('Registration', escapeHtml(data.account.registrationType));
+        if (data.extraction) {
+          html += stat('Extraction method', escapeHtml(data.extraction.method || '—'));
+          html += stat('Extraction quality', escapeHtml(data.extraction.quality || '—'));
+        }
+        if (data.reconciliation) {
+          html += stat('Statement reconciliation', data.reconciliation.ok ? 'matched' : 'failed');
+          html += stat('Computed total', formatMoney(data.reconciliation.computedTotal));
+          html += stat('Statement ending value', formatMoney(data.reconciliation.endingTotalValue));
+          html += stat('Reconciliation diff', formatMoney(data.reconciliation.difference));
+          if (data.reconciliation.unexplainedDifference != null &&
+              Math.abs(Number(data.reconciliation.unexplainedDifference)) > 0.001) {
+            html += stat('Unexplained diff', formatMoney(data.reconciliation.unexplainedDifference));
+          }
+        }
+        if (data.documentFingerprint) {
+          html += stat('Document fingerprint', escapeHtml(String(data.documentFingerprint).slice(0, 16) + '…'));
+        }
+        if (data.accountKind) {
+          html += stat('Statement account kind', escapeHtml(data.accountKind));
+        }
         html += stat('Holdings visibility', data.readiness.trustedForHoldingsVisibility ? 'ready' : 'not ready');
         html += stat('Income analysis', data.readiness.trustedForIncomeAnalysis ? 'ready' : 'not ready');
         html += stat('Tax-lot planning', data.readiness.trustedForTaxLotSalePlanning ? 'ready' : 'not ready');
@@ -1302,21 +1488,37 @@
 
         resultsArea.innerHTML = html;
         state.lastSinglePreview = data;
-        state.lastPreviewDocumentText = currentText();
+        state.lastPreviewDocumentText = previewDocumentText_();
         clearApplyState_(true);
         renderApplySection();
       }
 
+      function buildDocumentLoadOptions_() {
+        var groupedMode = isGroupedMode();
+        applyAccountSourceDefaults_();
+        var options = {
+          source: document.getElementById('previewSource').value,
+          groupedMode: groupedMode,
+          accountProvider: currentAccountProvider_()
+        };
+        return options;
+      }
+
       function buildPayload() {
         var selected = state.selectedAccount || {};
+        syncPreviewSourceOptions_();
         return {
           pickerValue: String(selected.pickerValue || selectedAccountEl.value || '').trim(),
           sysAssetsRow: selected.sysAssetsRow,
           source: document.getElementById('previewSource').value,
-          rawDocumentText: currentText(),
+          rawDocumentText: previewDocumentText_(),
+          extractionMeta: state.extractionMeta || null,
+          documentFingerprint: String(state.documentFingerprint || '').trim(),
           accountName: selected.accountName || '',
           registrationType: document.getElementById('registrationType').value,
-          explicitAccountMatch: document.getElementById('explicitAccountMatch').checked
+          explicitAccountMatch: document.getElementById('explicitAccountMatch').checked,
+          statementProvider: currentAccountProvider_(),
+          previewMode: selected.previewMode || 'SINGLE_ACCOUNT'
         };
       }
 
@@ -1328,6 +1530,7 @@
         document.getElementById('explicitAccountMatch').checked = false;
         resultsArea.innerHTML = '';
         clearApplyState_(false);
+        applyAccountSourceDefaults_();
         updateControls();
       }
 
@@ -1367,14 +1570,23 @@
           applyDocumentFileLoadError_(new Error('PDF text extraction helpers are unavailable.'));
           return;
         }
-        boundedHoldingsPreviewLoadDocumentTextFromFile_(
+        return boundedHoldingsPreviewLoadDocumentTextFromFile_(
           file,
-          typeof pdfjsLib !== 'undefined' ? pdfjsLib : null
+          typeof pdfjsLib !== 'undefined' ? pdfjsLib : null,
+          buildDocumentLoadOptions_()
         ).then(applyDocumentFileLoadResult_).catch(applyDocumentFileLoadError_);
       });
 
       selectedAccountEl.addEventListener('change', function() {
         resetPreviewFields();
+        state.groupedSession = { children: [], previews: [], pendingInspect: null };
+        groupedConfirmBox.hidden = true;
+        groupedStatusArea.innerHTML = '';
+        groupedChildrenArea.innerHTML = '';
+        groupedChildDetailArea.innerHTML = '';
+        groupedReconciliationArea.innerHTML = '';
+        groupedAggregateArea.innerHTML = '';
+        statusArea.innerHTML = '';
         applySelectedAccount();
       });
 
@@ -1386,10 +1598,16 @@
             clearDocumentFileState_(true);
             normalizePastedDocumentText_();
             state.pastedTextLength = currentText().length;
+            state.trustedDocumentText = currentText();
             state.extractionError = '';
+            syncEtradeClientStatementExtractionMetaFromText_(currentText());
           } else {
             state.pastedTextLength = 0;
             state.pastedSpacingNormalized = false;
+            state.trustedDocumentText = '';
+            state.extractionMeta = null;
+            state.ocrRequired = false;
+            state.clientStatementStatus = '';
           }
           renderDocumentFileMeta_();
           applyRegistrationSuggestion_();
@@ -1402,6 +1620,7 @@
         });
         document.getElementById('explicitAccountMatch').addEventListener(evt, updateControls);
         document.getElementById('previewSource').addEventListener(evt, function() {
+          syncPreviewSourceOptions_();
           applyRegistrationSuggestion_();
           updateControls();
         });
@@ -1439,6 +1658,20 @@
       });
 
       previewBtn.addEventListener('click', function() {
+        syncPreviewSourceOptions_();
+        if (allowedSourcesForAccount_().indexOf(currentPreviewSource_()) < 0) {
+          resultsArea.innerHTML = '<div class="error-box">Selected source is not valid for this account.</div>';
+          return;
+        }
+        if (currentAccountProvider_() === 'ETRADE' &&
+            typeof investmentEtradeClientStatementAssessTextQuality_ === 'function' &&
+            previewDocumentText_()) {
+          var pastedQuality = investmentEtradeClientStatementAssessTextQuality_(previewDocumentText_());
+          if (pastedQuality.quality === 'ENCODING_FAILURE') {
+            resultsArea.innerHTML = '<div class="error-box">Extracted PDF text is encoding-corrupt. E*TRADE monthly client statement PDF is not currently supported for direct import.</div>';
+            return;
+          }
+        }
         previewBtn.disabled = true;
         setLoading(true, 'Parsing document in memory…');
         resultsArea.innerHTML = '';

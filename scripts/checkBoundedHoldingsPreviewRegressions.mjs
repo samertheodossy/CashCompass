@@ -237,8 +237,14 @@ function buildContext(overrides = {}) {
   vm.runInContext(read('investment_etrade_positions_pdf.js'), context, {
     filename: 'investment_etrade_positions_pdf.js'
   });
+  vm.runInContext(read('investment_etrade_client_statement_pdf.js'), context, {
+    filename: 'investment_etrade_client_statement_pdf.js'
+  });
   vm.runInContext(read('investment_m1_statement_pdf.js'), context, {
     filename: 'investment_m1_statement_pdf.js'
+  });
+  vm.runInContext(read('investment_fidelity_401k_statement_pdf.js'), context, {
+    filename: 'investment_fidelity_401k_statement_pdf.js'
   });
   vm.runInContext(read('investment_adapters.js'), context, { filename: 'investment_adapters.js' });
   vm.runInContext(read('central_holdings_preview_lab.js'), context, {
@@ -254,6 +260,9 @@ function buildContext(overrides = {}) {
   vm.runInContext(read('bounded_holdings_preview_identity.js'), context, {
     filename: 'bounded_holdings_preview_identity.js'
   });
+  vm.runInContext(read('bounded_holdings_preview_pdf_client.js'), context, {
+    filename: 'bounded_holdings_preview_pdf_client.js'
+  });
   context.getSheetNames_ = overrides.getSheetNames_ || (() => ({ ASSETS: 'SYS - Assets' }));
   context.financialIdentityReadRegistry_ = overrides.financialIdentityReadRegistry_ ||
     (() => stubRegistry);
@@ -263,9 +272,11 @@ function buildContext(overrides = {}) {
 }
 
 const etradeFixture = fixture('etrade', 'synthetic_etrade_positions_minimal.txt');
+const etradeStatementFixture = fixture('etrade', 'synthetic_etrade_client_statement_main.txt');
 const m1Fixture = fixture('m1', 'synthetic_m1_statement_minimal.txt');
 const boundedSource = read('bounded_holdings_preview.js');
 const boundedHtml = read('BoundedHoldingsPreviewUI.html');
+const pdfClientSource = read('bounded_holdings_preview_pdf_client.js');
 const webappSource = read('webapp.js');
 const investmentsSource = read('investments.js');
 const dashboardInvestments = read('Dashboard_Script_AssetsBankInvestments.html');
@@ -278,16 +289,46 @@ const ctx = buildContext({ central: false, admin: false });
 // --- Bounded route + access ---
 assert.match(webappSource, /view === 'portfolio-holdings-preview' && !isCentralModeEnabled_\(\)/);
 assert.match(webappSource, /BoundedHoldingsPreviewUI/);
+assert.match(boundedHtml, /ETRADE_CLIENT_STATEMENT_PDF/);
+assert.match(boundedHtml, /trustedDocumentText/);
+assert.match(boundedHtml, /previewDocumentText_/);
+assert.match(boundedHtml, /etradeClientStatementExtractionReady_/);
+assert.match(boundedHtml, /clientStatementStatus/);
+assert.match(pdfClientSource, /boundedHoldingsPreviewShouldUseM1PdfLoadPath_/);
+assert.match(pdfClientSource, /boundedHoldingsPreviewLooksLikeM1StatementPdf_/);
+assert.match(boundedHtml, /syncEtradeClientStatementExtractionMetaFromText_/);
+assert.match(boundedHtml, /applyAccountSourceDefaults_/);
+assert.match(boundedHtml, /currentAccountProvider_/);
+assert.match(boundedHtml, /allowedSourcesForAccount_/);
+assert.match(boundedHtml, /statementProvider/);
+assert.match(boundedSource, /statementProvider/);
+assert.match(boundedSource, /defaultPreviewSource/);
+assert.match(boundedSource, /boundedHoldingsPreviewValidatePreviewSourceForAccount_/);
+assert.match(boundedSource, /boundedHoldingsPreviewDefaultSourceForAccount_/);
+assert.match(pdfClientSource, /accountProvider/);
+assert.doesNotMatch(boundedHtml, /tesseract\.js/);
+assert.doesNotMatch(boundedHtml, /boundedHoldingsPreviewCreateEtradeClientStatementOcrRunner_/);
+assert.doesNotMatch(boundedHtml, /boundedHoldingsPreviewPreloadEtradeClientStatementOcr_/);
+assert.doesNotMatch(boundedHtml, /boundedHoldingsPreviewMaybeBreakOutOfSandboxIframe_/);
+assert.doesNotMatch(boundedHtml, /localOcrHelperBtn/);
+assert.doesNotMatch(boundedHtml, /retryInBrowserOcrBtn/);
+assert.match(pdfClientSource, /BOUNDED_HOLDINGS_PREVIEW_CLIENT_STATEMENT_UNSUPPORTED_MESSAGE_/);
+assert.match(pdfClientSource, /Browser mirror of investment_etrade_client_statement_pdf\.js/);
+assert.match(pdfClientSource, /not currently supported for direct import/);
+assert.match(boundedHtml, /buildDocumentLoadOptions_/);
 assert.match(boundedHtml, /boundedHoldingsPreviewRunFromDashboard/);
 assert.match(boundedHtml, /Preview only — not loaded into CashCompass/);
-assert.match(dashboardBody, /openBoundedHoldingsPreview_/);
-assert.match(dashboardInvestments, /getBoundedHoldingsPreviewLaunchUrlFromDashboard/);
+assert.doesNotMatch(dashboardBody, /id="inv_holdings_preview_btn"/);
+assert.doesNotMatch(dashboardBody, /Preview holdings \(PDF\)/);
+assert.match(dashboardBody, /Import M1 statement PDF/);
+assert.match(dashboardBody, /CashCompass investment account/);
+assert.match(dashboardInvestments, /function openBoundedHoldingsPreview_/);
 assert.match(boundedSource, /boundedHoldingsPreviewLaunchUrl_/);
 assert.match(investmentsSource, /boundedHoldingsPreviewUrl:/);
 assert.match(boundedSource, /ScriptApp\.getService\(\)\.getUrl\(\)/);
 assert.match(boundedSource, /\?view=portfolio-holdings-preview/);
 assert.doesNotMatch(dashboardBody, /href="\?view=portfolio-holdings-preview"/);
-assert.match(dashboardInvestments, /boundedHoldingsPreviewAvailable/);
+assert.doesNotMatch(dashboardInvestments, /inv_holdings_preview_btn/);
 assert.match(investmentsSource, /boundedHoldingsPreviewAvailable: !isCentralModeEnabled_\(\)/);
 
 const centralDenied = buildContext({ central: true, admin: false });
@@ -440,6 +481,23 @@ assert.ok(etradePreview.holdingsRows.length >= 3);
 assert.equal(etradePreview.cashBalance, 12345.67);
 assert.equal(etradePreview.readiness.trustedForIncomeAnalysis, false);
 
+const etradeStatementPreview = ctx.boundedHoldingsPreviewRunFromDashboard({
+  source: 'ETRADE_CLIENT_STATEMENT_PDF',
+  rawDocumentText: etradeStatementFixture,
+  investmentId: 'INV-ET-BOUNDED-1',
+  accountName: 'Synthetic E*TRADE Taxable',
+  registrationType: 'TAXABLE',
+  explicitAccountMatch: true,
+  extractionMeta: { method: 'TEXT_FILE', quality: 'USABLE', usable: true }
+});
+assert.equal(etradeStatementPreview.ok, true, etradeStatementPreview.error || 'statement bounded preview failed');
+assert.equal(etradeStatementPreview.source, 'ETRADE_CLIENT_STATEMENT_PDF');
+assert.equal(etradeStatementPreview.provider, 'ETRADE');
+assert.equal(etradeStatementPreview.holdingsRows.length, 2);
+assert.equal(etradeStatementPreview.cashBalance, 5000);
+assert.equal(etradeStatementPreview.reconciliation.ok, true);
+assert.equal(etradeStatementPreview.readiness.trustedForHoldingsVisibility, true);
+
 // --- M1 adapter preview ---
 const m1Preview = ctx.boundedHoldingsPreviewRunFromDashboard({
   source: 'M1_STATEMENT_PDF',
@@ -508,5 +566,85 @@ assert.doesNotMatch(boundedSource, /boundedHoldingsPreviewApplyFromDashboard/);
 assert.ok(m1Fixture.includes('Synthetic'));
 assert.ok(etradeFixture.includes('Synthetic'));
 assert.doesNotMatch(boundedSource, /samertheodossy@gmail\.com/i);
+
+// --- Account provider + source routing ---
+const etradeAccount = setup.accounts.find((row) => row.accountName === 'Synthetic E*TRADE Taxable');
+const m1Account = setup.accounts.find((row) => row.accountName === 'Synthetic M1 Taxable One');
+assert.ok(etradeAccount && m1Account, 'fixture accounts must exist');
+assert.equal(etradeAccount.statementProvider, 'ETRADE');
+assert.equal(m1Account.statementProvider, 'M1');
+assert.equal(
+  ctx.boundedHoldingsPreviewDefaultSourceForAccount_(etradeAccount),
+  'ETRADE_CLIENT_STATEMENT_PDF'
+);
+assert.equal(ctx.boundedHoldingsPreviewDefaultSourceForAccount_(m1Account), 'M1_STATEMENT_PDF');
+assert.equal(
+  ctx.boundedHoldingsPreviewAllowedSourcesForAccount_(etradeAccount).join(','),
+  'ETRADE_POSITIONS_PDF,ETRADE_CLIENT_STATEMENT_PDF'
+);
+assert.equal(
+  ctx.boundedHoldingsPreviewAllowedSourcesForAccount_(m1Account).join(','),
+  'M1_STATEMENT_PDF'
+);
+assert.equal(
+  ctx.boundedHoldingsPreviewCoerceSourceForAccount_(etradeAccount, 'M1_STATEMENT_PDF'),
+  'ETRADE_CLIENT_STATEMENT_PDF'
+);
+assert.equal(
+  ctx.boundedHoldingsPreviewCoerceSourceForAccount_(m1Account, 'ETRADE_CLIENT_STATEMENT_PDF'),
+  'M1_STATEMENT_PDF'
+);
+
+const etradeWrongSource = ctx.boundedHoldingsPreviewRunFromDashboard({
+  source: 'M1_STATEMENT_PDF',
+  rawDocumentText: etradeStatementFixture,
+  investmentId: 'INV-ET-BOUNDED-1',
+  accountName: 'Synthetic E*TRADE Taxable',
+  registrationType: 'TAXABLE',
+  explicitAccountMatch: true,
+  statementProvider: 'ETRADE',
+  previewMode: 'SINGLE_ACCOUNT'
+});
+assert.equal(etradeWrongSource.ok, false, etradeWrongSource.error || 'expected source rejection');
+assert.match(String(etradeWrongSource.error), /not valid for E\*TRADE/i);
+
+const encodingFixture = fixture('etrade', 'synthetic_etrade_client_statement_encoding_failure.txt');
+const etradeCorruptOnM1Source = ctx.boundedHoldingsPreviewRunFromDashboard({
+  source: 'M1_STATEMENT_PDF',
+  rawDocumentText: encodingFixture,
+  investmentId: 'INV-ET-BOUNDED-1',
+  accountName: 'Synthetic E*TRADE Taxable',
+  registrationType: 'TAXABLE',
+  explicitAccountMatch: true,
+  statementProvider: 'ETRADE',
+  previewMode: 'SINGLE_ACCOUNT'
+});
+assert.equal(etradeCorruptOnM1Source.ok, false);
+assert.match(String(etradeCorruptOnM1Source.error), /not valid for E\*TRADE/i);
+
+const staleM1OnEtrade = ctx.boundedHoldingsPreviewValidatePreviewSourceForAccount_(
+  etradeAccount,
+  'M1_STATEMENT_PDF',
+  encodingFixture
+);
+assert.equal(staleM1OnEtrade.ok, false);
+assert.equal(
+  ctx.boundedHoldingsPreviewCoerceSourceForAccount_(etradeAccount, 'M1_STATEMENT_PDF'),
+  'ETRADE_CLIENT_STATEMENT_PDF'
+);
+assert.equal(
+  ctx.boundedHoldingsPreviewShouldUseM1PdfLoadPath_(
+    { source: 'M1_STATEMENT_PDF', groupedMode: false, accountProvider: 'ETRADE' },
+    encodingFixture
+  ),
+  false
+);
+assert.equal(
+  ctx.boundedHoldingsPreviewShouldUseM1PdfLoadPath_(
+    { source: 'M1_STATEMENT_PDF', groupedMode: false, accountProvider: 'M1' },
+    m1Fixture
+  ),
+  true
+);
 
 console.log('Bounded holdings preview regressions passed.');

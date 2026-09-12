@@ -65,6 +65,9 @@ function buildContext(overrides = {}) {
   `, context, { filename: 'activity-stubs.js' });
   vm.runInContext(etradeSource, context, { filename: 'investment_etrade_csv.js' });
   vm.runInContext(etradePositionsSource, context, { filename: 'investment_etrade_positions_pdf.js' });
+  vm.runInContext(read('investment_etrade_client_statement_pdf.js'), context, {
+    filename: 'investment_etrade_client_statement_pdf.js'
+  });
   vm.runInContext(read('investment_m1_statement_pdf.js'), context, { filename: 'investment_m1_statement_pdf.js' });
   vm.runInContext(adaptersSource, context, { filename: 'investment_adapters.js' });
   vm.runInContext(previewLabSource, context, { filename: 'central_etrade_preview_lab.js' });

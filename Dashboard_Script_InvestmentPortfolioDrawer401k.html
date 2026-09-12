@@ -1,0 +1,155 @@
+/* Portfolio activity drawer — Fidelity 401(k) retirement savings statement PDF (preview only). */
+var __invDrawer401kState = {
+  fileName: '',
+  extractionStatus: '',
+  extractedTextLength: 0,
+  extractionError: '',
+  lastPreview: null,
+  lastBalanceComparison: null
+};
+
+function invDrawer401kEscape_(value) {
+  return typeof escapeHtml === 'function' ? escapeHtml(value) : String(value || '');
+}
+
+function invDrawer401kCurrentText_() {
+  var el = document.getElementById('inv_401k_document_text');
+  return String(el && el.value || '').trim();
+}
+
+function resetInvestmentPortfolioDrawer401kImport_(keepPreview) {
+  __invDrawer401kState.fileName = '';
+  __invDrawer401kState.extractionStatus = '';
+  __invDrawer401kState.extractedTextLength = 0;
+  __invDrawer401kState.extractionError = '';
+  if (!keepPreview) {
+    __invDrawer401kState.lastPreview = null;
+    __invDrawer401kState.lastBalanceComparison = null;
+  }
+  var fileEl = document.getElementById('inv_401k_document_file');
+  if (fileEl) fileEl.value = '';
+  var textEl = document.getElementById('inv_401k_document_text');
+  if (textEl) textEl.value = '';
+  var metaEl = document.getElementById('inv_401k_file_meta');
+  if (metaEl) metaEl.textContent = 'No file selected.';
+  var matchEl = document.getElementById('inv_401k_explicit_match');
+  if (matchEl) matchEl.checked = false;
+  var resultsEl = document.getElementById('inv_401k_results');
+  if (resultsEl) resultsEl.innerHTML = '';
+  updateInvestmentPortfolioDrawer401kControls_();
+}
+
+function initInvestmentPortfolioDrawer401kImport_(pickerValue, portfolioData) {
+  portfolioData = portfolioData || {};
+  if (!portfolioData.fidelity401kImportAvailable) return;
+  var hintEl = document.getElementById('inv_401k_account_hint');
+  if (hintEl) {
+    hintEl.textContent = 'Import one Fidelity NetBenefits retirement savings statement PDF for ' +
+      (portfolioData.accountName || 'the selected 401K Account') +
+      '. Preview only — nothing is written to the workbook.';
+  }
+  updateInvestmentPortfolioDrawer401kControls_();
+}
+
+function updateInvestmentPortfolioDrawer401kControls_() {
+  var previewBtn = document.getElementById('inv_401k_preview_btn');
+  var hasText = !!invDrawer401kCurrentText_();
+  var confirmed = !!(document.getElementById('inv_401k_explicit_match') &&
+    document.getElementById('inv_401k_explicit_match').checked);
+  var ready = !!(__investmentPortfolioData && __investmentPortfolioData.fidelity401kImportAvailable) &&
+    hasText && confirmed;
+  if (previewBtn) previewBtn.disabled = !ready;
+}
+
+function onInvestmentPortfolioDrawer401kFileChanged_() {
+  var fileEl = document.getElementById('inv_401k_document_file');
+  var file = fileEl && fileEl.files && fileEl.files[0];
+  var metaEl = document.getElementById('inv_401k_file_meta');
+  var textEl = document.getElementById('inv_401k_document_text');
+  __invDrawer401kState.extractionError = '';
+  if (!file) {
+    if (metaEl) metaEl.textContent = 'No file selected.';
+    if (textEl) textEl.value = '';
+    updateInvestmentPortfolioDrawer401kControls_();
+    return;
+  }
+  if (metaEl) metaEl.textContent = 'Reading ' + file.name + '…';
+  ensureInvDrawerPdfClientReady_(function() {
+    boundedHoldingsPreviewLoadDocumentTextFromFile_(file, pdfjsLib, {
+      source: 'FIDELITY_401K_STATEMENT_PDF',
+      accountProvider: 'FIDELITY'
+    }).then(function(result) {
+      result = result || {};
+      __invDrawer401kState.fileName = file.name;
+      __invDrawer401kState.extractionStatus = result.extractionStatus || '';
+      __invDrawer401kState.extractedTextLength = Number(result.extractedTextLength || 0);
+      if (textEl) textEl.value = result.displayTextInEditor === false ? '' : String(result.text || '');
+      if (metaEl) {
+        metaEl.textContent = file.name + ' · ' +
+          (__invDrawer401kState.extractedTextLength || invDrawer401kCurrentText_().length) + ' chars';
+      }
+      __invDrawer401kState.lastPreview = null;
+      __invDrawer401kState.lastBalanceComparison = null;
+      updateInvestmentPortfolioDrawer401kControls_();
+    }).catch(function(err) {
+      __invDrawer401kState.extractionError = err && err.message ? err.message : String(err);
+      if (metaEl) metaEl.textContent = __invDrawer401kState.extractionError;
+      if (textEl) textEl.value = '';
+      updateInvestmentPortfolioDrawer401kControls_();
+    });
+  }, function(err) {
+    if (metaEl) metaEl.textContent = err.message || String(err);
+  });
+}
+
+function buildInvDrawer401kPayload_() {
+  return {
+    pickerValue: String(__investmentPortfolioSelectedId || '').trim(),
+    rawDocumentText: invDrawer401kCurrentText_(),
+    explicitAccountMatch: !!(document.getElementById('inv_401k_explicit_match') &&
+      document.getElementById('inv_401k_explicit_match').checked),
+    source: 'FIDELITY_401K_STATEMENT_PDF',
+    statementProvider: 'FIDELITY'
+  };
+}
+
+function renderInvDrawer401kResults_(res) {
+  var host = document.getElementById('inv_401k_results');
+  if (!host) return;
+  if (!res || !res.ok) {
+    host.innerHTML = '<div class="error-box">' +
+      invDrawer401kEscape_(res && res.error ? res.error : 'Preview failed.') + '</div>';
+    return;
+  }
+  __invDrawer401kState.lastPreview = res.preview || null;
+  __invDrawer401kState.lastBalanceComparison = res.balanceComparison || null;
+  var preview = res.preview || {};
+  host.innerHTML = '<div class="card"><div class="pill pill-ok">Retirement statement preview ready</div> ' +
+    invDrawer401kEscape_(preview.asOfDate ? ('As-of ' + preview.asOfDate) : '') +
+    ' · Ending balance ' +
+    invDrawer401kEscape_(typeof fmtCurrency === 'function'
+      ? fmtCurrency(Number(preview.endingBalance || 0))
+      : String(preview.endingBalance || '')) +
+    '</div><p class="muted">Preview only. Open the Portfolio tab to review balances. Nothing has been saved.</p>';
+  if (__investmentPortfolioData) {
+    renderInvestmentPortfolioDrawerView_(__investmentPortfolioData);
+  }
+}
+
+function previewInvestmentPortfolioDrawer401k_() {
+  var btn = document.getElementById('inv_401k_preview_btn');
+  if (btn) btn.disabled = true;
+  setStatusLoading('inv_401k_status', 'Parsing retirement savings statement in memory…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (btn) btn.disabled = false;
+      setStatus('inv_401k_status', '', false);
+      renderInvDrawer401kResults_(res);
+      updateInvestmentPortfolioDrawer401kControls_();
+    })
+    .withFailureHandler(function(err) {
+      if (btn) btn.disabled = false;
+      setStatus('inv_401k_status', err.message || String(err), true);
+    })
+    .previewFidelity401kStatementFromDashboard(buildInvDrawer401kPayload_());
+}

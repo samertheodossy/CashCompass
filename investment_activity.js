@@ -24,6 +24,11 @@ var INVESTMENT_PLAN_HEADERS_ = [
   'Plan Frequency', 'Planned Amount', 'Plan Active', 'Updated At',
   'Activity Boundary Date'
 ];
+var INVESTMENT_PORTFOLIO_COMPARISON_HEADERS_ = [
+  'Investment Id', 'Account Name', 'Comparison Date', 'Prior As Of Date',
+  'Prior Market Value', 'Current Market Value', 'Prior Holdings Count',
+  'Current Holdings Count', 'Prior Cash', 'Current Cash', 'Import Digest', 'Updated At'
+];
 var INVESTMENT_ACTIVITY_CANONICAL_WIDTHS_ = {
   'Import Key': 250, 'Investment Id': 250, 'Account Name': 280,
   'Activity Date': 125, 'Settle Date': 125, 'Ticker': 100,
@@ -43,6 +48,12 @@ var INVESTMENT_PLAN_CANONICAL_WIDTHS_ = {
   'Planned Amount': 170, 'Plan Active': 130, 'Updated At': 170,
   'Activity Boundary Date': 210
 };
+var INVESTMENT_PORTFOLIO_COMPARISON_CANONICAL_WIDTHS_ = {
+  'Investment Id': 250, 'Account Name': 280, 'Comparison Date': 150,
+  'Prior As Of Date': 150, 'Prior Market Value': 170, 'Current Market Value': 170,
+  'Prior Holdings Count': 170, 'Current Holdings Count': 170,
+  'Prior Cash': 130, 'Current Cash': 130, 'Import Digest': 250, 'Updated At': 170
+};
 
 function ensureInvestmentActivitySheet_(optionalSs) {
   var ss = optionalSs || getUserSpreadsheet_();
@@ -54,6 +65,12 @@ function ensureInvestmentHoldingsSheet_(optionalSs) {
   var ss = optionalSs || getUserSpreadsheet_();
   return ensureInvestmentSystemSheet_(ss, getSheetNames_().INVESTMENT_HOLDINGS,
     INVESTMENT_HOLDINGS_HEADERS_, INVESTMENT_HOLDINGS_CANONICAL_WIDTHS_);
+}
+
+function ensureInvestmentPortfolioComparisonsSheet_(optionalSs) {
+  var ss = optionalSs || getUserSpreadsheet_();
+  return ensureInvestmentSystemSheet_(ss, getSheetNames_().INVESTMENT_PORTFOLIO_COMPARISONS,
+    INVESTMENT_PORTFOLIO_COMPARISON_HEADERS_, INVESTMENT_PORTFOLIO_COMPARISON_CANONICAL_WIDTHS_);
 }
 
 function ensureInvestmentPlansSheet_(optionalSs) {
@@ -315,7 +332,7 @@ function previewInvestmentActivityImportFromDashboard(payload, optionalSs) {
       ticker: ticker,
       description: description,
       transCode: transCode,
-      quantity: parseInvestmentImportNumber_(raw[indexes['Quantity']]),
+      quantity: parseRobinhoodCsvQuantity_(raw[indexes['Quantity']], transCode, r + 1),
       price: parseInvestmentImportMoney_(raw[indexes['Price']]),
       amount: parseInvestmentImportMoney_(raw[indexes['Amount']]),
       recurring: recurring
@@ -557,7 +574,9 @@ function previewInvestmentActivityImportFromDashboard(payload, optionalSs) {
     tickerDecisionBoundaries: tickerDecisionBoundaries,
     requiresTickerDecisions: newTickerCandidates.length > 0,
     recurringPlanChanges: recurringPlanChanges,
-    summary: summary
+    summary: summary,
+    portfolioComparison: investmentActivityBuildRobinhoodPortfolioComparisonPreview_(
+      ss, account.investmentId, accepted)
   };
 }
 
@@ -611,11 +630,38 @@ function importInvestmentActivityFromDashboard(payload, optionalSs) {
     }
     fitInvestmentSystemSheetColumns_(activitySheet, INVESTMENT_ACTIVITY_HEADERS_,
       'investment activity import content fit');
+    var priorHoldings = getInvestmentHoldingsSummary_(ss, preview.investmentId);
+    var priorSummary = investmentActivitySummarizeSavedHoldingsPortfolio_(priorHoldings);
+    var priorAsOfDate = investmentActivityLatestHoldingsAsOfDate_(priorHoldings);
+    var hadPriorPortfolio = investmentActivityRobinhoodPortfolioHadPriorHoldings_(
+      priorHoldings, priorSummary);
     rebuildInvestmentHoldingsForAccount_(ss, preview.investmentId, preview.accountName);
     decisionAppend = saveInvestmentTickerDecisions_(ss, {
       investmentId: preview.investmentId,
       accountName: preview.accountName
     }, preview.appliedTickerDecisions, preview.tickerDecisionBoundaries);
+    var savedPortfolioComparison = investmentActivityBuildRobinhoodPortfolioComparisonForDrawer_(null);
+    if (hadPriorPortfolio) {
+      var currentHoldings = getInvestmentHoldingsSummary_(ss, preview.investmentId);
+      var currentSummary = investmentActivitySummarizeSavedHoldingsPortfolio_(currentHoldings);
+      var comparisonDate = investmentActivityLatestHoldingsAsOfDate_(currentHoldings) ||
+        preview.cutoffDate;
+      investmentActivityWriteRobinhoodPortfolioComparison_(ss, {
+        investmentId: preview.investmentId,
+        accountName: preview.accountName,
+        comparisonDate: comparisonDate,
+        priorAsOfDate: priorAsOfDate,
+        priorMarketValue: priorSummary.marketValueTotal,
+        currentMarketValue: currentSummary.marketValueTotal,
+        priorHoldingsCount: priorSummary.holdingsCount,
+        currentHoldingsCount: currentSummary.holdingsCount,
+        priorCash: priorSummary.cashBalance,
+        currentCash: currentSummary.cashBalance,
+        importDigest: preview.digest
+      });
+      savedPortfolioComparison = investmentActivityBuildRobinhoodPortfolioComparisonForDrawer_(
+        investmentActivityReadRobinhoodPortfolioComparison_(ss, preview.investmentId));
+    }
     try {
       appendActivityLog_(ss, {
         eventType: 'investment_activity_import', entryDate: preview.cutoffDate,
@@ -642,7 +688,8 @@ function importInvestmentActivityFromDashboard(payload, optionalSs) {
       appendedRows: newRows.length,
       duplicateRows: preview.summary.acceptedCount - newRows.length,
       summary: preview.summary,
-      holdings: getInvestmentHoldingsSummary_(ss, preview.investmentId)
+      holdings: getInvestmentHoldingsSummary_(ss, preview.investmentId),
+      savedPortfolioComparison: savedPortfolioComparison
     };
   } catch (e) {
     var rollbackProblems = [];
@@ -746,6 +793,54 @@ function parseInvestmentImportNumber_(value) {
   return numeric;
 }
 
+var ROBINHOOD_CSV_SHARE_SUFFIX_QUANTITY_CODES_ = {
+  SXCH: true,
+  CONV: true,
+  MRGS: true,
+  SPL: true,
+  SPR: true
+};
+
+var ROBINHOOD_CSV_NON_SHARE_QUANTITY_CODES_ = {
+  OEXP: true
+};
+
+/**
+ * Parse Robinhood activity CSV Quantity values for portfolio math.
+ *
+ * Robinhood appends a trailing "S" on some rows. For corporate actions such as SXCH,
+ * the suffix marks share quantity (for example "1S" is one share). For option expiration
+ * (OEXP), the suffix is not portfolio share quantity and must not be coerced to 1.
+ */
+function parseRobinhoodCsvQuantity_(value, transCode, sourceRow) {
+  sourceRow = Number(sourceRow) || 0;
+  transCode = String(transCode || '').trim().toUpperCase();
+  var text = String(value || '').trim();
+  if (!text) return 0;
+  var suffixMatch = text.match(/^(-?\d+(?:\.\d+)?)(S)$/i);
+  if (suffixMatch) {
+    if (ROBINHOOD_CSV_NON_SHARE_QUANTITY_CODES_[transCode]) {
+      return 0;
+    }
+    if (!ROBINHOOD_CSV_SHARE_SUFFIX_QUANTITY_CODES_[transCode]) {
+      throw new Error(
+        'Robinhood CSV row ' + sourceRow + ': quantity "' + text +
+        '" uses Robinhood\'s "S" suffix, but Trans Code "' + (transCode || '(blank)') +
+        '" is not a supported share-quantity row. Review the row or export a fresh activity report.'
+      );
+    }
+    text = suffixMatch[1];
+  }
+  var numeric = Number(text.replace(/,/g, ''));
+  if (!isFinite(numeric)) {
+    throw new Error(
+      'Robinhood CSV row ' + sourceRow + ': quantity is not a valid share count for Trans Code "' +
+      (transCode || '(blank)') + '".'
+    );
+  }
+  return numeric;
+}
+
 function normalizeInvestmentTicker_(value) {
   var ticker = String(value || '').trim().toUpperCase();
   return /^[A-Z][A-Z0-9.\-]{0,14}$/.test(ticker) ? ticker : '';
@@ -754,7 +849,7 @@ function normalizeInvestmentTicker_(value) {
 function classifyInvestmentImportRow_(row, cutoff, universe, administrativeOffsets) {
   if (row.activityDate < cutoff) return { accepted: false, reason: 'BEFORE_START_DATE' };
   var code = String(row.transCode || '').toUpperCase();
-  if (code === 'BTO' || code === 'STC' || code === 'STO' || code === 'BTC' ||
+  if (code === 'OEXP' || code === 'BTO' || code === 'STC' || code === 'STO' || code === 'BTC' ||
       /\b(call|put)\b/i.test(row.description)) {
     return { accepted: false, reason: 'OPTIONS_ACTIVITY' };
   }
@@ -769,6 +864,12 @@ function classifyInvestmentImportRow_(row, cutoff, universe, administrativeOffse
     return { accepted: false, reason: row.ticker ? 'OUTSIDE_PORTFOLIO' : 'CASH_OR_ADMIN' };
   }
   if (code === 'CDIV' && row.amount > 0) return { accepted: true, activityType: 'DIVIDEND' };
+  if (code === 'SXCH' || code === 'CONV' || code === 'MRGS' || code === 'SPL' || code === 'SPR') {
+    if (!(Number(row.quantity) > 0)) {
+      return { accepted: false, reason: 'UNSUPPORTED_ACTIVITY' };
+    }
+    return { accepted: true, activityType: 'CORPORATE_ACTION_IN' };
+  }
   if (code === 'BUY') {
     return { accepted: true, activityType: row.recurring ? 'RECURRING_BUY' : 'BUY' };
   }
@@ -791,6 +892,310 @@ function investmentImportDigest_() {
     var normalized = byte < 0 ? byte + 256 : byte;
     return ('0' + normalized.toString(16)).slice(-2);
   }).join('');
+}
+
+function investmentActivityPortfolioDeltaDirection_(delta) {
+  if (delta == null || !isFinite(delta)) return null;
+  if (delta > 0) return 'up';
+  if (delta < 0) return 'down';
+  return 'flat';
+}
+
+function investmentActivityBuildPortfolioDeltaEntry_(delta) {
+  if (delta == null || !isFinite(delta)) return null;
+  return {
+    delta: delta,
+    direction: investmentActivityPortfolioDeltaDirection_(delta)
+  };
+}
+
+function investmentActivityAggregateHoldingsFromRows_(rows) {
+  var aggregate = Object.create(null);
+  var asOfDate = '';
+  (rows || []).forEach(function(row) {
+    row = row || {};
+    var ticker = String(row.ticker || '').trim();
+    var activityType = String(row.activityType || '').trim();
+    var activityDate = String(row.activityDate || '').trim();
+    if (activityDate > asOfDate) asOfDate = activityDate;
+    if (!ticker) return;
+    if (!aggregate[ticker]) {
+      aggregate[ticker] = { quantity: 0, lastPrice: 0, count: 0 };
+    }
+    var item = aggregate[ticker];
+    var quantity = Number(row.quantity) || 0;
+    var price = Number(row.price) || 0;
+    item.count += 1;
+    if (price > 0) item.lastPrice = price;
+    if (activityType === 'BUY' || activityType === 'RECURRING_BUY' ||
+        activityType === 'CORPORATE_ACTION_IN') {
+      item.quantity += quantity;
+    } else if (activityType === 'SELL') {
+      item.quantity -= quantity;
+    }
+  });
+  return { aggregate: aggregate, asOfDate: asOfDate };
+}
+
+function investmentActivitySummarizeAggregatePortfolio_(aggregateResult) {
+  aggregateResult = aggregateResult || {};
+  var aggregate = aggregateResult.aggregate || Object.create(null);
+  var marketValueTotal = 0;
+  var holdingsCount = 0;
+  Object.keys(aggregate).forEach(function(ticker) {
+    var item = aggregate[ticker] || {};
+    if (!(Number(item.quantity) > 0)) return;
+    holdingsCount += 1;
+    var price = Number(item.lastPrice) || 0;
+    if (price > 0) marketValueTotal += Number(item.quantity) * price;
+  });
+  return {
+    marketValueTotal: marketValueTotal,
+    holdingsCount: holdingsCount,
+    cashBalance: null
+  };
+}
+
+function investmentActivitySummarizeSavedHoldingsPortfolio_(holdings) {
+  var marketValueTotal = 0;
+  var holdingsCount = 0;
+  (holdings || []).forEach(function(row) {
+    row = row || {};
+    var quantity = Number(row.quantity) || 0;
+    if (!(quantity > 0)) return;
+    holdingsCount += 1;
+    var price = Number(row.lastActivityPrice) || 0;
+    if (price > 0) marketValueTotal += quantity * price;
+  });
+  return {
+    marketValueTotal: marketValueTotal,
+    holdingsCount: holdingsCount,
+    cashBalance: null
+  };
+}
+
+function investmentActivityLatestHoldingsAsOfDate_(holdings) {
+  var latest = '';
+  (holdings || []).forEach(function(row) {
+    var asOf = String(row && row.asOfDate || '').trim().slice(0, 10);
+    if (asOf && (!latest || asOf > latest)) latest = asOf;
+  });
+  return latest;
+}
+
+function investmentActivityRobinhoodPortfolioHadPriorHoldings_(holdings, summary) {
+  summary = summary || investmentActivitySummarizeSavedHoldingsPortfolio_(holdings);
+  if (Number(summary.holdingsCount) > 0) return true;
+  return (holdings || []).some(function(row) {
+    return Number(row && row.quantity) > 0;
+  });
+}
+
+function investmentActivityNormalizePortfolioComparisonNumber_(value) {
+  if (value == null || value === '') return '';
+  var numeric = Number(value);
+  return isFinite(numeric) ? round2_(numeric) : '';
+}
+
+function investmentActivityWriteRobinhoodPortfolioComparison_(ss, record) {
+  record = record || {};
+  var investmentId = String(record.investmentId || '').trim();
+  if (!investmentId) return null;
+  var sheet = ensureInvestmentPortfolioComparisonsSheet_(ss);
+  var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  var rowValues = [
+    investmentId,
+    String(record.accountName || '').trim(),
+    String(record.comparisonDate || '').trim(),
+    String(record.priorAsOfDate || '').trim(),
+    investmentActivityNormalizePortfolioComparisonNumber_(record.priorMarketValue),
+    investmentActivityNormalizePortfolioComparisonNumber_(record.currentMarketValue),
+    Number(record.priorHoldingsCount) || 0,
+    Number(record.currentHoldingsCount) || 0,
+    investmentActivityNormalizePortfolioComparisonNumber_(record.priorCash),
+    investmentActivityNormalizePortfolioComparisonNumber_(record.currentCash),
+    String(record.importDigest || '').trim(),
+    now
+  ];
+  var targetRow = 0;
+  if (sheet.getLastRow() >= 2) {
+    var existing = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getDisplayValues();
+    existing.forEach(function(row, index) {
+      if (targetRow) return;
+      if (String(row[0] || '').trim() === investmentId) targetRow = index + 2;
+    });
+  }
+  if (targetRow) {
+    sheet.getRange(targetRow, 1, 1, INVESTMENT_PORTFOLIO_COMPARISON_HEADERS_.length)
+      .setValues([rowValues]);
+  } else {
+    targetRow = sheet.getLastRow() + 1;
+    sheet.getRange(targetRow, 1, 1, INVESTMENT_PORTFOLIO_COMPARISON_HEADERS_.length)
+      .setValues([rowValues]);
+  }
+  fitInvestmentSystemSheetColumns_(sheet, INVESTMENT_PORTFOLIO_COMPARISON_HEADERS_,
+    'investment portfolio comparison content fit');
+  return { sheetRow: targetRow, investmentId: investmentId };
+}
+
+function investmentActivityReadRobinhoodPortfolioComparison_(ss, investmentId) {
+  investmentId = String(investmentId || '').trim();
+  if (!investmentId) return null;
+  var sheet = ss.getSheetByName(getSheetNames_().INVESTMENT_PORTFOLIO_COMPARISONS);
+  if (!sheet || sheet.getLastRow() < 2) return null;
+  var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1,
+    INVESTMENT_PORTFOLIO_COMPARISON_HEADERS_.length).getValues();
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][0] || '').trim() !== investmentId) continue;
+    return {
+      investmentId: investmentId,
+      accountName: String(rows[i][1] || '').trim(),
+      comparisonDate: String(rows[i][2] || '').trim(),
+      priorAsOfDate: String(rows[i][3] || '').trim(),
+      priorMarketValue: Number(rows[i][4]) || 0,
+      currentMarketValue: Number(rows[i][5]) || 0,
+      priorHoldingsCount: Number(rows[i][6]) || 0,
+      currentHoldingsCount: Number(rows[i][7]) || 0,
+      priorCash: rows[i][8] === '' || rows[i][8] == null ? null : Number(rows[i][8]),
+      currentCash: rows[i][9] === '' || rows[i][9] == null ? null : Number(rows[i][9]),
+      importDigest: String(rows[i][10] || '').trim(),
+      updatedAt: String(rows[i][11] || '').trim()
+    };
+  }
+  return null;
+}
+
+function investmentActivityBuildRobinhoodPortfolioComparisonForDrawer_(record) {
+  if (!record) {
+    return {
+      status: 'NO_PRIOR',
+      label: 'Change from previous portfolio',
+      comparisonDate: '',
+      portfolioValue: null,
+      marketValue: null,
+      cash: null,
+      holdingsCount: null
+    };
+  }
+  var marketDelta = round2_(Number(record.currentMarketValue) - Number(record.priorMarketValue));
+  var holdingsDelta = Number(record.currentHoldingsCount) - Number(record.priorHoldingsCount);
+  var cashDelta = null;
+  if (record.priorCash != null && record.currentCash != null &&
+      isFinite(Number(record.priorCash)) && isFinite(Number(record.currentCash))) {
+    cashDelta = round2_(Number(record.currentCash) - Number(record.priorCash));
+  }
+  var unchanged = marketDelta === 0 &&
+    holdingsDelta === 0 &&
+    (cashDelta == null || cashDelta === 0);
+  return {
+    status: unchanged ? 'UNCHANGED' : 'HAS_DELTA',
+    label: 'Change from previous portfolio',
+    comparisonDate: String(record.comparisonDate || '').trim(),
+    priorAsOfDate: String(record.priorAsOfDate || '').trim(),
+    portfolioValue: round2_(Number(record.currentMarketValue)),
+    priorPortfolioValue: round2_(Number(record.priorMarketValue)),
+    marketValue: investmentActivityBuildPortfolioDeltaEntry_(marketDelta),
+    cash: investmentActivityBuildPortfolioDeltaEntry_(cashDelta),
+    holdingsCount: investmentActivityBuildPortfolioDeltaEntry_(holdingsDelta)
+  };
+}
+
+function investmentActivityReadSavedActivityRowsForAccount_(ss, investmentId) {
+  investmentId = String(investmentId || '').trim();
+  if (!investmentId) return [];
+  var sheet = ss.getSheetByName(getSheetNames_().INVESTMENT_ACTIVITY);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  return sheet.getRange(2, 1, sheet.getLastRow() - 1, INVESTMENT_ACTIVITY_HEADERS_.length)
+    .getValues()
+    .filter(function(row) {
+      return String(row[1] || '').trim() === investmentId;
+    })
+    .map(function(row) {
+      return {
+        importKey: String(row[0] || '').trim(),
+        activityDate: String(row[3] || '').trim(),
+        ticker: String(row[5] || '').trim(),
+        activityType: String(row[6] || '').trim(),
+        quantity: Number(row[7]) || 0,
+        price: Number(row[8]) || 0,
+        amount: Number(row[9]) || 0
+      };
+    });
+}
+
+function investmentActivityMergePreviewAcceptedActivity_(savedRows, acceptedPreviewRows) {
+  var keys = Object.create(null);
+  (savedRows || []).forEach(function(row) {
+    if (row && row.importKey) keys[row.importKey] = true;
+  });
+  var merged = (savedRows || []).slice();
+  (acceptedPreviewRows || []).forEach(function(row) {
+    row = row || {};
+    if (!row.importKey || keys[row.importKey]) return;
+    merged.push({
+      importKey: row.importKey,
+      activityDate: row.activityDate,
+      ticker: row.ticker,
+      activityType: row.activityType,
+      quantity: row.quantity,
+      price: row.price,
+      amount: row.amount
+    });
+  });
+  return merged;
+}
+
+function investmentActivityBuildRobinhoodPortfolioComparisonPreview_(ss, investmentId, acceptedPreviewRows) {
+  investmentId = String(investmentId || '').trim();
+  var label = 'Change from current portfolio';
+  if (!investmentId) {
+    return {
+      status: 'NO_BASELINE',
+      label: label,
+      marketValue: null,
+      cash: null,
+      holdingsCount: null
+    };
+  }
+
+  var currentHoldings = getInvestmentHoldingsSummary_(ss, investmentId);
+  if (!currentHoldings.length) {
+    return {
+      status: 'NO_BASELINE',
+      label: label,
+      marketValue: null,
+      cash: null,
+      holdingsCount: null
+    };
+  }
+
+  var current = investmentActivitySummarizeSavedHoldingsPortfolio_(currentHoldings);
+  var savedActivity = investmentActivityReadSavedActivityRowsForAccount_(ss, investmentId);
+  var proposedActivity = investmentActivityMergePreviewAcceptedActivity_(
+    savedActivity, acceptedPreviewRows);
+  var proposed = investmentActivitySummarizeAggregatePortfolio_(
+    investmentActivityAggregateHoldingsFromRows_(proposedActivity));
+
+  var marketDelta = Number(proposed.marketValueTotal) - Number(current.marketValueTotal);
+  var holdingsDelta = Number(proposed.holdingsCount) - Number(current.holdingsCount);
+  var cashDelta = null;
+  if (proposed.cashBalance != null && current.cashBalance != null &&
+      isFinite(Number(proposed.cashBalance)) && isFinite(Number(current.cashBalance))) {
+    cashDelta = Number(proposed.cashBalance) - Number(current.cashBalance);
+  }
+
+  var unchanged = marketDelta === 0 &&
+    (cashDelta == null || cashDelta === 0) &&
+    holdingsDelta === 0;
+
+  return {
+    status: unchanged ? 'UNCHANGED' : 'HAS_DELTA',
+    label: label,
+    currentPortfolioValue: current.marketValueTotal,
+    marketValue: investmentActivityBuildPortfolioDeltaEntry_(marketDelta),
+    cash: investmentActivityBuildPortfolioDeltaEntry_(cashDelta),
+    holdingsCount: investmentActivityBuildPortfolioDeltaEntry_(holdingsDelta)
+  };
 }
 
 function summarizeInvestmentImportPreview_(accepted, excluded, universe) {
@@ -951,6 +1356,8 @@ function rebuildInvestmentHoldingsForAccount_(ss, investmentId, accountName) {
     if (activityType === 'BUY' || activityType === 'RECURRING_BUY') {
       item.quantity += quantity;
       item.buys += Math.abs(amount);
+    } else if (activityType === 'CORPORATE_ACTION_IN') {
+      item.quantity += quantity;
     } else if (activityType === 'SELL') {
       item.quantity -= quantity;
       item.sales += Math.abs(amount);

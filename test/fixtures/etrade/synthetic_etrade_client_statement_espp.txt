@@ -1,0 +1,30 @@
+E*TRADE Client Statement
+Morgan Stanley
+Stock Plan Account
+Employee Stock Purchase Plan
+Statement period: 8/1/2026 to 8/31/2026
+Account number: XXXX-ESPP-001
+Account title: Synthetic ESPP Account
+
+Beginning Total Value (as of 8/1/2026) $6,800.00
+Ending Total Value (as of 8/31/2026) $7,000.00
+
+Security Description Quantity Share Price Total Cost Market Value Unrealized Gain/Loss Unrealized Gain/Loss % Est Annual Income Current Yield % Est YTD Income
+CSCO SYSTEMS INC (CSCO) Purchases 100.000 $70.00 $5,000.00 $7,000.00 $2,000.00
+Total 100.000 $70.00 $5,000.00 $7,000.00 $2,000.00
+
+Potential Restricted Stock
+Symbol Grant Date Unvested Shares Hypothetical Value
+CSCO 1/1/2020 50.000 $3,500.00
+
+Restricted Stock
+Grant Detail Hypothetical Plan Value $12,000.00
+
+Unvested Stock Summary
+Hypothetical value for illustration only $15,000.00
+
+Activity Summary
+CSCO Dividend $25.00
+
+Realized Gain/(Loss) Summary
+Total Realized Gain/(Loss) $0.00

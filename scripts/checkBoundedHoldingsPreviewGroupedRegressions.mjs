@@ -203,8 +203,14 @@ function buildContext(options = {}) {
   vm.runInContext(read('investment_etrade_positions_pdf.js'), context, {
     filename: 'investment_etrade_positions_pdf.js'
   });
+  vm.runInContext(read('investment_etrade_client_statement_pdf.js'), context, {
+    filename: 'investment_etrade_client_statement_pdf.js'
+  });
   vm.runInContext(read('investment_m1_statement_pdf.js'), context, {
     filename: 'investment_m1_statement_pdf.js'
+  });
+  vm.runInContext(read('investment_fidelity_401k_statement_pdf.js'), context, {
+    filename: 'investment_fidelity_401k_statement_pdf.js'
   });
   vm.runInContext(read('investment_adapters.js'), context, { filename: 'investment_adapters.js' });
   vm.runInContext(read('central_holdings_preview_lab.js'), context, {
@@ -365,6 +371,29 @@ assert.deepEqual({
   equitiesSubtotal: 18370.44,
   cashPlusEquitiesReconciles: true
 });
+
+assert.equal(
+  ctx.boundedHoldingsPreviewShouldUseM1PdfLoadPath_({ source: 'M1_STATEMENT_PDF', groupedMode: true }, ''),
+  true
+);
+assert.equal(
+  ctx.boundedHoldingsPreviewShouldUseM1PdfLoadPath_({ source: 'M1_STATEMENT_PDF', groupedMode: false },
+    ctx.boundedHoldingsPreviewReadableExtractText_(
+      read('test/fixtures/etrade/synthetic_etrade_client_statement_encoding_failure.txt')
+    ).text || read('test/fixtures/etrade/synthetic_etrade_client_statement_encoding_failure.txt')),
+  false
+);
+assert.equal(
+  ctx.boundedHoldingsPreviewShouldUseM1PdfLoadPath_({ source: 'ETRADE_POSITIONS_PDF', groupedMode: false }, ''),
+  false
+);
+assert.equal(
+  ctx.boundedHoldingsPreviewShouldUseM1PdfLoadPath_(
+    { source: 'M1_STATEMENT_PDF', groupedMode: false, accountProvider: 'M1' },
+    read('test/fixtures/m1/synthetic_m1_statement_minimal.txt')
+  ),
+  true
+);
 
 // --- End-to-end: two-column cash row (last + change only) through grouped preview ---
 const twoColumnCashText = read('test/fixtures/m1/synthetic_m1_statement_child_preview_structure.txt')

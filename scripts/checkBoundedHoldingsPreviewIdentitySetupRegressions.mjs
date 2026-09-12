@@ -232,8 +232,14 @@ function buildContext(workbook) {
   vm.runInContext(read('investment_etrade_positions_pdf.js'), context, {
     filename: 'investment_etrade_positions_pdf.js'
   });
+  vm.runInContext(read('investment_etrade_client_statement_pdf.js'), context, {
+    filename: 'investment_etrade_client_statement_pdf.js'
+  });
   vm.runInContext(read('investment_m1_statement_pdf.js'), context, {
     filename: 'investment_m1_statement_pdf.js'
+  });
+  vm.runInContext(read('investment_fidelity_401k_statement_pdf.js'), context, {
+    filename: 'investment_fidelity_401k_statement_pdf.js'
   });
   vm.runInContext(read('investment_adapters.js'), context, { filename: 'investment_adapters.js' });
   vm.runInContext(read('central_holdings_preview_lab.js'), context, {

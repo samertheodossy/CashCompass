@@ -1,7 +1,8 @@
 /**
  * bounded_holdings_preview.js — Owner-accessible Portfolio Holdings Preview (bounded app).
  *
- * Preview-only unified holdings for ETRADE_POSITIONS_PDF and M1_STATEMENT_PDF against
+ * Preview-only unified holdings for ETRADE_POSITIONS_PDF, ETRADE_CLIENT_STATEMENT_PDF,
+ * and M1_STATEMENT_PDF against
  * the caller's bound workbook investment accounts. No sheet writes or persistence.
  */
 
@@ -113,6 +114,16 @@ function boundedHoldingsPreviewRunFromDashboard(payload) {
       registrationType: accountValidation.registrationType,
       explicitAccountMatch: true
     });
+    var sourceValidation = boundedHoldingsPreviewValidatePreviewSourceForAccount_(
+      {
+        accountName: previewPayload.accountName,
+        statementProvider: previewPayload.statementProvider,
+        previewMode: previewPayload.previewMode
+      },
+      previewPayload.source,
+      previewPayload.rawDocumentText);
+    if (!sourceValidation.ok) return sourceValidation;
+    previewPayload.source = sourceValidation.source;
     return holdingsPreviewLabBuildPreview_(previewPayload);
   });
 }
@@ -156,6 +167,111 @@ function boundedHoldingsPreviewSuggestRegistrationType_(rawText, source) {
   return { suggested: '', confidence: 'LOW', source: '' };
 }
 
+function boundedHoldingsPreviewResolveStatementProvider_(accountMeta) {
+  accountMeta = accountMeta || {};
+  if (accountMeta.statementProvider) {
+    return String(accountMeta.statementProvider).trim().toUpperCase();
+  }
+  var groupProvider = accountMeta.previewMode === 'GROUPED_PROVIDER'
+    ? boundedHoldingsPreviewMatchGroupProvider_(accountMeta.accountName, 'M1_STATEMENT_PDF')
+    : null;
+  if (groupProvider) return 'M1';
+  if (typeof boundedHoldingsPreviewInferIdentityProvider_ === 'function') {
+    return boundedHoldingsPreviewInferIdentityProvider_(accountMeta.accountName, groupProvider);
+  }
+  return 'OTHER';
+}
+
+function boundedHoldingsPreviewDefaultSourceForAccount_(accountMeta) {
+  accountMeta = accountMeta || {};
+  if (accountMeta.previewMode === 'GROUPED_PROVIDER') return 'M1_STATEMENT_PDF';
+  var provider = boundedHoldingsPreviewResolveStatementProvider_(accountMeta);
+  if (provider === 'M1') return 'M1_STATEMENT_PDF';
+  if (provider === 'ETRADE') return 'ETRADE_CLIENT_STATEMENT_PDF';
+  return 'ETRADE_POSITIONS_PDF';
+}
+
+function boundedHoldingsPreviewAllowedSourcesForAccount_(accountMeta) {
+  accountMeta = accountMeta || {};
+  var provider = boundedHoldingsPreviewResolveStatementProvider_(accountMeta);
+  if (accountMeta.previewMode === 'GROUPED_PROVIDER' || provider === 'M1') {
+    return ['M1_STATEMENT_PDF'];
+  }
+  if (provider === 'ETRADE') {
+    return ['ETRADE_POSITIONS_PDF', 'ETRADE_CLIENT_STATEMENT_PDF'];
+  }
+  return ['ETRADE_POSITIONS_PDF', 'ETRADE_CLIENT_STATEMENT_PDF', 'M1_STATEMENT_PDF'];
+}
+
+function boundedHoldingsPreviewCoerceSourceForAccount_(accountMeta, requestedSource) {
+  var allowed = boundedHoldingsPreviewAllowedSourcesForAccount_(accountMeta);
+  var normalized = typeof investmentPortfolioNormalizeSource_ === 'function'
+    ? investmentPortfolioNormalizeSource_(requestedSource || '')
+    : String(requestedSource || '').trim().toUpperCase();
+  if (allowed.indexOf(normalized) >= 0) return normalized;
+  return boundedHoldingsPreviewDefaultSourceForAccount_(accountMeta);
+}
+
+function boundedHoldingsPreviewValidatePreviewSourceForAccount_(accountMeta, source, rawText) {
+  accountMeta = accountMeta || {};
+  var provider = boundedHoldingsPreviewResolveStatementProvider_(accountMeta);
+  var normalizedSource = typeof investmentPortfolioNormalizeSource_ === 'function'
+    ? investmentPortfolioNormalizeSource_(source || '')
+    : String(source || '').trim().toUpperCase();
+  var allowed = boundedHoldingsPreviewAllowedSourcesForAccount_(accountMeta);
+
+  if (allowed.indexOf(normalizedSource) < 0) {
+    if (provider === 'ETRADE') {
+      return {
+        ok: false,
+        error: 'M1_STATEMENT_PDF is not valid for E*TRADE accounts. Select ETRADE_CLIENT_STATEMENT_PDF or ETRADE_POSITIONS_PDF.',
+        source: normalizedSource,
+        provider: provider
+      };
+    }
+    if (provider === 'M1') {
+      return {
+        ok: false,
+        error: 'M1 accounts require M1_STATEMENT_PDF source.',
+        source: normalizedSource,
+        provider: provider
+      };
+    }
+    return {
+      ok: false,
+      error: 'Unsupported preview source for the selected account.',
+      source: normalizedSource,
+      provider: provider
+    };
+  }
+
+  rawText = String(rawText || '');
+  if (normalizedSource === 'M1_STATEMENT_PDF' && rawText && provider !== 'M1') {
+    if (typeof investmentEtradeClientStatementClassifyDocumentType_ === 'function') {
+      var docClass = investmentEtradeClientStatementClassifyDocumentType_(rawText);
+      if (docClass.documentType === 'ETRADE_CLIENT_STATEMENT_PDF') {
+        return {
+          ok: false,
+          error: 'Document matches an E*TRADE monthly client statement. Select ETRADE_CLIENT_STATEMENT_PDF source.',
+          source: normalizedSource
+        };
+      }
+    }
+    if (typeof investmentEtradeClientStatementAssessTextQuality_ === 'function') {
+      var corruptQuality = investmentEtradeClientStatementAssessTextQuality_(rawText);
+      if (corruptQuality.quality === 'ENCODING_FAILURE') {
+        return {
+          ok: false,
+          error: 'Extracted PDF text is encoding-corrupt. E*TRADE monthly client statement PDF is not currently supported for direct import.',
+          source: normalizedSource
+        };
+      }
+    }
+  }
+
+  return { ok: true, source: normalizedSource, provider: provider };
+}
+
 /**
  * HtmlService include for bounded preview PDF client helpers.
  *
@@ -182,6 +298,7 @@ function boundedHoldingsPreviewBuildSetup_(ss) {
     ok: true,
     previewLabel: 'Preview only — not loaded into CashCompass.',
     dashboardUrl: boundedHoldingsPreviewWebAppBaseUrl_(),
+    launchUrl: boundedHoldingsPreviewLaunchUrl_(),
     accounts: accounts
   };
 }
@@ -280,6 +397,9 @@ function boundedHoldingsPreviewMapAccountRow_(row, registryIndex, lifecycleCount
     identityReady = false;
   }
   var groupProvider = boundedHoldingsPreviewMatchGroupProvider_(accountName, 'M1_STATEMENT_PDF');
+  var statementProvider = typeof boundedHoldingsPreviewInferIdentityProvider_ === 'function'
+    ? boundedHoldingsPreviewInferIdentityProvider_(accountName, groupProvider)
+    : (groupProvider ? 'M1' : 'OTHER');
   var base = {
     sysAssetsRow: row.sysAssetsRow,
     investmentId: investmentId,
@@ -294,7 +414,13 @@ function boundedHoldingsPreviewMapAccountRow_(row, registryIndex, lifecycleCount
     suggestedStableAccountId: identityReady ? identity.stableAccountId : '',
     suggestedRegistrationType: registrationHint
       ? investmentPortfolioNormalizeRegistrationType_(registrationHint) : '',
-    previewMode: groupProvider ? 'GROUPED_PROVIDER' : 'SINGLE_ACCOUNT'
+    previewMode: groupProvider ? 'GROUPED_PROVIDER' : 'SINGLE_ACCOUNT',
+    statementProvider: statementProvider,
+    defaultPreviewSource: boundedHoldingsPreviewDefaultSourceForAccount_({
+      accountName: accountName,
+      previewMode: groupProvider ? 'GROUPED_PROVIDER' : 'SINGLE_ACCOUNT',
+      statementProvider: statementProvider
+    })
   };
   if (groupProvider) {
     base.groupProviderKey = groupProvider.providerKey;

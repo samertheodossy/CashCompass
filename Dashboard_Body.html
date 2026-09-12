@@ -723,7 +723,6 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           </div>
           <div class="tracked-editor-actions">
             <button type="button" id="inv_portfolio_activity_btn" class="small-btn" onclick="openInvestmentPortfolioDrawer_()">Portfolio activity</button>
-            <button type="button" id="inv_holdings_preview_btn" class="small-btn" style="display:none;" onclick="openBoundedHoldingsPreview_()">Preview holdings (PDF)</button>
             <button type="button" id="inv_show_inactive_btn" class="small-btn debt-inactive-toggle" style="display:none;" onclick="toggleInactiveInvestmentAccountsView_()" aria-expanded="false" aria-controls="inv_inactive_wrap"><span class="debt-caret" aria-hidden="true">&#9656;</span>Show inactive investments</button>
           </div>
         </div>
@@ -788,14 +787,16 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <button type="button" id="inv_portfolio_drawer_close" class="bill-pay-drawer-close" aria-label="Close Portfolio activity" onclick="closeInvestmentPortfolioDrawer_()">×</button>
           </div>
           <div class="bill-pay-drawer-body">
-            <label for="inv_activity_account">Income-Producing account</label>
+            <label for="inv_activity_account">CashCompass investment account</label>
             <select id="inv_activity_account" onchange="onInvestmentPortfolioAccountChanged_()"></select>
-            <p class="muted investment-portfolio-account-help">Choose an account to view its holdings, update recurring plans, or import activity. Each account is kept separate.</p>
+            <p class="muted investment-portfolio-account-help">Choose an account to view portfolio holdings and import statements when available for that provider.</p>
 
             <div id="inv_portfolio_account_content" hidden>
               <div class="investment-portfolio-tabs" role="tablist" aria-label="Portfolio activity views">
                 <button type="button" id="inv_portfolio_view_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setInvestmentPortfolioDrawerView_('portfolio')">Portfolio</button>
-                <button type="button" id="inv_portfolio_import_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setInvestmentPortfolioDrawerView_('import')">Import CSV</button>
+                <button type="button" id="inv_portfolio_m1_import_btn" class="segment-btn" role="tab" aria-selected="false" hidden onclick="setInvestmentPortfolioDrawerView_('m1')">Import M1 statement PDF</button>
+                <button type="button" id="inv_portfolio_401k_import_btn" class="segment-btn" role="tab" aria-selected="false" hidden onclick="setInvestmentPortfolioDrawerView_('401k')">Retirement savings statement PDF</button>
+                <button type="button" id="inv_portfolio_import_btn" class="segment-btn" role="tab" aria-selected="false" hidden onclick="setInvestmentPortfolioDrawerView_('import')">Import CSV</button>
               </div>
 
               <section id="inv_portfolio_view" class="investment-portfolio-view">
@@ -826,6 +827,62 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                   </div>
                 </div>
                 <div id="inv_portfolio_status" class="status" aria-live="polite"></div>
+              </section>
+
+              <section id="inv_portfolio_m1_import_view" class="investment-portfolio-view" hidden>
+                <p class="muted" id="inv_m1_grouped_intro" hidden></p>
+                <div id="inv_m1_account_hint" class="muted" style="margin:0 0 12px 0;"></div>
+                <label for="inv_m1_registration_type">Registration type (required)</label>
+                <select id="inv_m1_registration_type" onchange="onInvestmentPortfolioDrawerM1RegistrationChanged_()">
+                  <option value="">Select registration type…</option>
+                  <option value="TAXABLE">TAXABLE</option>
+                  <option value="TRADITIONAL_IRA">TRADITIONAL_IRA</option>
+                  <option value="ROTH_IRA">ROTH_IRA</option>
+                  <option value="401K">401K</option>
+                  <option value="HSA">HSA</option>
+                </select>
+                <label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:12px 0;">
+                  <input type="checkbox" id="inv_m1_explicit_match" style="width:auto;margin-top:3px;" onchange="updateInvestmentPortfolioDrawerM1Controls_()">
+                  <span id="inv_m1_explicit_match_text">I confirm this document belongs to the selected CashCompass investment account.</span>
+                </label>
+                <label for="inv_m1_document_file">M1 statement PDF</label>
+                <input type="file" id="inv_m1_document_file" accept=".pdf,application/pdf" onchange="onInvestmentPortfolioDrawerM1FileChanged_()">
+                <div id="inv_m1_file_meta" class="muted" style="margin:-6px 0 12px 0;">No file selected.</div>
+                <label for="inv_m1_document_text">Extracted PDF text (read-only after upload)</label>
+                <textarea id="inv_m1_document_text" rows="4" readonly placeholder="Upload an M1 monthly statement PDF…"></textarea>
+                <div class="investment-import-actions">
+                  <button type="button" id="inv_m1_preview_btn" class="small-btn primary" disabled onclick="previewInvestmentPortfolioDrawerM1_()">Preview M1 statement</button>
+                  <button type="button" class="small-btn" onclick="resetInvestmentPortfolioDrawerM1Import_(true)">Clear import</button>
+                </div>
+                <div id="inv_m1_grouped_confirm_box" class="confirm-box" hidden>
+                  <p id="inv_m1_grouped_confirm_prompt" style="margin:0 0 10px;"></p>
+                  <button type="button" class="small-btn primary" onclick="confirmInvDrawerM1GroupedChild_()">Add child account and preview</button>
+                </div>
+                <div id="inv_m1_results"></div>
+                <div id="inv_m1_grouped_status"></div>
+                <div id="inv_m1_grouped_children"></div>
+                <div id="inv_m1_grouped_detail"></div>
+                <div id="inv_m1_apply_area"></div>
+                <div id="inv_m1_status" class="status" aria-live="polite"></div>
+              </section>
+
+              <section id="inv_portfolio_401k_import_view" class="investment-portfolio-view" hidden>
+                <div id="inv_401k_account_hint" class="muted" style="margin:0 0 12px 0;"></div>
+                <label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:12px 0;">
+                  <input type="checkbox" id="inv_401k_explicit_match" style="width:auto;margin-top:3px;" onchange="updateInvestmentPortfolioDrawer401kControls_()">
+                  <span id="inv_401k_explicit_match_text">I confirm this retirement savings statement belongs to the selected 401K Account.</span>
+                </label>
+                <label for="inv_401k_document_file">Retirement savings statement PDF</label>
+                <input type="file" id="inv_401k_document_file" accept=".pdf,application/pdf" onchange="onInvestmentPortfolioDrawer401kFileChanged_()">
+                <div id="inv_401k_file_meta" class="muted" style="margin:-6px 0 12px 0;">No file selected.</div>
+                <label for="inv_401k_document_text">Extracted PDF text (read-only after upload)</label>
+                <textarea id="inv_401k_document_text" rows="4" readonly placeholder="Upload a Fidelity retirement savings statement PDF…"></textarea>
+                <div class="investment-import-actions">
+                  <button type="button" id="inv_401k_preview_btn" class="small-btn primary" disabled onclick="previewInvestmentPortfolioDrawer401k_()">Preview retirement statement</button>
+                  <button type="button" class="small-btn" onclick="resetInvestmentPortfolioDrawer401kImport_(false)">Clear import</button>
+                </div>
+                <div id="inv_401k_results"></div>
+                <div id="inv_401k_status" class="status" aria-live="polite"></div>
               </section>
 
               <section id="inv_portfolio_import_view" class="investment-portfolio-view" hidden>

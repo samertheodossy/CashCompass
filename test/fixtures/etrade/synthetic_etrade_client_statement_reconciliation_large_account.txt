@@ -1,0 +1,13 @@
+E*TRADE Client Statement
+Morgan Stanley
+Self-Directed Brokerage Account
+Statement period: 8/1/2026 to 8/31/2026
+Account number: XXXX-LARGE-001
+Account title: Synthetic Large Account Mismatch
+
+Ending Total Value (as of 8/31/2026) $1,000,000.00
+
+Security Description Quantity Share Price Total Cost Market Value Unrealized Gain/Loss
+SYNA CORP (SYNA) Total 10000.000 $99.00 $900,000.00 $996,000.00 $96,000.00
+
+Total Cash, Bank Deposit Program, and Money Market Funds $0.00

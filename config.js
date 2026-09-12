@@ -14,6 +14,7 @@ function getSheetNames_() {
     INVESTMENT_HOLDINGS: 'SYS - Investment Holdings',
     INVESTMENT_HOLDINGS_UNIFIED: 'SYS - Investment Holdings Unified',
     INVESTMENT_PLANS: 'SYS - Investment Plans',
+    INVESTMENT_PORTFOLIO_COMPARISONS: 'SYS - Investment Portfolio Comparisons',
     INVESTMENT_TAX_LOTS: 'SYS - Investment Tax Lots',
     INVESTMENT_SECURITIES: 'SYS - Investment Securities',
     FINANCIAL_ACCOUNTS: 'SYS - Financial Accounts',

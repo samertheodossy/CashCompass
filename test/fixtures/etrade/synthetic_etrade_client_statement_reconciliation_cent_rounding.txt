@@ -1,0 +1,30 @@
+E*TRADE Client Statement
+Morgan Stanley
+Self-Directed Brokerage Account
+Statement period: 8/1/2026 to 8/31/2026
+Account number: XXXX-MAIN-001
+Account title: Synthetic Main Brokerage
+
+Beginning Total Value (as of 8/1/2026) $6,500.00
+Ending Total Value (as of 8/31/2026) $7,000.01
+
+Security Description Quantity Share Price Total Cost Market Value Unrealized Gain/Loss Unrealized Gain/Loss % Est Annual Income Current Yield % Est YTD Income
+SYNA CORP (SYNA) Purchases 100.000 $10.00 $900.00 $950.00 $50.00
+Reinvestments 5.000 $10.00 $50.00 $50.00 $0.00
+Total 105.000 $10.00 $950.00 $1,000.00 $50.00 $100.00 2.00%
+Page 2 of 3
+Security Description Quantity Share Price Total Cost Market Value Unrealized Gain/Loss Unrealized Gain/Loss % Est Annual Income Current Yield % Est YTD Income
+SYNB INC (SYNB) Purchases 50.000 $20.00 $900.00 $1,000.00 $100.00
+Total 50.000 $20.00 $900.00 $1,000.00 $100.00
+
+Total Cash, Bank Deposit Program, and Money Market Funds $5,000.00
+Total Cash, Bank Deposit Program, and Money Market Funds Debit $0.00
+
+Activity Summary
+SYNA CORP (SYNA) Dividend $10.00
+
+Realized Gain/(Loss) Summary
+Total Realized Gain/(Loss) $25.00
+
+Total Equities $2,000.00
+Total Account Value $7,000.01

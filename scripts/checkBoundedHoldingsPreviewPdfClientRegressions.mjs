@@ -220,6 +220,12 @@ assert.match(boundedHtml, /accept="\.pdf,\.txt,application\/pdf,text\/plain"/);
 assert.match(boundedHtml, /id="documentFile"/);
 assert.match(boundedHtml, /id="fileMeta"/);
 assert.match(boundedHtml, /boundedHoldingsPreviewIncludePdfClient_/);
+assert.match(clientJs, /boundedHoldingsPreviewShouldUseM1PdfLoadPath_/);
+assert.match(clientJs, /groupedMode/);
+assert.match(clientJs, /boundedHoldingsPreviewBuildStandardPdfLoadResult_/);
+assert.match(clientJs, /Browser mirror of investment_etrade_client_statement_pdf\.js/);
+assert.doesNotMatch(boundedHtml, /boundedHoldingsPreviewIncludeClientStatementBrowser_/);
+assert.doesNotMatch(boundedSource, /boundedHoldingsPreviewIncludeClientStatementBrowser_/);
 assert.match(boundedHtml, /boundedHoldingsPreviewLoadDocumentTextFromFile_/);
 assert.match(boundedHtml, /boundedHoldingsPreviewFormatFileMeta_/);
 assert.match(boundedHtml, /renderDocumentFileMeta_/);
@@ -252,7 +258,7 @@ assert.match(boundedHtml, /normalizePastedDocumentText_/);
 assert.match(boundedHtml, /boundedHoldingsPreviewReadableExtractText_/);
 assert.match(clientJs, /extracted locally from PDF/);
 assert.match(clientJs, /read from text file/);
-assert.match(boundedHtml, /pdf\.min\.js/);
+assert.match(boundedHtml, /not currently supported for direct import/);
 assert.match(boundedHtml, /Or paste PDF text extract/);
 assert.match(boundedHtml, /boundedHoldingsPreviewRunGroupedChildFromDashboard/);
 assert.doesNotMatch(
@@ -276,5 +282,76 @@ assert.match(boundedHtml, /groupedSession/);
 assert.match(boundedHtml, /rawDocumentText/);
 assert.match(groupsSource, /rawDocumentText/);
 assert.doesNotMatch(boundedSource, /rawDocumentPdf|pdfBytes|base64Pdf/i);
+
+const encodingFixture = fs.readFileSync(
+  new URL('../test/fixtures/etrade/synthetic_etrade_client_statement_encoding_failure.txt', import.meta.url),
+  'utf8'
+);
+const m1Fixture = fs.readFileSync(
+  new URL('../test/fixtures/m1/synthetic_m1_statement_minimal.txt', import.meta.url),
+  'utf8'
+);
+
+assert.equal(
+  context.boundedHoldingsPreviewShouldUseM1PdfLoadPath_(
+    { source: 'M1_STATEMENT_PDF', groupedMode: false, accountProvider: 'ETRADE' },
+    encodingFixture
+  ),
+  false
+);
+assert.equal(
+  context.boundedHoldingsPreviewShouldUseM1PdfLoadPath_(
+    { source: 'M1_STATEMENT_PDF', groupedMode: false, accountProvider: 'M1' },
+    encodingFixture
+  ),
+  true
+);
+assert.equal(
+  context.boundedHoldingsPreviewShouldUseM1PdfLoadPath_(
+    { source: 'M1_STATEMENT_PDF', groupedMode: true, accountProvider: 'M1' },
+    encodingFixture
+  ),
+  true
+);
+
+const ocrRequired = context.boundedHoldingsPreviewBuildClientStatementOcrRequiredResult_(
+  { text: encodingFixture, extractedTextLength: encodingFixture.length, extractionStatus: 'extracted locally from PDF' },
+  { documentType: 'ETRADE_CLIENT_STATEMENT_PDF', confidence: 'MEDIUM', reason: 'encoding corrupt' },
+  { method: 'PDFJS', quality: 'ENCODING_FAILURE', usable: false },
+  'FP-ET-ENCODING',
+  'ETRADE_CLIENT_STATEMENT_PDF'
+);
+assert.equal(ocrRequired.effectiveSource, 'ETRADE_CLIENT_STATEMENT_PDF');
+assert.equal(ocrRequired.displayTextInEditor, false);
+assert.equal(ocrRequired.text, '');
+assert.equal(ocrRequired.ocrRequired, true);
+assert.match(ocrRequired.statusMessage, /not currently supported for direct import/i);
+
+const m1Standard = context.boundedHoldingsPreviewBuildStandardPdfLoadResult_(
+  { text: m1Fixture, extractedTextLength: m1Fixture.length, extractionStatus: 'extracted locally from PDF' },
+  { source: 'M1_STATEMENT_PDF', groupedMode: false, accountProvider: 'M1' },
+  'FP-M1'
+);
+assert.equal(m1Standard.effectiveSource, 'M1_STATEMENT_PDF');
+assert.equal(m1Standard.displayTextInEditor, true);
+
+assert.match(boundedHtml, /applyAccountSourceDefaults_/);
+assert.match(boundedHtml, /accountProvider: currentAccountProvider_\(\)/);
+assert.match(clientJs, /accountProvider === 'M1'/);
+assert.doesNotMatch(clientJs, /BOUNDED_HOLDINGS_PREVIEW_TESSERACT_/);
+assert.doesNotMatch(clientJs, /boundedHoldingsPreviewCreateEtradeClientStatementOcrRunner_/);
+assert.doesNotMatch(clientJs, /boundedHoldingsPreviewDiagnoseOcrEnvironment_/);
+assert.doesNotMatch(boundedHtml, /tesseract\.js/);
+assert.match(clientJs, /BOUNDED_HOLDINGS_PREVIEW_CLIENT_STATEMENT_UNSUPPORTED_MESSAGE_/);
+
+const pastedPreviewReady = (function() {
+  const text = fs.readFileSync(
+    new URL('../test/fixtures/etrade/synthetic_etrade_client_statement_main.txt', import.meta.url),
+    'utf8'
+  );
+  const quality = context.investmentEtradeClientStatementAssessTextQuality_(text);
+  return quality.usable === true && quality.quality === 'USABLE';
+})();
+assert.equal(pastedPreviewReady, true);
 
 console.log('Bounded holdings preview PDF client regressions passed.');

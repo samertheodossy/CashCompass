@@ -14,21 +14,18 @@ const labSource = read('central_holdings_preview_lab.js');
 const plannerWeb = read('PlannerDashboardWeb.html');
 const validationSource = read('validation_testing_server.js');
 
-// --- Manage Investments uses server /exec URL + top-frame navigation ---
-assert.match(dashboardBody, /onclick="openBoundedHoldingsPreview_\(\)"/);
-assert.match(dashboardBody, /id="inv_holdings_preview_btn"/);
+// --- Dashboard uses Portfolio activity drawer; standalone preview route kept internally ---
+assert.doesNotMatch(dashboardBody, /id="inv_holdings_preview_btn"/);
+assert.doesNotMatch(dashboardBody, /Preview holdings \(PDF\)/);
+assert.match(dashboardBody, /Import M1 statement PDF/);
 assert.doesNotMatch(dashboardBody, /href="\?view=portfolio-holdings-preview"/);
 assert.doesNotMatch(dashboardBody, /holdings-preview-lab/);
 assert.match(dashboardInvestments, /boundedHoldingsPreviewNavigateTop_/);
 assert.match(dashboardInvestments, /getBoundedHoldingsPreviewLaunchUrlFromDashboard/);
-assert.match(dashboardInvestments, /dataset\.launchUrl/);
-assert.match(dashboardInvestments, /window\.top\.location\.href = url/);
-assert.match(dashboardInvestments, /userCodeAppPanel/);
-assert.match(
-  dashboardInvestments,
-  /\/\^https:\\\/\\\/script\\\.google\\\.com\\\/macros\\\/s\\\/.+\\\/exec\\\?view=portfolio-holdings-preview/
-);
-assert.doesNotMatch(dashboardInvestments, /split\('\?'\)\[0\]/);
+assert.match(dashboardInvestments, /function openBoundedHoldingsPreview_/);
+assert.match(dashboardInvestments, /syncInvestmentPortfolioDrawerImportTabs_/);
+assert.match(plannerWeb, /boundedHoldingsPreviewIncludePdfClient_/);
+assert.match(plannerWeb, /Dashboard_Script_InvestmentPortfolioDrawerM1/);
 
 // --- Server resolves deployed /exec URL via ScriptApp.getService().getUrl() ---
 assert.match(boundedSource, /ScriptApp\.getService\(\)\.getUrl\(\)/);
@@ -92,8 +89,10 @@ assert.match(labSource, /Central mode only/);
 // --- Existing investment navigation preserved ---
 assert.match(dashboardBody, /inv_portfolio_activity_btn/);
 assert.match(dashboardBody, /openInvestmentPortfolioDrawer_/);
-assert.match(dashboardInvestments, /boundedHoldingsPreviewAvailable/);
+assert.match(investmentsSource, /boundedHoldingsPreviewAvailable/);
+assert.match(dashboardInvestments, /populateInvestmentPortfolioDrawerAccounts_/);
 assert.match(dashboardInvestments, /populateInvestmentActivityImportAccounts_/);
+assert.match(dashboardInvestments, /m1ImportAvailable/);
 assert.match(dashboardInvestments, /openInvestmentPortfolioDrawer_/);
 
 console.log('Bounded holdings preview route/navigation regressions passed.');
