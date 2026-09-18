@@ -1833,6 +1833,26 @@ function focusIdentityTarget_(obj) {
 function focusBankTarget_(obj) {
   const select = document.getElementById('bank_account');
   const name = obj && obj.accountName;
+  if (obj && obj.panelMode === 'manage') {
+    if (typeof setBankPanelMode === 'function') setBankPanelMode('manage');
+    if (name && typeof openBankEditForm_ === 'function') {
+      var manageRow = typeof __bankManagementByName === 'object' && __bankManagementByName
+        ? __bankManagementByName[String(name).trim().toLowerCase()]
+        : null;
+      if (manageRow) {
+        openBankEditForm_(name);
+        pendingFocus = null;
+        return;
+      }
+    }
+    if (name && typeof loadBankSectionThenSelect_ === 'function' &&
+        (!select || !select.options || select.options.length <= 1)) {
+      loadBankSectionThenSelect_(name);
+      return;
+    }
+    pendingFocus = null;
+    return;
+  }
   if (typeof setBankPanelMode === 'function') {
     setBankPanelMode('update');
   }

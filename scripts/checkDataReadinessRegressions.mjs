@@ -792,10 +792,9 @@ assert.match(help, /Not connected/);
 assert.match(help, /Needs attention/);
 assert.match(help, /Needs review/);
 assert.match(help, /Current — no action required/);
-assert.match(help, /Ready for review/);
 assert.match(help, /Open Bank Accounts/);
 assert.match(help, /INPUT and SYS/);
-assert.match(help, /do not open Connected Bank Accounts/);
+assert.match(help, /does not open Connected Accounts/);
 assert.match(help, /Action buttons appear only when a required monthly CashCompass value is missing/);
 assert.match(help, /not yet included in this readiness review/);
 assert.doesNotMatch(help, /Authoritative data not connected yet/);
@@ -814,5 +813,40 @@ assert.match(suites, /function testRunPart2aDataReadinessSuite\(options\)/);
 assert.match(suites, /requested\.dispositionMode = 'trash'/);
 assert.match(scenarios, /REGRESSION-PART-2A-DATA-READINESS/);
 assert.match(scenarios, /Planning remains byte-equivalent/);
+
+const dataReadinessScope =
+  'Data Readiness checks required monthly cash and credit-card data. Monthly Review checks monthly values across banks, houses, investments, and debts.';
+assert.equal(serverContext.DATA_READINESS_COPY_.PAGE_SCOPE, dataReadinessScope);
+assert.match(clientSource, /function planningDataReadinessPageScope_/);
+assert.match(screenshotDetail, /Data Readiness checks required monthly cash and credit-card data/);
+assert.match(screenshotDetail, /Monthly Review checks monthly values across banks, houses, investments, and debts/);
+assert.match(emptyDetail, /Data Readiness checks required monthly cash and credit-card data/);
+assert.match(help, /Data Readiness checks required monthly cash and credit-card data/);
+assert.match(help, /Monthly Review checks whether this month/);
+assert.match(help, /Optional provider information is reference-only when a valid CashCompass value already exists/);
+assert.match(help, /does not require Plaid, does not create an action item, does not open Connected Accounts, and does not replace the existing CashCompass value/);
+assert.doesNotMatch(help, /Ready for review/);
+assert.doesNotMatch(help, /compare or apply/);
+assert.doesNotMatch(help, /you can compare or apply/);
+const helpDataActions = help.match(/On Data Readiness those actions are[\s\S]*?\./)[0];
+assert.match(helpDataActions, /Open Bank Accounts/);
+assert.match(helpDataActions, /Open Debts/);
+assert.doesNotMatch(helpDataActions, /Open Houses|Open Investments/);
+assert.match(help, /Missing monthly values for banks, houses, investments, and debts are handled in <strong>Monthly Review<\/strong>/);
+assert.match(help, /Plan notes<\/strong> for allocation warnings and recommendations/);
+assert.match(help, /Planning warnings are not the same as missing monthly data/);
+assert.match(shellSource, /missingDataCount \? 'Needs your attention' : 'Plan notes'/);
+assert.match(shellSource, /planNotes\.length \? 'Planning considerations' : 'No action needed right now'/);
+assert.match(shellSource, /Planning warnings are not the same as missing monthly data/);
+assert.match(shellSource, /function openCapitalAllocationCashSettingsReview_/);
+assert.match(shellSource, /Review cash settings<\/button>/);
+assert.match(shellSource, /panelMode: 'manage'/);
+assert.doesNotMatch(shellSource,
+  /function openCapitalAllocationCashSettingsReview_[\s\S]{0,900}(?:google\.script\.run|saveTrackedBankAccountFromDashboard|submitBankEdit_|setBankPanelMode\('connected'\)|loadPlanningDataReadiness_|openMonthlyReviewScreen_)/);
+assert.match(renderSource,
+  /obj && obj\.panelMode === 'manage'[\s\S]*?setBankPanelMode\('manage'\)[\s\S]*?openBankEditForm_\(name\)/);
+assert.doesNotMatch(clientSource, /openCapitalAllocationCashSettingsReview_/);
+assert.match(styles, /data-readiness-page-scope/);
+assert.match(styles, /monthly-review-scope/);
 
 console.log('Data readiness regressions passed.');

@@ -365,4 +365,9 @@ context.monthlyCheckinNavigateToDomain_('assets', 'bank');
 assert.equal(lastWorkspacePage, 'assets');
 assert.equal(lastTab, 'bank');
 
+assert.match(body, /id="monthly_review_scope"/);
+assert.match(body, /Monthly Review checks whether this month/);
+assert.match(body, /Cash\/card provider readiness is reviewed separately under Planning → Data/);
+assert.doesNotMatch(monthlyUi, /Ready for review|compare or apply/);
+
 console.log('Monthly check-in UI regressions passed.');

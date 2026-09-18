@@ -78,7 +78,9 @@ assert.match(source, /capitalAllocationClassifyInvestmentContribution_/);
 assert.match(source, /readCapitalAllocationRecurringInvestmentContributions_/);
 assert.match(source, /function capitalAllocationBuildPropertyContingency_/);
 assert.match(source, /minimumFloor = capitalAllocationMoney_\(historicalAllowance \* 0\.25\)/);
-assert.match(source, /SAMER_ALLY_USE_POLICY_CONFLICT/);
+assert.doesNotMatch(source,
+  /SAMER_ALLY_USE_POLICY_CONFLICT/,
+  'Do Not Touch must not emit a name-gated blocking planning finding');
 assert.match(source, /DUPLICATE_IDENTITY_BLOCKED/);
 assert.match(source, /futureOperatingOutflows = capitalAllocationMoney_\([\s\S]*?futureBills\.total \+ futureDebtMinimums\.total \+ futureUpcoming\.total \+[\s\S]*?propertyContingency\.additionalReserveAmount/);
 assert.doesNotMatch(source, /futureOperatingOutflows = capitalAllocationMoney_\([\s\S]{0,180}futureInvestmentCommitments\.total/);
@@ -92,7 +94,22 @@ assert.match(body, /id="nextActions" class="panel"/);
 assert.match(body, /id="capitalAllocationPreview" class="panel active"/);
 assert.doesNotMatch(body, /Your household plan · read only/,
   'the shared This Week shell must not repeat a page-level read-only disclaimer');
-assert.match(client, /getCapitalAllocationPlanFromDashboard/);
+const help = fs.readFileSync(new URL('../Dashboard_Help.html', import.meta.url), 'utf8');
+assert.match(help,
+  /Do Not Touch[\s\S]*?intentional Use Policy[\s\S]*?excluded from available household cash/,
+  'Help must treat Do Not Touch as an intentional exclusion, not a missing-data error');
+assert.doesNotMatch(help,
+  /Samer Ally is intended to be eligible household capital/,
+  'Help must not tell the customer to change an equivalent Do Not Touch policy');
+assert.match(client, /After you complete this week\\'s actions/);
+assert.match(client, /Complete this week\\'s recommended actions, then refresh Cash Compass after the new balances appear/);
+assert.match(client, /After this week\\'s recommended actions/);
+assert.match(client, /Follow this week&rsquo;s plan for payments, investing, and cash protections/);
+assert.doesNotMatch(client, /After you make these payments/);
+assert.doesNotMatch(client,
+  /Make the recommended payments, then refresh Cash Compass after the new balances appear/);
+assert.doesNotMatch(client, /After this week\\'s recommended payments/);
+assert.doesNotMatch(client, /Follow this week&rsquo;s required payments and cash protections/);
 assert.match(client, /Variable bills use planning estimates/);
 assert.match(client, /estimatedAmount/);
 assert.match(client, /episodic bill/);
@@ -276,7 +293,151 @@ assert.equal(context.capitalAllocationIsRentalIncomeSource_('Salary'), false);
 assert.equal(context.capitalAllocationIsSamerAllyAccount_(
   'Ally - Samer Savings Account - 0393'), true);
 assert.equal(context.capitalAllocationIsSamerAllyAccount_(
-  'Ally - Laith Savings Account'), false);
+  'Ally - Laith Savings Account - 1367'), false);
+
+context.CASH_TO_USE_ALLOWED_TYPES_ = ['cash', 'checking', 'savings'];
+context.CASH_TO_USE_ALLOWED_POLICIES_ = ['use_for_bills', 'use_for_debt', 'use_with_caution'];
+context.CASH_TO_USE_DO_NOT_TOUCH_POLICY_ = 'do_not_touch';
+const previousGetSheetNames = context.getSheetNames_;
+context.getSheetNames_ = () => ({
+  BILLS: 'INPUT - Bills',
+  ACCOUNTS: 'SYS - Accounts',
+  DEBTS: 'INPUT - Debts'
+});
+context.getAccountsHeaderMap_ = function(sheet, optionalDisplay) {
+  const headers = (optionalDisplay && optionalDisplay[0]) || [];
+  const idx = (header) => headers.indexOf(header);
+  return {
+    nameColZero: idx('Account Name'),
+    balanceColZero: idx('Current Balance'),
+    availableColZero: idx('Available Now'),
+    bufferColZero: idx('Min Buffer'),
+    typeColZero: idx('Type'),
+    policyColZero: idx('Use Policy'),
+    priorityColZero: idx('Priority'),
+    activeColZero: idx('Active')
+  };
+};
+function mockAccountsSpreadsheet_(rows) {
+  const headers = [
+    'Account Name', 'Current Balance', 'Available Now', 'Min Buffer',
+    'Type', 'Use Policy', 'Priority', 'Active', 'Planning Role', 'Account Id'
+  ];
+  const values = [headers, ...rows];
+  const display = values.map((row) => row.map((cell) => cell == null ? '' : String(cell)));
+  return {
+    getSheetByName(name) {
+      if (name !== 'SYS - Accounts') return null;
+      return {
+        getDataRange() {
+          return {
+            getValues() { return values; },
+            getDisplayValues() { return display; }
+          };
+        }
+      };
+    }
+  };
+}
+function equivalentDntRow_(name) {
+  return [name, 10000, 10000, 0, 'Savings', 'DO_NOT_TOUCH', 'Use last (backup)', 'Yes', '', ''];
+}
+function planningStatus_(account) {
+  return {
+    included: account.included,
+    excludedReason: account.excludedReason,
+    usable: account.usable,
+    usePolicy: account.usePolicy,
+    minBuffer: account.minBuffer,
+    type: account.type,
+    planningRole: account.planningRole
+  };
+}
+
+const equivalentDntFindings = [];
+const equivalentDntLiquidity = context.readCapitalAllocationLiquidity_(mockAccountsSpreadsheet_([
+  equivalentDntRow_('Ally - Samer Savings Account - 0393'),
+  equivalentDntRow_('Ally - Laith Savings Account - 1367'),
+  ['Operating checking', 8000, 8000, 500, 'Checking', 'USE_FOR_BILLS', 'Use first', 'Yes', '', '']
+]), equivalentDntFindings);
+const samerDnt = equivalentDntLiquidity.accounts.find((row) =>
+  row.accountName === 'Ally - Samer Savings Account - 0393');
+const laithDnt = equivalentDntLiquidity.accounts.find((row) =>
+  row.accountName === 'Ally - Laith Savings Account - 1367');
+const operatingCash = equivalentDntLiquidity.accounts.find((row) =>
+  row.accountName === 'Operating checking');
+assert.ok(samerDnt && laithDnt && operatingCash);
+assert.deepEqual(planningStatus_(samerDnt), planningStatus_(laithDnt),
+  'equivalent Do Not Touch settings must produce the same planning status');
+assert.equal(samerDnt.included, false);
+assert.equal(samerDnt.excludedReason, 'do_not_touch_policy');
+assert.equal(samerDnt.usable, 0);
+assert.equal(equivalentDntLiquidity.cashToUse, 7500,
+  'Do Not Touch cash must remain excluded from available household cash');
+assert.equal(operatingCash.included, true);
+assert.equal(equivalentDntFindings.some((row) =>
+  row.findingId === 'SAMER_ALLY_USE_POLICY_CONFLICT' || row.blocksAllocation), false,
+  'Do Not Touch alone must not create a blocking planning finding or action item');
+
+const equivalentDntFacts = {
+  asOfDate: '2026-08-14',
+  liquidity: equivalentDntLiquidity,
+  debts: [],
+  obligations: [],
+  incomeProducingAccounts: [
+    { investmentId: 'INV-1', accountName: 'Samer Robinhood', eligible: true, requestedWeeklyPace: 500 }
+  ],
+  dataQuality: equivalentDntFindings.slice()
+};
+const equivalentDntQueue = context.buildCapitalAllocationQueue_(equivalentDntFacts);
+assert.equal(equivalentDntQueue.dataQuality.some((row) => row.blocksAllocation), false);
+assert.equal(equivalentDntQueue.hardConstraints.filter((row) =>
+  row.actionType === 'PROTECT_CASH').length, 2,
+  'both Do Not Touch accounts remain protected and excluded from deployable cash');
+const equivalentDntPlan = context.buildCapitalAllocationPlan_(equivalentDntFacts);
+assert.notEqual(equivalentDntPlan.allocationStatus, 'BLOCKED');
+assert.equal(equivalentDntPlan.dataQuality.some((row) =>
+  row.findingId === 'SAMER_ALLY_USE_POLICY_CONFLICT' ||
+  (row.blocksAllocation && /do not touch/i.test(row.message || ''))), false);
+const equivalentDntLadder = context.buildCapitalAllocationSourceLadder_(
+  equivalentDntFacts, equivalentDntPlan);
+assert.equal(equivalentDntLadder.cashAccounts.find((row) =>
+  row.accountName === 'Ally - Samer Savings Account - 0393').status, 'EXCLUDED');
+assert.equal(equivalentDntLadder.cashAccounts.find((row) =>
+  row.accountName === 'Ally - Laith Savings Account - 1367').status, 'EXCLUDED');
+assert.equal(equivalentDntLadder.totalEligibleCash, 7500);
+
+const missingCashFindings = [];
+const missingCashLiquidity = context.readCapitalAllocationLiquidity_({
+  getSheetByName() { return null; }
+}, missingCashFindings);
+assert.equal(missingCashLiquidity.cashToUse, 0);
+assert.equal(missingCashFindings.length, 1);
+assert.equal(missingCashFindings[0].findingId, 'CASH_DATA_UNAVAILABLE');
+assert.equal(missingCashFindings[0].blocksAllocation, true,
+  'a genuine incomplete cash configuration must still produce a clear planning warning');
+
+const writesBeforeLiquidity = [];
+const writeProbeSs = mockAccountsSpreadsheet_([
+  equivalentDntRow_('Ally - Samer Savings Account - 0393')
+]);
+writeProbeSs.getSheetByName = ((original) => function(name) {
+  const sheet = original.call(writeProbeSs, name);
+  if (!sheet) return null;
+  return new Proxy(sheet, {
+    get(target, prop) {
+      if (/^(setValue|setValues|appendRow|insertSheet|deleteSheet)$/.test(String(prop))) {
+        writesBeforeLiquidity.push(String(prop));
+      }
+      return target[prop];
+    }
+  });
+})(writeProbeSs.getSheetByName);
+context.readCapitalAllocationLiquidity_(writeProbeSs, []);
+assert.deepEqual(writesBeforeLiquidity, [],
+  'reading Do Not Touch planning status must not save or write the workbook');
+
+context.getSheetNames_ = previousGetSheetNames;
 assert.equal(context.capitalAllocationZeroEstimateFinding_(
   { payee: 'Medical Bills' }).blocksAllocation, false);
 assert.equal(context.capitalAllocationNormalizeContributionWeekly_(600, 'weekly'), 600);
@@ -980,7 +1141,7 @@ assert.doesNotMatch(clientContext.capitalAllocationPrimaryDecisionHtml_(househol
   /\$0\.00[^<]*(?:extra payoff|extra debt)|(?:extra payoff|extra debt)[\s\S]{0,80}\$0\.00/i,
   'missing pacing authority must not appear as a zero extra-payoff recommendation');
 assert.match(clientContext.capitalAllocationOverviewNextStepHtml_(householdPlan),
-  /Make the recommended payments[\s\S]*?refresh Cash Compass/);
+  /Complete this week(?:'|&#39;)s recommended actions[\s\S]*?refresh Cash Compass after the new balances appear[\s\S]*?We(?:'|\\')ll confirm what changed/);
 assert.match(clientContext.capitalAllocationCashViewHtml_(householdPlan),
   /Choose your pace[\s\S]*?Potential excess cash[\s\S]*?\$90,117\.54[\s\S]*?Recommended to deploy this month[\s\S]*?\$41,895\.78[\s\S]*?Intentionally held for future decisions[\s\S]*?\$48,221\.76/,
   'Cash must explain the monthly staging decision');
@@ -1348,13 +1509,113 @@ const overviewHtml = clientContext.capitalAllocationPrimaryDecisionHtml_(plan) +
 assert.match(overviewHtml,
   /This week's recommendation[\s\S]*?Your progress[\s\S]*?(?:Needs your attention|Plan notes)[\s\S]*?Next step/);
 assert.match(overviewHtml,
-  /Credit-card debt remaining[\s\S]*?After this week(?:'|&#39;)s recommended payments[\s\S]*?Next target:/,
+  /Credit-card debt remaining[\s\S]*?After this week(?:'|&#39;)s recommended actions[\s\S]*?Next target:/,
   'the revolving-debt progress card must identify the prospective amount remaining and its next target');
 assert.doesNotMatch(overviewHtml, /Credit-card debt<\/div>[\s\S]*?expected/,
   'the revolving-debt value must not rely on a vague expected suffix');
 assert.match(overviewHtml,
   /Income portfolio[\s\S]*?Current value[\s\S]*?\+\$500\.00 this week/,
   'the income-portfolio card must distinguish current value from this week\'s contribution');
+function overviewRefreshInstructions_(samplePlan) {
+  const next = clientContext.capitalAllocationOverviewNextStepHtml_(samplePlan);
+  const decision = clientContext.capitalAllocationPrimaryDecisionHtml_(samplePlan);
+  const progress = clientContext.capitalAllocationProgressHtml_(samplePlan);
+  return {
+    nextInstruction: String((next.match(/<strong>[\s\S]*?<\/strong>/) || [''])[0]) +
+      String((next.match(/<p>[\s\S]*?<\/p>/) || [''])[0]),
+    decisionInstruction: String((decision.match(
+      /<p class="capital-allocation-decision-next">[\s\S]*?<\/p>/) || [''])[0]),
+    headline: String((decision.match(/<h3>([\s\S]*?)<\/h3>/) || ['', ''])[1]),
+    progressNote: String((progress.match(/After this week(?:'|&#39;)s recommended [^<]+/) || [''])[0]),
+    overviewHtml: decision + progress + next
+  };
+}
+function assertOverviewActionRefreshWording_(samplePlan, label, options = {}) {
+  const wording = overviewRefreshInstructions_(samplePlan);
+  assert.match(wording.nextInstruction,
+    /Complete this week(?:'|&#39;)s recommended actions, then refresh Cash Compass after the new balances appear/,
+    label + ': next step uses actions, not payments');
+  assert.match(wording.nextInstruction,
+    /We(?:'|\\')ll confirm what changed and calculate your next recommendation/,
+    label + ': next step still explains confirmation');
+  assert.match(wording.decisionInstruction,
+    /After you complete this week(?:'|&#39;)s actions:<\/strong> Refresh Cash Compass once the new balances appear/,
+    label + ': recommendation uses actions, not payments');
+  assert.match(wording.decisionInstruction,
+    /We(?:'|\\')ll confirm the results and calculate your next recommendation/,
+    label + ': recommendation still explains confirmation');
+  assert.match(wording.progressNote, /After this week(?:'|&#39;)s recommended actions/,
+    label + ': progress card uses actions, not payments');
+  assert.doesNotMatch(wording.nextInstruction, /payments/i,
+    label + ': next-step instruction must not say payments');
+  assert.doesNotMatch(wording.decisionInstruction, /payments/i,
+    label + ': recommendation instruction must not say payments');
+  assert.doesNotMatch(wording.progressNote, /payments/i,
+    label + ': progress instruction must not say payments');
+  assert.doesNotMatch(wording.overviewHtml,
+    /After this week(?:'|&#39;)s recommended payments|Follow this week(?:'|&#39;|&rsquo;)s required payments and cash protections|After you make these payments|Make the recommended payments/,
+    label + ': Overview instructions must not treat every recommendation as a payment');
+  if (options.expectPlanHeadline) {
+    assert.match(wording.headline,
+      /Follow this week(?:'|&#39;|&rsquo;)s plan for payments, investing, and cash protections/,
+      label + ': headline covers payments, investing, and cash protections');
+  } else {
+    assert.doesNotMatch(wording.headline,
+      /Follow this week(?:'|&#39;|&rsquo;)s required payments and cash protections/,
+      label + ': debt plans must not use the old payment-only headline');
+  }
+}
+function cloneOverviewPlan_(overrides) {
+  const samplePlan = JSON.parse(JSON.stringify(plan));
+  if (overrides.stripDebtPayments) {
+    samplePlan.weeklyActions = (samplePlan.weeklyActions || []).filter((row) =>
+      row.actionType !== 'PAY_EXTRA_DEBT' && row.actionType !== 'PAY_DEBT_MINIMUM');
+    samplePlan.afterAction.debts = (samplePlan.afterAction.debts || []).map((row) =>
+      Object.assign({}, row, { proposedPayment: 0 }));
+  }
+  if (overrides.stripInvestment) {
+    samplePlan.investmentPolicy = Object.assign({}, samplePlan.investmentPolicy, {
+      recommendedAmount: 0,
+      overrideApplied: false
+    });
+    samplePlan.summary.standingInvestmentFunded = 0;
+  }
+  if (overrides.pause) {
+    samplePlan.investmentPolicy = Object.assign({}, samplePlan.investmentPolicy, {
+      recommendedAmount: 0,
+      overrideApplied: true
+    });
+    samplePlan.contributionStrategy = Object.assign({}, samplePlan.contributionStrategy, {
+      recommendation: 'HOLD_OPTIONAL_DURING_POLICY_OVERRIDE',
+      sourceContributions: [{ name: 'M1 Investment', scheduledAmount: 600, frequency: 'weekly' }]
+    });
+  }
+  return samplePlan;
+}
+const investOnlyPlan = cloneOverviewPlan_({ stripDebtPayments: true });
+assert.equal(clientContext.capitalAllocationPrimaryDecisionModel_(investOnlyPlan).debtAmount, 0);
+assert.ok(clientContext.capitalAllocationPrimaryDecisionModel_(investOnlyPlan).investAmount > 0);
+const debtOnlyPlan = cloneOverviewPlan_({ stripInvestment: true });
+assert.ok(clientContext.capitalAllocationPrimaryDecisionModel_(debtOnlyPlan).debtAmount > 0);
+assert.equal(clientContext.capitalAllocationPrimaryDecisionModel_(debtOnlyPlan).investAmount, 0);
+const pauseOnlyPlan = cloneOverviewPlan_({ stripDebtPayments: true, pause: true });
+assert.equal(clientContext.capitalAllocationPrimaryDecisionModel_(pauseOnlyPlan).debtAmount, 0);
+assert.equal(clientContext.capitalAllocationPrimaryDecisionModel_(pauseOnlyPlan).investmentPaused, true);
+const noActionPlan = cloneOverviewPlan_({ stripDebtPayments: true, stripInvestment: true });
+assert.equal(clientContext.capitalAllocationPrimaryDecisionModel_(noActionPlan).debtAmount, 0);
+assert.equal(clientContext.capitalAllocationPrimaryDecisionModel_(noActionPlan).investAmount, 0);
+assert.equal(clientContext.capitalAllocationPrimaryDecisionModel_(noActionPlan).investmentPaused, false);
+assertOverviewActionRefreshWording_(plan, 'investment and debt payment');
+assertOverviewActionRefreshWording_(investOnlyPlan, 'investment only', { expectPlanHeadline: true });
+assertOverviewActionRefreshWording_(debtOnlyPlan, 'debt payment only');
+assertOverviewActionRefreshWording_(pauseOnlyPlan, 'pause recommendation', { expectPlanHeadline: true });
+assertOverviewActionRefreshWording_(noActionPlan, 'no recommended action', { expectPlanHeadline: true });
+assert.match(clientContext.capitalAllocationPrimaryDecisionHtml_(investOnlyPlan),
+  /No extra credit-card payment is recommended this week/,
+  'investment-only plans still disclose that no extra debt payment is recommended');
+assert.match(clientContext.capitalAllocationPrimaryDecisionHtml_(pauseOnlyPlan),
+  /Pause this week|Pause \$/,
+  'pause recommendations remain visible alongside action wording');
 const progressExamplePlan = JSON.parse(JSON.stringify(plan));
 progressExamplePlan.afterAction.projectedReleasedMonthlyMinimums = 1193.72;
 progressExamplePlan.afterAction.confirmedReleasedMonthlyMinimums = 0;
@@ -1378,8 +1639,10 @@ attentionPlan.capitalSourceLadder.zeroBufferWarningCount = 1;
 const attentionHtml = clientContext.capitalAllocationOverviewWarningsHtml_(attentionPlan, [],
   [{}, {}, {}, {}]);
 assert.match(attentionHtml,
-  /Needs your attention[\s\S]*?1 action needed[\s\S]*?Set a cash buffer for Ally - Samer Savings/,
-  'the immediate action must name the affected cash account from plan data');
+  /Plan notes[\s\S]*?Planning considerations[\s\S]*?Set a cash buffer for Ally - Samer Savings/,
+  'ordinary planning constraints must use Plan notes, not a missing-data label');
+assert.doesNotMatch(attentionHtml, /Needs your attention|action needed/,
+  'cash-buffer recommendations must not use the stronger missing-data action label');
 assert.match(attentionHtml,
   /Cash Compass currently considers the full eligible balance available to use[\s\S]*?Set a protected amount if some of this money should remain untouched/,
   'the cash-buffer action must explain why the customer should review the account');
@@ -1398,6 +1661,88 @@ assert.match(zeroActionHtml,
   /Plan notes[\s\S]*?No action needed right now[\s\S]*?2 investments need tax information[\s\S]*?1 bill is using estimates/,
   'informational limitations must remain calm when no immediate action exists');
 assert.doesNotMatch(zeroActionHtml, /Needs your attention[\s\S]*?0|0 actions needed/);
+const equivalentDntOverviewHtml = clientContext.capitalAllocationOverviewWarningsHtml_({
+  capitalSourceLadder: {
+    cashAccounts: [
+      { accountName: 'Ally - Samer Savings Account - 0393', zeroBufferWarning: false, status: 'EXCLUDED' },
+      { accountName: 'Ally - Laith Savings Account - 1367', zeroBufferWarning: false, status: 'EXCLUDED' }
+    ],
+    steps: []
+  }
+}, [], []);
+assert.match(equivalentDntOverviewHtml, /Plan notes[\s\S]*?No action needed right now/,
+  'equivalent Do Not Touch accounts must share the same non-action planning status');
+assert.doesNotMatch(equivalentDntOverviewHtml,
+  /Needs your attention|1 action needed|Review cash settings/,
+  'Do Not Touch alone must not create a This Week action item');
+const missingCashOverviewHtml = clientContext.capitalAllocationOverviewWarningsHtml_({
+  capitalSourceLadder: { cashAccounts: [], steps: [] }
+}, [{
+  findingId: 'CASH_DATA_UNAVAILABLE',
+  message: 'SYS - Accounts is missing, so deployable cash cannot be proven.'
+}], []);
+assert.match(missingCashOverviewHtml, /Needs your attention[\s\S]*?1 action needed/,
+  'a genuine incomplete cash configuration must still produce a clear planning warning');
+const allyCashSettingsBlocker = {
+  findingId: 'SAMER_ALLY_USE_POLICY_CONFLICT',
+  message: 'Ally - Samer Savings Account - 0393 is intended to be eligible household capital but is currently marked Do Not Touch. In Assets & Liabilities → Bank accounts → Manage, change its Use Policy to Extra Cash and set the minimum buffer before using this plan.'
+};
+const allyCashSettingsAction = clientContext.capitalAllocationBlockingAttentionModel_(allyCashSettingsBlocker);
+assert.match(allyCashSettingsAction.title, /Review cash settings for Ally - Samer Savings Account - 0393/);
+assert.match(allyCashSettingsAction.explanation,
+  /This account's current settings prevent Cash Compass from safely treating it as available household cash/);
+assert.match(allyCashSettingsAction.button, />Review cash settings</);
+assert.match(allyCashSettingsAction.button, /data-account-name="Ally - Samer Savings Account - 0393"/);
+assert.match(allyCashSettingsAction.button, /openCapitalAllocationCashSettingsReviewFromButton_/);
+const allyCashSettingsPlan = {
+  capitalSourceLadder: {
+    cashAccounts: [],
+    steps: Array.from({ length: 10 }, (_, index) => (
+      { sourceName: 'Brokerage ' + (index + 1), status: 'TAX_DATA_REQUIRED' }
+    ))
+  }
+};
+const allyCashSettingsHtml = clientContext.capitalAllocationOverviewWarningsHtml_(
+  allyCashSettingsPlan, [allyCashSettingsBlocker], [{}, {}, {}]);
+assert.match(allyCashSettingsHtml,
+  /Needs your attention[\s\S]*?1 action needed[\s\S]*?Review cash settings for Ally - Samer Savings Account - 0393/,
+  'a required cash-settings issue must render as one clickable planning action');
+assert.match(allyCashSettingsHtml,
+  /data-account-name="Ally - Samer Savings Account - 0393"[\s\S]*?>Review cash settings</);
+assert.match(allyCashSettingsHtml,
+  /This account(?:&#39;|')s current settings prevent Cash Compass from safely treating it as available household cash/);
+assert.match(allyCashSettingsHtml,
+  /Also:[\s\S]*?10 investments need tax information[\s\S]*?3 bills are using estimates/);
+const allyAlsoNote = allyCashSettingsHtml.split('Also:')[1] || '';
+assert.doesNotMatch(allyAlsoNote, /<button/,
+  'tax and estimate warnings must stay informational and must not become action buttons');
+assert.doesNotMatch(allyCashSettingsAction.button,
+  /Monthly Review|Data readiness|connected|plaid|imported_evidence/i);
+assert.doesNotMatch(allyCashSettingsHtml, /Open Bank Accounts|setCapitalAllocationView_\('data'\)|setBankPanelMode\('connected'\)/);
+const cashSettingsNav = [];
+clientContext.showTab = (tab) => cashSettingsNav.push(['showTab', tab]);
+clientContext.setBankPanelMode = (mode) => cashSettingsNav.push(['setBankPanelMode', mode]);
+clientContext.openCapitalAllocationCashSettingsReview_('Ally - Samer Savings Account - 0393');
+assert.deepEqual(cashSettingsNav, [['showTab', 'bank'], ['setBankPanelMode', 'manage']]);
+assert.equal(clientContext.pendingFocus.accountName, 'Ally - Samer Savings Account - 0393');
+assert.equal(clientContext.pendingFocus.tab, 'bank');
+assert.equal(clientContext.pendingFocus.panelMode, 'manage');
+assert.equal(clientContext.pendingFocus.reviewRoute, 'editor');
+assert.notEqual(clientContext.pendingFocus.reviewRoute, 'identity');
+delete clientContext.showTab;
+delete clientContext.setBankPanelMode;
+assert.match(client, /function openCapitalAllocationCashSettingsReview_\(accountName\)[\s\S]*?showTab\('bank'\)[\s\S]*?setBankPanelMode\('manage'\)/);
+assert.doesNotMatch(client,
+  /function openCapitalAllocationCashSettingsReview_[\s\S]{0,900}(?:google\.script\.run|saveTrackedBankAccountFromDashboard|submitBankEdit_|setValue|setValues)/,
+  'opening cash settings must not save or change the account');
+assert.doesNotMatch(client,
+  /function openCapitalAllocationCashSettingsReview_[\s\S]{0,900}(?:setBankPanelMode\('connected'\)|loadPlanningDataReadiness_|setCapitalAllocationView_\('data'\)|openMonthlyReviewScreen_|plaid)/i,
+  'cash-settings review must not route to Data Readiness, Connected, Plaid, or Monthly Review');
+const renderSource = fs.readFileSync(new URL('../Dashboard_Script_Render.html', import.meta.url), 'utf8');
+assert.match(renderSource,
+  /obj && obj\.panelMode === 'manage'[\s\S]*?setBankPanelMode\('manage'\)[\s\S]*?openBankEditForm_\(name\)/);
+assert.doesNotMatch(renderSource,
+  /panelMode === 'manage'[\s\S]{0,600}(?:saveTrackedBankAccountFromDashboard|submitBankEdit_|google\.script\.run)/);
 const multipleActionPlan = JSON.parse(JSON.stringify(attentionPlan));
 multipleActionPlan.capitalSourceLadder.cashAccounts = [
   { accountName: 'Ally - Samer Savings', zeroBufferWarning: true },
@@ -1408,8 +1753,8 @@ multipleActionPlan.capitalSourceLadder.cashAccounts = [
 const multipleActionHtml = clientContext.capitalAllocationOverviewWarningsHtml_(multipleActionPlan,
   [{ findingId: 'MISSING_DEBT_APR:CITIAA', message: 'CitiAA has no usable APR. Ranking must wait.' }], []);
 assert.match(multipleActionHtml,
-  /5 actions needed[\s\S]*?Set a cash buffer for Ally - Samer Savings[\s\S]*?Set a cash buffer for Rental Reserve[\s\S]*?Set a cash buffer for Tax Reserve[\s\S]*?Review 2 more actions/,
-  'multiple immediate actions must stay concise and expose the remainder on demand');
+  /Needs your attention[\s\S]*?1 action needed[\s\S]*?Verify the APR for CitiAA[\s\S]*?Set a cash buffer for Ally - Samer Savings[\s\S]*?Set a cash buffer for Rental Reserve[\s\S]*?Review 2 more actions/,
+  'missing or invalid data keeps a stronger action label; remaining planning notes stay available on demand');
 assert.match(multipleActionHtml, /Verify the APR for CitiAA/,
   'known blocking information must translate into a customer action without exposing its reason code');
 assert.doesNotMatch(multipleActionHtml, /MISSING_DEBT_APR|TAX_DATA_REQUIRED/);

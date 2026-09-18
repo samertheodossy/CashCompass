@@ -1745,13 +1745,6 @@ function readCapitalAllocationLiquidity_(ss, findings) {
       usable: usable, included: included, provenance: 'SYS - Accounts' };
     if (reason) account.excludedReason = reason;
     result.accounts.push(account);
-    if (capitalAllocationIsSamerAllyAccount_(name) &&
-        reason === 'do_not_touch_policy') {
-      findings.push(capitalAllocationFinding_(
-        'SAMER_ALLY_USE_POLICY_CONFLICT', 'ERROR', true,
-        name + ' is intended to be eligible household capital but is currently marked Do Not Touch. In Assets & Liabilities → Bank accounts → Manage, change its Use Policy to Extra Cash and set the minimum buffer before using this plan.',
-        'SYS - Accounts / approved household capital policy'));
-    }
   }
   result.accounts.sort(function(a, b) { return a.accountName.localeCompare(b.accountName); });
   result.cashToUse = total;

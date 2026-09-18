@@ -134,7 +134,7 @@ function capitalAllocationProgressHtml_(plan) {
     '<h3>Your progress</h3><span class="capital-allocation-badge">At a glance</span></div>' +
     '<div class="capital-allocation-progress-grid">' +
     capitalAllocationProgressCardHtml_('Credit-card debt remaining', formatCapitalAllocationMoney_(revolvingRemaining),
-      'After this week\'s recommended payments',
+      'After this week\'s recommended actions',
       next.destination ? 'Next target: ' + capitalAllocationCustomerActionName_(next.destination) : '') +
     capitalAllocationProgressCardHtml_('Cash reserve', reserveCovered ? 'Covered' : 'Needs review',
       formatCapitalAllocationMoney_(summary.reserve90Days) + ' target', '') +
@@ -164,7 +164,8 @@ function capitalAllocationOverviewWarningsHtml_(plan, blockers, variableEstimate
   var taxData = (ladder.steps || []).filter(function(row) {
     return String(row.status || '') === 'TAX_DATA_REQUIRED';
   }).length;
-  var actions = zeroBufferAccounts.map(function(accountName) {
+  var dataActions = (blockers || []).map(capitalAllocationBlockingAttentionModel_);
+  var planNotes = zeroBufferAccounts.map(function(accountName) {
     return {
       title: 'Set a cash buffer for ' + accountName,
       explanation: 'Cash Compass currently considers the full eligible balance available to use. ' +
@@ -172,10 +173,11 @@ function capitalAllocationOverviewWarningsHtml_(plan, blockers, variableEstimate
       button: '<button type="button" class="small-btn" onclick="openCapitalAllocationCashBufferReview_()">' +
         'Review cash buffer</button>'
     };
-  }).concat((blockers || []).map(capitalAllocationBlockingAttentionModel_));
-  var actionCount = actions.length;
-  var visibleActions = actions.slice(0, 3).map(capitalAllocationAttentionActionHtml_).join('');
-  var additionalActions = actions.slice(3).map(capitalAllocationAttentionActionHtml_).join('');
+  });
+  var missingDataCount = dataActions.length;
+  var items = dataActions.concat(planNotes);
+  var visibleActions = items.slice(0, 3).map(capitalAllocationAttentionActionHtml_).join('');
+  var additionalActions = items.slice(3).map(capitalAllocationAttentionActionHtml_).join('');
   var information = [];
   if (taxData) {
     information.push(taxData + ' investment' + (taxData === 1 ? ' needs' : 's need') + ' tax information');
@@ -184,17 +186,22 @@ function capitalAllocationOverviewWarningsHtml_(plan, blockers, variableEstimate
     information.push(variableEstimates.length + ' bill' +
       (variableEstimates.length === 1 ? ' is' : 's are') + ' using estimates');
   }
+  var kicker = missingDataCount ? 'Needs your attention' : 'Plan notes';
+  var heading = missingDataCount
+    ? (missingDataCount + ' action' + (missingDataCount === 1 ? '' : 's') + ' needed')
+    : (planNotes.length ? 'Planning considerations' : 'No action needed right now');
   return '<section class="capital-allocation-overview-status"><div class="capital-allocation-attention-heading">' +
-    '<div class="capital-allocation-preview-kicker">' +
-      (actionCount ? 'Needs your attention' : 'Plan notes') + '</div>' +
-    '<strong>' + (actionCount ? actionCount + ' action' + (actionCount === 1 ? '' : 's') + ' needed' :
-      'No action needed right now') + '</strong></div>' +
+    '<div class="capital-allocation-preview-kicker">' + kicker + '</div>' +
+    '<strong>' + heading + '</strong></div>' +
     (visibleActions ? '<div class="capital-allocation-attention-list">' + visibleActions + '</div>' : '') +
     (additionalActions ? '<details class="capital-allocation-attention-more"><summary>Review ' +
-      (actions.length - 3) + ' more action' + (actions.length - 3 === 1 ? '' : 's') + '</summary>' +
+      (items.length - 3) + ' more ' + (missingDataCount ? 'action' : 'note') +
+      (items.length - 3 === 1 ? '' : 's') + '</summary>' +
       '<div class="capital-allocation-attention-list">' + additionalActions + '</div></details>' : '') +
     (information.length ? '<p class="capital-allocation-information-note"><strong>Also:</strong> ' +
       information.map(escapeCapitalAllocationHtml_).join(' &middot; ') + '</p>' : '') +
+    '<p class="capital-allocation-information-note">Planning warnings are not the same as missing monthly data. ' +
+    'Review monthly completeness in Monthly Review and cash/card readiness in Planning → Data.</p>' +
     '</section>';
 }
 
@@ -236,9 +243,11 @@ function capitalAllocationBlockingAttentionModel_(row) {
   }
   if (findingId === 'SAMER_ALLY_USE_POLICY_CONFLICT') {
     var allyMatch = message.match(/^(.+?) is intended\b/i);
+    var accountName = allyMatch ? String(allyMatch[1] || '').trim() : '';
     return {
-      title: 'Review cash settings' + (allyMatch ? ' for ' + allyMatch[1] : ''),
-      explanation: 'This account\'s current settings prevent Cash Compass from safely treating it as available household cash.'
+      title: 'Review cash settings' + (accountName ? ' for ' + accountName : ''),
+      explanation: 'This account\'s current settings prevent Cash Compass from safely treating it as available household cash.',
+      button: capitalAllocationReviewCashSettingsButtonHtml_(accountName)
     };
   }
   return {
@@ -254,6 +263,35 @@ function capitalAllocationAttentionActionHtml_(action) {
     (action.button || '') + '</div>';
 }
 
+function capitalAllocationReviewCashSettingsButtonHtml_(accountName) {
+  var name = String(accountName || '').trim();
+  return '<button type="button" class="small-btn"' +
+    (name ? ' data-account-name="' + escapeCapitalAllocationHtml_(name) + '"' : '') +
+    ' onclick="openCapitalAllocationCashSettingsReviewFromButton_(this)">' +
+    'Review cash settings</button>';
+}
+
+function openCapitalAllocationCashSettingsReviewFromButton_(button) {
+  var name = button && button.getAttribute
+    ? String(button.getAttribute('data-account-name') || '').trim()
+    : '';
+  openCapitalAllocationCashSettingsReview_(name);
+}
+
+function openCapitalAllocationCashSettingsReview_(accountName) {
+  var name = String(accountName || '').trim();
+  pendingFocus = {
+    tab: 'bank',
+    page: 'assets',
+    accountName: name,
+    panelMode: 'manage',
+    reviewRoute: 'editor',
+    source: 'this_week_planning'
+  };
+  if (typeof showTab === 'function') showTab('bank');
+  if (typeof setBankPanelMode === 'function') setBankPanelMode('manage');
+}
+
 function openCapitalAllocationCashBufferReview_() {
   if (typeof showTab === 'function') showTab('bank');
   if (typeof setBankPanelMode === 'function') setBankPanelMode('manage');
@@ -266,7 +304,7 @@ function capitalAllocationOverviewNextStepHtml_(plan) {
       '<p>Required payments, Robinhood, and protected cash remain accounted for.</p></section>';
   }
   return '<section class="capital-allocation-overview-next"><div class="capital-allocation-preview-kicker">Next step</div>' +
-    '<strong>Make the recommended payments, then refresh Cash Compass after the new balances appear.</strong>' +
+    '<strong>Complete this week\'s recommended actions, then refresh Cash Compass after the new balances appear.</strong>' +
     '<p>We\'ll confirm what changed and calculate your next recommendation.</p></section>';
 }
 
@@ -906,7 +944,7 @@ function capitalAllocationPrimaryDecisionHtml_(plan) {
     : decision.debtAmount > 0
     ? 'Pay ' + formatCapitalAllocationMoney_(decision.debtAmount) +
       ' toward debt now'
-    : 'Follow this week&rsquo;s required payments and cash protections.';
+    : 'Follow this week&rsquo;s plan for payments, investing, and cash protections.';
   var overrideReasons = (investmentPolicy.overrideReasons || []).map(function(row) {
     return '<li>' + escapeCapitalAllocationHtml_(row.message || String(row)) + '</li>';
   }).join('');
@@ -946,7 +984,7 @@ function capitalAllocationPrimaryDecisionHtml_(plan) {
     '<p>Cash Compass is intentionally keeping this money available instead of using all available cash for debt.</p></section>' +
     (pausedRows ? '<section class="capital-allocation-primary-pause"><div class="capital-allocation-preview-kicker">Pause for now</div>' +
       pausedRows + '</section>' : '') + '</div>' +
-    '<p class="capital-allocation-decision-next"><strong>After you make these payments:</strong> Refresh Cash Compass once the new balances appear. We\'ll confirm the results and calculate your next recommendation.</p>' +
+    '<p class="capital-allocation-decision-next"><strong>After you complete this week\'s actions:</strong> Refresh Cash Compass once the new balances appear. We\'ll confirm the results and calculate your next recommendation.</p>' +
     '<details class="capital-allocation-property-detail"><summary><strong>' +
       escapeCapitalAllocationHtml_(outcomeHeading) + '</strong>' +
       '<span class="capital-allocation-expand-label">View outcomes</span></summary>' +
