@@ -122,7 +122,7 @@ remain in `FULL_BETA_REMAINING_PLAN.md`.
 | C — known product gap | Central planner-email debounce/trigger noise | Open historical Central design issue; no financial-data impact | Must be dispositioned in known limitations/operations; implementation priority depends on cohort impact | Re-qualify before implementation; do not mix into import work |
 | C — known product gap | AutoPay creation of a missing exact Cash Flow payee row | Open product/financial decision; current behavior fails closed to manual handling | No unless cohort evidence promotes it | Separate higher-risk Bills decision; not part of completed lifecycle |
 | D — deferred strategic | Residual `RFP-4`/`RFP-5`, shared sheet-write utilities, Income Expected/Due, Money Plan Phase 2, debt aliases/merge, refresh awareness | Deferred | No, except exact evidence already represented elsewhere | Re-qualify after current Beta-critical work |
-| E — future/north star | Strategic Capital Allocation, Whole-Household Debt Freedom Planner, **Multi-Broker Portfolio Intelligence** (`MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` Phases 1–8), rewards/spend optimization, recurring schedule/gap modeling, Recurring Bill & Subscription Discovery, Property Value / AVM Refresh, broader transaction/provider ingestion, Chat/Assistant, billing activation | Future | No | Foundation v1 + E*TRADE source inspection complete; **bounded Unified Apply local** (M1/E*TRADE statement snapshots); preview-only E*TRADE adapter next after doc approval; Robinhood→Unified migration explicitly deferred; M1/Schwab later |
+| E — future/north star | **Complete financial decision engine** (source-neutral evidence → history → explainable payoff/investment recommendations), plus Strategic Capital Allocation, Whole-Household Debt Freedom Planner, **Multi-Broker Portfolio Intelligence** (`MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` Phases 1–8), rewards/spend optimization, recurring schedule/gap modeling, Recurring Bill & Subscription Discovery, Property Value / AVM Refresh, broader transaction/provider ingestion, Chat/Assistant, billing activation | Future | No | Does not interrupt the current Import / Refresh cluster, frozen Planning, or bounded-workbook safety. See **Complete financial decision engine** below. Foundation v1 + E*TRADE source inspection complete; **bounded Unified Apply local** (M1/E*TRADE statement snapshots); preview-only E*TRADE adapter next after doc approval; Robinhood→Unified migration explicitly deferred; M1/Schwab later |
 | F — obsolete/stale | Bills/House/Income recovery listed as open; native browser confirmation migration listed as open; zero-count recovery listed as missing; old Bank Import Step 2a “not started”; old bounded deployment cleanup item | Closed or superseded | No | Retain only as clearly labeled history |
 
 The Planning Overview and Debt surfaces remain frozen. Import work improves the
@@ -695,6 +695,7 @@ Performance under `8b`. Preserve Beta `@106` plus the user-controlled bounded de
 
 ### Priority 4 — Future features
 
+- **Complete financial decision engine** *(future north star; recorded 2026-09-17; does not interrupt current Beta work)* — a source-neutral engine that can use manual and imported data, historical values, holdings, debts, income, expenses, and tax-sensitive information to produce **explainable** payoff and investment recommendations. Full areas, provider coverage, milestones, and dependencies are in **Complete financial decision engine** below. Existing M1, Robinhood, common investment drawer, Data readiness, Planning, and bounded-workbook behavior stay as they are. One common drawer; provider-specific adapters behind it; no duplicate provider pages.
 - **Multi-Broker Portfolio Intelligence** *(Foundation v1 and E*TRADE source
   inspection complete; **preview-only E*TRADE adapter next** after owner doc
   approval; broader M1/Schwab work deferred)* — normalized multi-broker portfolio
@@ -815,6 +816,227 @@ Performance under `8b`. Preserve Beta `@106` plus the user-controlled bounded de
 
 ---
 
+## Complete financial decision engine *(future north star — 2026-09-17)*
+
+**Documentation only.** This section expands the long-term destination. It does
+**not** change the current Import / Refresh cluster, frozen Planning Overview or
+Debt surfaces, Data readiness four-status contract, common investment drawer,
+Robinhood production path, M1/E*TRADE local unified-holdings work, or
+bounded-workbook safety rules. Do not implement these capabilities from this
+roadmap update.
+
+**Objective.** CashCompass becomes a **source-neutral financial decision engine**
+that can use manual and imported data, historical values, holdings, debts,
+income, expenses, and tax-sensitive information to produce explainable payoff
+and investment recommendations. Recommendations remain advisory. The user must
+explicitly approve any financial action. There is no automatic trading, no
+automatic debt payment, no automatic account matching, and no automatic
+imported-data application.
+
+**Product-surface constraint.** Keep **one common drawer** and put
+provider-specific parsers behind adapters. Do **not** create duplicate
+provider-specific pages. Preserve current M1, Robinhood, drawer, readiness,
+Planning, and bounded-workbook behavior while this engine is sequenced.
+
+Related contracts already in the repository (do not replace them):
+`PART_2A_FINANCIAL_FACTS_CONTRACT.md`, `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md`,
+`ROLLING_FINANCIAL_PLAN_DECISION_CONTRACT.md`, `ETRADE_SOURCE_MAPPING.md`.
+
+### Area 1 — Complete account coverage
+
+Normalize every present household account into the shared identity and facts
+model. Add a provider only when the household actually holds it. Record
+supported formats and required fields before an adapter ships.
+
+| Provider / account | Supported or planned formats | Required fields (minimum) | Notes |
+|---|---|---|---|
+| **M1** | Statement PDF (local preview / explicit Apply to `SYS - Investment Holdings Unified`); CSV only if a stable export is later confirmed | Stable account identity, as-of date, holdings (symbol, quantity, market value), cash balance | Preserve current M1 path; no separate M1 page |
+| **Robinhood** | Production activity CSV; derived holdings | Stable account identity, activity date, instrument, quantity, amount, as-of / observed timestamps | Preserve the current Robinhood production path; Unified migration remains explicit and later |
+| **E\*TRADE brokerage** | Transactions CSV; Expanded Positions PDF; Gains & Losses PDF (`ETRADE_PACKAGE`) | Masked account identity, export/as-of or period window, activity rows, open lots, realized closed lots | Source mapping complete; preview-only adapter next after current gates |
+| **E\*TRADE ESPP / RSU** | Future grant, vest, sale, and withholding evidence (format TBD after inspection) | Grant/plan identity, vest or purchase date, shares, FMV, cost basis, withholding, holding period / disqualifying-disposition flags when supplied | Do not guess ESPP/RSU rules from brokerage cash activity alone |
+| **Schwab** | Future source inspection (CSV/PDF/other as offered) | TBD after inspection: identity, as-of, holdings, cash, lots if supplied | Same normalized model as other brokers |
+| **Stash** | Future source inspection | TBD after inspection: identity, as-of, holdings or contribution balance | Adapter only if the household holds Stash |
+| **401(k)** | Fidelity 401(k) statement PDF parser exists locally; other plan PDFs/CSV as inspected | Plan identity, as-of, balance, contribution, employer match when present, allocation | Retirement wrapper; not a taxable-brokerage clone |
+| **IRA, HSA, 529, other** | Only when present | Account type / tax wrapper, identity, as-of, balance; contributions or lots when supplied | Do not pre-build unused account types |
+
+Every adapter writes through the shared identity, Financial Facts, and (where
+investments) unified holdings contracts. Source type remains a label.
+
+### Area 2 — Source-neutral evidence
+
+Valid monthly values count equally from:
+
+- manual entry;
+- Plaid;
+- CSV;
+- PDF;
+- other approved adapters.
+
+Track, for every fact: **account identity**, **source**, **as-of date**,
+**freshness**, **provenance**, and **confidence**. Manual and imported evidence
+do not create a second Planning authority. Current Data readiness statuses
+remain **Not connected**, **More data needed**, **Needs review**, and **Ready
+for review**. Explicit zero remains valid evidence.
+
+### Area 3 — Historical data foundation
+
+Build auditable history before multi-year optimization:
+
+- monthly account snapshots;
+- holdings history;
+- cost basis and tax lots;
+- cash history;
+- debt and mortgage history;
+- income and expense history;
+- duplicate / replay protection;
+- auditable source lineage.
+
+History is append-only or superseding with provenance. Re-imports must not
+duplicate facts. Raw source files remain non-retained by default.
+
+### Area 4 — Debt-payoff optimizer
+
+After authoritative revolving-debt, HELOC, and mortgage facts:
+
+- credit cards, HELOC, mortgages;
+- minimum payments, APRs, payoff dates;
+- avalanche vs snowball comparison;
+- interest savings;
+- reserve protection;
+- bonus, RSU, rental, and monthly-surplus scenarios.
+
+Must not violate required obligations, liquidity, or 30/90-day safety. Must not
+auto-pay any debt. Builds on frozen Planning invariants and the Whole-Household
+Debt Freedom Planner north star.
+
+### Area 5 — Tax-aware portfolio action analysis
+
+Recommendation-only analysis of:
+
+- candidate stocks or lots to sell;
+- short-term versus long-term gains;
+- cost basis;
+- RSU / ESPP rules;
+- concentration risk;
+- taxable versus retirement accounts;
+- estimated tax impact.
+
+**No automatic trading or selling.** Aggregate holdings without lots are
+insufficient for tax-lot advice (`TAX_DATA_REQUIRED`). Robinhood remains
+protected from default sell-for-cash recommendations unless policy changes.
+
+### Area 6 — Idle-cash allocation
+
+Compare reserve, card payoff, HELOC payoff, extra mortgage principal, and
+investing options. Show cash remaining, interest saved, expected benefit, and
+risk. Pace only genuinely excess capital after hard reserve, preferred
+liquidity, and post-decision 30/90-day coverage using current cash only.
+
+### Area 7 — Robinhood funding optimization
+
+Model recurring contribution amount, cash-flow capacity, target allocation,
+dividend schedule, total return, taxes, concentration, and time to income
+goals. **Do not optimize on dividend yield alone.** Preserve the current
+`$500/week` policy-floor semantics unless the owner later changes policy.
+Do not recommend selling Robinhood holdings to fund contributions.
+
+### Area 8 — HELOC analysis
+
+Compare using cash, using HELOC, or staged use. Include variable-rate risk,
+repayment requirements, reserve floor, liquidity risk, and tax treatment.
+**Never recommend HELOC use solely because credit is available.**
+
+### Area 9 — Mortgage acceleration
+
+Model extra principal, refinancing, interest savings, cash-flow effects,
+opportunity cost, rental-property treatment, and prepayment constraints.
+Property Performance financing accuracy is already V1; this layer is decision
+support, not a second mortgage calculator.
+
+### Area 10 — Retirement and income planning
+
+Extend current Retirement analysis with:
+
+- 401(k) balance, contributions, match, allocation, and return assumptions;
+- taxable and tax-deferred assets;
+- RSU / ESPP income;
+- rental income;
+- retirement age;
+- withdrawal sequencing;
+- Social Security / pension inputs when available;
+- retirement cash-flow gap.
+
+Variable RSU/ESPP income stays tagged variable and must not be treated as a
+stable paycheck.
+
+### Area 11 — Explainable recommendations
+
+Every recommendation must show:
+
+- proposed action;
+- amount;
+- expected savings or benefit;
+- assumptions;
+- tax impact;
+- liquidity impact;
+- risks;
+- missing data;
+- confidence level.
+
+Recommendations remain advisory and require **explicit user approval**. Missing
+data fails closed (`TAX_DATA_REQUIRED`, `PACING_DATA_REQUIRED`, identity review,
+and similar) instead of inventing values.
+
+### Area 12 — Safety and governance
+
+Standing rules for every milestone in this engine:
+
+- no automatic trades;
+- no automatic debt payments;
+- no automatic account matching;
+- no automatic imported-data application;
+- explicit scenario assumptions;
+- audit trail;
+- user approval before any financial action;
+- no bounded, mapped-user, Golden, or configured-default workbook as a test
+  writer target;
+- Central and bounded keep one product design.
+
+### Milestones and dependencies
+
+These milestones are **future**. They start only after the named dependency is
+closed or explicitly waived. They do not preempt Credit Card Import
+correctness, Bank/Investment Apply (when separately opened), House/Income
+Edit/Rename disposition, or frozen-candidate evidence `8a`–`8f`.
+
+| ID | Milestone | Depends on | Delivers |
+|---|---|---|---|
+| **DE-0** | Preservation gate (constraint, not a feature build) | Current M1, Robinhood, common drawer, Data readiness, Planning freeze, bounded-workbook rules | Written non-regression: no duplicate provider UI; adapters behind the common drawer |
+| **DE-1** | Source-neutral evidence completeness | Part 2A-0–2A-5; current four-status readiness; no Planning authority switch | Identity, source, as-of, freshness, provenance, confidence on cash/card and then later domains; manual/Plaid/CSV/PDF count equally; explicit zero valid |
+| **DE-2** | Account-coverage adapters | DE-0, DE-1; per-provider format inspection | M1, Robinhood, E\*TRADE brokerage, E\*TRADE ESPP/RSU, Schwab, Stash, 401(k), and IRA/HSA/529 only when present — each behind the common drawer |
+| **DE-3** | Historical data foundation | DE-1; duplicate/replay-safe import | Monthly snapshots, holdings/lots, cash/debt/mortgage/income/expense history, lineage |
+| **DE-4** | Debt-payoff optimizer | DE-1; revolving-debt + HELOC + mortgage facts; frozen Planning safety | Cards/HELOC/mortgages, minimums, APRs, dates, avalanche/snowball, interest saved, reserve protection, surplus scenarios |
+| **DE-5** | Idle-cash allocation | DE-3, DE-4; hard reserve + preferred liquidity | Compare reserve vs payoff vs extra mortgage vs investing with remaining cash, benefit, and risk |
+| **DE-6** | HELOC analysis | DE-4; house financing identity | Cash vs HELOC vs staged use; variable-rate, repayment, reserve, liquidity, tax; never “because credit exists” |
+| **DE-7** | Mortgage acceleration | DE-4; Property Performance V1 | Extra principal, refinance, interest, cash-flow, opportunity cost, rental treatment, prepayment limits |
+| **DE-8** | Tax-aware portfolio actions | DE-2, DE-3 tax lots; Robinhood protection policy | Candidate lots, ST/LT, basis, RSU/ESPP, concentration, taxable vs retirement, estimated tax; no auto-sell |
+| **DE-9** | Robinhood funding optimization | DE-3, DE-5; current Robinhood policy floor | Contribution, capacity, allocation, dividends, total return, tax, concentration, time-to-income; not yield-only |
+| **DE-10** | Retirement and income planning | DE-2 401(k); DE-3 history; current Retirement surface | Contributions/match/allocation, wrappers, RSU/ESPP/rent, age, sequencing, SS/pension when present, cash-flow gap |
+| **DE-11** | Explainable recommendation packet | Required output of DE-4 through DE-10 | Action, amount, benefit, assumptions, tax, liquidity, risks, missing data, confidence; explicit approval |
+| **DE-12** | Safety and governance evidence | Cross-cutting from DE-1 | No auto-trade/pay/match/apply; assumptions; audit trail; user approval; bounded-workbook writer prohibition |
+
+**Suggested later sequence (after current Beta-critical import work):**
+DE-0/DE-1 (evidence) → DE-2 (coverage, one adapter at a time) → DE-3 (history)
+→ DE-11/DE-12 (packet + governance, in parallel) → DE-4 → DE-5 → DE-6 / DE-7
+→ DE-8 → DE-9 → DE-10.
+
+**Explicit non-goals for these milestones:** automatic execution, silent
+Planning-authority switch, provider-specific duplicate UIs, optimizing Robinhood
+on dividend yield alone, recommending HELOC use only because credit is
+available, and treating RSU/ESPP as stable salary.
+
+---
+
 ## House Financial Accuracy *(Priority 2 — High)*
 
 **Execution plan:** `HOUSE_FINANCIAL_ACCURACY_PLAN.md` — completed additive V1
@@ -858,6 +1080,10 @@ Sequenced **immediately after Validator Phase 2 and before major new user featur
 
 ## Related documents
 
+- `ROADMAP.md → Complete financial decision engine` — future source-neutral
+  decision engine (account coverage, history, payoff/investment/retirement
+  recommendations, explainability, and governance). Documentation only;
+  does not change current Beta sequence.
 - `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` — deferred next Investment milestone:
   multi-broker normalization, tax lots, passive income, and recommendation-only
   optimizers (Robinhood protected).

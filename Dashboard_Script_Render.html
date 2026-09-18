@@ -1765,37 +1765,155 @@ function focusIssueByIndex(index) {
 
 function focusTarget(obj) {
   pendingFocus = obj || null;
-  if (!obj || !obj.tab) return;
+  if (!obj) return;
+  if (obj.reviewRoute === 'imported_evidence') {
+    if (typeof planningDataReadinessOpenImportedReview_ === 'function') {
+      planningDataReadinessOpenImportedReview_(obj.accountKey || obj.stableAccountId || '');
+    }
+    pendingFocus = null;
+    return;
+  }
+  if (!obj.tab) return;
 
   showTab(obj.tab);
+
+  if (obj.reviewRoute === 'identity' || obj.actionKind === 'IDENTITY') {
+    focusIdentityTarget_(obj);
+    return;
+  }
 
   if (obj.tab === 'bank') {
     focusBankTarget_(obj);
   } else if (obj.tab === 'debts') {
     focusDebtTarget_(obj);
+  } else if (obj.tab === 'houses') {
+    focusHouseTarget_(obj);
+  } else if (obj.tab === 'investments') {
+    focusInvestmentTarget_(obj);
   } else if (obj.tab === 'payments') {
     if (obj.prefill) prefillQuickPayment(obj.prefill);
   }
 }
 
+function focusTargetCycleDate_(obj) {
+  if (!obj) return '';
+  var explicit = String(obj.targetDate || obj.asOf || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(explicit)) return explicit.slice(0, 10);
+  var cycle = String(obj.cycleKey || obj.targetMonth || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(cycle)) return '';
+  var parts = cycle.split('-');
+  var year = Number(parts[0]);
+  var month = Number(parts[1]);
+  var lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  var dd = lastDay < 10 ? '0' + lastDay : String(lastDay);
+  return cycle + '-' + dd;
+}
+
+function applyFocusDate_(fieldId, obj) {
+  var el = document.getElementById(fieldId);
+  if (!el) return;
+  var iso = focusTargetCycleDate_(obj);
+  if (iso) el.value = iso;
+}
+
+function focusIdentityTarget_(obj) {
+  if (!obj || !obj.tab) return;
+  if (obj.tab === 'bank' && typeof setBankPanelMode === 'function') {
+    setBankPanelMode('connected');
+  } else if (obj.tab === 'debts' && typeof setDebtPanelMode === 'function') {
+    setDebtPanelMode('connected');
+  } else if (obj.tab === 'investments' && typeof setInvestmentPanelMode === 'function') {
+    setInvestmentPanelMode('connected');
+  } else if (obj.tab === 'houses' && typeof setHousePanelMode === 'function') {
+    setHousePanelMode('update');
+  }
+  pendingFocus = null;
+}
+
 function focusBankTarget_(obj) {
   const select = document.getElementById('bank_account');
-  if (!select || !obj.accountName) return;
-
+  const name = obj && obj.accountName;
   if (typeof setBankPanelMode === 'function') {
     setBankPanelMode('update');
   }
+  if ((!select || !name || !select.options || select.options.length <= 1) &&
+      typeof loadBankSectionThenSelect_ === 'function' && name) {
+    loadBankSectionThenSelect_(name);
+    setTimeout(function() {
+      applyFocusDate_('bank_date', obj);
+      pendingFocus = null;
+    }, 50);
+    return;
+  }
+  if (!select || !name) return;
 
   setTimeout(function() {
     const opt = Array.from(select.options).find(function(x) {
-      return x.value === obj.accountName;
+      return x.value === name;
     });
+    applyFocusDate_('bank_date', obj);
     if (!opt) return;
-    select.value = obj.accountName;
+    select.value = name;
     if (!document.getElementById('bank_date').value) {
       document.getElementById('bank_date').value = new Date().toISOString().slice(0, 10);
     }
     loadBankData();
+    pendingFocus = null;
+  }, 50);
+}
+
+function focusHouseTarget_(obj) {
+  if (typeof setHousePanelMode === 'function') setHousePanelMode('update');
+  const select = document.getElementById('house_house');
+  const name = obj && obj.accountName;
+  if ((!select || !select.options || select.options.length <= 1) &&
+      typeof loadHouseSectionThenSelect_ === 'function' && name) {
+    loadHouseSectionThenSelect_(name);
+    setTimeout(function() {
+      applyFocusDate_('house_date', obj);
+      pendingFocus = null;
+    }, 50);
+    return;
+  }
+  setTimeout(function() {
+    applyFocusDate_('house_date', obj);
+    if (select && name) {
+      const opt = Array.from(select.options).find(function(x) {
+        return x.value === name;
+      });
+      if (opt) {
+        select.value = name;
+        if (typeof loadHouseData === 'function') loadHouseData();
+      }
+    }
+    pendingFocus = null;
+  }, 50);
+}
+
+function focusInvestmentTarget_(obj) {
+  if (typeof setInvestmentPanelMode === 'function') setInvestmentPanelMode('update');
+  const select = document.getElementById('inv_account');
+  const name = obj && obj.accountName;
+  if ((!select || !select.options || select.options.length <= 1) &&
+      typeof loadInvestmentSectionThenSelect_ === 'function' && name) {
+    loadInvestmentSectionThenSelect_(name);
+    setTimeout(function() {
+      applyFocusDate_('inv_date', obj);
+      pendingFocus = null;
+    }, 50);
+    return;
+  }
+  setTimeout(function() {
+    applyFocusDate_('inv_date', obj);
+    if (select && name) {
+      const opt = Array.from(select.options).find(function(x) {
+        return x.value === name;
+      });
+      if (opt) {
+        select.value = name;
+        if (typeof loadInvestmentData === 'function') loadInvestmentData();
+      }
+    }
     pendingFocus = null;
   }, 50);
 }

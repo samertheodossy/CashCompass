@@ -149,8 +149,11 @@ function monthlyCheckinFormatLastUpdatedDate_(isoDateOnly) {
   return date.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 }
 
-function monthlyCheckinEnrichDomainRecord_(record, section) {
+function monthlyCheckinEnrichDomainRecord_(record, section, cycleKey) {
   var row = section || {};
+  var needsAttention = !!(record && record.needsAttention);
+  var hasAction = record && Object.prototype.hasOwnProperty.call(record, 'hasAction')
+    ? !!record.hasAction : needsAttention;
   return {
     domain: row.domain,
     accountKey: record && record.accountKey,
@@ -158,15 +161,57 @@ function monthlyCheckinEnrichDomainRecord_(record, section) {
     navigateTab: (record && record.navigateTab) || row.navigateTab || '',
     domainLabel: (record && record.domainLabel) || row.label || '',
     displayName: record && record.displayName,
-    needsAttention: !!(record && record.needsAttention),
+    needsAttention: needsAttention,
     reason: record && record.reason,
     currentStatusLabel: record && record.currentStatusLabel,
     lastUpdated: record && record.lastUpdated,
     hasPriorMonthValue: record && record.hasPriorMonthValue,
     priorMonthValue: record && record.priorMonthValue,
     currentValue: record && record.currentValue,
-    debtType: record && record.debtType
+    debtType: record && record.debtType,
+    sourceLabel: record && record.sourceLabel,
+    sourceCode: record && record.sourceCode,
+    cycleKey: (record && record.cycleKey) || cycleKey || '',
+    targetMonth: (record && record.targetMonth) || (record && record.cycleKey) || cycleKey || '',
+    hasAction: hasAction,
+    actionLabel: (record && record.actionLabel) || (hasAction
+      ? monthlyCheckinSectionNavLabel_(row.label || row.domain) : ''),
+    nextAction: (record && record.nextAction) || (hasAction
+      ? monthlyCheckinSectionNavLabel_(row.label || row.domain)
+      : 'Current — no action required.'),
+    reviewRoute: (record && record.reviewRoute) || (hasAction ? 'editor' : ''),
+    actionKind: (record && record.actionKind) || (hasAction ? 'UPDATE' : ''),
+    invalidCurrentMonthValue: !!(record && record.invalidCurrentMonthValue)
   };
+}
+
+function monthlyCheckinActionButtonHtml_(record) {
+  var row = record || {};
+  if (!row.hasAction) return '';
+  return '<button type="button" class="small-btn monthly-review-card-action"' +
+    ' data-review-route="' + monthlyCheckinEscape_(row.reviewRoute || 'editor') + '"' +
+    ' data-page="' + monthlyCheckinEscape_(row.navigatePage || 'assets') + '"' +
+    ' data-tab="' + monthlyCheckinEscape_(row.navigateTab || '') + '"' +
+    ' data-domain="' + monthlyCheckinEscape_(row.domain || '') + '"' +
+    ' data-account-key="' + monthlyCheckinEscape_(row.accountKey || '') + '"' +
+    ' data-account-name="' + monthlyCheckinEscape_(row.displayName || '') + '"' +
+    ' data-cycle-key="' + monthlyCheckinEscape_(row.cycleKey || '') + '"' +
+    ' data-reason="' + monthlyCheckinEscape_(row.reason || row.message || '') + '"' +
+    ' data-debt-type="' + monthlyCheckinEscape_(row.debtType || '') + '"' +
+    ' data-action-kind="' + monthlyCheckinEscape_(row.actionKind || 'UPDATE') + '"' +
+    ' onclick="monthlyCheckinOpenItemFromButton_(this)">' +
+    monthlyCheckinEscape_(row.actionLabel || row.nextAction || 'Open') + '</button>';
+}
+
+function monthlyCheckinCurrentActionHtml_(record) {
+  var extra = record && record.currentStatusLabel &&
+    String(record.currentStatusLabel) !== 'Current — no action required.'
+    ? '<p class="monthly-review-card-status monthly-review-card-status--current">' +
+      monthlyCheckinEscape_(record.currentStatusLabel) + '</p>'
+    : '';
+  return extra + '<p class="monthly-review-card-status monthly-review-card-status--current">' +
+    monthlyCheckinEscape_((record && record.nextAction) || 'Current — no action required.') +
+    '</p>';
 }
 
 function monthlyCheckinDebtLastUpdatedLineHtml_(record) {
@@ -185,7 +230,13 @@ function monthlyCheckinMonthValueAttentionCardHtml_(record, cycleKey) {
   var priorValueText = row.hasPriorMonthValue
     ? monthlyCheckinFormatMoney_(row.priorMonthValue)
     : 'No prior value';
-  return '<article class="monthly-review-card monthly-review-card--attention">' +
+  var currentValueHtml = row.invalidCurrentMonthValue
+    ? '<span class="monthly-review-card-value-amount--invalid">Invalid value</span>'
+    : '<span class="monthly-review-card-value-amount--missing">Not entered</span>';
+  var cardClass = row.invalidCurrentMonthValue
+    ? 'monthly-review-card monthly-review-card--attention monthly-review-card--invalid'
+    : 'monthly-review-card monthly-review-card--attention';
+  return '<article class="' + cardClass + '">' +
     '<header class="monthly-review-card-head">' +
     '<strong class="monthly-review-card-title">' + monthlyCheckinEscape_(row.displayName || 'Account') + '</strong>' +
     '</header>' +
@@ -194,12 +245,12 @@ function monthlyCheckinMonthValueAttentionCardHtml_(record, cycleKey) {
     monthlyCheckinEscape_(priorLabel) + ': ' + monthlyCheckinEscape_(priorValueText) +
     '</div>' +
     '<div class="monthly-review-card-value-line">' +
-    monthlyCheckinEscape_(currentLabel) + ': ' +
-    '<span class="monthly-review-card-value-amount--missing">Not entered</span>' +
+    monthlyCheckinEscape_(currentLabel) + ': ' + currentValueHtml +
     '</div>' +
     '</div>' +
     '<p class="monthly-review-card-reason">' +
     monthlyCheckinEscape_(row.reason || monthlyCheckinNeedsMonthValueShortReason_(cycleKey)) + '</p>' +
+    monthlyCheckinActionButtonHtml_(row) +
     '</article>';
 }
 
@@ -218,6 +269,7 @@ function monthlyCheckinDebtAttentionCardHtml_(record) {
     monthlyCheckinDebtLastUpdatedLineHtml_(row) +
     '<p class="monthly-review-card-reason">' +
     monthlyCheckinEscape_(row.reason || 'Needs current-cycle update') + '</p>' +
+    monthlyCheckinActionButtonHtml_(row) +
     '</article>';
 }
 
@@ -243,8 +295,7 @@ function monthlyCheckinCurrentCardHtml_(record, cycleKey, section) {
       '<div class="monthly-review-card-meta-line">Balance: ' +
       monthlyCheckinEscape_(monthlyCheckinFormatMoney_(row.currentValue)) + '</div>' +
       monthlyCheckinDebtLastUpdatedLineHtml_(row) +
-      '<p class="monthly-review-card-status monthly-review-card-status--current">' +
-      monthlyCheckinEscape_(row.currentStatusLabel || 'Current') + '</p>' +
+      monthlyCheckinCurrentActionHtml_(row) +
       '</article>';
   }
   var currentLabel = monthlyCheckinShortMonthLabel_(cycleKey);
@@ -256,12 +307,32 @@ function monthlyCheckinCurrentCardHtml_(record, cycleKey, section) {
     monthlyCheckinEscape_(currentLabel) + ': ' +
     monthlyCheckinEscape_(monthlyCheckinFormatMoney_(row.currentValue)) +
     '</div>' +
-    '<p class="monthly-review-card-status monthly-review-card-status--current">Current</p>' +
+    (row.sourceLabel ? '<div class="monthly-review-card-meta-line">Evidence source: ' +
+      monthlyCheckinEscape_(row.sourceLabel) + '</div>' : '') +
+    monthlyCheckinCurrentActionHtml_(row) +
     '</article>';
 }
 
-function monthlyCheckinIdentityCardHtml_(item) {
+function monthlyCheckinIdentityCardHtml_(item, cycleKey) {
   var row = item || {};
+  if (!row.hasAction) {
+    row = {
+      domain: row.domain,
+      displayName: row.displayName,
+      accountKey: row.accountKey || '',
+      message: row.message,
+      code: row.code,
+      reason: row.message || row.reason || '',
+      navigatePage: row.navigatePage || 'assets',
+      navigateTab: row.navigateTab || '',
+      cycleKey: row.cycleKey || cycleKey || '',
+      hasAction: true,
+      actionLabel: row.actionLabel || 'Review account match',
+      nextAction: row.nextAction || 'Review account match',
+      reviewRoute: row.reviewRoute || 'identity',
+      actionKind: row.actionKind || 'IDENTITY'
+    };
+  }
   return '<article class="monthly-review-card monthly-review-card--identity">' +
     '<header class="monthly-review-card-head">' +
     '<strong class="monthly-review-card-title">' + monthlyCheckinEscape_(row.displayName || 'Unknown account') + '</strong>' +
@@ -269,6 +340,7 @@ function monthlyCheckinIdentityCardHtml_(item) {
     '</header>' +
     '<p class="monthly-review-card-reason monthly-review-card-reason--identity">' +
     monthlyCheckinEscape_(row.message || row.code || 'Identity unresolved') + '</p>' +
+    monthlyCheckinActionButtonHtml_(row) +
     '</article>';
 }
 
@@ -292,7 +364,7 @@ function monthlyCheckinDomainSectionHtml_(section, cycleKey) {
     : statusLine;
 
   var cardsHtml = attentionRecords.concat(currentRecords).map(function(record) {
-    var cardRecord = monthlyCheckinEnrichDomainRecord_(record, row);
+    var cardRecord = monthlyCheckinEnrichDomainRecord_(record, row, cycleKey);
     if (cardRecord.needsAttention) {
       return monthlyCheckinAttentionCardHtml_(cardRecord, cycleKey);
     }
@@ -371,19 +443,50 @@ function renderMonthlyReviewScreen_(model) {
     identitySection.hidden = identityItems.length === 0;
     identityList.innerHTML = identityItems.length > 0
       ? '<div class="monthly-review-cards-grid">' +
-        identityItems.map(monthlyCheckinIdentityCardHtml_).join('') +
+        identityItems.map(function(item) { return monthlyCheckinIdentityCardHtml_(item, cycleKey); }).join('') +
         '</div>'
       : '';
   }
 }
 
 function monthlyCheckinNavigateToDomain_(page, tab) {
+  __monthlyCheckinStale = true;
   if (typeof showWorkspacePage === 'function') {
     showWorkspacePage(page);
   } else if (typeof showPage === 'function') {
     showPage(page);
   }
   if (typeof showTab === 'function') showTab(tab);
+}
+
+function monthlyCheckinOpenItemFromButton_(button) {
+  if (!button) return;
+  __monthlyCheckinStale = true;
+  var context = {
+    tab: button.getAttribute('data-tab') || '',
+    page: button.getAttribute('data-page') || 'assets',
+    domain: button.getAttribute('data-domain') || '',
+    accountKey: button.getAttribute('data-account-key') || '',
+    accountName: button.getAttribute('data-account-name') || '',
+    cycleKey: button.getAttribute('data-cycle-key') ||
+      (__monthlyCheckinModel && __monthlyCheckinModel.cycleKey) || '',
+    targetMonth: button.getAttribute('data-cycle-key') || '',
+    reason: button.getAttribute('data-reason') || '',
+    debtType: button.getAttribute('data-debt-type') || '',
+    reviewRoute: button.getAttribute('data-review-route') || 'editor',
+    actionKind: button.getAttribute('data-action-kind') || 'UPDATE',
+    source: 'monthly_review'
+  };
+  if (typeof showWorkspacePage === 'function') {
+    showWorkspacePage(context.page);
+  } else if (typeof showPage === 'function') {
+    showPage(context.page);
+  }
+  if (typeof focusTarget === 'function') {
+    focusTarget(context);
+    return;
+  }
+  if (typeof showTab === 'function') showTab(context.tab);
 }
 
 function openMonthlyReviewScreen_() {

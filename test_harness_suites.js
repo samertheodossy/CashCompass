@@ -114,7 +114,7 @@ function getHarnessSuites_() {
     {
       id: 'SUITE-PART-2A-DATA-READINESS',
       label: 'Part 2A Data Refresh and Plan Readiness',
-      description: 'Validate the shadow-only cash and credit-card readiness model, concise customer presentation, exact reconciliation, APR-review routing, Planning isolation, and disposable cleanup.',
+      description: 'Validate source-neutral cash and credit-card evidence, concise customer presentation, optional provider review, Planning isolation, and disposable cleanup.',
       scenarioIds: ['REGRESSION-PART-2A-DATA-READINESS']
     },
     {

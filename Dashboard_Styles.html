@@ -652,6 +652,11 @@
     color: #9a3412;
     font-weight: 600;
   }
+  .monthly-review-card-value-amount--invalid,
+  .monthly-review-card--invalid .monthly-review-card-reason {
+    color: #991b1b;
+    font-weight: 600;
+  }
   .monthly-review-card-balance {
     font-size: 14px;
     font-weight: 600;
@@ -672,6 +677,12 @@
   }
   .monthly-review-card-status--current {
     color: #166534;
+    font-weight: 600;
+  }
+  .monthly-review-card-action,
+  .data-readiness-item-action {
+    align-self: flex-start;
+    margin-top: 4px;
   }
   @media (max-width: 720px) {
     .monthly-review-domain-summary-row {
@@ -4095,7 +4106,70 @@
   }
   .data-readiness-authority-banner p { margin: 4px 0; }
   .data-readiness-authority-banner small { color: #475569; }
-  .data-readiness-summary,
+  .data-readiness-page-headline {
+    margin: 8px 0 0;
+    font-size: 20px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.35;
+  }
+  .data-readiness-page-headline--current { color: #166534; }
+  .data-readiness-required-summary {
+    margin: 0 0 16px;
+    padding: 14px 16px;
+    border: 1px solid #dbe5ef;
+    border-radius: 10px;
+    background: #f8fafc;
+  }
+  .data-readiness-required-summary--current {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+  }
+  .data-readiness-required-summary--attention {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+  .data-readiness-required-summary h3 {
+    margin: 0 0 8px;
+    font-size: 14px;
+  }
+  .data-readiness-required-list {
+    margin: 0;
+    padding-left: 18px;
+    color: #0f172a;
+  }
+  .data-readiness-required-list li { margin: 4px 0; }
+  .data-readiness-current-note {
+    margin: 8px 0 0;
+    color: #166534;
+    font-weight: 600;
+  }
+  .data-readiness-optional-provider {
+    margin: 8px 0 16px;
+    padding: 14px 16px;
+    border: 1px solid #dbe5ef;
+    border-radius: 10px;
+    background: #f8fafc;
+  }
+  .data-readiness-optional-provider h3 { margin: 0 0 6px; font-size: 14px; }
+  .data-readiness-optional-details { margin-top: 8px; }
+  .data-readiness-optional-details > summary {
+    cursor: pointer;
+    color: #1f4e78;
+    font-weight: 600;
+  }
+  .data-readiness-optional-list { display: grid; gap: 8px; margin-top: 10px; }
+  .data-readiness-optional-record {
+    padding: 10px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff;
+  }
+  .data-readiness-optional-record p {
+    margin: 4px 0 0;
+    color: #475569;
+    font-size: 13px;
+  }
   .data-readiness-section { margin-bottom: 16px; }
   .data-readiness-summary-grid {
     display: grid;
@@ -4140,6 +4214,7 @@
     white-space: nowrap;
   }
   .data-readiness-status--current { color: #166534; border-color: #bbf7d0; background: #f0fdf4; }
+  .data-readiness-status--idle { color: #475569; border-color: #cbd5e1; background: #f8fafc; }
   .data-readiness-status--refresh,
   .data-readiness-status--review { color: #854d0e; border-color: #fde68a; background: #fffbeb; }
   .data-readiness-status--incomplete { color: #991b1b; border-color: #fecaca; background: #fff1f2; }
@@ -4158,7 +4233,18 @@
   }
   .data-readiness-attention-row div { display: grid; gap: 2px; }
   .data-readiness-attention-row span:not(.data-readiness-status-chip) { color: #475569; font-size: 12px; }
-  .data-readiness-attention-row p { margin: 2px 0 0; color: #64748b; font-size: 12px; }
+  .data-readiness-guidance {
+    display: grid;
+    gap: 4px;
+    margin: 8px 0 0;
+  }
+  .data-readiness-guidance div { display: grid; gap: 1px; }
+  .data-readiness-guidance dt { color: #64748b; font-size: 11px; font-weight: 700; }
+  .data-readiness-guidance dd { margin: 0; color: #0f172a; font-size: 12px; }
+  .data-readiness-reason-list { margin: 6px 0 0; padding-left: 18px; color: #475569; font-size: 12px; }
+  .data-readiness-optional-block { margin-top: 10px; }
+  .data-readiness-optional-block > strong { display: block; font-size: 12px; margin-bottom: 4px; }
+  .data-readiness-readiness-row .data-readiness-guidance { grid-column: 1 / -1; }
   .data-readiness-account-row {
     border: 1px solid #dbe5ef;
     border-radius: 10px;

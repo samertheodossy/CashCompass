@@ -108,6 +108,29 @@ function monthlyCheckinIsPresentSheetValue_(value) {
   return !(value === '' || value === null || value === undefined);
 }
 
+function monthlyCheckinParseSheetNumericEvidence_(raw) {
+  if (!monthlyCheckinIsPresentSheetValue_(raw)) {
+    return {
+      present: false,
+      valid: false,
+      value: null,
+      invalid: false
+    };
+  }
+  var parsed = typeof monthlyCheckinTryNumber_ === 'function'
+    ? monthlyCheckinTryNumber_(raw)
+    : { valid: typeof raw === 'number' && isFinite(raw), value: typeof raw === 'number' ? raw : Number(raw) };
+  if (!parsed.valid) {
+    return { present: true, valid: false, value: null, invalid: true };
+  }
+  return {
+    present: true,
+    valid: true,
+    value: round2_(parsed.value),
+    invalid: false
+  };
+}
+
 function monthlyCheckinReadMonthValueMap_(sheet, balanceDate, blockReader, rowMatcher) {
   var result = Object.create(null);
   if (!sheet || typeof blockReader !== 'function' || typeof rowMatcher !== 'function') {
@@ -149,10 +172,13 @@ function monthlyCheckinReadMonthValueMap_(sheet, balanceDate, blockReader, rowMa
     var rowInfo = rowMatcher(dispRow);
     if (!rowInfo || !rowInfo.name) continue;
     var raw = values[i][colZero];
-    var present = monthlyCheckinIsPresentSheetValue_(raw);
+    var parsed = monthlyCheckinParseSheetNumericEvidence_(raw);
     result[String(rowInfo.name).toLowerCase()] = {
-      present: present,
-      value: present ? round2_(toNumber_(raw)) : null
+      present: parsed.valid,
+      value: parsed.valid ? parsed.value : null,
+      invalid: parsed.invalid,
+      sourceCode: 'MANUAL',
+      sourceLabel: 'Manual'
     };
   }
   return result;
@@ -265,6 +291,9 @@ function monthlyCheckinMonthValueInfo_(monthValues, displayName, priorMonthValue
     return {
       hasCurrentMonthValue: false,
       currentMonthValue: null,
+      invalidCurrentMonthValue: false,
+      sourceCode: 'MANUAL',
+      sourceLabel: 'Manual',
       hasPriorMonthValue: false,
       priorMonthValue: null
     };
@@ -276,6 +305,9 @@ function monthlyCheckinMonthValueInfo_(monthValues, displayName, priorMonthValue
     return {
       hasCurrentMonthValue: false,
       currentMonthValue: null,
+      invalidCurrentMonthValue: false,
+      sourceCode: 'MANUAL',
+      sourceLabel: 'Manual',
       hasPriorMonthValue: !!(priorRow && priorRow.present),
       priorMonthValue: priorRow && priorRow.present ? priorRow.value : null
     };
@@ -283,6 +315,9 @@ function monthlyCheckinMonthValueInfo_(monthValues, displayName, priorMonthValue
   return {
     hasCurrentMonthValue: !!row.present,
     currentMonthValue: row.present ? row.value : null,
+    invalidCurrentMonthValue: !!row.invalid,
+    sourceCode: row.sourceCode || 'MANUAL',
+    sourceLabel: row.sourceLabel || 'Manual',
     hasPriorMonthValue: !!(priorRow && priorRow.present),
     priorMonthValue: priorRow && priorRow.present ? priorRow.value : null
   };
@@ -307,6 +342,9 @@ function monthlyCheckinResolveBankActive_(rows, registryIndex, monthValues, prio
         displayName: displayName,
         hasCurrentMonthValue: monthInfo.hasCurrentMonthValue,
         currentMonthValue: monthInfo.currentMonthValue,
+        invalidCurrentMonthValue: monthInfo.invalidCurrentMonthValue,
+        sourceCode: monthInfo.sourceCode,
+        sourceLabel: monthInfo.sourceLabel,
         hasPriorMonthValue: monthInfo.hasPriorMonthValue,
         priorMonthValue: monthInfo.priorMonthValue
       });
@@ -336,6 +374,9 @@ function monthlyCheckinResolveHouseActive_(rows, registryIndex, monthValues, pri
         displayName: displayName,
         hasCurrentMonthValue: monthInfo.hasCurrentMonthValue,
         currentMonthValue: monthInfo.currentMonthValue,
+        invalidCurrentMonthValue: monthInfo.invalidCurrentMonthValue,
+        sourceCode: monthInfo.sourceCode,
+        sourceLabel: monthInfo.sourceLabel,
         hasPriorMonthValue: monthInfo.hasPriorMonthValue,
         priorMonthValue: monthInfo.priorMonthValue
       });
@@ -359,6 +400,9 @@ function monthlyCheckinResolveInvestmentActive_(rows, registryIndex, investmentL
         displayName: displayName,
         hasCurrentMonthValue: monthInfo.hasCurrentMonthValue,
         currentMonthValue: monthInfo.currentMonthValue,
+        invalidCurrentMonthValue: monthInfo.invalidCurrentMonthValue,
+        sourceCode: monthInfo.sourceCode,
+        sourceLabel: monthInfo.sourceLabel,
         hasPriorMonthValue: monthInfo.hasPriorMonthValue,
         priorMonthValue: monthInfo.priorMonthValue
       });
@@ -378,6 +422,9 @@ function monthlyCheckinResolveInvestmentActive_(rows, registryIndex, investmentL
         displayName: displayName,
         hasCurrentMonthValue: monthInfo.hasCurrentMonthValue,
         currentMonthValue: monthInfo.currentMonthValue,
+        invalidCurrentMonthValue: monthInfo.invalidCurrentMonthValue,
+        sourceCode: monthInfo.sourceCode,
+        sourceLabel: monthInfo.sourceLabel,
         hasPriorMonthValue: monthInfo.hasPriorMonthValue,
         priorMonthValue: monthInfo.priorMonthValue
       });

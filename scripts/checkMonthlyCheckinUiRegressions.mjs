@@ -120,9 +120,19 @@ function domainChunk(html, domain) {
   return html.match(new RegExp('monthly_review_domain_' + domain + '[\\s\\S]*?</details>'));
 }
 
-function cardButtons(html) {
+function cardActionButtons(html) {
   const cards = html.match(/<article class="monthly-review-card[\s\S]*?<\/article>/g) || [];
-  return cards.filter((card) => card.includes('monthlyCheckinNavigateToDomain_'));
+  return cards.filter((card) => card.includes('monthlyCheckinOpenItemFromButton_'));
+}
+
+function currentCards(html) {
+  const cards = html.match(/<article class="monthly-review-card[\s\S]*?<\/article>/g) || [];
+  return cards.filter((card) => card.includes('monthly-review-card--current'));
+}
+
+function attentionCards(html) {
+  const cards = html.match(/<article class="monthly-review-card[\s\S]*?<\/article>/g) || [];
+  return cards.filter((card) => card.includes('monthly-review-card--attention'));
 }
 
 hosts.ov_monthly_review_entry.hidden = true;
@@ -162,8 +172,16 @@ assert.match(bankChunk[0], /Open Bank Accounts/);
 assert.match(housesChunk[0], /Open Houses/);
 assert.match(investmentsChunk[0], /Open Investments/);
 assert.match(debtsChunk[0], /Open Debts/);
-assert.equal(cardButtons(domainsHtml).length, 0,
-  'cards must not repeat domain navigation buttons');
+assert.equal(cardActionButtons(currentCards(domainsHtml).join('')).length, 0,
+  'current items must have no action button');
+assert.equal(currentCards(domainsHtml).every((card) => card.includes('Current — no action required.')), true);
+assert.ok(attentionCards(domainsHtml).length >= 3);
+assert.equal(attentionCards(domainsHtml).every((card) => card.includes('monthlyCheckinOpenItemFromButton_')), true,
+  'attention cards must provide a direct action');
+assert.match(housesChunk[0], /Open Houses[\s\S]*Main House|Main House[\s\S]*Open Houses/);
+assert.match(investmentsChunk[0], /Roth IRA[\s\S]*Open Investments/);
+assert.match(debtsChunk[0], /Visa[\s\S]*Open Debts/);
+assert.doesNotMatch(bankChunk[0], /monthly-review-card--current[\s\S]*monthlyCheckinOpenItemFromButton_/);
 
 assert.match(housesChunk[0], /Main House/);
 assert.match(housesChunk[0], /Aug-26:/);
@@ -177,10 +195,10 @@ assert.ok(rothPos !== -1 && brokeragePos !== -1 && rothPos < brokeragePos,
   'investment attention cards must appear before current cards');
 assert.match(investmentsChunk[0], /monthly-review-card--current[\s\S]*Brokerage/);
 assert.match(investmentsChunk[0], /Sep-26:/);
-assert.match(investmentsChunk[0], />Current</);
+assert.match(investmentsChunk[0], /Current — no action required/);
 
 assert.match(bankChunk[0], /monthly-review-card--current[\s\S]*Ally/);
-assert.match(bankChunk[0], />Current</);
+assert.match(bankChunk[0], /Current — no action required/);
 assert.equal((bankChunk[0].match(/1 of 1 September values present/g) || []).length, 1);
 
 assert.match(debtsChunk[0], /Type: Credit card/);
@@ -263,8 +281,8 @@ const fullyCurrentBankModel = buildModel({
         activeCount: 20, currentMonthValueCount: 20,
         records: [
           { displayName: 'Ally', needsAttention: false, currentValue: 1200 },
-          { displayName: 'BofA', needsAttention: false, currentValue: 2400 },
-          { displayName: 'Cash Maximizer', needsAttention: false, currentValue: 500 }
+          { displayName: 'BofA', needsAttention: false, currentValue: 2400, sourceLabel: 'Plaid' },
+          { displayName: 'Cash Maximizer', needsAttention: false, currentValue: 0 },
         ]
       }]
     }
@@ -277,7 +295,14 @@ assert.doesNotMatch(bankOnly[0], /\sopen/);
 assert.match(bankOnly[0], /Ally/);
 assert.match(bankOnly[0], /BofA/);
 assert.match(bankOnly[0], /Cash Maximizer/);
+assert.match(bankOnly[0], /\$0\.00/);
+assert.match(bankOnly[0], /Evidence source: Plaid/);
 assert.equal((bankOnly[0].match(/20 of 20 September values present/g) || []).length, 1);
+assert.equal(cardActionButtons(bankOnly[0]).length, 0,
+  'current Ally and BofA values have no item action buttons');
+assert.equal(currentCards(bankOnly[0]).every((card) =>
+  card.includes('Current — no action required.')), true);
+assert.doesNotMatch(bankOnly[0], /Review account match|Connected Bank Accounts/);
 
 const noPriorModel = buildModel({
   projection: {
@@ -302,7 +327,37 @@ assert.doesNotMatch(hosts.monthly_review_domains.innerHTML,
   /Empty Fund[\s\S]*\$0\.00[\s\S]*Not entered/);
 
 assert.match(hosts.monthly_review_identity_list.innerHTML, /monthly-review-card--identity/);
-assert.equal(cardButtons(hosts.monthly_review_identity_list.innerHTML).length, 0);
+assert.match(hosts.monthly_review_identity_list.innerHTML, /Review account match/);
+assert.equal(cardActionButtons(hosts.monthly_review_identity_list.innerHTML).length, 1);
+
+lastWorkspacePage = null;
+lastTab = null;
+let lastFocus = null;
+context.focusTarget = function(obj) { lastFocus = obj; lastTab = obj && obj.tab; };
+const fakeButton = {
+  getAttribute(name) {
+    const attrs = {
+      'data-tab': 'investments',
+      'data-page': 'assets',
+      'data-domain': 'investments',
+      'data-account-key': 'investment:v1:I-1',
+      'data-account-name': 'Roth IRA',
+      'data-cycle-key': '2026-09',
+      'data-reason': 'Missing September 2026 value',
+      'data-debt-type': '',
+      'data-review-route': 'editor',
+      'data-action-kind': 'UPDATE'
+    };
+    return attrs[name] || '';
+  }
+};
+context.monthlyCheckinOpenItemFromButton_(fakeButton);
+assert.equal(lastWorkspacePage, 'assets');
+assert.equal(lastFocus.accountName, 'Roth IRA');
+assert.equal(lastFocus.cycleKey, '2026-09');
+assert.equal(lastFocus.domain, 'investments');
+assert.equal(lastFocus.reason, 'Missing September 2026 value');
+assert.equal(lastFocus.reviewRoute, 'editor');
 
 lastWorkspacePage = null;
 lastTab = null;

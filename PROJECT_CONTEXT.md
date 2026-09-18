@@ -127,9 +127,13 @@ plan still uses existing Planning values. No Part 1 calculation, authority switc
 schema rewrite, persisted Current Facts surface, or bounded workbook mutation is
 part of this slice.
 The customer presentation contract distinguishes **Not connected**, **More data
-needed**, **Needs review**, and **Ready for review**. Empty cash/card domains and
-their readiness dimensions are explicitly Not connected and can never pass by
-vacuous `0 / 0` readiness. Isolated Central `@369` run
+needed**, **Needs review**, and **Ready for review**. Every valid monthly value counts as
+evidence whether it was entered manually or obtained through Plaid, CSV, PDF, or
+another approved source. Source labels are shown; they do not change readiness.
+A valid current monthly INPUT/SYS value used by Planning keeps the account
+**Ready for review** and out of Needs attention; stale, conflicting, unmatched, or
+unavailable imported evidence is optional imported review only. Empty cash/card domains remain Not connected and can never pass by
+vacuous `0 / 0` readiness, Current, Needs attention, or More data needed. Isolated Central `@369` run
 `20260817-102843-e241` passed 1/1 scenario and 35/35 assertions in 29.8 seconds
 with Restricted sharing, Provisioning and Drift PASS, verified Trash cleanup,
 and the disposable runner OFF. No bounded workbook or Central Beta deployment

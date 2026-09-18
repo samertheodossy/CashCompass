@@ -791,8 +791,8 @@ function getHarnessPart2aDataReadinessScenario_() {
   return {
     id: 'REGRESSION-PART-2A-DATA-READINESS',
     category: 'REGRESSION', executionLevel: 'INTEGRATION',
-    expectedAssertionCount: 24,
-    description: 'Project current, stale, missing, conflicting, and differing normalized cash/card facts into a concise customer view without changing Planning authority.',
+    expectedAssertionCount: 28,
+    description: 'Project current, stale, missing, invalid, and differing cash/card evidence into a source-neutral customer view without changing Planning authority.',
     requiresTrashCleanup: true,
     expectedSheets: [names.ACCOUNTS, names.DEBTS, names.FINANCIAL_ACCOUNTS,
       names.ACCOUNT_SOURCE_LINKS, names.FINANCIAL_FACTS, 'SYS - Meta'],
@@ -890,7 +890,7 @@ function getHarnessPart2aDataReadinessScenario_() {
       var debt = ctx.model.debts[0];
       var apr = debt.facts.filter(function(fact) { return fact.factType === 'APR'; })[0];
       ctx.assert.equals('View contract is versioned', ctx.model.version,
-        'DATA_READINESS_VIEW_V1', { module: mod });
+        'DATA_READINESS_VIEW_V2', { module: mod });
       ctx.assert.equals('Planning authority remains shadow-only',
         ctx.model.authority.planningUsesNormalizedData, false, { module: mod });
       ctx.assert.equals('Authority banner is customer explicit',
@@ -915,14 +915,32 @@ function getHarnessPart2aDataReadinessScenario_() {
         null, { module: mod });
       ctx.assert.equals('Ambiguous APR exposes verified-manual review', apr.canVerifyManually,
         true, { module: mod });
-      ctx.assert.equals('APR ambiguity blocks readiness', debt.ready, false, { module: mod });
-      ctx.assert.equals('Needs Attention contains actionable APR review',
-        ctx.model.attention.some(function(issue) { return issue.title === 'APR needs review'; }),
-        true, { module: mod });
-      ctx.assert.equals('Weekly readiness remains review-required', ctx.model.weeklyPlanReadiness.status,
-        'NEEDS_REVIEW', { module: mod });
+      ctx.assert.equals('Planning APR remains valid evidence', debt.ready, true, { module: mod });
+      ctx.assert.equals('APR ambiguity is optional source review',
+        (ctx.model.providerReview || []).some(function(issue) {
+          return issue.title === 'APR needs review';
+        }), true, { module: mod });
+      ctx.assert.equals('Weekly readiness is More data needed when a required field is missing',
+        ctx.model.weeklyPlanReadiness.status, 'MORE_DATA_NEEDED', { module: mod });
+      ctx.assert.equals('Missing cash asks for this month\'s balance',
+        (ctx.model.attention || []).some(function(card) {
+          return card.accountName === 'Fixture Cash' &&
+            card.nextAction === 'Enter this month\'s balance.';
+        }), true, { module: mod });
+      ctx.assert.equals('Attention cards are not duplicated for the same account',
+        (ctx.model.attention || []).filter(function(card) {
+          return card.accountName === 'Fixture Cash';
+        }).length, 1, { module: mod });
+      ctx.assert.equals('Valid Ally cash is not an unexplained attention card',
+        (ctx.model.attention || []).some(function(card) {
+          return String(card.accountName || '').indexOf('Ally') !== -1;
+        }), false, { module: mod });
+      ctx.assert.equals('Optional imported difference stays optional and does not require action',
+        (ctx.model.providerReview || []).some(function(card) {
+          return card.optional === true && card.hasAction === false;
+        }), true, { module: mod });
       ctx.assert.equals('Unsupported domains use calm placeholder language',
-        ctx.model.unsupportedDomains[0].status, 'Authoritative data not connected yet',
+        ctx.model.unsupportedDomains[0].status, 'Not included in this readiness review yet',
         { module: mod });
       ctx.assert.equals('Customer model contains no protected source key',
         JSON.stringify(ctx.model).indexOf(ctx.sourceKey), -1, { module: mod });
@@ -953,14 +971,16 @@ function getHarnessPart2aDataReadinessScenario_() {
         }), true, { module: mod });
       ctx.assert.equals('No no-data customer dimension says Ready',
         ctx.noDataWeekly.dimensions.some(function(row) {
-          return row.statusLabel === 'Ready';
+          return row.statusLabel === 'Ready' || row.statusLabel === 'Ready for review' ||
+            row.statusLabel === 'Current' || row.statusLabel === 'More data needed' ||
+            row.statusLabel === 'Needs attention';
         }), false, { module: mod });
-      ctx.assert.equals('Cash-only normalized data produces More data needed',
-        ctx.cashOnlyState.code, 'MORE_DATA_NEEDED', { module: mod });
-      ctx.assert.equals('Card-only normalized data produces More data needed',
-        ctx.cardsOnlyState.code, 'MORE_DATA_NEEDED', { module: mod });
-      ctx.assert.equals('Complete normalized domains produce Ready for review only',
-        ctx.readyState.code, 'READY_FOR_REVIEW', { module: mod });
+      ctx.assert.equals('Cash-only connected data is Current',
+        ctx.cashOnlyState.code, 'CURRENT', { module: mod });
+      ctx.assert.equals('Card-only connected data is Current',
+        ctx.cardsOnlyState.code, 'CURRENT', { module: mod });
+      ctx.assert.equals('Complete normalized domains produce Current only',
+        ctx.readyState.code, 'CURRENT', { module: mod });
     }
   };
 }

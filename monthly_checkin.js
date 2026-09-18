@@ -17,6 +17,47 @@ var MONTHLY_CHECKIN_DOMAIN_NAV_ = {
   investments: { page: 'assets', tab: 'investments', label: 'Investments' },
   debts: { page: 'assets', tab: 'debts', label: 'Debts' }
 };
+var MONTHLY_CHECKIN_OPEN_ACTION_ = {
+  bank: 'Open Bank Accounts',
+  houses: 'Open Houses',
+  investments: 'Open Investments',
+  debts: 'Open Debts'
+};
+var MONTHLY_CHECKIN_CURRENT_ACTION_ = 'Current — no action required.';
+var MONTHLY_CHECKIN_IDENTITY_ACTION_ = 'Review account match';
+
+function monthlyCheckinOpenActionLabel_(domainKey) {
+  return MONTHLY_CHECKIN_OPEN_ACTION_[domainKey] || ('Open ' + String(domainKey || 'account'));
+}
+
+function monthlyCheckinAttachItemAction_(base, needsAttention, cycleKey, extras) {
+  var details = extras || {};
+  var key = String(cycleKey || '').trim();
+  base.cycleKey = key;
+  base.targetMonth = key;
+  if (details.identity) {
+    base.hasAction = true;
+    base.actionLabel = MONTHLY_CHECKIN_IDENTITY_ACTION_;
+    base.nextAction = MONTHLY_CHECKIN_IDENTITY_ACTION_;
+    base.reviewRoute = 'identity';
+    base.actionKind = 'IDENTITY';
+    return base;
+  }
+  if (!needsAttention) {
+    base.hasAction = false;
+    base.actionLabel = '';
+    base.nextAction = MONTHLY_CHECKIN_CURRENT_ACTION_;
+    base.reviewRoute = '';
+    base.actionKind = '';
+    return base;
+  }
+  base.hasAction = true;
+  base.actionLabel = monthlyCheckinOpenActionLabel_(base.domain);
+  base.nextAction = base.actionLabel;
+  base.reviewRoute = 'editor';
+  base.actionKind = 'UPDATE';
+  return base;
+}
 var MONTHLY_CHECKIN_ACCOUNT_KEY_PATTERN_ = /^(bank|house|investment|debt):v1:[^:\s]+$/;
 var MONTHLY_CHECKIN_ACCOUNT_KEY_PREFIX_BY_STATE_DOMAIN_ = {
   bank: 'bank:v1:',
@@ -24,6 +65,110 @@ var MONTHLY_CHECKIN_ACCOUNT_KEY_PREFIX_BY_STATE_DOMAIN_ = {
   investments: 'investment:v1:',
   debts: 'debt:v1:'
 };
+var MONTHLY_CHECKIN_APPROVED_EVIDENCE_SOURCES_ = {
+  MANUAL: true,
+  PLAID: true,
+  CSV: true,
+  PDF: true,
+  FILE_IMPORT: true,
+  INSTITUTION: true,
+  STATEMENT: true,
+  CALCULATED: true,
+  ESTIMATED: true,
+  LEGACY: true
+};
+
+function monthlyCheckinIsApprovedEvidenceSource_(sourceCode) {
+  return !!MONTHLY_CHECKIN_APPROVED_EVIDENCE_SOURCES_[String(sourceCode || '').trim().toUpperCase()];
+}
+
+function monthlyCheckinCanonicalEvidenceSource_(sourceType, sourceSystem) {
+  var type = String(sourceType || '').trim().toUpperCase();
+  var system = String(sourceSystem || '').trim().toUpperCase();
+  if (type === 'PLAID' || system.indexOf('PLAID') !== -1) {
+    return { sourceCode: 'PLAID', sourceLabel: 'Plaid' };
+  }
+  if (type === 'CSV' || system.indexOf('CSV') !== -1) {
+    return { sourceCode: 'CSV', sourceLabel: 'CSV' };
+  }
+  if (type === 'PDF' || system.indexOf('PDF') !== -1) {
+    return { sourceCode: 'PDF', sourceLabel: 'PDF' };
+  }
+  if (type === 'FILE_IMPORT') return { sourceCode: 'FILE_IMPORT', sourceLabel: 'File import' };
+  if (type === 'INSTITUTION') return { sourceCode: 'INSTITUTION', sourceLabel: 'Institution' };
+  if (type === 'STATEMENT') return { sourceCode: 'STATEMENT', sourceLabel: 'Statement' };
+  if (type === 'CALCULATED') return { sourceCode: 'CALCULATED', sourceLabel: 'Calculated' };
+  if (type === 'ESTIMATED') return { sourceCode: 'ESTIMATED', sourceLabel: 'Estimated' };
+  return { sourceCode: 'MANUAL', sourceLabel: 'Manual' };
+}
+
+function monthlyCheckinTryNumber_(raw) {
+  if (typeof raw === 'number') {
+    return isFinite(raw) ? { valid: true, value: raw } : { valid: false, value: null };
+  }
+  var text = String(raw == null ? '' : raw).trim();
+  if (!text) return { valid: false, value: null };
+  if (/^\(.*\)$/.test(text)) {
+    var inner = monthlyCheckinTryNumber_(text.replace(/[()]/g, ''));
+    if (!inner.valid) return { valid: false, value: null };
+    return { valid: true, value: -inner.value };
+  }
+  var parsed = Number(text.replace(/\$/g, '').replace(/,/g, '').replace(/%/g, '').trim());
+  if (!isFinite(parsed)) return { valid: false, value: null };
+  return { valid: true, value: parsed };
+}
+
+function monthlyCheckinEvaluateMonthValueEvidence_(entry) {
+  var row = entry && typeof entry === 'object' ? entry : {};
+  var source = monthlyCheckinCanonicalEvidenceSource_(
+    row.sourceCode || row.sourceType, row.sourceSystem);
+  if (!monthlyCheckinIsApprovedEvidenceSource_(source.sourceCode)) {
+    source = { sourceCode: 'MANUAL', sourceLabel: 'Manual' };
+  }
+  var hasValueField = Object.prototype.hasOwnProperty.call(row, 'currentMonthValue');
+  var parsed = hasValueField ? monthlyCheckinTryNumber_(row.currentMonthValue) : { valid: false, value: null };
+  var valueMissing = !hasValueField || row.currentMonthValue === null ||
+    typeof row.currentMonthValue === 'undefined' || row.currentMonthValue === '';
+  var invalid = !!row.invalidCurrentMonthValue ||
+    (row.hasCurrentMonthValue === true && !valueMissing && !parsed.valid) ||
+    (!valueMissing && !parsed.valid && row.hasCurrentMonthValue !== false);
+  if (invalid && !valueMissing && !parsed.valid) {
+    return {
+      hasCurrentMonthValue: false,
+      currentMonthValue: null,
+      invalidCurrentMonthValue: true,
+      evidenceStatus: 'INVALID',
+      evidenceTone: 'error',
+      sourceCode: source.sourceCode,
+      sourceLabel: source.sourceLabel
+    };
+  }
+  if (row.invalidCurrentMonthValue) {
+    return {
+      hasCurrentMonthValue: false,
+      currentMonthValue: null,
+      invalidCurrentMonthValue: true,
+      evidenceStatus: 'INVALID',
+      evidenceTone: 'error',
+      sourceCode: source.sourceCode,
+      sourceLabel: source.sourceLabel
+    };
+  }
+  var hasCurrentMonthValue = row.hasCurrentMonthValue === true || parsed.valid;
+  if (row.hasCurrentMonthValue === false && !parsed.valid) hasCurrentMonthValue = false;
+  if (row.hasCurrentMonthValue === false && parsed.valid) hasCurrentMonthValue = true;
+  return {
+    hasCurrentMonthValue: !!hasCurrentMonthValue,
+    currentMonthValue: hasCurrentMonthValue
+      ? (parsed.valid ? parsed.value : (hasValueField ? row.currentMonthValue : null))
+      : null,
+    invalidCurrentMonthValue: false,
+    evidenceStatus: hasCurrentMonthValue ? 'CURRENT' : 'MISSING',
+    evidenceTone: hasCurrentMonthValue ? 'current' : 'review',
+    sourceCode: source.sourceCode,
+    sourceLabel: source.sourceLabel
+  };
+}
 
 function monthlyCheckinValidateCycleKey_(cycleKey) {
   return MONTHLY_CHECKIN_CYCLE_KEY_PATTERN_.test(String(cycleKey || '').trim());
@@ -103,29 +248,28 @@ function monthlyCheckinNormalizeInvestmentMonthEntries_(entries) {
     var displayName = String(entry.displayName || '').trim();
     var accountKey = String(entry.accountKey || '').trim();
     if (!displayName && !accountKey) return;
-    var hasCurrentMonthValue = !!entry.hasCurrentMonthValue;
     if (accountKey && monthlyCheckinIsValidAccountKey_(accountKey) &&
         accountKey.indexOf('investment:v1:') === 0) {
       if (seenByKey[accountKey]) return;
       seenByKey[accountKey] = true;
-      out.push({
+      out.push(Object.assign({
         accountKey: accountKey,
         displayName: displayName,
-        hasCurrentMonthValue: hasCurrentMonthValue,
-        currentMonthValue: hasCurrentMonthValue ? entry.currentMonthValue : null
-      });
+        hasPriorMonthValue: !!entry.hasPriorMonthValue,
+        priorMonthValue: entry.hasPriorMonthValue ? entry.priorMonthValue : null
+      }, monthlyCheckinEvaluateMonthValueEvidence_(entry)));
       return;
     }
     if (!displayName) return;
     var nameKey = displayName.toLowerCase();
     if (seenByName[nameKey]) return;
     seenByName[nameKey] = true;
-    out.push({
+    out.push(Object.assign({
       accountKey: '',
       displayName: displayName,
-      hasCurrentMonthValue: hasCurrentMonthValue,
-      currentMonthValue: hasCurrentMonthValue ? entry.currentMonthValue : null
-    });
+      hasPriorMonthValue: !!entry.hasPriorMonthValue,
+      priorMonthValue: entry.hasPriorMonthValue ? entry.priorMonthValue : null
+    }, monthlyCheckinEvaluateMonthValueEvidence_(entry)));
   });
   out.sort(function(a, b) {
     return String(a.displayName || '').localeCompare(String(b.displayName || ''), undefined, {
@@ -144,26 +288,25 @@ function monthlyCheckinNormalizeMonthValueActiveEntries_(entries, stateDomainKey
   var out = [];
   (entries || []).forEach(function(entry) {
     var accountKey = '';
-    var hasCurrentMonthValue = false;
     if (typeof entry === 'string') {
       accountKey = entry;
     } else if (entry && entry.accountKey) {
       accountKey = entry.accountKey;
-      hasCurrentMonthValue = !!entry.hasCurrentMonthValue;
     }
     var normalized = String(accountKey || '').trim();
     if (!normalized || seen[normalized]) return;
     if (!monthlyCheckinIsValidAccountKey_(normalized)) return;
     if (prefix && normalized.indexOf(prefix) !== 0) return;
     seen[normalized] = true;
-    out.push({
+    out.push(Object.assign({
       accountKey: normalized,
       displayName: typeof entry === 'object' && entry ? String(entry.displayName || '').trim() : '',
-      hasCurrentMonthValue: hasCurrentMonthValue,
-      currentMonthValue: typeof entry === 'object' && entry && entry.hasCurrentMonthValue
-        ? entry.currentMonthValue
-        : null
-    });
+      hasPriorMonthValue: !!(typeof entry === 'object' && entry && entry.hasPriorMonthValue),
+      priorMonthValue: typeof entry === 'object' && entry && entry.hasPriorMonthValue
+        ? entry.priorMonthValue : null
+    }, monthlyCheckinEvaluateMonthValueEvidence_(typeof entry === 'object' && entry
+      ? entry
+      : { hasCurrentMonthValue: false })));
   });
   out.sort(function(a, b) {
     return a.accountKey.localeCompare(b.accountKey);
@@ -214,12 +357,17 @@ function monthlyCheckinDeriveMonthValueDomainStatus_(activeEntries, identityIssu
   var currentMonthValueCount = entries.filter(function(entry) {
     return !!entry.hasCurrentMonthValue;
   }).length;
-  var missingCurrentMonthValueCount = Math.max(0, activeCount - currentMonthValueCount);
+  var invalidCurrentMonthValueCount = entries.filter(function(entry) {
+    return !!entry.invalidCurrentMonthValue || entry.evidenceStatus === 'INVALID';
+  }).length;
+  var missingCurrentMonthValueCount = Math.max(0,
+    activeCount - currentMonthValueCount - invalidCurrentMonthValueCount);
   var unresolvedCount = Math.max(0, Number(identityIssueCount || 0));
   var base = {
     activeCount: activeCount,
     currentMonthValueCount: currentMonthValueCount,
     missingCurrentMonthValueCount: missingCurrentMonthValueCount,
+    invalidCurrentMonthValueCount: invalidCurrentMonthValueCount,
     unresolvedCount: unresolvedCount,
     identityIssueCount: unresolvedCount
   };
@@ -227,7 +375,7 @@ function monthlyCheckinDeriveMonthValueDomainStatus_(activeEntries, identityIssu
   if (activeCount === 0 && unresolvedCount === 0) {
     return Object.assign({ status: 'COMPLETE' }, base);
   }
-  if (unresolvedCount > 0) {
+  if (unresolvedCount > 0 || invalidCurrentMonthValueCount > 0) {
     return Object.assign({ status: 'IN_PROGRESS' }, base);
   }
   if (activeCount === 0) {
@@ -365,7 +513,14 @@ function monthlyCheckinBuildDomainProjection_(stateDomainKey, state, activeEntri
         displayName: String(entry.displayName || '').trim(),
         hasCurrentMonthValue: !!entry.hasCurrentMonthValue,
         needsCurrentMonthValue: !entry.hasCurrentMonthValue,
-        currentMonthValue: entry.hasCurrentMonthValue ? entry.currentMonthValue : null
+        currentMonthValue: entry.hasCurrentMonthValue ? entry.currentMonthValue : null,
+        hasPriorMonthValue: !!entry.hasPriorMonthValue,
+        priorMonthValue: entry.hasPriorMonthValue ? entry.priorMonthValue : null,
+        invalidCurrentMonthValue: !!entry.invalidCurrentMonthValue,
+        evidenceStatus: entry.evidenceStatus || (entry.hasCurrentMonthValue ? 'CURRENT' : 'MISSING'),
+        evidenceTone: entry.evidenceTone || (entry.hasCurrentMonthValue ? 'current' : 'review'),
+        sourceCode: entry.sourceCode || 'MANUAL',
+        sourceLabel: entry.sourceLabel || 'Manual'
       };
     });
     issues.forEach(function(issue) {
@@ -384,6 +539,7 @@ function monthlyCheckinBuildDomainProjection_(stateDomainKey, state, activeEntri
       activeCount: monthCounts.activeCount,
       currentMonthValueCount: monthCounts.currentMonthValueCount,
       missingCurrentMonthValueCount: monthCounts.missingCurrentMonthValueCount,
+      invalidCurrentMonthValueCount: monthCounts.invalidCurrentMonthValueCount,
       unresolvedCount: monthCounts.unresolvedCount,
       identityIssueCount: monthCounts.identityIssueCount,
       identityIssues: issues,
@@ -444,6 +600,10 @@ function monthlyCheckinMonthNameFromCycleKey_(cycleKey) {
 function monthlyCheckinMissingMonthReason_(cycleKey) {
   var monthName = monthlyCheckinMonthNameFromCycleKey_(cycleKey);
   return monthName ? ('Missing ' + monthName + ' value') : 'Missing current-month value';
+}
+
+function monthlyCheckinInvalidMonthReason_() {
+  return 'Invalid value needs review';
 }
 
 function monthlyCheckinDebtNeedsUpdateReason_() {
@@ -520,9 +680,18 @@ function monthlyCheckinBuildRecordUi_(domainKey, record, cycleKey) {
     base.hasPriorMonthValue = !!record.hasPriorMonthValue;
     base.priorMonthValue = record.hasPriorMonthValue ? record.priorMonthValue : null;
     base.domainLabel = nav.label || domainKey;
-    base.needsAttention = !record.hasCurrentMonthValue;
-    base.reason = record.hasCurrentMonthValue ? '' : monthlyCheckinMissingMonthReason_(cycleKey);
-    return base;
+    base.sourceCode = record.sourceCode || 'MANUAL';
+    base.sourceLabel = record.sourceLabel || 'Manual';
+    base.evidenceStatus = record.evidenceStatus || (record.invalidCurrentMonthValue ? 'INVALID' :
+      (record.hasCurrentMonthValue ? 'CURRENT' : 'MISSING'));
+    base.evidenceTone = record.evidenceTone || (record.invalidCurrentMonthValue ? 'error' :
+      (record.hasCurrentMonthValue ? 'current' : 'review'));
+    base.invalidCurrentMonthValue = !!record.invalidCurrentMonthValue;
+    base.needsAttention = !record.hasCurrentMonthValue || !!record.invalidCurrentMonthValue;
+    base.reason = record.invalidCurrentMonthValue
+      ? monthlyCheckinInvalidMonthReason_()
+      : (record.hasCurrentMonthValue ? '' : monthlyCheckinMissingMonthReason_(cycleKey));
+    return monthlyCheckinAttachItemAction_(base, base.needsAttention, cycleKey);
   }
   base.currentValue = record.accountBalance === '' || record.accountBalance == null
     ? null
@@ -538,7 +707,7 @@ function monthlyCheckinBuildRecordUi_(domainKey, record, cycleKey) {
   base.minimumPayment = record.minimumPayment === '' || record.minimumPayment == null
     ? null
     : record.minimumPayment;
-  return base;
+  return monthlyCheckinAttachItemAction_(base, base.needsAttention, cycleKey);
 }
 
 function monthlyCheckinBuildUiProjection_(domains, cycleKey) {
@@ -606,14 +775,16 @@ function monthlyCheckinBuildUiProjection_(domains, cycleKey) {
     });
 
     (domain.identityIssues || []).forEach(function(issue) {
-      identityRepairItems.push({
+      identityRepairItems.push(monthlyCheckinAttachItemAction_({
         domain: domainKey,
         displayName: String((issue && issue.displayName) || '').trim(),
+        accountKey: String((issue && issue.accountKey) || '').trim(),
         code: String((issue && issue.code) || 'IDENTITY_UNRESOLVED'),
         message: String((issue && issue.message) || 'Account identity could not be resolved.'),
+        reason: String((issue && issue.message) || 'Account identity could not be resolved.'),
         navigatePage: nav.page || '',
         navigateTab: nav.tab || ''
-      });
+      }, true, cycleKey, { identity: true }));
       identityIssueCount++;
     });
   });

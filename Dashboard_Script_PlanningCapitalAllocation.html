@@ -112,7 +112,8 @@ function setCapitalAllocationView_(view) {
     }
   });
   if (selected === 'data' && typeof loadPlanningDataReadiness_ === 'function') {
-    loadPlanningDataReadiness_();
+    loadPlanningDataReadiness_({ force: typeof __planningDataReadinessStale !== 'undefined' &&
+      __planningDataReadinessStale });
   }
 }
 

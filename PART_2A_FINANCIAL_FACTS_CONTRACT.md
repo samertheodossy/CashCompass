@@ -77,7 +77,7 @@ Household policy field names are not valid fact types.
 received it. Freshness uses only Effective As Of. A July 31 statement observed
 August 15 remains July 31 evidence.
 
-Supported source types are MANUAL, FILE_IMPORT, INSTITUTION, STATEMENT,
+Supported source types are MANUAL, PLAID, CSV, PDF, FILE_IMPORT, INSTITUTION, STATEMENT,
 CALCULATED, ESTIMATED, and LEGACY. Authority is separately represented as
 INSTITUTION_AUTHORITATIVE, USER_VERIFIED_MANUAL, STATEMENT_DERIVED, CALCULATED,
 FILE_IMPORTED, ESTIMATED, or LEGACY_MANUAL.

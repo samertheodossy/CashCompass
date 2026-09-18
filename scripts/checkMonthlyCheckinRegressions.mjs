@@ -248,6 +248,8 @@ assert.equal(
 assert.equal(uiProjection.attentionItems.some((row) => row.domain === 'debts' && row.reason === 'Needs current-cycle update'), true);
 assert.equal(uiProjection.identityRepairItems.length, 1);
 assert.equal(uiProjection.identityRepairItems[0].displayName, 'Orphan Bank');
+assert.equal(uiProjection.identityRepairItems[0].reviewRoute, 'identity');
+assert.equal(uiProjection.identityRepairItems[0].actionLabel, 'Review account match');
 assert.equal(uiProjection.domainSections.every((row) => row.navigatePage === 'assets'), true);
 assert.equal(
   JSON.stringify(uiProjection.domainSections.map((row) => row.navigateTab)),
@@ -266,6 +268,77 @@ assert.doesNotMatch(planningSource, /monthly_checkin/);
 assert.doesNotMatch(readinessSource, /monthly_checkin/);
 assert.doesNotMatch(plaidSource, /monthly_checkin/);
 assert.doesNotMatch(factsSource, /monthly_checkin/);
+
+const zeroBank = context.monthlyCheckinEvaluateMonthValueEvidence_({
+  accountKey: 'bank:v1:CASH-ZERO',
+  hasCurrentMonthValue: true,
+  currentMonthValue: 0,
+  sourceType: 'MANUAL'
+});
+assert.equal(zeroBank.hasCurrentMonthValue, true, 'explicit zero counts as valid monthly evidence');
+assert.equal(zeroBank.currentMonthValue, 0);
+assert.equal(zeroBank.sourceCode, 'MANUAL');
+assert.equal(zeroBank.evidenceStatus, 'CURRENT');
+
+const manualBank = context.monthlyCheckinEvaluateMonthValueEvidence_({
+  accountKey: 'bank:v1:CASH-MANUAL',
+  hasCurrentMonthValue: true,
+  currentMonthValue: 1200,
+  sourceType: 'MANUAL'
+});
+assert.equal(manualBank.valid === undefined ? manualBank.hasCurrentMonthValue : manualBank.valid, true);
+assert.equal(manualBank.sourceLabel, 'Manual');
+
+const plaidBank = context.monthlyCheckinEvaluateMonthValueEvidence_({
+  accountKey: 'bank:v1:CASH-PLAID',
+  hasCurrentMonthValue: true,
+  currentMonthValue: 800,
+  sourceType: 'PLAID',
+  sourceSystem: 'PLAID'
+});
+assert.equal(plaidBank.hasCurrentMonthValue, true, 'Plaid value counts as valid monthly evidence');
+assert.equal(plaidBank.sourceCode, 'PLAID');
+assert.equal(plaidBank.sourceLabel, 'Plaid');
+
+const csvBank = context.monthlyCheckinEvaluateMonthValueEvidence_({
+  accountKey: 'bank:v1:CASH-CSV',
+  hasCurrentMonthValue: true,
+  currentMonthValue: 90,
+  sourceType: 'CSV'
+});
+assert.equal(csvBank.sourceCode, 'CSV');
+const pdfBank = context.monthlyCheckinEvaluateMonthValueEvidence_({
+  accountKey: 'bank:v1:CASH-PDF',
+  hasCurrentMonthValue: true,
+  currentMonthValue: 70,
+  sourceType: 'PDF'
+});
+assert.equal(pdfBank.sourceCode, 'PDF');
+
+const missingBank = context.monthlyCheckinEvaluateMonthValueEvidence_({
+  accountKey: 'bank:v1:CASH-MISSING',
+  hasCurrentMonthValue: false
+});
+assert.equal(missingBank.hasCurrentMonthValue, false, 'missing value requires attention');
+assert.equal(missingBank.evidenceStatus, 'MISSING');
+assert.equal(missingBank.evidenceTone, 'review');
+
+const invalidBank = context.monthlyCheckinEvaluateMonthValueEvidence_({
+  accountKey: 'bank:v1:CASH-INVALID',
+  hasCurrentMonthValue: true,
+  currentMonthValue: 'N/A'
+});
+assert.equal(invalidBank.hasCurrentMonthValue, false, 'invalid value requires review');
+assert.equal(invalidBank.invalidCurrentMonthValue, true);
+assert.equal(invalidBank.evidenceTone, 'error');
+
+const unimportedBank = context.monthlyCheckinBuildDomainProjection_(
+  'bank', defaultState,
+  [{ accountKey: 'bank:v1:CASH-1', hasCurrentMonthValue: true, currentMonthValue: 50, sourceType: 'MANUAL' }],
+  []);
+assert.equal(unimportedBank.status, 'COMPLETE');
+assert.equal(unimportedBank.activeRecords[0].sourceCode, 'MANUAL');
+assert.doesNotMatch(JSON.stringify(unimportedBank), /imported-data failure|Imported evidence/i);
 
 vm.runInContext(identitySource, context, { filename: 'monthly_checkin_identity.js' });
 const registry = {
@@ -299,5 +372,108 @@ assertJsonEqual(invalidReviewed.state.domains.bank.reviewedKeys, ['bank:v1:CASH-
 const serialized = context.monthlyCheckinSerializeState_(invalidReviewed.state);
 assert.equal(typeof serialized, 'string');
 assert.equal(JSON.parse(serialized).domains.bank.reviewedKeys[0], 'bank:v1:CASH-1');
+
+const missingBankUi = context.monthlyCheckinBuildRecordUi_('bank', {
+  accountKey: 'bank:v1:CASH-MISSING', displayName: 'Ally', hasCurrentMonthValue: false
+}, cycleKey);
+assert.equal(missingBankUi.hasAction, true);
+assert.equal(missingBankUi.actionLabel, 'Open Bank Accounts');
+assert.equal(missingBankUi.navigateTab, 'bank');
+assert.equal(missingBankUi.cycleKey, cycleKey);
+assert.equal(missingBankUi.accountKey, 'bank:v1:CASH-MISSING');
+assert.equal(missingBankUi.reviewRoute, 'editor');
+assert.match(missingBankUi.reason, /September 2026/);
+
+const missingHouseUi = context.monthlyCheckinBuildRecordUi_('houses', {
+  accountKey: 'house:v1:H-1', displayName: 'Main House', hasCurrentMonthValue: false
+}, cycleKey);
+assert.equal(missingHouseUi.actionLabel, 'Open Houses');
+assert.equal(missingHouseUi.navigateTab, 'houses');
+
+const missingInvestmentUi = context.monthlyCheckinBuildRecordUi_('investments', {
+  accountKey: 'investment:v1:I-1', displayName: 'Fund 13', hasCurrentMonthValue: false
+}, cycleKey);
+assert.equal(missingInvestmentUi.actionLabel, 'Open Investments');
+assert.equal(missingInvestmentUi.navigateTab, 'investments');
+
+const missingDebtUi = context.monthlyCheckinBuildRecordUi_('debts', {
+  accountKey: 'debt:v1:D-1', displayName: 'Visa', currentForCycle: false, type: 'Credit card'
+}, cycleKey);
+assert.equal(missingDebtUi.actionLabel, 'Open Debts');
+assert.equal(missingDebtUi.navigateTab, 'debts');
+assert.equal(missingDebtUi.reason, 'Needs current-cycle update');
+
+const currentBankUi = context.monthlyCheckinBuildRecordUi_('bank', {
+  accountKey: 'bank:v1:CASH-CURRENT', displayName: 'Ally',
+  hasCurrentMonthValue: true, currentMonthValue: 1200
+}, cycleKey);
+assert.equal(currentBankUi.hasAction, false);
+assert.equal(currentBankUi.actionLabel, '');
+assert.equal(currentBankUi.nextAction, 'Current — no action required.');
+assert.equal(currentBankUi.needsAttention, false);
+
+const currentImportedBankUi = context.monthlyCheckinBuildRecordUi_('bank', {
+  accountKey: 'bank:v1:CASH-PLAID', displayName: 'BofA',
+  hasCurrentMonthValue: true, currentMonthValue: 2400,
+  sourceCode: 'PLAID', sourceLabel: 'Plaid'
+}, cycleKey);
+assert.equal(currentImportedBankUi.hasAction, false);
+assert.equal(currentImportedBankUi.needsAttention, false);
+assert.equal(currentImportedBankUi.nextAction, 'Current — no action required.');
+assert.equal(currentImportedBankUi.sourceCode, 'PLAID');
+
+const currentZeroBankUi = context.monthlyCheckinBuildRecordUi_('bank', {
+  accountKey: 'bank:v1:CASH-ZERO', displayName: 'Ally',
+  hasCurrentMonthValue: true, currentMonthValue: 0
+}, cycleKey);
+assert.equal(currentZeroBankUi.hasAction, false);
+assert.equal(currentZeroBankUi.needsAttention, false);
+assert.equal(currentZeroBankUi.currentValue, 0);
+assert.equal(currentZeroBankUi.nextAction, 'Current — no action required.');
+
+const invalidBankUi = context.monthlyCheckinBuildRecordUi_('bank', {
+  accountKey: 'bank:v1:CASH-INVALID', displayName: 'Broken Bank',
+  hasCurrentMonthValue: false, invalidCurrentMonthValue: true, currentMonthValue: 'N/A'
+}, cycleKey);
+assert.equal(invalidBankUi.needsAttention, true);
+assert.notEqual(invalidBankUi.evidenceStatus, 'CURRENT');
+assert.equal(invalidBankUi.evidenceStatus, 'INVALID');
+assert.match(invalidBankUi.reason, /Invalid value needs review/);
+assert.equal(invalidBankUi.hasAction, true);
+assert.equal(invalidBankUi.actionLabel, 'Open Bank Accounts');
+assert.equal(invalidBankUi.reviewRoute, 'editor');
+
+const attentionThenCurrent = context.monthlyCheckinBuildCycleProjection_(defaultState, {
+  bank: [{ accountKey: 'bank:v1:CASH-FIX', displayName: 'Fix Bank', hasCurrentMonthValue: false }],
+  houses: [{ accountKey: 'house:v1:H-FIX', displayName: 'Fix House', hasCurrentMonthValue: false }],
+  investments: [{ accountKey: 'investment:v1:I-FIX', displayName: 'Fund 13', hasCurrentMonthValue: false }],
+  debts: [{ accountKey: 'debt:v1:D-FIX', displayName: 'Visa', lastUpdated: '' }]
+}, { bank: [], houses: [], investments: [], debts: [] });
+const attentionThenCurrentUi = context.monthlyCheckinBuildUiProjection_(attentionThenCurrent.domains, cycleKey);
+assert.equal(attentionThenCurrentUi.attentionCount, 4);
+assert.equal(attentionThenCurrentUi.attentionItems.every((row) => row.hasAction), true);
+
+const afterFix = context.monthlyCheckinBuildCycleProjection_(defaultState, {
+  bank: [{ accountKey: 'bank:v1:CASH-FIX', displayName: 'Fix Bank', hasCurrentMonthValue: true, currentMonthValue: 10 }],
+  houses: [{ accountKey: 'house:v1:H-FIX', displayName: 'Fix House', hasCurrentMonthValue: true, currentMonthValue: 1 }],
+  investments: [{ accountKey: 'investment:v1:I-FIX', displayName: 'Fund 13', hasCurrentMonthValue: true, currentMonthValue: 2 }],
+  debts: [{ accountKey: 'debt:v1:D-FIX', displayName: 'Visa', lastUpdated: '2026-09-15' }]
+}, { bank: [], houses: [], investments: [], debts: [] });
+const afterFixUi = context.monthlyCheckinBuildUiProjection_(afterFix.domains, cycleKey);
+assert.equal(afterFixUi.attentionCount, 0);
+assert.equal(afterFixUi.attentionItems.length, 0);
+assert.equal(afterFixUi.domainSections.every((row) => row.records.every((item) => !item.hasAction &&
+  item.nextAction === 'Current — no action required.')), true);
+
+const laterMonth = context.monthlyCheckinBuildCycleProjection_(
+  context.monthlyCheckinDefaultState_('2026-10'),
+  {
+    bank: [{ accountKey: 'bank:v1:CASH-FIX', displayName: 'Fix Bank', hasCurrentMonthValue: true, currentMonthValue: 10 }],
+    houses: [{ accountKey: 'house:v1:H-FIX', displayName: 'Fix House', hasCurrentMonthValue: true, currentMonthValue: 1 }],
+    investments: [{ accountKey: 'investment:v1:I-FIX', displayName: 'Fund 13', hasCurrentMonthValue: true, currentMonthValue: 2 }],
+    debts: [{ accountKey: 'debt:v1:D-FIX', displayName: 'Visa', lastUpdated: '2026-09-15' }]
+  }, { bank: [], houses: [], investments: [], debts: [] });
+assert.equal(laterMonth.domains.debts.needsUpdateCount, 1,
+  'a completed debt stays current only until the month changes');
 
 console.log('Monthly check-in model regressions passed.');
