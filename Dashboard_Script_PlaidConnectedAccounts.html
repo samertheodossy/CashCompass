@@ -1164,6 +1164,14 @@ function plaidMainHasValidAccountPreview_(connection, account) {
   return !!(accountPreview.rows || []).length;
 }
 
+function plaidMainImportStatusText_(domain, importedAt) {
+  if (importedAt) return 'Last imported: ' + plaidMainFormatImportedAt_(importedAt);
+  if (plaidMainDomain_(domain) === 'DEBT') {
+    return 'Provider data has not been imported. No action required.';
+  }
+  return 'Last imported: Not yet imported';
+}
+
 function plaidMainLastImportedAt_(connection, account) {
   var mapping = account.mapping || {};
   var importState = plaidMainState_.accountImportState[plaidMainApplySelectionKey_(connection, account)];
@@ -1695,7 +1703,7 @@ function plaidMainBuildAccountCard_(domain, connection, account) {
 
   var importedAt = plaidMainLastImportedAt_(connection, account);
   accountCard.appendChild(plaidMainElement_('div', 'muted',
-    'Last imported: ' + (importedAt ? plaidMainFormatImportedAt_(importedAt) : 'Not yet imported')));
+    plaidMainImportStatusText_(domain, importedAt)));
   if (hasPreview && preview) {
     var accountPreview = (preview.accounts || []).filter(function(row) {
       return String(row.protectedAccountKey || '') === String(account.protectedAccountKey || '');

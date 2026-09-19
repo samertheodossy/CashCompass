@@ -324,8 +324,9 @@
             <select id="house_house" onchange="loadHouseData()"></select>
             <label>Date</label>
             <input type="date" id="house_date" onchange="loadHouseData()">
-            <label>Value</label>
+            <label for="house_value">Value</label>
             <input type="text" id="house_value" inputmode="decimal" onfocus="currencyFocus('house_value')" onblur="currencyBlur('house_value')">
+            <div class="muted" style="margin-top:4px;font-size:12px;">Saves this month’s property value only. Other months, remaining loan, and expense history stay as they are. Enter <strong>$0.00</strong> only when the property value is actually zero. Choose a date in this calendar year; a date from another year is not saved as this month.</div>
             <div class="house-update-actions">
               <button id="house_update_save_btn" onclick="saveHouse()" disabled>Save house value</button>
             </div>
@@ -336,7 +337,7 @@
             <div><strong>Stored value for selected month:</strong> <span id="house_selectedMonthValue" class="muted">—</span></div>
             <div><strong>Current House Assets value:</strong> <span id="house_currentAssetValue" class="muted">—</span></div>
             <div><strong>Property type:</strong> <span id="house_propertyType" class="muted">—</span></div>
-            <div><strong>Loan amount left:</strong> <span id="house_loanAmountLeft" class="muted">—</span></div>
+            <div><strong>Remaining loan balance:</strong> <span id="house_loanAmountLeft" class="muted">—</span></div>
             <div class="house-value-delta-sep" aria-hidden="true"></div>
             <div class="house-value-delta-row"><strong>Change vs prior month:</strong> <span id="house_deltaPriorMonth" class="muted">—</span></div>
           </div>
@@ -346,10 +347,10 @@
       <div id="house_mode_add_wrap" class="bank-mode-wrap">
         <div class="grid-2">
           <div>
-            <label>House name</label>
+            <label for="house_add_name">House name (required)</label>
             <input type="text" id="house_add_name" maxlength="120" autocomplete="off" oninput="if (typeof clearHouseAddNameError_==='function') clearHouseAddNameError_();">
             <div id="house_add_name_error" class="field-error" role="alert" aria-live="polite"></div>
-            <label>Property type</label>
+            <label for="house_add_type">Property type (required)</label>
             <select id="house_add_type" onchange="onHouseAddTypeChange_()">
               <option value="">— Select type —</option>
             </select>
@@ -358,19 +359,21 @@
               <label for="house_add_type_custom">Custom property type</label>
               <input type="text" id="house_add_type_custom" maxlength="80" autocomplete="off" placeholder="e.g. Land, Commercial">
             </div>
-            <label>Current value</label>
+            <label for="house_add_current_value">Current value (optional)</label>
             <input type="text" id="house_add_current_value" inputmode="decimal" onfocus="currencyFocus('house_add_current_value')" onblur="currencyBlur('house_add_current_value')">
-            <label>Loan amount left</label>
+            <div class="muted" style="margin-top:4px;font-size:12px;">Enter <strong>$0.00</strong> only when the property is actually worth zero. Leave blank if you do not know the value yet. CashCompass still creates the house, and Monthly Review will show that month as missing.</div>
+            <label for="house_add_loan">Remaining loan balance (optional)</label>
             <input type="text" id="house_add_loan" inputmode="decimal" onfocus="currencyFocus('house_add_loan')" onblur="currencyBlur('house_add_loan')">
-            <label>Valuation date (optional)</label>
+            <div class="muted" style="margin-top:4px;font-size:12px;">Enter <strong>$0.00</strong> only when there is no remaining loan. Leave blank if you do not know it yet. A blank remaining loan is not recorded as $0.</div>
+            <label for="house_add_valuation_date">Valuation date (optional)</label>
             <input type="date" id="house_add_valuation_date">
-            <div class="muted" style="margin-top:4px;font-size:12px;">If left blank, the current month is used. Historical dates are allowed; the current value is recorded in the current year block.</div>
+            <div class="muted" style="margin-top:4px;font-size:12px;">Used only when you enter a current value, including $0.00. If that date is left blank, this month is used. A date in this calendar year is saved in that month. A date from another year is kept in Activity and does not fill this year’s tracking. Monthly Review stays missing until you save a value for this year.</div>
             <button onclick="createHouse()">Create house</button>
           </div>
           <div class="info muted">
             <p style="margin-top:0;">Creates the property and prepares its expense tracking.</p>
-            <p>The current value is recorded for the selected valuation month.</p>
-            <p>You can also use a historical valuation date.</p>
+            <p>House name and property type are required. Current value and remaining loan balance are optional. <strong>$0.00</strong> means the amount is really zero. A blank amount is unknown — it is not saved as $0, and a blank current value leaves this month missing in Monthly Review.</p>
+            <p>The valuation date is optional and only applies when you enter a current value. A date in this year chooses that month. A date from another year is remembered in Activity and does not count as this month.</p>
           </div>
         </div>
       </div>
@@ -417,16 +420,17 @@
             <select id="bank_account" onchange="loadBankData()"></select>
             <label>Date</label>
             <input type="date" id="bank_date" onchange="loadBankData()">
-            <label>Value</label>
+            <label for="bank_value">Monthly balance</label>
             <input type="text" id="bank_value" inputmode="decimal" onfocus="currencyFocus('bank_value', true)" onblur="currencyBlur('bank_value')" oninput="evaluateBankBufferWarning()">
+            <div class="muted" style="margin-top:4px;font-size:12px;">Saves this month’s account balance only. Available Now, Min Buffer, Use policy, and Priority stay as they are unless you explicitly change them. Enter <strong>$0.00</strong> only when the account is actually at zero. A blank balance is not saved as $0.</div>
             <div id="bank_bufferWarning" class="warning-box"></div>
             <div class="check-row">
-              <input type="checkbox" id="bank_updateAvailableNow" checked>
-              <label for="bank_updateAvailableNow" style="margin:0;font-weight:normal;">Also update Available Now</label>
+              <input type="checkbox" id="bank_updateAvailableNow">
+              <label for="bank_updateAvailableNow" style="margin:0;font-weight:normal;">Also update Available Now. This changes the amount Planning may use.</label>
             </div>
             <div class="check-row">
               <input type="checkbox" id="bank_updateMinBuffer" onchange="evaluateBankBufferWarning()">
-              <label for="bank_updateMinBuffer" style="margin:0;font-weight:normal;">Also update Min Buffer</label>
+              <label for="bank_updateMinBuffer" style="margin:0;font-weight:normal;">Also update Min Buffer. This changes the protected minimum for this account.</label>
             </div>
             <div class="house-update-actions">
               <button id="bank_update_save_btn" onclick="saveBank()" disabled>Save bank account</button>
@@ -517,6 +521,7 @@
               <p class="muted">Edit account details or stop tracking an account while preserving its history.</p>
             </div>
             <div class="tracked-editor-actions">
+              <button type="button" id="bank_account_activity_btn" class="small-btn" onclick="openBankAccountActivityDrawer_('review')">Account activity</button>
               <button type="button" id="bank_show_inactive_btn" class="small-btn debt-inactive-toggle" style="display:none;" onclick="toggleInactiveBankAccountsView_()" aria-expanded="false" aria-controls="bank_inactive_wrap"><span class="debt-caret" aria-hidden="true">&#9656;</span>Show inactive accounts</button>
             </div>
           </div>
@@ -576,31 +581,7 @@
             <div id="bank_inactive_list" class="tracked-editor-list"></div>
           </div>
 
-          <div class="tracked-editor-secondary-tools">
-            <div>
-              <strong>Import tools</strong>
-              <p class="muted">Review staged account snapshots or paste a CSV when the import preview is enabled.</p>
-            </div>
-            <div class="tracked-editor-actions">
-              <button type="button" class="small-btn" onclick="setBankPanelMode('review')">Review pending imports<span id="bank_mode_review_badge" class="muted" style="margin-left:6px;display:none;"></span></button>
-              <button type="button" id="bank_mode_import_btn" class="small-btn" onclick="setBankPanelMode('import')" style="display:none;">Paste CSV</button>
-            </div>
-          </div>
         </div>
-      </div>
-
-      <div id="bank_mode_review_wrap" class="tracked-editor-secondary-view" style="display:none;">
-        <button type="button" class="small-btn tracked-editor-back" onclick="setBankPanelMode('manage')">← Back to account management</button>
-        <div class="muted" style="margin-bottom:8px;font-size:13px;line-height:1.4;">
-          Review imported accounts. Link first (<strong>Add as new</strong> or <strong>Match</strong>), then <strong>Apply</strong> to update this month's balance.
-        </div>
-        <div id="bank_import_dev_callout" style="display:none;margin-bottom:10px;padding:8px 10px;background:#fff8e1;border:1px dashed #d6b656;border-radius:6px;font-size:12px;line-height:1.4;">
-          <strong>Dev / sample data only.</strong> No real bank connection or external sync. The button below re-runs the built-in demo harness, which seeds two staged rows (<code>Demo Checking</code> · <code>Demo Savings</code>) so you can exercise <em>Add as new</em> / <em>Match</em> / <em>Apply balance</em> / <em>Ignore</em> without leaving the dashboard.
-          <div style="margin-top:6px;">
-            <button type="button" class="small-btn" onclick="loadBankImportSampleData_()">Load sample import data (dev)</button>
-          </div>
-        </div>
-        <div id="bank_import_review_list"></div>
       </div>
 
       <div id="bank_mode_connected_wrap" class="bank-mode-wrap">
@@ -615,37 +596,75 @@
         <div id="plaid_main_cash_connections"></div>
       </div>
 
-      <div id="bank_mode_import_wrap" class="tracked-editor-secondary-view" style="display:none;">
-        <button type="button" class="small-btn tracked-editor-back" onclick="setBankPanelMode('manage')">← Back to account management</button>
-        <div class="muted" style="margin-bottom:8px;font-size:13px;line-height:1.4;">
-          Paste a CSV of bank-account balance snapshots. Nothing is written to any account until you Apply in Review imports.
-        </div>
-        <details style="margin-bottom:10px;font-size:12px;line-height:1.4;">
-          <summary style="cursor:pointer;">Show CSV template</summary>
-          <div style="margin-top:6px;padding:8px;background:#f8f8f8;border-radius:4px;">
-            <div style="font-family:monospace;white-space:pre-wrap;word-break:break-all;">displayName,balance,balanceAsOf,externalAccountId,institution,last4,type,currency
-Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,0123,CHECKING,USD</div>
-            <div style="margin-top:6px;">
-              <button type="button" class="small-btn" onclick="copyBankImportCsvTemplateToClipboard_()">Copy template</button>
-              <span id="bank_import_csv_template_copy_status" class="muted" style="margin-left:8px;font-size:12px;"></span>
-            </div>
-            <div class="muted" style="margin-top:6px;font-size:11px;">
-              Required columns: <strong>displayName</strong> (or any other identifier), <strong>balance</strong>, <strong>balanceAsOf</strong> (YYYY-MM-DD). Numbers must use <code>.</code> for decimals; commas and <code>$</code> are stripped. Up to 200 rows per paste.
-            </div>
-          </div>
-        </details>
-        <textarea id="bank_import_csv_paste" rows="10" placeholder="Paste CSV text here. First row must be a header row." style="width:100%;font-family:monospace;font-size:12px;box-sizing:border-box;"></textarea>
-        <div style="margin-top:8px;">
-          <button type="button" id="bank_import_csv_preview_btn" class="small-btn primary" onclick="bankImportCsvPastePreview_()">Preview</button>
-          <button type="button" class="small-btn" onclick="clearBankImportCsvPaste_()" style="margin-left:6px;">Clear</button>
-        </div>
-        <div id="bank_import_csv_preview" style="margin-top:10px;"></div>
-        <div id="bank_import_csv_stage_row" style="margin-top:10px;display:none;">
-          <button type="button" id="bank_import_csv_stage_btn" class="small-btn primary" onclick="confirmBankImportCsvPasteStage_()" disabled>Stage rows for review</button>
-        </div>
-      </div>
-
       <div id="bank_status" class="status"></div>
+
+      <div id="bank_activity_drawer_backdrop" class="bill-pay-drawer-backdrop" hidden onclick="onBankAccountActivityDrawerBackdropClick_(event)">
+        <aside id="bank_activity_drawer" class="bill-pay-drawer investment-portfolio-drawer" role="dialog" aria-modal="true" aria-labelledby="bank_activity_drawer_title" tabindex="-1">
+          <div class="bill-pay-drawer-head">
+            <div>
+              <div class="bill-pay-drawer-eyebrow">Bank accounts</div>
+              <h2 id="bank_activity_drawer_title">Account activity</h2>
+            </div>
+            <button type="button" id="bank_activity_drawer_close" class="bill-pay-drawer-close" aria-label="Close Account activity" onclick="closeBankAccountActivityDrawer_()">×</button>
+          </div>
+          <div class="bill-pay-drawer-body">
+            <div class="investment-portfolio-tabs" role="tablist" aria-label="Account activity views">
+              <button type="button" id="bank_activity_review_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setBankAccountActivityView_('review')">Review pending imports<span id="bank_mode_review_badge" class="muted" style="margin-left:6px;display:none;"></span></button>
+              <button type="button" id="bank_activity_import_btn" class="segment-btn" role="tab" aria-selected="false" hidden onclick="setBankAccountActivityView_('import')">Paste CSV</button>
+            </div>
+
+            <section id="bank_activity_review_view">
+              <div id="bank_mode_review_wrap">
+                <div class="muted" style="margin-bottom:8px;font-size:13px;line-height:1.4;">
+                  Review imported accounts. Link first (<strong>Add as new</strong> or <strong>Match</strong>), then preview and confirm before Apply. Staging does not change CashCompass balances.
+                </div>
+                <div id="bank_import_dev_callout" style="display:none;margin-bottom:10px;padding:8px 10px;background:#fff8e1;border:1px dashed #d6b656;border-radius:6px;font-size:12px;line-height:1.4;">
+                  <strong>Dev / sample data only.</strong> No real bank connection or external sync. The button below re-runs the built-in demo harness, which seeds two staged rows (<code>Demo Checking</code> · <code>Demo Savings</code>) so you can exercise <em>Add as new</em> / <em>Match</em> / <em>Apply balance</em> / <em>Ignore</em> without leaving the dashboard.
+                  <div style="margin-top:6px;">
+                    <button type="button" class="small-btn" onclick="loadBankImportSampleData_()">Load sample import data (dev)</button>
+                  </div>
+                </div>
+                <div id="bank_import_review_list"></div>
+              </div>
+            </section>
+
+            <section id="bank_activity_import_view" hidden>
+              <div id="bank_mode_import_wrap">
+                <div class="muted" style="margin-bottom:8px;font-size:13px;line-height:1.4;">
+                  Paste a CSV of bank-account balance snapshots. Preview does not write a balance. Nothing is saved to an account until you confirm Apply in Review pending imports.
+                </div>
+                <details style="margin-bottom:10px;font-size:12px;line-height:1.4;">
+                  <summary style="cursor:pointer;">Show CSV template</summary>
+                  <div style="margin-top:6px;padding:8px;background:#f8f8f8;border-radius:4px;">
+                    <div style="font-family:monospace;white-space:pre-wrap;word-break:break-all;">displayName,balance,balanceAsOf,externalAccountId,institution,last4,type,currency
+Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,0123,CHECKING,USD</div>
+                    <div style="margin-top:6px;">
+                      <button type="button" class="small-btn" onclick="copyBankImportCsvTemplateToClipboard_()">Copy template</button>
+                      <span id="bank_import_csv_template_copy_status" class="muted" style="margin-left:8px;font-size:12px;"></span>
+                    </div>
+                    <div class="muted" style="margin-top:6px;font-size:11px;">
+                      Required columns: <strong>displayName</strong> (or any other identifier), <strong>balance</strong>, <strong>balanceAsOf</strong> (YYYY-MM-DD). Numbers must use <code>.</code> for decimals; commas and <code>$</code> are stripped. A blank balance is rejected. <strong>$0.00</strong> is valid. Up to 200 rows per paste.
+                    </div>
+                  </div>
+                </details>
+                <textarea id="bank_import_csv_paste" rows="10" placeholder="Paste CSV text here. First row must be a header row." style="width:100%;font-family:monospace;font-size:12px;box-sizing:border-box;"></textarea>
+                <div style="margin-top:8px;">
+                  <button type="button" id="bank_import_csv_preview_btn" class="small-btn primary" onclick="bankImportCsvPastePreview_()">Preview</button>
+                  <button type="button" class="small-btn" onclick="clearBankImportCsvPaste_()" style="margin-left:6px;">Clear</button>
+                </div>
+                <div id="bank_import_csv_preview" style="margin-top:10px;"></div>
+                <div id="bank_import_csv_stage_row" style="margin-top:10px;display:none;">
+                  <button type="button" id="bank_import_csv_stage_btn" class="small-btn primary" onclick="confirmBankImportCsvPasteStage_()" disabled>Stage rows for review</button>
+                </div>
+              </div>
+            </section>
+            <div id="bank_activity_status" class="status" aria-live="polite"></div>
+          </div>
+          <div class="bill-pay-drawer-actions">
+            <button type="button" class="small-btn" onclick="closeBankAccountActivityDrawer_()">Close</button>
+          </div>
+        </aside>
+      </div>
     </div>
 
     <div id="investments" class="panel">
@@ -700,17 +719,21 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
               <label for="inv_add_type_custom">Custom type</label>
               <input type="text" id="inv_add_type_custom" maxlength="80" autocomplete="off" placeholder="e.g. HSA, Crypto">
             </div>
-            <label>Starting value</label>
-            <input type="text" id="inv_add_starting_value" inputmode="decimal" value="0.00" onfocus="currencyFocus('inv_add_starting_value')" onblur="currencyBlur('inv_add_starting_value')">
-            <div class="muted" style="margin-top:4px;font-size:12px;">Enter <code>0</code> if unknown. Cannot be empty.</div>
-            <label>Starting value date (optional)</label>
+            <label for="inv_add_starting_value">Starting value</label>
+            <input type="text" id="inv_add_starting_value" inputmode="decimal" onfocus="currencyFocus('inv_add_starting_value')" onblur="currencyBlur('inv_add_starting_value')">
+            <label for="inv_add_balance_unknown" style="display:flex;align-items:flex-start;gap:8px;font-weight:600;margin-top:8px;">
+              <input type="checkbox" id="inv_add_balance_unknown" style="width:auto;margin-top:3px;" onchange="onInvAddBalanceUnknownChange_()">
+              <span>Balance is unknown / not available yet</span>
+            </label>
+            <div class="muted" style="margin-top:4px;font-size:12px;">Enter <strong>$0.00</strong> only when you have confirmed the balance is actually zero. If you do not know it yet, check the box and leave the starting value blank. CashCompass will create the account without recording a value for this month.</div>
+            <label for="inv_add_starting_date">Starting value date (optional)</label>
             <input type="date" id="inv_add_starting_date">
-            <div class="muted" style="margin-top:4px;font-size:12px;">If left blank, the current month will be used. Must be in the current calendar year when provided.</div>
+            <div class="muted" style="margin-top:4px;font-size:12px;">Used only when you enter a starting value, including $0.00. If that date is left blank, the current month is used. A date is not recorded when the balance is unknown.</div>
             <button onclick="createInvestmentAccount()">Create account</button>
           </div>
           <div class="info muted">
             <p style="margin-top:0;">Creates the account and prepares the current year's tracking area automatically when needed.</p>
-            <p>Starting value is required (enter <code>0</code> if unknown). Starting value date is optional — <strong>if left blank, the current month is used automatically</strong> so the amount always lands in a real month column. Type is a dropdown of common investment roles plus any types already used in this workbook; pick <strong>Other</strong> to enter a custom label.</p>
+            <p><strong>$0.00</strong> means the balance is really zero and is saved as this month's value. <strong>Balance is unknown / not available yet</strong> creates the account with no monthly value, so Monthly Review shows it as missing and Planning does not treat it as a verified balance. Starting value date is optional when you enter an amount — <strong>if left blank, the current month is used automatically</strong>. Type is a dropdown of common investment roles plus any types already used in this workbook; pick <strong>Other</strong> to enter a custom label.</p>
           </div>
         </div>
       </div>
@@ -2158,7 +2181,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <div class="info">
             <div><strong>Current value:</strong> <span id="debt_currentValue" class="muted">—</span></div>
             <div><strong>Type:</strong> <span id="debt_type" class="muted">—</span></div>
-            <div><strong>Available credit %:</strong> <span id="debt_pctAvail" class="muted">—</span></div>
+            <div><strong>Available credit:</strong> <span id="debt_pctAvail" class="muted">—</span></div>
           </div>
         </div>
 
@@ -2233,7 +2256,8 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
               <label>Credit Limit</label>
               <input type="text" id="debt_edit_credit_limit" inputmode="decimal" onfocus="currencyFocus('debt_edit_credit_limit')" onblur="currencyBlur('debt_edit_credit_limit')">
               <label>Credit Left</label>
-              <input type="text" id="debt_edit_credit_left" inputmode="decimal" onfocus="currencyFocus('debt_edit_credit_left')" onblur="currencyBlur('debt_edit_credit_left')">
+              <div id="debt_edit_credit_left" class="muted" style="padding:8px 10px;background:#f1f5f9;border-radius:6px;">—</div>
+              <div class="muted" style="margin-top:4px;font-size:12px;">Calculated from Credit Limit − Balance for credit cards. Loans and HELOCs do not use revolving available credit.</div>
               <label>Minimum Payment</label>
               <input type="text" id="debt_edit_min_payment" inputmode="decimal" onfocus="currencyFocus('debt_edit_min_payment')" onblur="currencyBlur('debt_edit_min_payment')">
               <label>Interest Rate %</label>
@@ -2243,9 +2267,9 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                 <select id="debt_edit_linked_property"></select>
                 <div class="muted" style="margin-top:4px;font-size:12px;">Optional for Loans and HELOCs. Existing inactive links are retained until you clear or replace them.</div>
               </div>
-              <label>Available credit %</label>
+              <label>Available credit</label>
               <div id="debt_edit_pct_avail" class="muted" style="padding:8px 10px;background:#f1f5f9;border-radius:6px;">—</div>
-              <div class="muted" style="margin-top:4px;font-size:12px;">Calculated automatically from Credit Limit, Credit Left and Balance.</div>
+              <div class="muted" style="margin-top:4px;font-size:12px;">Shown for credit cards from Credit Limit and Balance. Loans and HELOCs do not use this field.</div>
               <div style="display:flex;gap:8px;margin-top:12px;">
                 <button type="button" id="debt_edit_save_btn" class="small-btn primary" onclick="submitDebtEdit_()">Save changes</button>
                 <button type="button" class="small-btn" onclick="cancelDebtEdit_()">Cancel</button>
@@ -2266,8 +2290,8 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       </div>
 
       <div id="debt_mode_connected_wrap" class="bank-mode-wrap">
-        <h3>Connected debts</h3>
-        <p class="muted">Match credit cards and mortgages to CashCompass debts and review provider evidence here. Debt and mortgage values remain comparison-only.</p>
+        <h3>Optional provider connections</h3>
+        <p class="muted">Connect institutions only when you want to compare provider data with your CashCompass debt values. Planning continues to use your CashCompass balances and terms.</p>
         <div class="warning-box">Plaid is optional. Connected debt evidence is managed securely by CashCompass and remains comparison-only.</div>
         <div class="tracked-editor-actions" style="margin-top:12px;">
           <button type="button" id="plaid_main_debt_connect_btn" class="small-btn primary" onclick="plaidMainConnect_('DEBT')">Connect institution</button>

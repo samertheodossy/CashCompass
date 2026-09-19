@@ -29,7 +29,7 @@ assert(client.includes('function plaidMainAuthoritativeCreditLimit_') &&
 const bridge = fs.readFileSync(new URL('../plaid_import_bridge.js', import.meta.url), 'utf8');
 
 assert(debts.includes('function recalcDebtDerivedCreditFieldsForRow_') &&
-  bridge.includes('recalcDebtDerivedCreditFieldsForRow_'),
+  bridge.includes('recalcDebtDerivedCreditFieldsForRow_(writeSession.sheet, writeSession.targetRow'),
   'successful Debt Apply must recalculate canonical Credit Left and Pct Avail');
 
 class FakeRange {
@@ -41,10 +41,16 @@ class FakeRange {
     this.numCols = numCols;
   }
   getValue() { return this.sheet.rows[this.row - 1]?.[this.col - 1] ?? ''; }
+  getDisplayValue() { return String(this.getValue() ?? ''); }
+  getFormula() { return this.sheet.formulas?.[this.row - 1]?.[this.col - 1] || ''; }
   setValue(value) {
     const rr = this.row - 1;
     while (this.sheet.rows.length <= rr) this.sheet.rows.push([]);
     this.sheet.rows[rr][this.col - 1] = value;
+    if (this.sheet.formulas) {
+      while (this.sheet.formulas.length <= rr) this.sheet.formulas.push([]);
+      this.sheet.formulas[rr][this.col - 1] = '';
+    }
     return this;
   }
   setNumberFormat() { return this; }
@@ -66,7 +72,11 @@ class FakeRange {
   }
 }
 class FakeSheet {
-  constructor(name, rows = []) { this.name = name; this.rows = rows.map((row) => [...row]); }
+  constructor(name, rows = []) {
+    this.name = name;
+    this.rows = rows.map((row) => [...row]);
+    this.formulas = rows.map((row) => row.map(() => ''));
+  }
   getName() { return this.name; }
   getLastRow() { return this.rows.length; }
   getLastColumn() { return Math.max(0, ...this.rows.map((row) => row.length)); }
@@ -135,6 +145,7 @@ assert.equal(legacyIndex['DEBT-AMEX'].CREDIT_LEFT, 1303.05);
 assert.equal(legacyIndex['DEBT-SWA'].CREDIT_LEFT, -200);
 
 const corpCols = {
+  typeCol: 1,
   creditLimitCol: 5,
   creditLeftCol: 6,
   balanceCol: 3,
@@ -153,9 +164,9 @@ assert.equal(Math.round(sheet.getRange(3, 9).getValue() * 10000) / 100, 2.61,
 
 ctx.recalcDebtPctAvailForRow_(sheet, 4, corpCols);
 assert.equal(sheet.getRange(4, 7).getValue(), -200,
-  'Southwest negative Credit Left must be preserved until balance/limit recalc');
+  'Pct-only recalc must not write Credit Left');
 assert(sheet.getRange(4, 9).getValue() < 0,
-  'Southwest negative Pct Avail must be preserved');
+  'Consistent over-limit Pct Avail remains negative from Credit Limit − Balance');
 
 vm.runInContext([
   'var PLAID_MAIN_MISSING_ = "—";',
@@ -203,5 +214,133 @@ const otherProvider = ctx.plaidMainBuildProviderAvailableCreditRow_(
   { candidate: { numericValue: 50000, currency: 'USD' } }, isolatedLegacy);
 assert(otherProvider.change.includes('Exceeds CashCompass credit limit'),
   'provider evidence must flag inconsistency without writing Credit Left');
+
+const editableSlice = debts.slice(
+  debts.indexOf('var DEBT_EDITABLE_FIELDS_'),
+  debts.indexOf('var DEBT_DERIVED_FIELDS_')
+);
+assert(debts.includes("Credit Left and available credit percentage are calculated") &&
+  !editableSlice.includes("'Credit Left'") &&
+  debts.includes("var DEBT_DERIVED_FIELDS_"),
+  'Credit Left is a derived field and cannot be written by the generic editor');
+assert(bridge.includes('PLAID_IMPORT_DEBT_DERIVED_KEYS_') &&
+  bridge.includes('AVAILABLE_CREDIT: true') &&
+  !bridge.includes('applyDebtDerivedCreditFieldRepair_'),
+  'Plaid Apply cannot select derived keys and must not auto-repair workbook rows');
+assert(debtImport.includes('never writes INPUT - Debts') &&
+  !debtImport.includes('applyDebtDerivedCreditFieldRepair_'),
+  'shadow debt import must not write or repair INPUT derived columns');
+
+const derivedHeaderMap = {
+  nameColZero: 0, typeColZero: 1, balanceColZero: 3, creditLimitColZero: 5,
+  creditLeftColZero: 6, pctAvailColZero: 8
+};
+
+function derivedPct_(sheet, row) {
+  return Math.round(Number(sheet.getRange(row, 9).getValue()) * 10000) / 100;
+}
+
+function writeSourceAndRecalc_(sheet, row, patch) {
+  if (Object.prototype.hasOwnProperty.call(patch, 'balance')) {
+    sheet.getRange(row, derivedHeaderMap.balanceColZero + 1).setValue(patch.balance);
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'limit')) {
+    sheet.getRange(row, derivedHeaderMap.creditLimitColZero + 1).setValue(patch.limit);
+  }
+  ctx.recalcDebtDerivedCreditFieldsForRow_(sheet, row, derivedHeaderMap);
+}
+
+const dynamicSheet = new FakeSheet('INPUT - Debts', [
+  debtHeaders,
+  ['Derived Fixture Card', 'Credit Card', 'Yes', 28923.04, 35, 35800, -660.39, 24.99, -0.0184],
+  ['Home Loan', 'Loan', 'Yes', 200000, 900, 0, 0, 6.25, ''],
+  ['Heloc Line', 'HELOC', 'Yes', 55000, 400, 80000, 25000, 7.5, 0.5],
+  ['Formula Card', 'Credit Card', 'Yes', 1000, 25, 5000, 9999, 18, 0.5]
+]);
+dynamicSheet.formulas[4][6] = '=F5-D5';
+dynamicSheet.formulas[4][8] = '=G5/F5';
+
+writeSourceAndRecalc_(dynamicSheet, 2, { balance: 28923.04, limit: 35800 });
+assert.equal(dynamicSheet.getRange(2, 7).getValue(), 6876.96,
+  'starting Balance $28,923.04 and Limit $35,800.00 derive Credit Left $6,876.96');
+assert.equal(derivedPct_(dynamicSheet, 2), 19.21,
+  'starting values derive Acct PCT Avail 19.21%');
+
+writeSourceAndRecalc_(dynamicSheet, 2, { balance: 25000 });
+assert.equal(dynamicSheet.getRange(2, 7).getValue(), 10800);
+assert.equal(derivedPct_(dynamicSheet, 2), 30.17,
+  'changing Balance updates both derived fields');
+
+writeSourceAndRecalc_(dynamicSheet, 2, { limit: 40000 });
+assert.equal(dynamicSheet.getRange(2, 7).getValue(), 15000);
+assert.equal(derivedPct_(dynamicSheet, 2), 37.5,
+  'changing Credit Limit updates both derived fields');
+
+writeSourceAndRecalc_(dynamicSheet, 2, { balance: 28923.04, limit: 35800 });
+assert.equal(dynamicSheet.getRange(2, 7).getValue(), 6876.96);
+assert.equal(derivedPct_(dynamicSheet, 2), 19.21,
+  'changing both Balance and Credit Limit updates both derived fields');
+
+dynamicSheet.getRange(2, 7).setValue(-660.39);
+ctx.recalcDebtPctAvailForRow_(dynamicSheet, 2, {
+  typeCol: 1, creditLimitCol: 5, creditLeftCol: 6, balanceCol: 3, pctAvailCol: 8
+});
+assert.equal(derivedPct_(dynamicSheet, 2), 19.21,
+  'stale Credit Left cannot affect Acct PCT Avail');
+assert.equal(dynamicSheet.getRange(2, 7).getValue(), -660.39,
+  'pct-only recalc must not write Credit Left');
+
+const loanLeftBefore = dynamicSheet.getRange(3, 7).getValue();
+const helocLeftBefore = dynamicSheet.getRange(4, 7).getValue();
+writeSourceAndRecalc_(dynamicSheet, 3, { balance: 199000, limit: 0 });
+writeSourceAndRecalc_(dynamicSheet, 4, { balance: 54000, limit: 80000 });
+assert.equal(dynamicSheet.getRange(3, 7).getValue(), loanLeftBefore,
+  'loans must not receive credit-card available-credit formulas');
+assert.equal(dynamicSheet.getRange(4, 7).getValue(), helocLeftBefore,
+  'HELOCs must not receive credit-card available-credit formulas');
+
+const formulaLeftBefore = dynamicSheet.getRange(5, 7).getValue();
+const formulaPctBefore = dynamicSheet.getRange(5, 9).getValue();
+writeSourceAndRecalc_(dynamicSheet, 5, { balance: 2000 });
+assert.equal(dynamicSheet.getRange(5, 7).getValue(), formulaLeftBefore,
+  'existing Credit Left formulas remain the source of truth');
+assert.equal(dynamicSheet.getRange(5, 9).getValue(), formulaPctBefore,
+  'existing Acct PCT Avail formulas remain the source of truth');
+assert.equal(dynamicSheet.formulas[4][6], '=F5-D5');
+assert.equal(dynamicSheet.formulas[4][8], '=G5/F5');
+
+const previewSheet = new FakeSheet('INPUT - Debts', [
+  debtHeaders,
+  ['Derived Fixture Card', 'Credit Card', 'Yes', 28923.04, 35, 35800, -660.39, 24.99, -0.0184]
+]);
+const previewSs = {
+  getSheetByName(name) { return name === ctx.getSheetNames_().DEBTS ? previewSheet : null; }
+};
+const previewBefore = JSON.stringify(previewSheet.rows);
+const preview = ctx.previewDebtDerivedCreditFieldRepair_(previewSs);
+assert.equal(preview.ok, true);
+assert.equal(preview.mismatches.length, 1);
+assert.equal(JSON.stringify(previewSheet.rows), previewBefore,
+  'preview must not rewrite populated workbook values');
+assert.throws(
+  () => ctx.applyDebtDerivedCreditFieldRepair_({ accountName: 'Derived Fixture Card' }, previewSs),
+  /explicit confirmation/,
+  'repair requires explicit confirmation and is not run automatically'
+);
+assert.throws(
+  () => ctx.applyDebtDerivedCreditFieldRepair_({
+    confirmRepair: true, repairAllMismatchedCreditCards: true, accountName: 'Derived Fixture Card'
+  }, previewSs),
+  /Bulk derived credit repair is not enabled/,
+  'bulk repair remains disabled'
+);
+assert.equal(JSON.stringify(previewSheet.rows), previewBefore,
+  'failed or unconfirmed repair must not write derived fields');
+
+assert.equal(ctx.debtDerivedAvailableCredit_(35800, 28923.04).creditLeft, 6876.96);
+assert.equal(ctx.debtDerivedAvailableCredit_(35800, 28923.04).pctAvail, 19.21);
+assert.equal(ctx.debtIsCreditCardType_('HELOC'), false);
+assert.equal(ctx.debtIsCreditCardType_('Loan'), false);
+assert.equal(ctx.debtIsCreditCardType_('Credit Card'), true);
 
 console.log('Plaid Credit Left semantics regressions passed.');

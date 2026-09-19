@@ -72,19 +72,22 @@
         <h3>Assets &amp; Liabilities</h3>
         <h4>Bank accounts</h4>
         <ul class="help-list">
-          <li><strong>Update</strong> records a balance for the selected month.</li>
+          <li><strong>Update</strong> records a monthly balance for the selected month. It does not change Available Now, Min Buffer, Use policy, or Priority unless you explicitly choose that. Enter <strong>$0.00</strong> only when the account is actually at zero. A blank monthly balance is not saved as $0.</li>
+          <li>Check <strong>Also update Available Now</strong> only when you want Planning to use that same amount for bills or debt decisions. The box starts unchecked so a monthly-balance save cannot overwrite a separate cash-availability setting.</li>
+          <li><strong>Min Buffer</strong> stays unchanged unless you check that option separately.</li>
           <li><strong>Add new</strong> creates another account. <strong>Manage accounts</strong> lists active accounts so you can edit account details or stop tracking them.</li>
           <li><strong>Edit</strong> changes the account name, type, use policy, priority, available amount, and minimum buffer with one <strong>Save changes</strong> action. Renaming updates the same account across every Bank Accounts year while preserving balances and any import connection.</li>
           <li><strong>Available Now</strong> is the amount that may be considered for bills or debt decisions.</li>
           <li><strong>Min Buffer</strong> protects the minimum balance you want to keep.</li>
           <li><strong>Use policy</strong> tells the planner whether an account is protected or available for a specific purpose.</li>
-          <li>Import review and CSV tools live under <strong>Manage accounts</strong> because they are maintenance tools, not everyday balance actions.</li>
+          <li>Open <strong>Account activity</strong> under <strong>Manage accounts</strong> to review staged imports, paste a CSV, and link or ignore an account. Preview never changes CashCompass balances. Apply updates only the confirmed account and month after you confirm the account, month, and balance. <strong>Connected</strong> is for institution connection management.</li>
           <li><strong>Stop tracking</strong> removes an account from active views while preserving past balances. <strong>Show inactive accounts</strong> lets you reactivate the existing account later without recreating it.</li>
         </ul>
         <h4>Investments</h4>
         <ul class="help-list">
           <li>Record each investment account and its current value.</li>
           <li>Use <strong>Add new</strong> for another account and <strong>Manage investments</strong> to update or stop tracking an active account.</li>
+          <li>On <strong>Add new</strong>, enter <strong>$0.00</strong> only when the balance is actually zero. If the balance is unknown or not available yet, choose <strong>Balance is unknown / not available yet</strong> and leave the starting value blank. CashCompass still creates the account, but it does not record a monthly value, so Monthly Review shows that investment as missing and Planning does not treat it as a verified zero.</li>
           <li>For accounts marked <strong>Income-Producing</strong>, open <strong>Portfolio activity</strong> under Manage and choose an account. You can then review its holdings, update recurring plans, or import activity; each account is kept separate.</li>
           <li>The <strong>Portfolio</strong> view separates imported facts from your intentions: shares, dividends, and the last detected recurring purchase come from saved activity; frequency, amount per occurrence, and paused/active state are editable plans.</li>
           <li>Use <strong>Import CSV</strong> to preview a Robinhood export before saving. A newly detected ticker must be included in that income portfolio or marked as <strong>not part of this portfolio for now</strong>.</li>
@@ -96,14 +99,19 @@
         </ul>
         <h4>House values</h4>
         <ul class="help-list">
-          <li>Record the property value and remaining loan amount.</li>
+          <li>Record the property value and remaining loan balance.</li>
           <li>Use <strong>Add new</strong> for another property and <strong>Manage houses</strong> to update or stop tracking an active property. <strong>Show inactive houses</strong> lets you reactivate the same preserved house later without recreating it.</li>
-          <li>CashCompass calculates equity from those two amounts.</li>
+          <li>On <strong>Add new</strong>, house name and property type are required. Current value and remaining loan balance are optional. Enter <strong>$0.00</strong> only when the amount is actually zero. Leave a field blank if you do not know it yet; CashCompass does not save a blank amount as $0. A house created without a current value stays in the list, and Monthly Review shows that month as missing until you save a value.</li>
+          <li><strong>Update</strong> saves one month’s property value and does not change other months, remaining loan, or expense history. The date must be in this calendar year so a historical valuation cannot make this month look current.</li>
+          <li>A valuation date in this calendar year is saved in that month. A date from another year is kept in Activity and does not fill this year’s tracking. Monthly Review shows the current month as missing until you save a this-year value. If you leave the date blank, this month is used.</li>
+          <li>CashCompass calculates equity from the recorded property value and remaining loan. Unknown amounts are not treated as verified zeros.</li>
           <li>Each property can also track repairs, fees, insurance, and other expenses.</li>
         </ul>
         <h4>Debt accounts</h4>
         <ul class="help-list">
           <li>Open <strong>Assets &amp; Liabilities → Debt accounts</strong> to add, edit, or stop tracking a debt.</li>
+          <li><strong>Connected</strong> is optional. Connect an institution only to compare provider data with CashCompass debt values. Planning continues to use CashCompass balances and terms. If provider data has not been imported, no action is required.</li>
+          <li>The debt table lists <strong>Account</strong>, <strong>Type</strong>, <strong>Balance</strong>, <strong>Minimum payment</strong>, <strong>APR</strong>, <strong>Available credit</strong>, and <strong>Actions</strong>. Available credit for credit cards is Credit Limit minus Balance. Loans and HELOCs show —. A card over its limit shows a warning, <strong>Over limit by $X</strong>. Provider available-credit figures stay comparison-only and do not overwrite CashCompass calculations. CashCompass does not rewrite stored account values just to display that message.</li>
           <li><strong>Edit</strong> updates the account name, balances, minimum payments, interest rates, limits, and due dates with one <strong>Save changes</strong> action. CashCompass updates linked Cash Flow references when the name changes.</li>
           <li>These source values feed the read-only <strong>Debt overview</strong>, the actionable <strong>Rolling debt payoff</strong>, and Net Worth.</li>
           <li>Stopping tracking preserves history while removing the debt from active totals.</li>

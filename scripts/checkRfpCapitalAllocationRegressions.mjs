@@ -110,6 +110,12 @@ assert.doesNotMatch(client,
   /Make the recommended payments, then refresh Cash Compass after the new balances appear/);
 assert.doesNotMatch(client, /After this week\\'s recommended payments/);
 assert.doesNotMatch(client, /Follow this week&rsquo;s required payments and cash protections/);
+assert.match(client, /After you complete the remaining required debt payments, refresh Cash Compass once the updated balances appear/);
+assert.doesNotMatch(client,
+  /After you make the recommended payments, refresh Cash Compass once the updated balances appear/);
+assert.match(client,
+  /Required payments already covered<\/span><strong>' \+[\s\S]*?formatCapitalAllocationMoney_\(Math\.max\(0, Number\(monthly\.recordedTotal/);
+assert.doesNotMatch(client, /Required payments already covered<\/span><strong>−/);
 assert.match(client, /Variable bills use planning estimates/);
 assert.match(client, /estimatedAmount/);
 assert.match(client, /episodic bill/);
@@ -1082,9 +1088,11 @@ assert.equal(outcomeDecision.debtActions[1].annualInterestReduction,
   'the customer outcome must use the existing deterministic interest result');
 const outcomeHtml = clientContext.capitalAllocationPrimaryDecisionHtml_(outcomePlan);
 assert.match(outcomeHtml, /Expected results/);
-assert.match(outcomeHtml, /American Express — Expected to be paid off[\s\S]*?Expected balance \$39,790\.53 → \$0\.00[\s\S]*?~\$10,739\.46\/yr[\s\S]*?projected interest avoided/);
-assert.match(outcomeHtml, /CitiAA — Recommended extra payment[\s\S]*?Expected balance \$9,000\.00 → \$6,761\.40[\s\S]*?~\$525\.82\/yr[\s\S]*?projected interest reduction/);
+assert.match(outcomeHtml, /American Express — Expected to be paid off[\s\S]*?Expected balance \$39,790\.53 → \$0\.00[\s\S]*?~\$10,739\.46\/yr[\s\S]*?Estimated interest impact from proposed extra payoff/);
+assert.match(outcomeHtml, /CitiAA — Recommended extra payment[\s\S]*?Expected balance \$9,000\.00 → \$6,761\.40[\s\S]*?~\$525\.82\/yr[\s\S]*?Estimated interest impact from proposed extra payoff/);
 assert.match(outcomeHtml, /Southwest — Required payment covered[\s\S]*?\$988\.41 required · No extra payment/);
+assert.doesNotMatch(outcomeHtml, /Southwest[\s\S]{0,500}(?:interest avoided|interest reduction|interest impact)/,
+  'a required minimum must not be described as extra-payoff interest savings');
 assert.doesNotMatch(outcomeHtml, /capital-allocation-badge">(?:Paid off|Paid down)/,
   'a proposed outcome must never use a completed-state badge');
 const partialOutcome = outcomeHtml.slice(outcomeHtml.lastIndexOf('CitiAA'),
@@ -1172,14 +1180,70 @@ assert.equal(270 + 1968.60, 2238.60,
   'required plus pure extra must reconcile to the existing proposed CitiAA payment without double counting');
 assert.doesNotMatch(southwestDebtCard, /Extra payoff<\/span>|\$0\.00/,
   'a required-only payment must hide zero extra and duplicate-total rows');
+assert.doesNotMatch(southwestDebtCard,
+  /interest avoided|interest reduction|Estimated interest impact from proposed extra payoff/,
+  'a required-only card must not claim extra-payoff interest savings');
 const recordedPaidPlan = JSON.parse(JSON.stringify(outcomePlan));
 recordedPaidPlan.monthlyDebtEvidence = [{ name: 'Marriott', originalName: 'Credit Card - Marriott',
   status: 'RECORDED_PAID', dueDate: '2026-08-26', obligationAmount: 240,
   recordedPaymentAmount: 240, remainingRequiredAmount: 0, paymentDate: '2026-08-09' }];
 const recordedPaidHtml = clientContext.capitalAllocationDebtViewHtml_(recordedPaidPlan);
 assert.match(recordedPaidHtml,
-  /Required payments this month[\s\S]*?\$2,673\.41[\s\S]*?Required payments already covered[\s\S]*?−\$240\.00[\s\S]*?Required payments still to cover[\s\S]*?\$2,433\.41/,
+  /Required payments this month[\s\S]*?\$2,673\.41[\s\S]*?Required payments already covered[\s\S]*?\$240\.00[\s\S]*?Required payments still to cover[\s\S]*?\$2,433\.41/,
   'recorded payments must reduce the remaining required ledger without hiding the monthly obligation');
+assert.doesNotMatch(recordedPaidHtml,
+  /Required payments already covered[\s\S]*?−\$/,
+  'already-covered payments are a completed positive amount, not a negative payment');
+function coveredPaymentSummaryHtml_(overrides) {
+  return clientContext.capitalAllocationMonthlyDebtSummaryHtml_(Object.assign({
+    obligationTotal: 22204.13,
+    recordedTotal: 21495.59,
+    requiredTotal: 708.54,
+    extraTotal: 0,
+    requiredIncludedTotal: 0,
+    totalPlanned: 708.54,
+    currentDebt: 0,
+    expectedDebt: 0,
+    unresolvedCount: 0
+  }, overrides));
+}
+function assertCoveredPaymentSummary_(html, required, covered, remaining, label) {
+  assert.match(html,
+    new RegExp('Required payments this month[\\s\\S]*?\\$' + required +
+      '[\\s\\S]*?Required payments still to cover[\\s\\S]*?\\$' + remaining),
+    label + ': required and remaining remain visible');
+  assert.doesNotMatch(html, /Required payments still to cover[\s\S]*?(?:−|- )\$/,
+    label + ': remaining payments must stay non-negative');
+  const coveredShown = Number(covered.replace(/,/g, '')) > 0.005;
+  if (coveredShown) {
+    assert.match(html,
+      new RegExp('Required payments already covered[\\s\\S]*?\\$' + covered),
+      label + ': covered payments render as a positive currency amount');
+    assert.doesNotMatch(html, /Required payments already covered[\s\S]*?−\$/,
+      label + ': covered payments must not use negative payment formatting');
+  } else {
+    assert.doesNotMatch(html, /Required payments already covered/,
+      label + ': no covered-payment row when nothing has been covered');
+  }
+  assert.equal(Math.max(0, Math.round((Number(String(required).replace(/,/g, '')) -
+    Number(String(covered).replace(/,/g, ''))) * 100) / 100),
+    Number(String(remaining).replace(/,/g, '')),
+    label + ': remaining equals required minus covered and stays non-negative');
+}
+assertCoveredPaymentSummary_(coveredPaymentSummaryHtml_({}),
+  '22,204.13', '21,495.59', '708.54', 'covered less than required');
+assertCoveredPaymentSummary_(coveredPaymentSummaryHtml_({
+  obligationTotal: 500, recordedTotal: 500, requiredTotal: 0, totalPlanned: 0
+}), '500.00', '500.00', '0.00', 'covered equal to required');
+assertCoveredPaymentSummary_(coveredPaymentSummaryHtml_({
+  obligationTotal: 500, recordedTotal: 600, requiredTotal: -100, totalPlanned: 0
+}), '500.00', '600.00', '0.00', 'covered greater than required');
+assertCoveredPaymentSummary_(coveredPaymentSummaryHtml_({
+  obligationTotal: 500, recordedTotal: 0, requiredTotal: 500, totalPlanned: 500
+}), '500.00', '0.00', '500.00', 'no covered payments');
+assert.match(householdMonthlyDebtSummaryHtml,
+  /Required amount already covered by payoff recommendations[\s\S]*?−\$1,193\.72/,
+  'negative formatting remains only where an overlap is subtracted from planned totals');
 assert.match(recordedPaidHtml,
   /Monthly payment covered[\s\S]*?Marriott[\s\S]*?Recorded payment[\s\S]*?\$240\.00 on Aug 9, 2026/,
   'manual Cash Flow evidence must say recorded, not confirmed');
@@ -1294,12 +1358,43 @@ const extraOnlyHtml = clientContext.capitalAllocationDetailedDebtOutcomesHtml_([
 assert.doesNotMatch(extraOnlyHtml, /Required payment|Total this week|\$0\.00/,
   'an extra-only payment must hide zero required and duplicate-total rows');
 assert.match(extraOnlyHtml, /Recommended extra payment[\s\S]*?Pay \$500\.00/);
+assert.match(extraOnlyHtml, /Estimated interest impact from proposed extra payoff[\s\S]*?~\$90\.00/);
+const requiredOnlyInterestHtml = clientContext.capitalAllocationDetailedDebtOutcomesHtml_([{
+  displayName: 'Required Only', amount: 270, requiredPayment: 270, extraPayment: 0,
+  startingBalance: 9000, endingBalance: 8730, apr: 23.49, annualInterestReduction: 0,
+  outcome: 'REQUIRED_PAYMENT'
+}], 'PROPOSED');
+assert.doesNotMatch(requiredOnlyInterestHtml,
+  /interest avoided|interest reduction|Estimated interest impact from proposed extra payoff/,
+  'zero extra payoff must not claim interest was avoided');
+assert.doesNotMatch(requiredOnlyInterestHtml, /~\$0\.00/);
 assert.doesNotMatch(debtViewHtml, /Balance after plan|capital-allocation-badge">Paid off|capital-allocation-badge">Paid down/,
   'proposed debt actions must remain prospective throughout the detailed view');
-assert.match(debtViewHtml, /These payments are not complete yet\.[\s\S]*?After you make the recommended payments/,
-  'the proposed Debt view must contain one clear lifecycle instruction');
-assert.equal((debtViewHtml.match(/These payments are not complete yet\./g) || []).length, 1,
+assert.match(debtViewHtml, /Some required debt payments are still outstanding\.[\s\S]*?After you complete the remaining required debt payments/,
+  'the proposed Debt view must contain one clear outstanding-payment instruction');
+assert.equal((debtViewHtml.match(/Some required debt payments are still outstanding\./g) || []).length, 1,
   'the lifecycle instruction must not be duplicated');
+const zeroExtraPayoffPlan = JSON.parse(JSON.stringify(outcomePlan));
+zeroExtraPayoffPlan.weeklyActions = (zeroExtraPayoffPlan.weeklyActions || []).filter((row) =>
+  row.actionType !== 'PAY_EXTRA_DEBT');
+const zeroExtraPayoffDecision = clientContext.capitalAllocationPrimaryDecisionModel_(zeroExtraPayoffPlan);
+const zeroExtraPayoffMonthly = clientContext.capitalAllocationMonthlyDebtPlanModel_(
+  zeroExtraPayoffPlan, zeroExtraPayoffDecision);
+assert.equal(zeroExtraPayoffMonthly.extraTotal, 0);
+const zeroExtraPayoffHtml = clientContext.capitalAllocationDebtViewHtml_(zeroExtraPayoffPlan);
+assert.match(zeroExtraPayoffHtml,
+  /After you complete the remaining required debt payments, refresh Cash Compass once the updated balances appear/,
+  'when extra payoff is $0.00, Debt Plan tells the customer to complete remaining required payments');
+assert.doesNotMatch(zeroExtraPayoffHtml, /recommended payments/i,
+  'the Debt page must not say recommended payments when extra payoff is $0.00');
+assert.doesNotMatch(debtViewHtml, /These payments are not complete yet/);
+assert.match(debtViewHtml,
+  /Required payments are prioritized by due date\. Any remaining amount is shown above\./);
+assert.doesNotMatch(debtViewHtml, /Required monthly payments are paid by their due dates/,
+  'Debt Plan must not claim required payments are already paid while amounts remain');
+assert.match(debtViewHtml, /Still to pay this month[\s\S]*?CitiAA[\s\S]*?\$270\.00/);
+assert.doesNotMatch(debtViewHtml,
+  /Still to pay this month[\s\S]*?(?:These payments have been confirmed|all payments are complete)/i);
 assert.match(debtViewHtml,
   /Next extra-payoff target[\s\S]*?CitiAA — 23\.49% APR[\s\S]*?Next: Marriott 20\.25% → Southwest 20\.24% → United 20\.24%/,
   'customer priority rows must preserve descending revolving APR order');
@@ -1335,8 +1430,21 @@ assert.match(partialFreedCashHtml,
   /Monthly cash freed[\s\S]*?None yet[\s\S]*?American Express is expected to retain a \$14,217\.58 balance after the current recommendation[\s\S]*?monthly payment will not be considered freed until a refreshed balance confirms the account has been paid off/,
   'a partial payoff must clearly say that no monthly cash is freed yet');
 assert.doesNotMatch(partialFreedCashHtml, /\$0\.00\/month expected|After confirmed payoffs payoff/);
-assert.match(debtViewHtml, /Audit details[\s\S]*?CRITICAL[\s\S]*?MODERATE[\s\S]*?LOW_COST/,
-  'technical severity evidence must remain available only under collapsed Audit details');
+assert.match(debtViewHtml, /Audit details[\s\S]*?High-interest debt[\s\S]*?Moderate-rate debt[\s\S]*?Lower-cost debt/,
+  'audit details must use customer-friendly interest-rate labels');
+assert.doesNotMatch(debtViewHtml, /\b(?:CRITICAL|MODERATE|LOW_COST)\b/,
+  'internal severity enums must not appear in rendered Debt details');
+assert.equal(clientContext.capitalAllocationCustomerActionName_('Credit Card - CitiAA'), 'CitiAA');
+assert.equal(clientContext.capitalAllocationCustomerActionName_('Credit Card - AA'), 'AA');
+assert.equal(clientContext.capitalAllocationDebtMatchKey_('Credit Card - AA'),
+  clientContext.capitalAllocationDebtMatchKey_('Credit Card - CitiAA'),
+  'Credit Card - AA and Credit Card - CitiAA are the same account via display alias');
+assert.equal(clientContext.capitalAllocationDebtMatchKey_('CitiAA'),
+  clientContext.capitalAllocationDebtMatchKey_('Credit Card - CitiAA'));
+assert.equal(householdFacts.debts.find((row) => row.name === 'Credit Card - CitiAA').originalName,
+  'Credit Card - AA',
+  'INPUT original name remains Credit Card - AA; Debt Plan only shortens the normalized display name');
+assert.match(debtViewHtml, />CitiAA</);
 assert.match(debtViewHtml, /<details class="capital-allocation-debt-advanced">/);
 assert.doesNotMatch(debtViewHtml, /<details class="capital-allocation-debt-advanced"\s+open/,
   'customer Advanced details must be collapsed by default');

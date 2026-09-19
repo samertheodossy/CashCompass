@@ -1105,6 +1105,35 @@ function getBankAccountHistoryValueForMonth_(accountName, year, balanceDate) {
   return round2_(toNumber_(sheet.getRange(accountRow, monthCol).getValue()));
 }
 
+/**
+ * A blank cell is not a verified number. Numeric 0 is present evidence,
+ * including an account that is actually at zero.
+ * @param {*} raw
+ * @returns {boolean}
+ */
+function bankNumericEvidencePresent_(raw) {
+  return !(raw === '' || raw === null || raw === undefined);
+}
+
+/**
+ * Monthly balance for Bank Accounts Update: blank is unknown, not $0.
+ * Explicit 0 is valid. Negative amounts are allowed (overdraft).
+ * @param {*} raw
+ * @returns {{unknown: boolean, amount: (number|null)}}
+ */
+function resolveBankMonthlyBalance_(raw) {
+  if (!bankNumericEvidencePresent_(raw) || String(raw).trim() === '') {
+    return { unknown: true, amount: null };
+  }
+  const text = String(raw).trim().replace(/\$/g, '').replace(/,/g, '').replace(/\s+/g, '');
+  if (typeof raw !== 'number' && !/^-?\d+(\.\d+)?$/.test(text)) {
+    throw new Error('Monthly balance must be a valid number.');
+  }
+  const amount = round2_(typeof raw === 'number' ? raw : Number(text));
+  if (!isFinite(amount)) throw new Error('Monthly balance must be a valid number.');
+  return { unknown: false, amount: amount };
+}
+
 function updateBankAccountValueByDate(payload) {
   return updateBankAccountValueByDate_(payload, null);
 }
@@ -1120,12 +1149,21 @@ function updateBankAccountValueByDate_(payload, trustedProvenance) {
   const performanceTrace = startPerformanceTrace_('bank.ordinary_save');
   let failedStage = 'validate';
   try {
-    validateRequired_(payload, ['accountName', 'balanceDate', 'currentValue']);
+    validateRequired_(payload, ['accountName', 'balanceDate']);
 
     const accountName = String(payload.accountName || '').trim();
     const balanceDate = parseIsoDateLocal_(payload.balanceDate);
-    const currentValue = toNumber_(payload.currentValue);
+    const currentParsed = resolveBankMonthlyBalance_(payload.currentValue);
+    if (currentParsed.unknown) {
+      throw new Error(
+        'Enter a monthly balance, including 0.00 if the account is actually at zero.'
+      );
+    }
+    const currentValue = currentParsed.amount;
 
+    // Available Now and Min Buffer are independent Planning settings.
+    // A monthly-balance save never copies into them unless the user
+    // explicitly opts in on this request. Default is false.
     const updateAvailableNow = !!payload.updateAvailableNow;
     const updateMinBuffer = !!payload.updateMinBuffer;
 

@@ -69,6 +69,9 @@ function canonicalFinancialIssue_(code, message, details) {
 function canonicalFinancialSumIncluded_(rows, valueField) {
   return round2_((rows || []).reduce(function(sum, row) {
     if (!row || !row.included) return sum;
+    // A blank current-year month is not a verified $0 balance. Numeric
+    // totals are unchanged because the missing value was already coerced to 0.
+    if (row.hasCurrentValue === false) return sum;
     return sum + toNumber_(row[valueField]);
   }, 0));
 }

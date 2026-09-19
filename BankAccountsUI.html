@@ -95,20 +95,22 @@
   <div><strong>Use policy:</strong> <span id="usePolicy" class="muted">—</span></div>
 </div>
 
-<label>Value</label>
+<label for="value">Monthly balance</label>
 <input type="text" id="value" inputmode="decimal" onfocus="handleValueFocus()" onblur="handleValueBlur()" oninput="evaluateBufferWarning()">
+
+<div class="muted" style="margin-top:4px;font-size:12px;">Saves this month’s account balance only. Available Now, Min Buffer, Use policy, and Priority stay as they are unless you explicitly change them. Enter <strong>$0.00</strong> only when the account is actually at zero. A blank balance is not saved as $0.</div>
 
 <div id="bufferWarning" class="warning-box"></div>
 
 <div class="checks">
   <div class="check-row">
-    <input type="checkbox" id="updateAvailableNow" checked>
-    <label for="updateAvailableNow" style="margin:0;font-weight:normal;">Also update Available Now to this value</label>
+    <input type="checkbox" id="updateAvailableNow">
+    <label for="updateAvailableNow" style="margin:0;font-weight:normal;">Also update Available Now. This changes the amount Planning may use.</label>
   </div>
 
   <div class="check-row">
     <input type="checkbox" id="updateMinBuffer" onchange="evaluateBufferWarning()">
-    <label for="updateMinBuffer" style="margin:0;font-weight:normal;">Also update Min Buffer to this value</label>
+    <label for="updateMinBuffer" style="margin:0;font-weight:normal;">Also update Min Buffer. This changes the protected minimum for this account.</label>
   </div>
 </div>
 
@@ -318,10 +320,14 @@ function loadSelectedAccountData() {
 
 function save() {
   const rawValue = document.getElementById('value').value;
+  if (!String(rawValue || '').trim()) {
+    setStatus('Enter a monthly balance, including $0.00 if the account is actually at zero.', true);
+    return;
+  }
   const numericValue = toNumber(rawValue);
 
-  if (String(rawValue || '').trim() && isNaN(numericValue)) {
-    setStatus('Value must be a valid number.', true);
+  if (isNaN(numericValue)) {
+    setStatus('Monthly balance must be a valid number.', true);
     return;
   }
 

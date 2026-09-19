@@ -3267,8 +3267,298 @@ assert.doesNotMatch(body,
   'Normal dashboard copy must not expose sheet mechanics, writers, sidebars, or debt abbreviations');
 assert.match(body, /<label for="don_taxYear">Tax year<\/label>/,
   'Donation tax year must use direct customer language');
-assert.match(body, /Available credit %/,
-  'Debt credit availability must use a readable label');
+assert.doesNotMatch(body, /Available credit %/,
+  'Debt credit availability must not expose a percentage-only customer label');
+assert.match(body, /<h3>Optional provider connections<\/h3>/,
+  'Connected debts must say provider connections are optional');
+assert.match(body,
+  /Connect institutions only when you want to compare provider data with your CashCompass debt values\. Planning continues to use your CashCompass balances and terms\./,
+  'Connected debts must keep Planning on CashCompass balances and terms');
+assert.doesNotMatch(body,
+  /Match credit cards and mortgages to CashCompass debts/,
+  'Connected debts must not present provider matching as required');
+assert.match(body, /id="plaid_main_debt_connect_btn"[^>]*>Connect institution</,
+  'Connect institution remains available for optional debt comparison');
+assert.match(body, /id="plaid_main_debt_reload_btn"[^>]*>Reload</,
+  'Reload remains available for optional debt comparison');
+assert.doesNotMatch(body, /id="plaid_main_debt_connect_btn"[^>]*\sdisabled/,
+  'Connect institution must stay enabled');
+assert.doesNotMatch(body, /id="plaid_main_debt_reload_btn"[^>]*\sdisabled/,
+  'Reload must stay enabled');
+const plaidConnected = files['Dashboard_Script_PlaidConnectedAccounts.html'];
+assert.match(plaidConnected, /plaidMainButton_\('Change'/,
+  'Change remains available for an existing debt match');
+assert.match(plaidConnected, /Import Data/,
+  'Import Data remains available as an optional comparison action');
+assert.match(plaidConnected, /Manage connection/,
+  'Manage connection remains available');
+assert.match(functionSource_(plaidConnected, 'plaidMainImportStatusText_'),
+  /plaidMainDomain_\(domain\) === 'DEBT'[\s\S]*Provider data has not been imported\. No action required\./,
+  'An unimported debt provider must say no action is required');
+assert.doesNotMatch(functionSource_(plaidConnected, 'plaidMainImportStatusText_'),
+  /missing|Open Debts|action required(?!\.)/i,
+  'Unimported provider status must not look like a missing debt value');
+assert.match(functionSource_(plaidConnected, 'plaidMainBuildAccountCard_'),
+  /plaidMainImportStatusText_\(domain, importedAt\)/,
+  'Debt account cards must use the optional import-status message');
+assert.match(files['Dashboard_Help.html'],
+  /Planning continues to use CashCompass balances and terms/,
+  'Help must keep Planning on CashCompass debt values');
+assert.match(files['Dashboard_Help.html'],
+  /Over limit by \$X/,
+  'Help must explain over-limit credit-card display without rewriting stored values');
+
+const debtManageRenderSrc = functionSource_(debtScript, 'renderActiveDebtsList_');
+assert.match(debtManageRenderSrc,
+  /buildDebtSortableHeader_\('accountName', 'Account'/,
+  'Debt manage table must label the first column Account');
+assert.match(debtManageRenderSrc,
+  /buildDebtSortableHeader_\('type', 'Type'/,
+  'Debt manage table must label the type column Type');
+assert.match(debtManageRenderSrc,
+  /buildDebtSortableHeader_\('accountBalance', 'Balance'/,
+  'Debt manage table must label the balance column Balance');
+assert.match(debtManageRenderSrc,
+  />Minimum payment<\/th>/,
+  'Debt manage table must use the full Minimum payment header');
+assert.match(debtManageRenderSrc,
+  />APR<\/th>/,
+  'Debt manage table must use the APR header');
+assert.match(debtManageRenderSrc,
+  />Available credit<\/th>/,
+  'Debt manage table must use the Available credit header');
+assert.match(debtManageRenderSrc,
+  />Actions<\/th>/,
+  'Debt manage table must keep the Actions header');
+assert.doesNotMatch(debtManageRenderSrc,
+  /Min Payment|Int Rate|Pct Avail|Account Name/,
+  'Debt manage table must not use compressed or spreadsheet headers');
+assert.match(debtManageRenderSrc, /debtManageAvailableCreditHtml_\(r\)/,
+  'Debt manage rows must format available credit instead of dumping Pct Avail');
+assert.doesNotMatch(debtManageRenderSrc, /acctPctAvail/,
+  'Debt manage rows must not render stored Acct PCT Avail strings');
+assert.doesNotMatch(
+  debtManageRenderSrc +
+    functionSource_(debtScript, 'buildDebtSortableHeader_') +
+    functionSource_(debtScript, 'debtManageAvailableCreditDisplay_') +
+    functionSource_(debtScript, 'debtManageAvailableCreditHtml_') +
+    functionSource_(debtScript, 'debtManageAvailableCreditText_') +
+    functionSource_(debtScript, 'debtManagePaintAvailableCreditEl_'),
+  /setValue|updateDebtField|recalcDebtPctAvailForRow_/,
+  'Debt available-credit display must not rewrite INPUT/SYS account data'
+);
+assert.doesNotMatch(functionSource_(debtScript, 'buildDebtSortableHeader_'),
+  /role=['"]button['"]/,
+  'Sortable debt headers must remain column headers, not buttons');
+assert.match(functionSource_(debtScript, 'buildDebtSortableHeader_'),
+  /escapeHtml\(label\) \+ indicator/,
+  'Sortable debt headers must expose Account/Type/Balance as readable th text');
+assert.match(functionSource_(debtScript, 'loadDebtFieldValue'),
+  /debtManagePaintAvailableCreditEl_\(document\.getElementById\('debt_pctAvail'\), \{[\s\S]*?type:\s*data\.type[\s\S]*?creditLimit:\s*data\.creditLimit[\s\S]*?creditLeft:\s*data\.creditLeft[\s\S]*?accountBalance:\s*data\.accountBalance/,
+  'Debt Update details must reuse the same available-credit display as the table');
+assert.match(files['debts.js'],
+  /function getDebtFieldValue\([\s\S]*?pctAvail:[\s\S]*?creditLimit:[\s\S]*?creditLeft:[\s\S]*?accountBalance:/,
+  'Debt field reads may expose limit/left/balance for display but must keep stored pctAvail unread-only');
+assert.doesNotMatch(functionSource_(files['debts.js'], 'recalcDebtPctAvailForRow_'),
+  /creditLeftRaw|cols\.creditLeftCol/,
+  'Acct PCT Avail must be calculated from Credit Limit − Balance, never stale Credit Left');
+assert.match(functionSource_(files['debts.js'], 'updateDebtField'),
+  /fieldName === 'Account Balance' \|\| fieldName === 'Credit Limit'[\s\S]*recalcDebtDerivedCreditFieldsForRow_/,
+  'Generic debt editor and Plaid Apply field writes must recalc derived credit after Balance or Credit Limit');
+assert.match(functionSource_(files['debts.js'], 'updateTrackedDebtFromDashboard'),
+  /changedFields\.indexOf\('Account Balance'\)[\s\S]*changedFields\.indexOf\('Credit Limit'\)[\s\S]*recalcDebtDerivedCreditFieldsForRow_/,
+  'Manage Edit must recalc derived credit after Balance or Credit Limit');
+assert.match(files['quick_add_payment.js'],
+  /recalcDebtDerivedCreditFieldsForRow_\(debtSheet, matches\[0\], debtMap\)/,
+  'Quick Add debt-balance correction must recalc derived credit');
+assert.match(files['quick_add_payment.js'],
+  /recalcDebtDerivedCreditFieldsForRow_\(debtSheet, targetRow, headerMap\)/,
+  'Quick Add card-payment balance reduction must recalc derived credit');
+assert.match(functionSource_(files['debts.js'], 'addDebtFromDashboard'),
+  /recalcDebtDerivedCreditFieldsForRow_\(sheet, appendedRow, headerMap\)/,
+  'New credit-card rows must seed derived credit from Limit − Balance');
+assert.match(styles, /\.debt-over-limit-warning[\s\S]*?color:\s*#991b1b;[\s\S]*?font-weight:\s*700;/,
+  'Over-limit available credit must use a high-contrast warning style');
+assert.match(styles, /\.cc-sr-only[\s\S]*?clip:\s*rect\(0,\s*0,\s*0,\s*0\)/,
+  'Over-limit warnings must keep a screen-reader-only prefix so color is not the only cue');
+
+const debtAvailableDisplay = Function(
+  'fmtCurrency',
+  `${functionSource_(debtScript, 'debtManageMoney_')}
+   ${functionSource_(debtScript, 'debtManageMoneyText_')}
+   ${functionSource_(debtScript, 'debtManageRoundMoney_')}
+   ${functionSource_(debtScript, 'debtManageIsCreditCardType_')}
+   ${functionSource_(debtScript, 'debtManageAvailableCreditDisplay_')}
+   return debtManageAvailableCreditDisplay_;`
+)(dashboardMoneyFormatter);
+const mutedDash = '<span class="muted">—</span>';
+assert.equal(
+  debtAvailableDisplay({ type: 'Loan', creditLimit: 50000, creditLeft: 12000, accountBalance: 38000 }).html,
+  mutedDash,
+  'Loans must show — for available credit instead of invented utilization'
+);
+assert.doesNotMatch(
+  debtAvailableDisplay({ type: 'Loan', creditLimit: 50000, creditLeft: 12000, accountBalance: 38000 }).html,
+  /debt-over-limit-warning/,
+  'Loans must not receive the over-limit warning style'
+);
+assert.equal(
+  debtAvailableDisplay({ type: 'HELOC', creditLimit: 80000, creditLeft: 25000, accountBalance: 55000 }).html,
+  mutedDash,
+  'HELOCs must show — for available credit instead of invented utilization'
+);
+assert.doesNotMatch(
+  debtAvailableDisplay({ type: 'HELOC', creditLimit: 80000, creditLeft: 25000, accountBalance: 55000 }).html,
+  /debt-over-limit-warning/,
+  'HELOCs must not receive the over-limit warning style'
+);
+const normalCard = debtAvailableDisplay({
+  type: 'Credit Card',
+  creditLimit: 10000,
+  creditLeft: 500,
+  accountBalance: 4000
+});
+assert.equal(normalCard.kind, 'ok');
+assert.equal(normalCard.text, '$6,000.00',
+  'Normal credit cards must show remaining credit from Credit Limit − Balance');
+assert.doesNotMatch(normalCard.html, /debt-over-limit-warning/,
+  'Normal credit cards must not receive the over-limit warning style');
+assert.match(normalCard.html, /\$6,000\.00/,
+  'Normal credit-card available credit must keep the numeric amount visible');
+const lowAvailCard = debtAvailableDisplay({
+  type: 'Credit Card',
+  creditLimit: 10000,
+  accountBalance: 9800,
+  intRate: '29.99%'
+});
+assert.equal(lowAvailCard.text, '$200.00',
+  'Low remaining credit must still display as a dollar amount');
+assert.doesNotMatch(lowAvailCard.html, /debt-over-limit-warning|Over limit/,
+  'Low available credit or high APR alone must not use the over-limit warning');
+const zeroBalanceCard = debtAvailableDisplay({
+  type: 'Credit Card',
+  creditLimit: 10000,
+  creditLeft: 10000,
+  accountBalance: 0
+});
+assert.equal(zeroBalanceCard.text, '$10,000.00',
+  'Zero-balance credit cards must show the full limit as available credit');
+assert.doesNotMatch(zeroBalanceCard.html, /debt-over-limit-warning/,
+  'Zero-balance credit cards must not receive the over-limit warning style');
+const overLimitCard = debtAvailableDisplay({
+  accountName: 'Credit Card - SW',
+  type: 'Credit Card',
+  creditLimit: 28400,
+  creditLeft: -660.39,
+  accountBalance: 28923.04,
+  acctPctAvail: '-2.32%'
+});
+assert.equal(overLimitCard.kind, 'over');
+assert.equal(overLimitCard.text, 'Over limit by $523.04',
+  'Over-limit dollars must come from Credit Limit and Balance, not stale Credit Left');
+assert.match(overLimitCard.html, /class="debt-over-limit-warning"/,
+  'Over-limit cards must render the warning class');
+assert.match(overLimitCard.html, /role="status"/,
+  'Over-limit cards must expose a semantic warning state');
+assert.match(overLimitCard.html, /cc-sr-only">Warning\./,
+  'Over-limit cards must include accessible warning text in addition to color');
+assert.match(overLimitCard.html, /Over limit by \$523\.04/,
+  'Over-limit cards must keep the numeric overage visible');
+assert.doesNotMatch(functionSource_(debtScript, 'submitDebtEdit_'),
+  /creditLeft:/,
+  'Debt Edit must not submit Credit Left for import or manual overwrite');
+assert.doesNotMatch(files['Dashboard_Script_PlanningDebts.html'] + files['plaid_import_bridge.js'],
+  /applyDebtDerivedCreditFieldRepair_/,
+  'Dashboard and Plaid Apply must not auto-run derived-field workbook repair');
+
+const healthySwCard = debtAvailableDisplay({
+  accountName: 'Credit Card - SW',
+  type: 'Credit Card',
+  creditLimit: 35800,
+  creditLeft: -660.39,
+  accountBalance: 28923.04,
+  acctPctAvail: '-1.84%'
+});
+assert.equal(healthySwCard.kind, 'ok');
+assert.equal(healthySwCard.text, '$6,876.96',
+  'Southwest available credit must use Credit Limit − Balance, not stale Credit Left');
+assert.doesNotMatch(healthySwCard.html, /debt-over-limit-warning|Over limit|660\.39|-1\.84%/,
+  'A card under its limit must not inherit stale provider over-limit display');
+
+const debtManageHost = { innerHTML: '' };
+const debtManageCtx = vm.createContext({
+  document: { getElementById(id) { return id === 'debt_manage_list' ? debtManageHost : null; } },
+  window: {},
+  escapeHtml(value) {
+    return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  },
+  escapeJs(value) { return String(value ?? '').replace(/'/g, "\\'"); },
+  fmtCurrency: dashboardMoneyFormatter
+});
+vm.runInContext(
+  'var __debtManageSort = { column: "accountName", dir: "asc" }; var __debtManageRows = [];' +
+    functionSource_(debtScript, 'debtManageMoney_') +
+    functionSource_(debtScript, 'debtManageMoneyText_') +
+    functionSource_(debtScript, 'debtManageRoundMoney_') +
+    functionSource_(debtScript, 'debtManageIsCreditCardType_') +
+    functionSource_(debtScript, 'debtManageAvailableCreditDisplay_') +
+    functionSource_(debtScript, 'debtManageAvailableCreditHtml_') +
+    functionSource_(debtScript, 'sortDebtManageRows_') +
+    functionSource_(debtScript, 'buildDebtSortableHeader_') +
+    functionSource_(debtScript, 'renderActiveDebtsList_'),
+  debtManageCtx
+);
+vm.runInContext(
+  'renderActiveDebtsList_([' +
+    '{accountName:"Credit Card - SW",type:"Credit Card",accountBalance:28923.04,minimumPayment:35,intRate:"24.99%",creditLimit:28400,creditLeft:-660.39,acctPctAvail:"-2.32%"},' +
+    '{accountName:"Home Loan",type:"Loan",accountBalance:120000,minimumPayment:900,intRate:"6.25%",creditLimit:0,creditLeft:0},' +
+    '{accountName:"Backup Card",type:"Credit Card",accountBalance:0,minimumPayment:0,intRate:"18.00%",creditLimit:2500,creditLeft:2500}' +
+  '])',
+  debtManageCtx
+);
+const debtHeaderLabels = [...debtManageHost.innerHTML.matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g)]
+  .map((match) => match[1].replace(/<[^>]+>/g, '').replace(/[^\w .]/g, ' ').replace(/\s+/g, ' ').trim());
+assert.deepEqual(
+  debtHeaderLabels,
+  ['Account', 'Type', 'Balance', 'Minimum payment', 'APR', 'Available credit', 'Actions'],
+  'Rendered debt manage table must expose all seven readable column headers'
+);
+assert.match(debtManageHost.innerHTML, /<th scope="col"[^>]*>Account/,
+  'Account must be a semantic column header with readable text');
+assert.match(debtManageHost.innerHTML, /<th scope="col"[^>]*>Type/,
+  'Type must be a semantic column header with readable text');
+assert.match(debtManageHost.innerHTML, /<th scope="col"[^>]*>Balance/,
+  'Balance must be a semantic column header with readable text');
+assert.doesNotMatch(debtManageHost.innerHTML, /<th[^>]*role=['"]button['"]/,
+  'Debt column headers must not be exposed as buttons');
+function debtManageRenderedRow_(name) {
+  const marker = '<td><strong>' + name + '</strong></td>';
+  const idx = debtManageHost.innerHTML.indexOf(marker);
+  assert.ok(idx >= 0, `${name} must render as a debt manage row`);
+  const start = debtManageHost.innerHTML.lastIndexOf('<tr>', idx);
+  const end = debtManageHost.innerHTML.indexOf('</tr>', idx) + 5;
+  return debtManageHost.innerHTML.slice(start, end);
+}
+const swRowHtml = debtManageRenderedRow_('Credit Card - SW');
+assert.match(swRowHtml, /debt-over-limit-warning/,
+  'Rendered SW row must include the over-limit warning class');
+assert.match(swRowHtml, /role="status"/,
+  'Rendered SW row must include the semantic warning state');
+assert.match(swRowHtml, /Warning\./,
+  'Rendered SW row must include accessible warning text');
+assert.match(swRowHtml, /Over limit by \$523\.04/,
+  'Rendered SW row must keep the consistent numeric overage visible');
+const loanRowHtml = debtManageRenderedRow_('Home Loan');
+assert.match(loanRowHtml, /<span class="muted">—<\/span>/,
+  'Rendered loan rows must show — for available credit');
+assert.doesNotMatch(loanRowHtml, /debt-over-limit-warning|Over limit/,
+  'Rendered loan rows must not receive the over-limit warning style');
+const zeroRowHtml = debtManageRenderedRow_('Backup Card');
+assert.match(zeroRowHtml, /\$2,500\.00/,
+  'Rendered zero-balance cards must show available credit as a dollar amount');
+assert.doesNotMatch(zeroRowHtml, /debt-over-limit-warning|Over limit/,
+  'Rendered zero-balance cards must not receive the over-limit warning style');
 assert.match(assetScript,
   /function formatBankUsePolicyLabel_\(value\)[\s\S]*?USE_FOR_BILLS:\s*'Use for bills'/,
   'Stored Bank policy tokens must render as customer-facing labels');
@@ -3620,8 +3910,13 @@ const bankTabs = body.slice(
 assert.doesNotMatch(bankTabs, /Review imports|Paste CSV/,
   'Bank import utilities must remain secondary tools under Manage accounts');
 assert.match(body,
-  /id=["']bank_mode_manage_wrap["'][\s\S]*?Review pending imports[\s\S]*?id=["']bank_mode_import_btn["']/,
-  'Bank Manage must retain both guarded import utilities');
+  /id=["']bank_mode_manage_wrap["'][\s\S]*?id=["']bank_account_activity_btn["'][\s\S]*?Account activity/,
+  'Bank Manage must open Account activity instead of a second import page');
+assert.match(body,
+  /id=["']bank_activity_drawer["'][\s\S]*?Review pending imports[\s\S]*?id=["']bank_activity_import_btn["'][\s\S]*?Paste CSV/,
+  'Account activity must contain pending review and Paste CSV');
+assert.doesNotMatch(body, /id=["']bank_mode_import_btn["']/,
+  'The old Manage-page Paste CSV link must be removed once Account activity owns it');
 assert.ok(
   files['Dashboard_Script_Onboarding.html'].includes("onboardingOpenBankAccountsPage(\\'add\\')") &&
     files['Dashboard_Script_Onboarding.html'].includes("onboardingOpenBankAccountsPage(\\'manage\\')"),

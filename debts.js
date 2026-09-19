@@ -67,16 +67,20 @@ var DEBTS_CANONICAL_WIDTHS_ = {
  * Account Name (rename has its own coordinated flow) and Active (lifecycle is
  * owned exclusively by deactivateDebtFromDashboard / reactivateDebtFromDashboard)
  * are deliberately EXCLUDED so a generic field write can never silently flip a
- * debt's tracking state or rename it. Derived columns (Acct PCT Avail) are
- * recomputed server-side and never user-written.
+ * debt's tracking state or rename it. Derived columns (Credit Left,
+ * Acct PCT Avail) are recomputed server-side and never user-written or
+ * import-written.
  */
 var DEBT_EDITABLE_FIELDS_ = [
   'Account Balance',
   'Due Date',
   'Credit Limit',
   'Minimum Payment',
-  'Credit Left',
   'Int Rate'
+];
+var DEBT_DERIVED_FIELDS_ = [
+  'Credit Left',
+  'Acct PCT Avail'
 ];
 
 /* -------------------------------------------------------------------------- */
@@ -535,7 +539,6 @@ function updateTrackedDebtFromDashboard(payload) {
   currencyChange('accountBalance', 'Account Balance', headerMap.balanceColZero);
   intChange('dueDate', 'Due Date', headerMap.dueDateColZero);
   currencyChange('creditLimit', 'Credit Limit', headerMap.creditLimitColZero);
-  currencyChange('creditLeft', 'Credit Left', headerMap.creditLeftColZero);
   currencyChange('minimumPayment', 'Minimum Payment', headerMap.minimumPaymentColZero);
   percentChange('intRate', 'Int Rate', headerMap.intRateColZero);
 
@@ -554,15 +557,18 @@ function updateTrackedDebtFromDashboard(payload) {
     return { ok: true, message: 'No changes made', accountName: actualName, changedFields: [] };
   }
 
-  // Recompute the derived Acct PCT Avail once, after all field writes.
-  recalcDebtPctAvailForRow_(sheet, sheetRow, {
-    creditLimitCol: headerMap.creditLimitColZero,
-    creditLeftCol: headerMap.creditLeftColZero,
-    balanceCol: headerMap.balanceColZero,
-    pctAvailCol: headerMap.pctAvailColZero
-  });
+  // Recompute Credit Left and Acct PCT Avail from Credit Limit − Balance
+  // when an authoritative source field changed. Never persist payload.creditLeft.
+  const derivedSourceChanged = changedFields.indexOf('Account Balance') !== -1 ||
+    changedFields.indexOf('Credit Limit') !== -1;
+  if (derivedSourceChanged) {
+    recalcDebtDerivedCreditFieldsForRow_(sheet, sheetRow, headerMap);
+  }
   if (headerMap.pctAvailCol !== -1) {
     debtColumnFitTargets.push({ sheet: sheet, col: headerMap.pctAvailCol });
+  }
+  if (headerMap.creditLeftCol !== -1 && derivedSourceChanged) {
+    debtColumnFitTargets.push({ sheet: sheet, col: headerMap.creditLeftCol });
   }
 
   // One consolidated debt_update activity row. When exactly one field
@@ -1192,13 +1198,22 @@ function getDebtFieldValue(accountName, fieldName) {
     throw new Error('Debt account not found: ' + accountName);
   }
 
+  const numOrBlank = function(colZero) {
+    if (colZero === -1) return '';
+    if (String((display[rowIdx] || [])[colZero] || '').trim() === '') return '';
+    return toNumber_(values[rowIdx][colZero]);
+  };
+
   return {
     accountName: accountName,
     fieldName: fieldName,
     value: values[rowIdx][fieldColZero],
     displayValue: display[rowIdx][fieldColZero],
     type: headerMap.typeColZero === -1 ? '' : String(display[rowIdx][headerMap.typeColZero] || '').trim(),
-    pctAvail: headerMap.pctAvailColZero === -1 ? '' : String(display[rowIdx][headerMap.pctAvailColZero] || '').trim()
+    pctAvail: headerMap.pctAvailColZero === -1 ? '' : String(display[rowIdx][headerMap.pctAvailColZero] || '').trim(),
+    creditLimit: numOrBlank(headerMap.creditLimitColZero),
+    creditLeft: numOrBlank(headerMap.creditLeftColZero),
+    accountBalance: numOrBlank(headerMap.balanceColZero)
   };
 }
 
@@ -1220,6 +1235,11 @@ function updateDebtField(payload) {
     }
     if (fieldName === 'Account Name') {
       throw new Error('Use the rename action in Edit to change Account Name.');
+    }
+    if (DEBT_DERIVED_FIELDS_.indexOf(fieldName) !== -1) {
+      throw new Error(
+        'Credit Left and available credit percentage are calculated from Credit Limit and Balance.'
+      );
     }
     // Derived / calculated columns (e.g. Acct PCT Avail) and anything else.
     throw new Error('This field cannot be edited here: ' + (fieldName || '(blank)'));
@@ -1252,8 +1272,7 @@ function updateDebtField(payload) {
   const currencyFields = {
     'Account Balance': true,
     'Minimum Payment': true,
-    'Credit Limit': true,
-    'Credit Left': true
+    'Credit Limit': true
   };
 
   const percentFields = {
@@ -1324,16 +1343,9 @@ function updateDebtField(payload) {
     newRawForLog = rawValue;
   }
 
-  const pctCols = {
-    creditLimitCol: headerMap.creditLimitColZero,
-    creditLeftCol: headerMap.creditLeftColZero,
-    balanceCol: headerMap.balanceColZero,
-    pctAvailCol: headerMap.pctAvailColZero
-  };
   if (fieldName === 'Account Balance' || fieldName === 'Credit Limit') {
-    recalcCreditLeftFromLimitBalance_(sheet, targetRow, pctCols);
+    recalcDebtDerivedCreditFieldsForRow_(sheet, targetRow, headerMap);
   }
-  recalcDebtPctAvailForRow_(sheet, targetRow, pctCols);
 
   // Activity log: field-edit event. Non-monetary (Amount renders "—") —
   // the action label carries the new value in context (e.g. "Updated
@@ -1415,77 +1427,213 @@ function updateDebtField(payload) {
 
 function recalcCreditLeftFromLimitBalance_(sheet, row, cols) {
   if (
+    !cols ||
     cols.creditLimitCol === -1 ||
     cols.creditLeftCol === -1 ||
     cols.balanceCol === -1
   ) {
     return;
   }
+  if (!debtIsCreditCardType_(debtTypeFromDerivedCols_(sheet, row, cols))) {
+    return;
+  }
+  if (debtCellHasFormula_(sheet, row, cols.creditLeftCol)) {
+    return;
+  }
 
   const creditLimit = toNumber_(sheet.getRange(row, cols.creditLimitCol + 1).getValue());
   const balance = toNumber_(sheet.getRange(row, cols.balanceCol + 1).getValue());
-  const creditLeft = round2_(creditLimit - balance);
+  const derived = debtDerivedAvailableCredit_(creditLimit, balance);
   const cell = sheet.getRange(row, cols.creditLeftCol + 1);
-  copyNeighborFormatInRow_(sheet, row, cols.creditLeftCol + 1, 1);
-  cell.setValue(creditLeft);
+  cell.setValue(derived.creditLeft);
   applyCurrencyFormat_(cell);
 }
 
 function recalcDebtDerivedCreditFieldsForRow_(sheet, row, headerMap) {
+  // Application-owned derived values for credit cards: Credit Left =
+  // Credit Limit − Balance and Acct PCT Avail = Credit Left ÷ Credit Limit.
+  // Called after a successful Balance or Credit Limit write from:
+  //   updateDebtField (generic editor / Plaid Apply field writes),
+  //   updateTrackedDebtFromDashboard (Manage Edit),
+  //   plaidImportApplyDebtUpdates_ (post-Apply),
+  //   quick-add debt balance correction,
+  //   addDebtFromDashboard (new credit-card row).
+  // Existing sheet formulas in those cells are left untouched.
   const cols = {
-    creditLimitCol: headerMap.creditLimitColZero,
-    creditLeftCol: headerMap.creditLeftColZero,
-    balanceCol: headerMap.balanceColZero,
-    pctAvailCol: headerMap.pctAvailColZero
+    typeCol: headerMap ? headerMap.typeColZero : -1,
+    creditLimitCol: headerMap ? headerMap.creditLimitColZero : -1,
+    creditLeftCol: headerMap ? headerMap.creditLeftColZero : -1,
+    balanceCol: headerMap ? headerMap.balanceColZero : -1,
+    pctAvailCol: headerMap ? headerMap.pctAvailColZero : -1
   };
   recalcCreditLeftFromLimitBalance_(sheet, row, cols);
   recalcDebtPctAvailForRow_(sheet, row, cols);
 }
 
+function debtIsCreditCardType_(type) {
+  return /^credit\s*cards?$/i.test(String(type || '').trim());
+}
+
+function debtDerivedAvailableCredit_(creditLimit, balance) {
+  const limit = toNumber_(creditLimit);
+  const bal = toNumber_(balance);
+  const creditLeft = round2_(limit - bal);
+  const pctAvail = limit > 0 ? round2_((creditLeft / limit) * 100) : '';
+  return { creditLeft: creditLeft, pctAvail: pctAvail };
+}
+
+function debtCellHasFormula_(sheet, row, colZero) {
+  if (!sheet || colZero === -1 || colZero == null) return false;
+  try {
+    return String(sheet.getRange(row, colZero + 1).getFormula() || '').trim() !== '';
+  } catch (e) {
+    return false;
+  }
+}
+
+function debtTypeFromDerivedCols_(sheet, row, cols) {
+  if (!sheet || !cols || cols.typeCol === -1 || cols.typeCol == null) return '';
+  try {
+    return String(sheet.getRange(row, cols.typeCol + 1).getValue() || '').trim();
+  } catch (e) {
+    return '';
+  }
+}
+
 function recalcDebtPctAvailForRow_(sheet, row, cols) {
   if (
+    !cols ||
     cols.creditLimitCol === -1 ||
-    cols.creditLeftCol === -1 ||
     cols.balanceCol === -1 ||
     cols.pctAvailCol === -1
   ) {
     return;
   }
-
-  const creditLimitRaw = sheet.getRange(row, cols.creditLimitCol + 1).getValue();
-  const creditLeftRaw = sheet.getRange(row, cols.creditLeftCol + 1).getValue();
-  const balanceRaw = sheet.getRange(row, cols.balanceCol + 1).getValue();
-
-  const creditLimit = toNumber_(creditLimitRaw);
-  const balance = toNumber_(balanceRaw);
-
-  // A truly blank Credit Left cell should trigger derivation from
-  // Credit Limit − Balance. `toNumber_('')` coerces blank to 0, so we can't
-  // distinguish "user typed 0" from "cell empty" via toNumber_ alone.
-  const creditLeftIsBlank =
-    creditLeftRaw === '' ||
-    creditLeftRaw === null ||
-    creditLeftRaw === undefined;
-
-  let pct = '';
-  if (creditLimit > 0) {
-    if (creditLeftIsBlank) {
-      pct = round2_(((creditLimit - balance) / creditLimit) * 100);
-    } else {
-      const creditLeft = toNumber_(creditLeftRaw);
-      pct = round2_((creditLeft / creditLimit) * 100);
-    }
+  if (!debtIsCreditCardType_(debtTypeFromDerivedCols_(sheet, row, cols))) {
+    return;
+  }
+  if (debtCellHasFormula_(sheet, row, cols.pctAvailCol)) {
+    return;
   }
 
+  const creditLimit = toNumber_(sheet.getRange(row, cols.creditLimitCol + 1).getValue());
+  const balance = toNumber_(sheet.getRange(row, cols.balanceCol + 1).getValue());
+  const derived = debtDerivedAvailableCredit_(creditLimit, balance);
   const pctCell = sheet.getRange(row, cols.pctAvailCol + 1);
-  copyNeighborFormatInRow_(sheet, row, cols.pctAvailCol + 1, 1);
 
-  if (pct === '') {
+  if (derived.pctAvail === '') {
     pctCell.setValue('');
   } else {
-    pctCell.setValue(pct / 100);
+    pctCell.setValue(derived.pctAvail / 100);
     pctCell.setNumberFormat('0.00%');
   }
+}
+
+/**
+ * Read-only report of credit-card rows whose stored Credit Left or
+ * Acct PCT Avail disagree with Credit Limit − Balance. Never writes.
+ */
+function previewDebtDerivedCreditFieldRepair_(optionalSpreadsheet) {
+  const ss = optionalSpreadsheet || getUserSpreadsheet_();
+  const sheet = ss.getSheetByName(getSheetNames_().DEBTS);
+  if (!sheet) return { ok: true, mismatches: [] };
+  let display = [];
+  let values = [];
+  try {
+    display = sheet.getDataRange().getDisplayValues();
+    values = sheet.getDataRange().getValues();
+  } catch (e) {
+    return { ok: false, error: String(e && e.message || e), mismatches: [] };
+  }
+  if (display.length < 2) return { ok: true, mismatches: [] };
+  const headerMap = getDebtsHeaderMap_(sheet, display);
+  const mismatches = [];
+  for (let r = 1; r < display.length; r++) {
+    const name = String((display[r] || [])[headerMap.nameColZero] || '').trim();
+    if (!name || isDebtSummaryRowName_(name)) continue;
+    const type = String((display[r] || [])[headerMap.typeColZero] || '').trim();
+    if (!debtIsCreditCardType_(type)) continue;
+    const limit = headerMap.creditLimitColZero === -1 ? 0 : toNumber_((values[r] || [])[headerMap.creditLimitColZero]);
+    const balance = headerMap.balanceColZero === -1 ? 0 : toNumber_((values[r] || [])[headerMap.balanceColZero]);
+    const storedLeft = headerMap.creditLeftColZero === -1 ? '' : (values[r] || [])[headerMap.creditLeftColZero];
+    const storedPct = headerMap.pctAvailColZero === -1 ? '' : (values[r] || [])[headerMap.pctAvailColZero];
+    const derived = debtDerivedAvailableCredit_(limit, balance);
+    const leftNum = (storedLeft === '' || storedLeft === null || typeof storedLeft === 'undefined')
+      ? null : round2_(toNumber_(storedLeft));
+    const pctNum = (storedPct === '' || storedPct === null || typeof storedPct === 'undefined')
+      ? null : round2_(toNumber_(storedPct) * (Math.abs(toNumber_(storedPct)) <= 1.5 ? 100 : 1));
+    const leftMismatch = leftNum === null || Math.abs(leftNum - derived.creditLeft) > 0.005;
+    const expectedPct = derived.pctAvail === '' ? null : derived.pctAvail;
+    const pctMismatch = expectedPct === null
+      ? false
+      : (pctNum === null || Math.abs(pctNum - expectedPct) > 0.05);
+    if (!leftMismatch && !pctMismatch) continue;
+    mismatches.push({
+      accountName: name,
+      type: type,
+      accountBalance: round2_(balance),
+      creditLimit: round2_(limit),
+      storedCreditLeft: leftNum,
+      derivedCreditLeft: derived.creditLeft,
+      storedPctAvail: pctNum,
+      derivedPctAvail: expectedPct
+    });
+  }
+  return { ok: true, mismatches: mismatches };
+}
+
+/**
+ * Explicit one-account derived-field repair. Never runs from import, Apply,
+ * dashboard load, or any automatic migration. Requires confirmRepair: true
+ * and a single accountName.
+ */
+function applyDebtDerivedCreditFieldRepair_(payload, optionalSpreadsheet) {
+  const input = payload && typeof payload === 'object' ? payload : {};
+  if (input.confirmRepair !== true) {
+    throw new Error('Derived credit repair requires explicit confirmation.');
+  }
+  if (input.repairAllMismatchedCreditCards === true) {
+    throw new Error('Bulk derived credit repair is not enabled.');
+  }
+  const accountName = String(input.accountName || '').trim();
+  if (!accountName) {
+    throw new Error('Repair a single named account.');
+  }
+  const preview = previewDebtDerivedCreditFieldRepair_(optionalSpreadsheet);
+  const match = (preview.mismatches || []).filter(function(row) {
+    return String(row.accountName || '') === accountName;
+  })[0];
+  if (!match) {
+    return { ok: true, repaired: false, accountName: accountName, message: 'No derived-field mismatch.' };
+  }
+  const ss = optionalSpreadsheet || getUserSpreadsheet_();
+  const sheet = ss.getSheetByName(getSheetNames_().DEBTS);
+  if (!sheet) throw new Error('Debts sheet is unavailable.');
+  const headerMap = getDebtsHeaderMap_(sheet);
+  const display = sheet.getDataRange().getDisplayValues();
+  let targetRow = -1;
+  for (let r = 1; r < display.length; r++) {
+    const name = String((display[r] || [])[headerMap.nameColZero] || '').trim();
+    if (name === accountName && !isDebtSummaryRowName_(name)) {
+      targetRow = r + 1;
+      break;
+    }
+  }
+  if (targetRow === -1) throw new Error('Debt account not found: ' + accountName);
+  recalcDebtDerivedCreditFieldsForRow_(sheet, targetRow, headerMap);
+  return {
+    ok: true,
+    repaired: true,
+    accountName: accountName,
+    previous: {
+      creditLeft: match.storedCreditLeft,
+      pctAvail: match.storedPctAvail
+    },
+    next: {
+      creditLeft: match.derivedCreditLeft,
+      pctAvail: match.derivedPctAvail
+    }
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1637,14 +1785,11 @@ function addDebtFromDashboard(payload) {
   const linkedProperty = validateDebtLinkedProperty_(
     ss, typeStr, payload.linkedProperty, '');
 
-  // Credit Left is derived from the user-supplied Credit Limit and Account
-  // Balance. Because both are required on the form, we always pre-populate
-  // it here so the new row reads like existing hand-entered rows
-  // (e.g. Credit Left = $24,496.63 on a $25k limit / $503 balance card).
-  // recalcDebtPctAvailForRow_ then computes the percent from the stored
-  // value. For non-revolving accounts (Loan / HELOC) users enter 0 / 0
-  // and Credit Left lands at 0 accordingly.
-  const creditLeft = round2_(creditLimit - balance);
+  // Credit Left is derived for credit cards from Credit Limit − Balance.
+  // Loans and HELOCs do not receive revolving utilization formulas.
+  const creditLeft = debtIsCreditCardType_(typeStr)
+    ? debtDerivedAvailableCredit_(creditLimit, balance).creditLeft
+    : 0;
 
   const sheet = getSheet_(ss, 'DEBTS');
   const headerMap = ensureDebtsLastUpdatedColumn_(sheet, ss);
@@ -1813,14 +1958,9 @@ function addDebtFromDashboard(payload) {
   // Compute Acct PCT Avail for the newly written row so the dashboard
   // reflects the correct utilization immediately.
   try {
-    recalcDebtPctAvailForRow_(sheet, appendedRow, {
-      creditLimitCol: headerMap.creditLimitColZero,
-      creditLeftCol: headerMap.creditLeftColZero,
-      balanceCol: headerMap.balanceColZero,
-      pctAvailCol: headerMap.pctAvailColZero
-    });
+    recalcDebtDerivedCreditFieldsForRow_(sheet, appendedRow, headerMap);
   } catch (pctErr) {
-    Logger.log('addDebtFromDashboard recalcDebtPctAvailForRow_: ' + pctErr);
+    Logger.log('addDebtFromDashboard recalcDebtDerivedCreditFieldsForRow_: ' + pctErr);
   }
 
   // Keep the TOTAL DEBT summary row's gross =SUM ranges covering the newly
@@ -2446,7 +2586,7 @@ function debtFieldValueChangedForLastUpdated_(fieldName, previousRaw, newRaw) {
   const label = String(fieldName || '').trim();
   if (DEBT_EDITABLE_FIELDS_.indexOf(label) === -1) return false;
   if (label === 'Account Balance' || label === 'Minimum Payment' ||
-      label === 'Credit Limit' || label === 'Credit Left') {
+      label === 'Credit Limit') {
     return round2_(toNumber_(previousRaw)) !== round2_(toNumber_(newRaw));
   }
   if (label === 'Int Rate') {

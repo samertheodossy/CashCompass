@@ -51,11 +51,12 @@
   <div><strong>Stored value for selected month:</strong> <span id="selectedMonthValue" class="muted">—</span></div>
   <div><strong>Current House Assets value:</strong> <span id="currentAssetValue" class="muted">—</span></div>
   <div><strong>Property type:</strong> <span id="propertyType" class="muted">—</span></div>
-  <div><strong>Loan amount left:</strong> <span id="loanAmountLeft" class="muted">—</span></div>
+  <div><strong>Remaining loan balance:</strong> <span id="loanAmountLeft" class="muted">—</span></div>
 </div>
 
 <label>Value</label>
 <input type="text" id="value" inputmode="decimal" onfocus="handleValueFocus()" onblur="handleValueBlur()">
+<div class="muted" style="margin-top:4px;font-size:12px;">Saves this month’s property value only. Other months, remaining loan, and expense history stay as they are. Enter <strong>$0.00</strong> only when the property value is actually zero.</div>
 
 <button onclick="save()">Save</button>
 
@@ -197,10 +198,18 @@ function loadSelectedHouseData() {
 
 function save() {
   const rawValue = document.getElementById('value').value;
+  if (!String(rawValue || '').trim()) {
+    setStatus('Enter a value, including $0.00 if the property value is actually zero.', true);
+    return;
+  }
   const numericValue = toNumber(rawValue);
 
-  if (String(rawValue || '').trim() && isNaN(numericValue)) {
+  if (isNaN(numericValue)) {
     setStatus('Value must be a valid number.', true);
+    return;
+  }
+  if (numericValue < 0) {
+    setStatus('Value cannot be negative.', true);
     return;
   }
 

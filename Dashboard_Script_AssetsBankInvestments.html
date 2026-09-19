@@ -331,37 +331,95 @@ function isBankNameRelatedError_(msg) {
 
 function setBankPanelMode(mode) {
   const requested = String(mode || 'update');
+  if (requested === 'review' || requested === 'import') {
+    openBankAccountActivityDrawer_(requested === 'import' ? 'import' : 'review');
+    return;
+  }
   const connectedMode = requested === 'connected';
-  const secondaryMode = requested === 'review' || requested === 'import'
-    ? requested
-    : '';
   const m = setTrackedEditorMode_(
     { prefix: 'bank', modes: ['update', 'add', 'manage', 'connected'] },
-    secondaryMode ? 'manage' : requested
+    requested
   );
-  const manageHome = document.getElementById('bank_manage_home');
-  const wrapR = document.getElementById('bank_mode_review_wrap');
-  const wrapI = document.getElementById('bank_mode_import_wrap');
-  const showReview = m === 'manage' && secondaryMode === 'review';
-  const showImport = m === 'manage' &&
-    secondaryMode === 'import' &&
-    BANK_IMPORT_CSV_PASTE_ENABLED;
 
-  if (m !== 'manage' || secondaryMode) closeBankEdit_();
-
-  if (manageHome) manageHome.style.display = (showReview || showImport) ? 'none' : '';
-  if (wrapR) wrapR.style.display = showReview ? '' : 'none';
-  if (wrapI) wrapI.style.display = showImport ? '' : 'none';
+  if (m !== 'manage') closeBankEdit_();
 
   if (m === 'update') setStatus('bank_status', '', false);
-  if (m === 'manage' && !secondaryMode) renderBankManageList_();
-  if (showReview) {
-    setStatus('bank_status', '', false);
-    if (typeof loadBankImportReviewSection === 'function') loadBankImportReviewSection();
-  }
-  if (showImport) setStatus('bank_status', '', false);
+  if (m === 'manage') renderBankManageList_();
   if (connectedMode && typeof loadPlaidConnectedAccounts_ === 'function') {
     loadPlaidConnectedAccounts_(false, 'CASH');
+  }
+}
+
+var __bankAccountActivityDrawerKeyHandlerInstalled = false;
+var __bankAccountActivityDrawerPreviousFocus = null;
+
+function installBankAccountActivityDrawerKeyHandler_() {
+  if (__bankAccountActivityDrawerKeyHandlerInstalled) return;
+  __bankAccountActivityDrawerKeyHandlerInstalled = true;
+  document.addEventListener('keydown', function(event) {
+    var backdrop = document.getElementById('bank_activity_drawer_backdrop');
+    if (!backdrop || backdrop.hidden) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeBankAccountActivityDrawer_();
+    }
+  });
+}
+
+function openBankAccountActivityDrawer_(view) {
+  var backdrop = document.getElementById('bank_activity_drawer_backdrop');
+  var drawer = document.getElementById('bank_activity_drawer');
+  if (!backdrop || !drawer) {
+    setStatus('bank_status', 'Account activity could not open. Refresh and try again.', true);
+    return;
+  }
+  __bankAccountActivityDrawerPreviousFocus = document.activeElement;
+  backdrop.hidden = false;
+  document.body.classList.add('bill-pay-drawer-open');
+  installBankAccountActivityDrawerKeyHandler_();
+  applyBankImportCsvPasteVisibility_();
+  setBankAccountActivityView_(view === 'import' && BANK_IMPORT_CSV_PASTE_ENABLED ? 'import' : 'review');
+  setTimeout(function() {
+    try { drawer.focus(); } catch (_e) {}
+  }, 0);
+}
+
+function closeBankAccountActivityDrawer_() {
+  var backdrop = document.getElementById('bank_activity_drawer_backdrop');
+  if (backdrop) backdrop.hidden = true;
+  var other = document.getElementById('inv_portfolio_drawer_backdrop');
+  if (!other || other.hidden) document.body.classList.remove('bill-pay-drawer-open');
+  var prior = __bankAccountActivityDrawerPreviousFocus;
+  __bankAccountActivityDrawerPreviousFocus = null;
+  if (prior && typeof prior.focus === 'function') {
+    try { prior.focus(); } catch (_e) {}
+  }
+}
+
+function onBankAccountActivityDrawerBackdropClick_(event) {
+  if (event && event.target && event.target.id === 'bank_activity_drawer_backdrop') {
+    closeBankAccountActivityDrawer_();
+  }
+}
+
+function setBankAccountActivityView_(view) {
+  var review = document.getElementById('bank_activity_review_view');
+  var paste = document.getElementById('bank_activity_import_view');
+  var reviewBtn = document.getElementById('bank_activity_review_btn');
+  var pasteBtn = document.getElementById('bank_activity_import_btn');
+  var showPaste = view === 'import' && BANK_IMPORT_CSV_PASTE_ENABLED;
+  if (review) review.hidden = showPaste;
+  if (paste) paste.hidden = !showPaste;
+  if (reviewBtn) {
+    reviewBtn.classList.toggle('active', !showPaste);
+    reviewBtn.setAttribute('aria-selected', showPaste ? 'false' : 'true');
+  }
+  if (pasteBtn) {
+    pasteBtn.classList.toggle('active', showPaste);
+    pasteBtn.setAttribute('aria-selected', showPaste ? 'true' : 'false');
+  }
+  if (!showPaste && typeof loadBankImportReviewSection === 'function') {
+    loadBankImportReviewSection();
   }
 }
 
@@ -1084,10 +1142,14 @@ function stopTrackingBank() {
 
 function saveBank() {
   const rawValue = document.getElementById('bank_value').value;
+  if (!String(rawValue || '').trim()) {
+    setStatus('bank_status', 'Enter a monthly balance, including $0.00 if the account is actually at zero.', true);
+    return;
+  }
   const numericValue = toNumber(rawValue);
 
-  if (String(rawValue || '').trim() && isNaN(numericValue)) {
-    setStatus('bank_status', 'Value must be a valid number.', true);
+  if (isNaN(numericValue)) {
+    setStatus('bank_status', 'Monthly balance must be a valid number.', true);
     return;
   }
 
@@ -1258,6 +1320,21 @@ function onInvAddTypeChange_() {
   }
 }
 
+function onInvAddBalanceUnknownChange_() {
+  const box = document.getElementById('inv_add_balance_unknown');
+  const valueEl = document.getElementById('inv_add_starting_value');
+  const dateEl = document.getElementById('inv_add_starting_date');
+  const unknown = !!(box && box.checked);
+  if (valueEl) {
+    valueEl.disabled = unknown;
+    if (unknown) valueEl.value = '';
+  }
+  if (dateEl) {
+    dateEl.disabled = unknown;
+    if (unknown) dateEl.value = '';
+  }
+}
+
 function resetInvestmentAddForm_() {
   const n = document.getElementById('inv_add_name');
   const t = document.getElementById('inv_add_type');
@@ -1265,12 +1342,20 @@ function resetInvestmentAddForm_() {
   const tCustomRow = document.getElementById('inv_add_type_custom_row');
   const v = document.getElementById('inv_add_starting_value');
   const d = document.getElementById('inv_add_starting_date');
+  const unknown = document.getElementById('inv_add_balance_unknown');
   if (n) n.value = '';
   if (t) t.value = '';
   if (tCustom) tCustom.value = '';
   if (tCustomRow) tCustomRow.style.display = 'none';
-  if (v) v.value = '0.00';
-  if (d) d.value = '';
+  if (unknown) unknown.checked = false;
+  if (v) {
+    v.disabled = false;
+    v.value = '';
+  }
+  if (d) {
+    d.disabled = false;
+    d.value = '';
+  }
   clearInvestmentAddNameError_();
 }
 
@@ -3078,8 +3163,10 @@ function createInvestmentAccount() {
   } else {
     typeStr = (typeSelVal || '').trim();
   }
+  const unknownEl = document.getElementById('inv_add_balance_unknown');
+  const balanceUnknown = !!(unknownEl && unknownEl.checked);
   const startRaw = document.getElementById('inv_add_starting_value').value;
-  const startDate = document.getElementById('inv_add_starting_date').value.trim();
+  const startDate = balanceUnknown ? '' : document.getElementById('inv_add_starting_date').value.trim();
 
   if (!name) {
     showInvestmentAddNameError_('Account name is required.');
@@ -3095,23 +3182,28 @@ function createInvestmentAccount() {
     return;
   }
 
-  if (String(startRaw || '').trim() === '') {
-    setStatus('inv_status', 'Starting value is required (enter 0 if unknown).', true);
-    return;
-  }
-  const startNum = toNumber(startRaw);
-  if (isNaN(startNum)) {
-    setStatus('inv_status', 'Starting value must be a valid number.', true);
-    return;
+  let startNum = null;
+  if (!balanceUnknown) {
+    if (String(startRaw || '').trim() === '') {
+      setStatus('inv_status', 'Enter a starting value, including $0.00 if the balance is actually zero, or confirm the balance is unknown.', true);
+      return;
+    }
+    startNum = toNumber(startRaw);
+    if (isNaN(startNum)) {
+      setStatus('inv_status', 'Starting value must be a valid number.', true);
+      return;
+    }
   }
 
   const payload = {
     accountName: name,
-    type: typeStr,
-    startingBalance: startNum
+    type: typeStr
   };
-  if (startDate) {
-    payload.startingBalanceDate = startDate;
+  if (balanceUnknown) {
+    payload.startingBalanceUnknown = true;
+  } else {
+    payload.startingBalance = startNum;
+    if (startDate) payload.startingBalanceDate = startDate;
   }
 
   setStatusLoading('inv_status', 'Creating investment account…');
@@ -3679,7 +3771,7 @@ function renderBankImportReviewApplyForm_(row) {
         '<br>Other months are not touched. Available Now / Min Buffer / Use Policy / Priority / Active are not touched.' +
       '</div>' +
       '<div style="margin-top:8px;">' +
-        '<button class="small-btn primary" onclick="confirmBankImportReviewApplyBalance_(\'' + sid + '\')">Apply</button>' +
+        '<button class="small-btn primary" onclick="confirmBankImportReviewApplyBalance_(\'' + sid + '\')">Confirm account, month, and balance</button>' +
         '<button class="small-btn" onclick="toggleBankImportReviewAction_(\'' + sid + '\',\'apply\')" style="margin-left:6px;">Cancel</button>' +
       '</div>' +
     '</div>'
@@ -3883,7 +3975,7 @@ function confirmBankImportReviewApplyBalance_(sid) {
     .withFailureHandler(function(err) {
       setStatus('bank_status', (err && err.message ? err.message : String(err)), true);
     })
-    .applyStagedBankAccountBalance({ stagingId: stagingId });
+    .applyStagedBankAccountBalance({ stagingId: stagingId, confirmed: true });
 }
 
 /**
@@ -3942,18 +4034,8 @@ function loadBankImportSampleData_() {
  * ------------------------------------------------------------------------- */
 
 function applyBankImportCsvPasteVisibility_() {
-  const btn = document.getElementById('bank_mode_import_btn');
-  if (btn) {
-    btn.style.display = BANK_IMPORT_CSV_PASTE_ENABLED ? '' : 'none';
-  }
-  // The wrap's display is also driven by setBankPanelMode (it has
-  // both the .bank-mode-wrap class AND inline display, so we keep
-  // both in sync). When the flag is false, force display:none even
-  // if some other code path toggled .active onto it.
-  const wrap = document.getElementById('bank_mode_import_wrap');
-  if (wrap && !BANK_IMPORT_CSV_PASTE_ENABLED) {
-    wrap.style.display = 'none';
-  }
+  const btn = document.getElementById('bank_activity_import_btn');
+  if (btn) btn.hidden = !BANK_IMPORT_CSV_PASTE_ENABLED;
 }
 
 function resetBankImportCsvPasteState_() {
@@ -4556,7 +4638,7 @@ function confirmBankImportCsvPasteStage_() {
       // both blank #bank_status, so the success message has to be
       // written LAST.
       clearBankImportCsvPaste_();
-      setBankPanelMode('review');
+      setBankAccountActivityView_('review');
       setStatus('bank_status', msg, errors > 0);
     })
     .withFailureHandler(function(err) {

@@ -337,6 +337,9 @@ function processBankImportBatch_(payload) {
       else if (rowResult.outcome === 'error') summary.errors++;
     }
 
+    if (summary.autoMatched) {
+      throw new Error('Bank import ingest must not auto-match or write a balance.');
+    }
     return summary;
   } catch (e) {
     summary.ok = false;
@@ -476,6 +479,12 @@ function bankImportProcessSingleRow_(ss, rawRow, rowIndex, ignoredEntries, sourc
  * Throws on missing required fields so the caller can convert to a
  * row-error outcome with an actionable message.
  */
+function bankImportBalanceEvidencePresent_(raw) {
+  if (raw === '' || raw === null || raw === undefined) return false;
+  if (typeof raw === 'string' && String(raw).trim() === '') return false;
+  return true;
+}
+
 function bankImportNormalizeRow_(rawRow) {
   if (!rawRow || typeof rawRow !== 'object') {
     throw new Error('Row is not an object.');
@@ -497,7 +506,7 @@ function bankImportNormalizeRow_(rawRow) {
     throw new Error('Invalid balanceAsOf: ' + balanceAsOfRaw);
   }
 
-  if (rawRow.balance === '' || rawRow.balance === null || rawRow.balance === undefined) {
+  if (!bankImportBalanceEvidencePresent_(rawRow.balance)) {
     throw new Error('balance is required.');
   }
   var balance = round2_(toNumber_(rawRow.balance));
@@ -825,19 +834,21 @@ function bankImportUpsertPendingStagingRow_(ss, normalized, reason, stagingId) {
 }
 
 /**
- * Auto-match writer. Uses the same proven helpers
- * updateBankAccountValueByDate uses for a manual update — month-cell
- * write on INPUT - Bank Accounts, sync to SYS - Accounts.Current
- * Balance, dashboard source touch — but deliberately does NOT trigger
- * runDebtPlanner because per-row planner runs in a batch loop are both
- * slow and misleading. The user invokes the planner via the existing
- * top-bar button when the batch is complete.
+ * Explicit Apply writer. Ingest must not call this. applyStagedBankAccountBalance
+ * sets BANK_IMPORT_EXPLICIT_APPLY_DEPTH_ only after the user confirms the
+ * account, month, and balance. A call from staging or preview throws and
+ * writes nothing.
  *
  * Never touches Available Now / Min Buffer / Use Policy / Priority /
  * Active. The match was made on External Account Id alone; user-set
  * planner inputs stay user-owned.
  */
+var BANK_IMPORT_EXPLICIT_APPLY_DEPTH_ = 0;
+
 function bankImportApplyAutoMatchWrite_(accountName, balanceAsOfDate, balance) {
+  if (!BANK_IMPORT_EXPLICIT_APPLY_DEPTH_) {
+    throw new Error('Bank import ingest cannot write a balance. Confirm Apply first.');
+  }
   var year = balanceAsOfDate.getFullYear();
   updateBankAccountsHistory_(accountName, year, balanceAsOfDate, balance);
   syncAllAccountsFromLatestCurrentYear_();
@@ -1426,6 +1437,9 @@ function applyStagedBankAccountBalance(payload) {
     }
     var stagingId = String(payload.stagingId || '').trim();
     if (!stagingId) throw new Error('stagingId is required.');
+    if (payload.confirmed !== true) {
+      throw new Error('Confirm the account, month, and balance before applying.');
+    }
 
     var ss = getUserSpreadsheet_();
     ensureImportStagingBankAccountsSheet_();
@@ -1436,6 +1450,9 @@ function applyStagedBankAccountBalance(payload) {
     var stagingHeaderMap = bankImportLoadStagingHeaderMap_(stagingSheet);
     var stagedRow = bankImportFindStagingRowByStagingId_(stagingSheet, stagingId, stagingHeaderMap);
     if (!stagedRow) throw new Error(BANK_IMPORT_REVIEW_FRIENDLY_NOT_FOUND_);
+    if (!bankImportBalanceEvidencePresent_(stagedRow.balance)) {
+      throw new Error('Imported balance is blank. A blank balance is not saved as $0.');
+    }
     if (!bankImportIsReviewVisibleStatus_(stagedRow.status)) {
       throw new Error(BANK_IMPORT_APPLY_FRIENDLY_NOT_PENDING_);
     }
@@ -1507,8 +1524,15 @@ function applyStagedBankAccountBalance(payload) {
     var fingerprint = bankImportFingerprint_(
       externalId, newRaw, balanceAsOfRaw, stagedRow.institution);
 
-    // Actual write — same path Bank → Update uses, minus runDebtPlanner.
-    bankImportApplyAutoMatchWrite_(linkedAccount.accountName, balanceAsOfDate, newRaw);
+    // Actual write — same month path Bank → Update uses, minus Available
+    // Now / Min Buffer and minus runDebtPlanner. The depth flag is the
+    // only way this writer can run.
+    BANK_IMPORT_EXPLICIT_APPLY_DEPTH_++;
+    try {
+      bankImportApplyAutoMatchWrite_(linkedAccount.accountName, balanceAsOfDate, newRaw);
+    } finally {
+      BANK_IMPORT_EXPLICIT_APPLY_DEPTH_--;
+    }
 
     // Mark staged row terminal so it leaves the Review imports list.
     bankImportSetStagingRowStatus_(stagingSheet, stagedRow.row, stagingHeaderMap, BANK_IMPORT_STATUS_RESOLVED_APPLIED);

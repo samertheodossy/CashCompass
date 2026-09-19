@@ -181,6 +181,17 @@ const unimportedReady = serverContext.dataReadinessEvaluateValueEvidence_(
   12.5, { fact: null, freshness: { status: 'MISSING', safeToAct: false } },
   verifiedIdentity, 'CURRENT_BALANCE', '2026-08-17T16:00:00.000Z');
 assert.equal(unimportedReady.valid, true, 'unimported accounts with a valid value are not failures');
+const unimportedDebtGuidance = serverContext.dataReadinessGuidanceFromEvidence_(
+  unimportedReady, verifiedIdentity, 'UNAVAILABLE', 'Balance', {
+    domain: 'DEBT', accountKey: 'DEBT-SW', asOf: '2026-09-17'
+  });
+assert.equal(unimportedDebtGuidance.status, 'CURRENT');
+assert.equal(unimportedDebtGuidance.actionable, false);
+assert.equal(unimportedDebtGuidance.hasAction, false);
+assert.equal(unimportedDebtGuidance.nextAction, 'Current — no action required.');
+assert.notEqual(unimportedDebtGuidance.nextAction, 'Open Debts');
+assert.doesNotMatch(String(unimportedDebtGuidance.reason || ''), /missing/i,
+  'an unimported provider must not appear as a missing debt value');
 const staleEvidence = serverContext.dataReadinessEvaluateValueEvidence_(
   null, {
     fact: { numericValue: 100, sourceType: 'PLAID', sourceSystem: 'PLAID',

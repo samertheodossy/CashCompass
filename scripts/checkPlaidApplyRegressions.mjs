@@ -54,11 +54,15 @@ assert(applyInner.includes('baselineFactsHash') && applyInner.includes('candidat
   applyInner.includes('Import Data again'),
   'stale preview and changed CashCompass/import must fail closed');
 
-assert(bridge.includes('PLAID_IMPORT_DEBT_APPLY_KEYS_') &&
-  bridge.includes('CURRENT_BALANCE') && bridge.includes('INT_RATE') &&
-  !bridge.includes("CREDIT_LEFT_DERIVED") &&
-  !/PLAID_IMPORT_DEBT_APPLY_KEYS_[\s\S]{0,200}AVAILABLE_CREDIT/.test(bridge),
+const applyKeysBlock = bridge.match(/var PLAID_IMPORT_DEBT_APPLY_KEYS_ = \{[\s\S]*?\};/)[0];
+const derivedKeysBlock = bridge.match(/var PLAID_IMPORT_DEBT_DERIVED_KEYS_ = \{[\s\S]*?\};/)[0];
+assert(applyKeysBlock.includes('CURRENT_BALANCE') && applyKeysBlock.includes('INT_RATE') &&
+  !applyKeysBlock.includes('CREDIT_LEFT') && !applyKeysBlock.includes('AVAILABLE_CREDIT'),
   'allowed Apply keys exclude derived and informational fields');
+assert(derivedKeysBlock.includes('CREDIT_LEFT') && derivedKeysBlock.includes('AVAILABLE_CREDIT') &&
+  applyInner.includes('PLAID_IMPORT_DEBT_DERIVED_KEYS_') &&
+  !bridge.includes('applyDebtDerivedCreditFieldRepair_'),
+  'Apply must reject derived keys and must not auto-repair workbook rows');
 
 assert(bridge.includes('plaidImportDueDayFromIso_') &&
   bridge.includes("NEXT_PAYMENT_DATE: 'Due Date'") &&

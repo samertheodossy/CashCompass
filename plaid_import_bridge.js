@@ -22,6 +22,10 @@ var PLAID_IMPORT_DEBT_APPLY_KEYS_ = {
   CURRENT_BALANCE: true, CREDIT_LIMIT: true, MINIMUM_PAYMENT: true,
   NEXT_PAYMENT_DATE: true, INT_RATE: true
 };
+var PLAID_IMPORT_DEBT_DERIVED_KEYS_ = {
+  CREDIT_LEFT: true, CREDIT_LEFT_DERIVED: true, AVAILABLE_CREDIT: true,
+  ACCT_PCT_AVAIL: true, UTILIZATION: true, PCT_AVAIL: true
+};
 var PLAID_IMPORT_CASH_APPLY_KEYS_ = {
   CURRENT_BALANCE: true
 };
@@ -1552,8 +1556,12 @@ function plaidImportApplyDebtUpdates_(payload) {
   }
   if (!selectedKeys.length) throw new Error('Select at least one field to apply.');
   selectedKeys.forEach(function(key) {
-    if (!PLAID_IMPORT_DEBT_APPLY_KEYS_[String(key || '')]) {
-      throw new Error('Selected field cannot be applied: ' + key);
+    var applyKey = String(key || '');
+    if (PLAID_IMPORT_DEBT_DERIVED_KEYS_[applyKey]) {
+      throw new Error('Selected field cannot be applied: ' + applyKey);
+    }
+    if (!PLAID_IMPORT_DEBT_APPLY_KEYS_[applyKey]) {
+      throw new Error('Selected field cannot be applied: ' + applyKey);
     }
   });
   try {

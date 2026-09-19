@@ -698,10 +698,13 @@ function getInvestmentValueForDate(accountName, balanceDate) {
       invSheet, invDisplay, name, priorYear, prior
     );
     previousMonthLabel = Utilities.formatDate(prior, Session.getScriptTimeZone(), 'MMM-yy');
-    const cur = Number(monthValue);
-    const prev = Number(previousMonthValue);
-    if (!isNaN(cur) && !isNaN(prev)) {
-      deltaFromPreviousMonth = round2_(cur - prev);
+    if (monthValue !== '' && monthValue !== null &&
+        previousMonthValue !== '' && previousMonthValue !== null) {
+      const cur = Number(monthValue);
+      const prev = Number(previousMonthValue);
+      if (!isNaN(cur) && !isNaN(prev)) {
+        deltaFromPreviousMonth = round2_(cur - prev);
+      }
     }
   } catch (e) {
     /* prior month block/column unavailable */
@@ -718,6 +721,15 @@ function getInvestmentValueForDate(accountName, balanceDate) {
   };
 }
 
+/**
+ * A blank cell is not a verified number. Numeric 0 is present evidence.
+ * @param {*} raw
+ * @returns {boolean}
+ */
+function investmentNumericEvidencePresent_(raw) {
+  return !(raw === '' || raw === null || raw === undefined);
+}
+
 function getInvestmentHistoryValueForMonth_(accountName, year, balanceDate) {
   const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'INVESTMENTS');
@@ -729,7 +741,9 @@ function getInvestmentHistoryValueForMonth_(accountName, year, balanceDate) {
   }
 
   const monthCol = getMonthColumnByDate_(sheet, balanceDate, block.headerRow);
-  return round2_(toNumber_(sheet.getRange(accountRow, monthCol).getValue()));
+  const raw = sheet.getRange(accountRow, monthCol).getValue();
+  if (!investmentNumericEvidencePresent_(raw)) return '';
+  return round2_(toNumber_(raw));
 }
 
 /**
@@ -747,7 +761,9 @@ function getInvestmentHistoryValueForMonthFromDisplay_(sheet, display, accountNa
     throw new Error('Could not find investment "' + accountName + '" inside Year ' + year + ' block.');
   }
   const monthCol = getMonthColumnByDate_(sheet, balanceDate, block.headerRow);
-  return round2_(toNumber_(sheet.getRange(accountRow, monthCol).getValue()));
+  const raw = sheet.getRange(accountRow, monthCol).getValue();
+  if (!investmentNumericEvidencePresent_(raw)) return '';
+  return round2_(toNumber_(raw));
 }
 
 function updateInvestmentValueByDate(payload) {
@@ -886,9 +902,11 @@ function getAssetRowData_(accountName) {
 
   for (let r = 1; r < display.length; r++) {
     if (String(display[r][headerMap.nameColZero] || '').trim() === accountName) {
+      const rawBalance = headerMap.balanceColZero === -1 ? '' : values[r][headerMap.balanceColZero];
       return {
         type: headerMap.typeColZero === -1 ? '' : String(display[r][headerMap.typeColZero] || '').trim(),
-        currentBalance: headerMap.balanceColZero === -1 ? '' : round2_(toNumber_(values[r][headerMap.balanceColZero]))
+        currentBalance: investmentNumericEvidencePresent_(rawBalance)
+          ? round2_(toNumber_(rawBalance)) : ''
       };
     }
   }
@@ -1852,7 +1870,11 @@ function appendAssetsRowForNewInvestment_(sheet, accountName, typeStr, currentBa
 
   row[headerMap.nameColZero] = accountName;
   if (headerMap.typeColZero !== -1) row[headerMap.typeColZero] = String(typeStr || '');
-  if (headerMap.balanceColZero !== -1) row[headerMap.balanceColZero] = round2_(toNumber_(currentBalance));
+  // A missing balance is not $0. Callers pass null when the starting value
+  // is explicitly unknown so SYS - Assets does not gain a verified zero.
+  if (headerMap.balanceColZero !== -1 && investmentNumericEvidencePresent_(currentBalance)) {
+    row[headerMap.balanceColZero] = round2_(toNumber_(currentBalance));
+  }
   if (headerMap.activeColZero !== -1) row[headerMap.activeColZero] = 'Yes';
 
   // Identify a neighbor row BEFORE appending so we can clone visual
@@ -1974,16 +1996,51 @@ function deleteAssetsRowByExactName_(sheet, accountName) {
 }
 
 /**
+ * Explicit $0 is a verified starting balance. A blank amount is not $0 unless
+ * the caller also confirms the balance is unknown, in which case no monthly
+ * value and no SYS current balance are written.
+ *
+ * @param {Object} payload
+ * @returns {{unknown: boolean, amount: (number|null)}}
+ */
+function resolveInvestmentStartingBalance_(payload) {
+  const unknown = !!(payload && payload.startingBalanceUnknown === true);
+  const sbRaw = payload ? payload.startingBalance : undefined;
+  const hasStartAmount = investmentNumericEvidencePresent_(sbRaw) && String(sbRaw).trim() !== '';
+  if (unknown && hasStartAmount) {
+    throw new Error('Clear the starting value when the balance is unknown.');
+  }
+  if (unknown) return { unknown: true, amount: null };
+  if (!hasStartAmount) {
+    throw new Error(
+      'Enter a starting value, including 0.00 if the balance is actually zero, or confirm the balance is unknown.'
+    );
+  }
+  const text = String(sbRaw).trim().replace(/\$/g, '').replace(/,/g, '').replace(/\s+/g, '');
+  if (typeof sbRaw !== 'number' && !/^-?\d+(\.\d+)?$/.test(text)) {
+    throw new Error('Starting value must be a valid number.');
+  }
+  const startAmount = round2_(typeof sbRaw === 'number' ? sbRaw : Number(text));
+  if (!isFinite(startAmount)) throw new Error('Starting value must be a valid number.');
+  return { unknown: false, amount: startAmount };
+}
+
+/**
  * Creates a new investment account in the current year block of
  * INPUT - Investments, mirrors it to SYS - Assets (Active=Yes), optionally
  * seeds a starting value into the given month, and logs an `investment_add`
  * activity event. Mirrors addBankAccountFromDashboard / addHouseFromDashboard.
  *
+ * An explicit starting balance, including 0, is written to the month column
+ * and to SYS Current Balance. startingBalanceUnknown creates the account
+ * with both of those cells left blank.
+ *
  * @param {{
  *   accountName: string,
  *   type: string,
  *   startingBalance?: number|string,
- *   startingBalanceDate?: string
+ *   startingBalanceDate?: string,
+ *   startingBalanceUnknown?: boolean
  * }} payload
  */
 function addInvestmentAccountFromDashboard(payload) {
@@ -2024,23 +2081,13 @@ function addInvestmentAccountFromDashboard(payload) {
   if (!typeStr) throw new Error('Type is required.');
   if (typeStr.length > 80) throw new Error('Type is too long (max 80 characters).');
 
-  const startDateStr = String(payload.startingBalanceDate || '').trim();
-  const sbRaw = payload.startingBalance;
-  const hasStartDate = !!startDateStr;
-  const hasStartAmount =
-    sbRaw !== '' && sbRaw !== null && sbRaw !== undefined && String(sbRaw).trim() !== '';
+  const starting = resolveInvestmentStartingBalance_(payload);
+  const startDateStr = starting.unknown ? '' : String(payload.startingBalanceDate || '').trim();
 
-  // Starting amount: default to 0 when omitted (blank is treated as 0).
-  let startAmount = 0;
-  if (hasStartAmount) {
-    startAmount = round2_(toNumber_(sbRaw));
-    if (isNaN(startAmount)) throw new Error('Starting value must be a valid number.');
-  }
-
-  // Starting date: if provided, validate; if blank, default to today so the
-  // month column is always deterministic.
+  // A known amount, including an explicit 0, is dated. Unknown leaves every
+  // month cell blank, so no starting date is recorded.
   let startDate;
-  if (hasStartDate) {
+  if (!starting.unknown && startDateStr) {
     startDate = parseIsoDateLocal_(startDateStr);
     if (isNaN(startDate.getTime())) throw new Error('Invalid starting value date.');
     const cy = getCurrentYear_();
@@ -2080,7 +2127,7 @@ function addInvestmentAccountFromDashboard(payload) {
       assetsSheet,
       accountName,
       typeStr,
-      startAmount
+      starting.unknown ? null : starting.amount
     );
   } catch (e2) {
     invSheet.deleteRow(invRowNum);
@@ -2088,10 +2135,9 @@ function addInvestmentAccountFromDashboard(payload) {
   }
 
   try {
-    // Preserve historical "leave month empty for 0" semantic: only seed the
-    // month column when we actually have a non-zero amount.
-    if (startAmount !== 0) {
-      updateInvestmentHistory_(accountName, currentYear, startDate, startAmount);
+    // Explicit 0 is current-month evidence. Unknown must not write a month cell.
+    if (!starting.unknown) {
+      updateInvestmentHistory_(accountName, currentYear, startDate, starting.amount);
     }
     syncAllAssetsFromLatestCurrentYear_();
     touchDashboardSourceUpdated_('investments');
@@ -2105,7 +2151,7 @@ function addInvestmentAccountFromDashboard(payload) {
     appendActivityLog_(ss, {
       eventType: 'investment_add',
       entryDate: Utilities.formatDate(stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
-      amount: Math.abs(startAmount),
+      amount: starting.unknown ? '' : Math.abs(starting.amount),
       direction: 'expense',
       payee: accountName,
       category: typeStr,
@@ -2117,7 +2163,8 @@ function addInvestmentAccountFromDashboard(payload) {
         detailsVersion: 1,
         year: currentYear,
         startingBalanceDate: startDateStr,
-        startingBalance: startAmount
+        startingBalance: starting.unknown ? null : starting.amount,
+        startingBalanceUnknown: starting.unknown
       })
     });
   } catch (logErr) {

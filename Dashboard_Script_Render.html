@@ -798,6 +798,14 @@ function setStatus(id, msg, isError) {
   if (!el) return;
   el.textContent = isError ? customerSafeErrorMessage_(msg) : (msg || '');
   el.className = isError ? 'status error' : 'status';
+  if (id === 'bank_status') {
+    var activityStatus = document.getElementById('bank_activity_status');
+    var activityBackdrop = document.getElementById('bank_activity_drawer_backdrop');
+    if (activityStatus && activityBackdrop && !activityBackdrop.hidden) {
+      activityStatus.textContent = el.textContent;
+      activityStatus.className = el.className;
+    }
+  }
 }
 
 /**

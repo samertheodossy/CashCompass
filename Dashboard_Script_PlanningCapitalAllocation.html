@@ -491,13 +491,15 @@ function capitalAllocationMonthlyDebtSummaryHtml_(monthly) {
       formatCapitalAllocationMoney_(monthly.requiredIncludedTotal) + '</strong></div>'
     : '';
   var recorded = Number(monthly.recordedTotal || 0) > 0.005
-    ? '<div><span>Required payments already covered</span><strong>−' +
-      formatCapitalAllocationMoney_(monthly.recordedTotal) + '</strong></div>' : '';
+    ? '<div><span>Required payments already covered</span><strong>' +
+      formatCapitalAllocationMoney_(Math.max(0, Number(monthly.recordedTotal || 0))) +
+      '</strong></div>' : '';
   var pacingRequired = !!monthly.pacingRequired;
   return '<div class="capital-allocation-debt-month-summary"><div><span>Required payments this month</span><strong>' +
     formatCapitalAllocationMoney_(monthly.obligationTotal) + '</strong></div>' + recorded +
     '<div><span>Required payments still to cover</span><strong>' +
-    formatCapitalAllocationMoney_(monthly.requiredTotal) + '</strong></div><div><span>Extra payoff</span><strong>' +
+    formatCapitalAllocationMoney_(Math.max(0, Number(monthly.requiredTotal || 0))) +
+    '</strong></div><div><span>Extra payoff</span><strong>' +
     (pacingRequired ? 'Not calculated yet' : formatCapitalAllocationMoney_(monthly.extraTotal)) + '</strong></div>' + coveredByPayoff +
     '<div><span>Remaining debt payments this month</span><strong>' +
     formatCapitalAllocationMoney_(monthly.totalPlanned) + '</strong></div><div><span>Credit-card debt now</span><strong>' +
@@ -602,8 +604,7 @@ function capitalAllocationMonthlyDebtCardHtml_(row, lifecycleState, mode) {
       paymentLead + recordedLine + requiredLine + dueLine + missingAmountLine + extraLine +
       '<div><span>Balance</span><strong>' + balanceLine + '</strong></div>' +
       '<div><span>APR</span><strong>' + Number(row.apr || 0).toFixed(2) + '%</strong></div>' +
-      (row.extraPayment > 0 ? '<div><span>' + (row.fullPayoff ? 'Projected first-year interest avoided' :
-        'Projected first-year interest reduction') + '</span><strong>~' +
+      (mode === 'extra' && row.extraPayment > 0.005 ? '<div><span>Estimated interest impact from proposed extra payoff</span><strong>~' +
         formatCapitalAllocationMoney_(row.annualInterestReduction) + '</strong></div>' : '') +
       '</div></article>';
 }
@@ -675,7 +676,7 @@ function capitalAllocationNextDebtTargetHtml_(monthly) {
       ? 'This is the highest-APR revolving balance, but an extra-payoff amount has not been calculated yet.'
       : 'After the current recommendation, this remains the next target for additional payoff money.') +
     '</p></div></div>' +
-    '<p class="muted">Required monthly payments are paid by their due dates. Extra payoff money goes to the highest-APR revolving balance first.</p>' +
+    '<p class="muted">Required payments are prioritized by due date. Any remaining amount is shown above. Extra payoff money goes to the highest-APR revolving balance first.</p>' +
     (rows.length > 1 ? '<p class="capital-allocation-debt-priority-sequence">Next: ' + rows.slice(1).map(function(row) {
       return escapeCapitalAllocationHtml_(row.displayName) + ' ' + Number(row.apr || 0).toFixed(2) + '%';
     }).join(' → ') + '</p>' : '') + '</section>';
@@ -1079,8 +1080,8 @@ function capitalAllocationDetailedDebtOutcomesHtml_(rows, lifecycleState) {
       escapeCapitalAllocationHtml_(presentation.aprValue) + '</strong></div>' +
       (presentation.aprNote ? '<p class="capital-allocation-debt-apr-note">' +
         escapeCapitalAllocationHtml_(presentation.aprNote) + '.</p>' : '') +
-      '<div><span>' + escapeCapitalAllocationHtml_(presentation.interestLine) + '</span><strong>~' +
-      formatCapitalAllocationMoney_(row.annualInterestReduction) + '</strong></div></div></div>';
+      capitalAllocationExtraPayoffInterestRowHtml_(row.extraPayment, row.annualInterestReduction) +
+      '</div></div>';
   }).join('');
 }
 
@@ -1097,8 +1098,8 @@ function capitalAllocationDebtLifecycleHtml_(lifecycleState) {
       '<p>Refresh Cash Compass once the updated balances appear. We\'ll confirm the results and calculate the next recommendation.</p></div>';
   }
   return '<div class="capital-allocation-debt-lifecycle"><h4>What happens next?</h4>' +
-    '<strong>These payments are not complete yet.</strong>' +
-    '<p>After you make the recommended payments, refresh Cash Compass once the updated balances appear. We\'ll confirm the results and calculate the next recommendation.</p></div>';
+    '<strong>Some required debt payments are still outstanding.</strong>' +
+    '<p>After you complete the remaining required debt payments, refresh Cash Compass once the updated balances appear. We\'ll confirm the results and calculate the next recommendation.</p></div>';
 }
 
 function capitalAllocationDebtStatusLabel_(row, decisionByName, laterByName, lifecycleState) {
@@ -1288,14 +1289,42 @@ function capitalAllocationDebtFreedCashHtml_(after, lifecycleState) {
     '</div>';
 }
 
-function capitalAllocationDebtAuditHtml_(rows, next) {
+function capitalAllocationDebtPriorityCustomerLabel_(priorityClass) {
+  var value = String(priorityClass || '').toUpperCase();
+  if (value === 'CRITICAL') return 'High-interest debt';
+  if (value === 'MODERATE') return 'Moderate-rate debt';
+  if (value === 'LOW_COST') return 'Lower-cost debt';
+  return 'Interest-rate class pending';
+}
+
+function capitalAllocationExtraPayoffInterestRowHtml_(extraPayment, interestAmount) {
+  var extra = Number(extraPayment || 0);
+  var interest = Number(interestAmount || 0);
+  if (extra > 0.005) {
+    return '<div><span>Estimated interest impact from proposed extra payoff</span><strong>~' +
+      formatCapitalAllocationMoney_(interest) + '</strong></div>';
+  }
+  return '';
+}
+
+function capitalAllocationDebtAuditHtml_(rows, next, decision) {
+  var extraByName = {};
+  ((decision && decision.debtActions) || []).forEach(function(row) {
+    extraByName[capitalAllocationCustomerActionKey_(row.name)] = Number(row.extraPayment || 0);
+  });
   var debtRows = (rows || []).map(function(row) {
+    var extra = extraByName[capitalAllocationCustomerActionKey_(row.name)] || 0;
+    var interestNote = extra > 0.005
+      ? 'Estimated interest impact from proposed extra payoff about ' +
+        formatCapitalAllocationMoney_(row.projectedAnnualInterestAvoided) + '/year'
+      : 'No extra-payoff interest savings calculated.';
     return '<div class="capital-allocation-compact-action"><div><strong>' +
-      escapeCapitalAllocationHtml_(row.name) + '</strong><div class="capital-allocation-card-reason">' +
-      escapeCapitalAllocationHtml_(row.priorityClass + ' · ' + Number(row.apr || 0).toFixed(2) +
+      escapeCapitalAllocationHtml_(capitalAllocationCustomerActionName_(row.name)) +
+      '</strong><div class="capital-allocation-card-reason">' +
+      escapeCapitalAllocationHtml_(capitalAllocationDebtPriorityCustomerLabel_(row.priorityClass) + ' · ' +
+        Number(row.apr || 0).toFixed(2) +
         '% APR · proposed payment ' + formatCapitalAllocationMoney_(row.proposedPayment) +
-        ' · projected interest avoided about ' +
-        formatCapitalAllocationMoney_(row.projectedAnnualInterestAvoided) + '/year') +
+        ' · ' + interestNote) +
       '</div></div><strong>' + formatCapitalAllocationMoney_(row.projectedEndingBalance) +
       ' projected</strong></div>';
   }).join('');
@@ -1329,7 +1358,7 @@ function capitalAllocationDebtAdvancedHtml_(plan, decision, lifecycleState, mont
     '<p><strong>Required payments:</strong> ' + formatCapitalAllocationMoney_(monthly.requiredTotal) +
     ' · <strong>Extra payoff:</strong> ' + formatCapitalAllocationMoney_(monthly.extraTotal) + '</p></section>' +
     otherLoansHtml +
-    capitalAllocationDebtAuditHtml_(debts, plan.nextDollar || {}) + '</div></details>';
+    capitalAllocationDebtAuditHtml_(debts, plan.nextDollar || {}, decision) + '</div></details>';
 }
 
 function capitalAllocationCompactDebtOutcomesHtml_(rows, lifecycleState) {
@@ -1337,19 +1366,15 @@ function capitalAllocationCompactDebtOutcomesHtml_(rows, lifecycleState) {
     var state = lifecycleState || 'PROPOSED';
     var label;
     var balanceLine;
-    var interestLine;
+    var extra = Number(row.extraPayment || 0);
     if (state === 'CONFIRMED') {
       label = row.outcome === 'PAID_OFF' ? 'Paid off' :
         row.outcome === 'REQUIRED_PAYMENT' ? 'Required payment completed' : 'Payment completed';
       balanceLine = 'Confirmed balance ' + formatCapitalAllocationMoney_(row.endingBalance);
-      interestLine = row.outcome === 'PAID_OFF' ? ' estimated interest avoided' :
-        ' estimated interest reduction';
     } else if (state === 'AWAITING_CONFIRMATION') {
       label = 'Waiting for confirmation';
       balanceLine = 'Expected balance after payment ' + formatCapitalAllocationMoney_(row.endingBalance) +
         ' · Refresh data to confirm';
-      interestLine = row.outcome === 'PAID_OFF' ? ' projected interest avoided' :
-        ' projected interest reduction';
     } else {
       label = row.outcome === 'PAID_OFF' ? 'Expected to be paid off' :
         row.outcome === 'REQUIRED_PAYMENT' ? 'Required payment covered' :
@@ -1358,16 +1383,17 @@ function capitalAllocationCompactDebtOutcomesHtml_(rows, lifecycleState) {
         ? formatCapitalAllocationMoney_(row.requiredPayment) + ' required · No extra payment'
         : 'Expected balance ' + formatCapitalAllocationMoney_(row.startingBalance) + ' → ' +
           formatCapitalAllocationMoney_(row.endingBalance);
-      interestLine = row.outcome === 'PAID_OFF' ? ' projected interest avoided' :
-        ' projected interest reduction';
     }
+    var interestHtml = extra > 0.005
+      ? '<div class="capital-allocation-compact-outcome-impact"><strong>~' +
+        formatCapitalAllocationMoney_(row.annualInterestReduction) + '/yr</strong>' +
+        '<span>Estimated interest impact from proposed extra payoff</span></div>'
+      : '';
     return '<div class="capital-allocation-compact-outcome"><div><strong>' +
       escapeCapitalAllocationHtml_(row.displayName) + ' — ' + escapeCapitalAllocationHtml_(label) +
       '</strong><div class="capital-allocation-card-reason">' +
       escapeCapitalAllocationHtml_(balanceLine) + '</div></div>' +
-      '<div class="capital-allocation-compact-outcome-impact"><strong>~' +
-      formatCapitalAllocationMoney_(row.annualInterestReduction) + '/yr</strong>' +
-      '<span>' + escapeCapitalAllocationHtml_(interestLine) + '</span></div></div>';
+      interestHtml + '</div>';
   }).join('');
 }
 

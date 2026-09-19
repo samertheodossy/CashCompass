@@ -503,6 +503,36 @@ function getHousesFromHouseValues_(optionalSs) {
   return Array.from(houses).sort();
 }
 
+/**
+ * A blank cell is not a verified number. Numeric 0 is present evidence.
+ * @param {*} raw
+ * @returns {boolean}
+ */
+function houseNumericEvidencePresent_(raw) {
+  return !(raw === '' || raw === null || raw === undefined);
+}
+
+/**
+ * Optional house money: blank means unknown, not $0. Explicit 0 is valid.
+ * @param {*} raw
+ * @param {string} fieldLabel
+ * @returns {{unknown: boolean, amount: (number|null)}}
+ */
+function resolveHouseOptionalMoney_(raw, fieldLabel) {
+  const label = String(fieldLabel || 'Value');
+  if (!houseNumericEvidencePresent_(raw) || String(raw).trim() === '') {
+    return { unknown: true, amount: null };
+  }
+  const text = String(raw).trim().replace(/\$/g, '').replace(/,/g, '').replace(/\s+/g, '');
+  if (typeof raw !== 'number' && !/^-?\d+(\.\d+)?$/.test(text)) {
+    throw new Error(label + ' must be a valid number.');
+  }
+  const amount = round2_(typeof raw === 'number' ? raw : Number(text));
+  if (!isFinite(amount)) throw new Error(label + ' must be a valid number.');
+  if (amount < 0) throw new Error(label + ' cannot be negative.');
+  return { unknown: false, amount: amount };
+}
+
 function getHouseValueForDate(house, valuationDate) {
   const houseName = String(house || '').trim();
   if (!houseName) throw new Error('House is required.');
@@ -520,38 +550,40 @@ function getHouseValueForDate(house, valuationDate) {
   const hvSheet = getSheet_(ss, 'HOUSE_VALUES');
   const hvDisplay = hvSheet.getDataRange().getDisplayValues();
 
-  // Preview must mirror the SAVE path (updateHouseValueByDate): the house
-  // lives in the CURRENT-year block, and an out-of-year selected date (e.g.
-  // 02/10/2020) resolves to a safe month in that block via the shared
-  // resolveHouseValuesSeedDate_ helper — never searching for or creating a
-  // historical year block. seedDate drives the block/month lookup and the
-  // displayed "selectedMonth"; the raw selected date `d` is untouched and is
-  // still what the client sends back to updateHouseValueByDate on save (which
-  // preserves it verbatim in the activity log).
+  // Preview only reads the current-year block. A date in this tracking year
+  // shows that month. A date from another year is not remapped to today, so
+  // Monthly Review / Update cannot treat a historical valuation as this month.
   const currentYear = getCurrentYear_();
   const seedDate = resolveHouseValuesSeedDate_(d, currentYear);
-  const monthValue = getHouseValueFromHistoryForMonthFromDisplay_(
-    hvSheet, hvDisplay, houseName, currentYear, seedDate
-  );
+  const monthValue = seedDate
+    ? getHouseValueFromHistoryForMonthFromDisplay_(
+        hvSheet, hvDisplay, houseName, currentYear, seedDate
+      )
+    : '';
   const assetsInfo = getHouseAssetRowData_(houseName);
 
   var previousMonthLabel = '';
   var deltaFromPreviousMonth = null;
   try {
-    // Prior month is derived from the resolved seed month so it stays within
-    // the current-year block. When seedDate is January the prior month is Dec
-    // of the previous year, whose block may not exist — that lookup throws and
-    // is swallowed below (no delta), matching prior behavior.
-    const prior = new Date(seedDate.getFullYear(), seedDate.getMonth() - 1, 15);
-    const priorYear = prior.getFullYear();
-    const previousMonthValue = getHouseValueFromHistoryForMonthFromDisplay_(
-      hvSheet, hvDisplay, houseName, priorYear, prior
-    );
-    previousMonthLabel = Utilities.formatDate(prior, Session.getScriptTimeZone(), 'MMM-yy');
-    const cur = Number(monthValue);
-    const prev = Number(previousMonthValue);
-    if (!isNaN(cur) && !isNaN(prev)) {
-      deltaFromPreviousMonth = round2_(cur - prev);
+    if (seedDate) {
+      // Prior month is derived from the selected current-year month. When
+      // seedDate is January the prior month is Dec of the previous year, whose
+      // block may not exist — that lookup throws and is swallowed below (no
+      // delta), matching prior behavior.
+      const prior = new Date(seedDate.getFullYear(), seedDate.getMonth() - 1, 15);
+      const priorYear = prior.getFullYear();
+      const previousMonthValue = getHouseValueFromHistoryForMonthFromDisplay_(
+        hvSheet, hvDisplay, houseName, priorYear, prior
+      );
+      previousMonthLabel = Utilities.formatDate(prior, Session.getScriptTimeZone(), 'MMM-yy');
+      if (monthValue !== '' && monthValue !== null &&
+          previousMonthValue !== '' && previousMonthValue !== null) {
+        const cur = Number(monthValue);
+        const prev = Number(previousMonthValue);
+        if (!isNaN(cur) && !isNaN(prev)) {
+          deltaFromPreviousMonth = round2_(cur - prev);
+        }
+      }
     }
   } catch (e) {
     /* prior month block/column unavailable */
@@ -559,7 +591,7 @@ function getHouseValueForDate(house, valuationDate) {
 
   return {
     house: houseName,
-    selectedMonth: Utilities.formatDate(seedDate, Session.getScriptTimeZone(), 'MMM-yy'),
+    selectedMonth: Utilities.formatDate(seedDate || d, Session.getScriptTimeZone(), 'MMM-yy'),
     selectedMonthValue: monthValue,
     currentAssetValue: assetsInfo ? assetsInfo.currentValue : '',
     propertyType: assetsInfo ? assetsInfo.propertyType : '',
@@ -584,53 +616,60 @@ function getHouseValueFromHistoryForMonthFromDisplay_(sheet, display, houseName,
     throw new Error('Could not find house "' + houseName + '" inside Year ' + year + ' block.');
   }
   const monthCol = getMonthColumnByDate_(sheet, valuationDate, block.headerRow);
-  return round2_(toNumber_(sheet.getRange(houseRow, monthCol).getValue()));
+  const raw = sheet.getRange(houseRow, monthCol).getValue();
+  if (!houseNumericEvidencePresent_(raw)) return '';
+  return round2_(toNumber_(raw));
 }
 
 /**
  * Canonical month-seed date resolver for House Values writes (Add + Update).
  *
- * A house row always lives in the CURRENT-year block; this returns the date
+ * A house row always lives in the CURRENT-year block. This returns the date
  * used ONLY to choose which month column of that block receives the value.
- * When the entered date already falls in the block year we honor its month;
- * when it is historical or in the future (out-of-block-year) we fall back to
- * today — always inside the block year, since getCurrentYear_() is the
- * calendar year — so the month-column lookup, which keys on month AND year
- * ("MMM-yy"), resolves instead of throwing "Could not find month column".
+ * When the entered date already falls in the block year we honor its month.
+ * Dates from another year return null so they cannot be rewritten as today
+ * and create false current-month evidence. Callers keep the raw entered date
+ * for Activity / reporting.
  *
- * Never creates, searches, or backfills historical year blocks. The caller is
- * responsible for preserving the user's raw entered date in any log/detail.
+ * Never creates, searches, or backfills historical year blocks.
  *
  * @param {!Date} valuationDate  parsed, validated entered date
  * @param {number} blockYear     the current-year block being written
- * @returns {!Date} a date guaranteed to fall inside blockYear
+ * @returns {Date|null} a date inside blockYear, or null when the valuation
+ *   belongs to another year
  */
 function resolveHouseValuesSeedDate_(valuationDate, blockYear) {
-  if (valuationDate && valuationDate.getFullYear() === blockYear) {
+  if (valuationDate && valuationDate.getFullYear() === Number(blockYear)) {
     return valuationDate;
   }
-  return stripTime_(new Date());
+  return null;
 }
 
 function updateHouseValueByDate(payload) {
-  validateRequired_(payload, ['house', 'valuationDate', 'currentValue']);
+  validateRequired_(payload, ['house', 'valuationDate']);
 
   const house = String(payload.house || '').trim();
   const valuationDate = parseIsoDateLocal_(payload.valuationDate);
-  const currentValue = toNumber_(payload.currentValue);
+  const currentParsed = resolveHouseOptionalMoney_(payload.currentValue, 'Current value');
 
   if (!house) throw new Error('House is required.');
   if (isNaN(valuationDate.getTime())) throw new Error('Invalid valuation date.');
-  if (currentValue <= 0) throw new Error('Current value must be greater than 0.');
+  if (currentParsed.unknown) {
+    throw new Error('Enter a value, including 0.00 if the property value is actually zero.');
+  }
+  const currentValue = currentParsed.amount;
 
-  // Update mirrors Add: the destination is ALWAYS the current-year block.
-  // Historical dates express user intent only; the entered date is preserved
-  // in the activity log below, but the block/month resolution uses the same
-  // canonical seed-date logic as addHouseFromDashboard so an out-of-year date
-  // (e.g. 02/10/2020) seeds a safe month in the current block instead of
-  // searching for a nonexistent 2020 block.
+  // Update writes only the selected month in the current-year block.
+  // A date from another year is not remapped to today — that would create
+  // false current-month evidence in Monthly Review and Planning.
   const currentYear = getCurrentYear_();
   const seedDate = resolveHouseValuesSeedDate_(valuationDate, currentYear);
+  if (!seedDate) {
+    throw new Error(
+      'Valuation date must be in ' + currentYear +
+      '. A date from another year is not saved as this month\'s value.'
+    );
+  }
   const year = currentYear;
   const monthLabel = Utilities.formatDate(seedDate, Session.getScriptTimeZone(), 'MMM-yy');
   const ss = getUserSpreadsheet_();
@@ -652,7 +691,8 @@ function updateHouseValueByDate(payload) {
     if (prevRow !== -1) {
       const prevCol = getMonthColumnByDate_(prevSheet, seedDate, prevBlock.headerRow);
       const prevCell = prevSheet.getRange(prevRow, prevCol);
-      previousRaw = round2_(toNumber_(prevCell.getValue()));
+      const prevRaw = prevCell.getValue();
+      previousRaw = houseNumericEvidencePresent_(prevRaw) ? round2_(toNumber_(prevRaw)) : null;
       previousDisplay = String(prevCell.getDisplayValue() || '').trim();
     }
   } catch (prevErr) {
@@ -759,7 +799,9 @@ function getHouseValueFromHistoryForMonth_(house, year, valuationDate) {
   }
 
   const monthCol = getMonthColumnByDate_(sheet, valuationDate, block.headerRow);
-  return round2_(toNumber_(sheet.getRange(houseRow, monthCol).getValue()));
+  const raw = sheet.getRange(houseRow, monthCol).getValue();
+  if (!houseNumericEvidencePresent_(raw)) return '';
+  return round2_(toNumber_(raw));
 }
 
 /**
@@ -880,8 +922,12 @@ function getHouseAssetRowData_(house) {
           headerMap.typeColZero === -1
             ? ''
             : String(displayValues[r][headerMap.typeColZero] || '').trim(),
-        loanAmountLeft: headerMap.loanColZero === -1 ? '' : round2_(toNumber_(values[r][headerMap.loanColZero])),
-        currentValue: headerMap.valueColZero === -1 ? '' : round2_(toNumber_(values[r][headerMap.valueColZero]))
+        loanAmountLeft: headerMap.loanColZero === -1 ? '' :
+          (houseNumericEvidencePresent_(values[r][headerMap.loanColZero])
+            ? round2_(toNumber_(values[r][headerMap.loanColZero])) : ''),
+        currentValue: headerMap.valueColZero === -1 ? '' :
+          (houseNumericEvidencePresent_(values[r][headerMap.valueColZero])
+            ? round2_(toNumber_(values[r][headerMap.valueColZero])) : '')
       };
     }
   }
@@ -1284,7 +1330,8 @@ function findLastHouseDataRowInBlock_(sheet, block) {
  *
  * Writes:
  *   - column 1 → houseName
- *   - column 2 → Loan Amount Left (from loanAmountLeft)
+ *   - column 2 → Loan Amount Left when known, including an explicit 0;
+ *     unknown remaining loan leaves the cell blank
  *
  * Month columns (firstMonthCol..) are left blank; month valuation seeding is
  * handled separately by updateHouseValuesHistory_().
@@ -1375,14 +1422,16 @@ function insertNewHouseHistoryRow_(sheet, block, houseName, loanAmountLeft) {
   sheet.getRange(newRow, 1).setValue(houseName);
 
   // Column 2 in INPUT - House Values is "Loan Amount Left" (firstMonthCol = 3).
-  // We always write it so the row is complete — callers pass 0 when unknown.
-  const loanNum = round2_(toNumber_(loanAmountLeft));
-  const loanCell = sheet.getRange(newRow, 2);
-  loanCell.setValue(isNaN(loanNum) ? 0 : loanNum);
-  // Only apply currency format if the template didn't already set one —
-  // the PASTE_FORMAT copy above normally inherits the right format already.
-  if (!String(loanCell.getNumberFormat() || '').match(/\$|#,##0/)) {
-    applyCurrencyFormat_(loanCell);
+  // Explicit 0 is a verified remaining loan. Unknown leaves the cell blank.
+  if (houseNumericEvidencePresent_(loanAmountLeft)) {
+    const loanNum = round2_(toNumber_(loanAmountLeft));
+    if (!isNaN(loanNum)) {
+      const loanCell = sheet.getRange(newRow, 2);
+      loanCell.setValue(loanNum);
+      if (!String(loanCell.getNumberFormat() || '').match(/\$|#,##0/)) {
+        applyCurrencyFormat_(loanCell);
+      }
+    }
   }
 
   // New houses are Active = Yes. Historical rows created before the Active
@@ -1436,8 +1485,12 @@ function appendHouseAssetsRowForNewHouse_(sheet, houseName, propertyType, loanAm
 
   row[headerMap.houseColZero] = houseName;
   if (headerMap.typeColZero !== -1) row[headerMap.typeColZero] = propertyType;
-  if (headerMap.loanColZero !== -1) row[headerMap.loanColZero] = round2_(toNumber_(loanAmountLeft));
-  if (headerMap.valueColZero !== -1) row[headerMap.valueColZero] = round2_(toNumber_(currentValue));
+  if (headerMap.loanColZero !== -1 && houseNumericEvidencePresent_(loanAmountLeft)) {
+    row[headerMap.loanColZero] = round2_(toNumber_(loanAmountLeft));
+  }
+  if (headerMap.valueColZero !== -1 && houseNumericEvidencePresent_(currentValue)) {
+    row[headerMap.valueColZero] = round2_(toNumber_(currentValue));
+  }
   if (headerMap.activeColZero !== -1) row[headerMap.activeColZero] = 'Yes';
 
   // Identify a neighboring existing data row BEFORE appending, so we can clone
@@ -1811,8 +1864,8 @@ function applyHouseValuesSheetStyling_(sheet) {
  * @param {{
  *   houseName: string,
  *   propertyType: string,
- *   currentValue: number|string,
- *   loanAmountLeft: number|string,
+ *   currentValue?: number|string,
+ *   loanAmountLeft?: number|string,
  *   valuationDate?: string
  * }} payload
  */
@@ -1867,7 +1920,7 @@ function addHouseFromDashboard(payload) {
  * point owns the serialization / flush / release lifecycle.
  */
 function addHouseFromDashboardLocked_(payload) {
-  validateRequired_(payload, ['houseName', 'propertyType', 'currentValue', 'loanAmountLeft']);
+  validateRequired_(payload, ['houseName', 'propertyType']);
 
   // Ensure-before-write guards. Both helpers are idempotent no-ops on
   // populated workbooks. On a fresh workbook they write the canonical
@@ -1902,31 +1955,27 @@ function addHouseFromDashboardLocked_(payload) {
   if (!propertyType) throw new Error('Property type is required.');
   if (propertyType.length > 80) throw new Error('Property type is too long (max 80 characters).');
 
-  const currentValueRaw = payload.currentValue;
-  const currentValue = round2_(toNumber_(currentValueRaw));
-  if (isNaN(currentValue)) throw new Error('Current value must be a valid number.');
-  if (currentValue < 0) throw new Error('Current value cannot be negative.');
-
-  const loanRaw = payload.loanAmountLeft;
-  const loanAmountLeft = round2_(toNumber_(loanRaw));
-  if (isNaN(loanAmountLeft)) throw new Error('Loan amount left must be a valid number.');
-  if (loanAmountLeft < 0) throw new Error('Loan amount left cannot be negative.');
+  const currentParsed = resolveHouseOptionalMoney_(payload.currentValue, 'Current value');
+  const loanParsed = resolveHouseOptionalMoney_(payload.loanAmountLeft, 'Remaining loan balance');
+  const currentValue = currentParsed.unknown ? null : currentParsed.amount;
+  const loanAmountLeft = loanParsed.unknown ? null : loanParsed.amount;
 
   const tz = Session.getScriptTimeZone();
   const currentYear = getCurrentYear_();
 
   // Resolve the user-entered valuation date (preserved for the activity log).
-  //   - If the user supplied a date, validate it is a real date and keep it
-  //     verbatim — HISTORICAL dates are allowed (buying a house years ago and
-  //     recording it in the current workbook is a normal scenario).
+  //   - If the user supplied a date and a current value, validate it is a real
+  //     date and keep it verbatim — HISTORICAL dates are allowed (buying a
+  //     house years ago and recording it in the current workbook is normal).
   //   - If the user left the field blank, default to today so month extraction
   //     in updateHouseValuesHistory_ / Utilities.formatDate is stable
   //     regardless of script timezone drift.
+  //   - Unknown current value does not record a month, so no date is seeded.
   //
   // `valuationDateWasProvided` preserves whether the UI supplied a date so the
   // activity log can still record the raw user intent (details.valuationDate).
   let valuationDate = null;
-  const valuationDateStr = String(payload.valuationDate || '').trim();
+  const valuationDateStr = currentParsed.unknown ? '' : String(payload.valuationDate || '').trim();
   const valuationDateWasProvided = !!valuationDateStr;
   if (valuationDateWasProvided) {
     valuationDate = parseIsoDateLocal_(valuationDateStr);
@@ -1937,12 +1986,13 @@ function addHouseFromDashboardLocked_(payload) {
 
   // Resolve the month-seed date used ONLY to choose which month column of the
   // current-year block receives the Current Value. The house is ALWAYS created
-  // in the current-year block; an out-of-year entered date (e.g. 02/10/2018)
-  // seeds a safe month in the current block instead of throwing. Shared with
-  // updateHouseValueByDate via resolveHouseValuesSeedDate_ so Add and Update
-  // behave identically. The user's raw entered date is preserved in the
-  // activity log below (details.valuationDate).
+  // in the current-year block. A date in this tracking year writes that month.
+  // A date from another year is kept in Activity and does not fill a current-
+  // year month, so Monthly Review cannot treat it as this month. Shared with
+  // updateHouseValueByDate via resolveHouseValuesSeedDate_.
   const seedDate = resolveHouseValuesSeedDate_(valuationDate, currentYear);
+
+  const sysCurrentValue = (!currentParsed.unknown && seedDate) ? currentValue : null;
 
   const ss = getUserSpreadsheet_();
   const hvSheet = getSheet_(ss, 'HOUSE_VALUES');
@@ -1950,7 +2000,7 @@ function addHouseFromDashboardLocked_(payload) {
   const block = getHouseValuesYearBlock_(hvSheet, currentYear);
 
   // 1) Insert the INPUT - House Values row. Column 2 ("Loan Amount Left") is
-  //    populated here so the row is complete before we move on to SYS.
+  //    written when the remaining loan is known, including an explicit 0.
   let newHvRow = 0;
   try {
     newHvRow = insertNewHouseHistoryRow_(hvSheet, block, houseName, loanAmountLeft);
@@ -1960,26 +2010,22 @@ function addHouseFromDashboardLocked_(payload) {
 
   // 2) Append the SYS - House Assets row. Roll back HV row on failure.
   try {
-    appendHouseAssetsRowForNewHouse_(haSheet, houseName, propertyType, loanAmountLeft, currentValue);
+    appendHouseAssetsRowForNewHouse_(haSheet, houseName, propertyType, loanAmountLeft, sysCurrentValue);
   } catch (e2) {
     hvSheet.deleteRow(newHvRow);
     throw new Error('Could not add House Assets row (rolled back House Values row): ' +
       (e2.message || e2));
   }
 
-  // 3) Seed the month cell with currentValue using the resolved
-  //    valuation date (always non-null now — either the user-supplied
-  //    date or today when the field was left blank).
-  //    The `currentValue !== 0` guard is preserved from prior
-  //    behavior: writing an explicit 0 into a month cell is
-  //    indistinguishable from "no entry" in downstream readers, and
-  //    historically populated workbooks rely on that. New-house
-  //    creation still records the SYS - House Assets Current Value
-  //    directly in step 2, so the row is complete even when the
-  //    month cell is skipped.
+  // 3) Seed the month cell with an explicit current value, including 0,
+  //    only when the valuation date falls in this tracking year. Unknown
+  //    current value, and known values dated in another year, leave every
+  //    current-year month cell blank so Monthly Review stays missing.
+  //    SYS Current Value is written in step 2 only when a current-year
+  //    month is being seeded (including explicit 0).
   let seededMonthLabel = '';
   try {
-    if (currentValue !== 0) {
+    if (!currentParsed.unknown && seedDate) {
       updateHouseValuesHistory_(houseName, currentYear, seedDate, currentValue);
       seededMonthLabel = Utilities.formatDate(seedDate, tz, 'MMM-yy');
     }
@@ -2010,11 +2056,11 @@ function addHouseFromDashboardLocked_(payload) {
   try {
     appendActivityLog_(ss, {
       eventType: 'house_add',
-      // entryDate reflects the in-block month the value was seeded into (today
-      // when the entered date is historical/out-of-year). The raw user-entered
-      // date is preserved verbatim below in details.valuationDate.
-      entryDate: Utilities.formatDate(stripTime_(seedDate || new Date()), tz, 'yyyy-MM-dd'),
-      amount: Math.abs(currentValue),
+      // entryDate is the day this add was recorded. The raw user-entered
+      // valuation date is preserved verbatim below in details.valuationDate,
+      // including dates from another year that did not seed a month.
+      entryDate: Utilities.formatDate(stripTime_(new Date()), tz, 'yyyy-MM-dd'),
+      amount: currentParsed.unknown ? '' : Math.abs(currentValue),
       direction: 'expense',
       payee: houseName,
       category: propertyType,
@@ -2026,10 +2072,13 @@ function addHouseFromDashboardLocked_(payload) {
         detailsVersion: 1,
         year: currentYear,
         propertyType: propertyType,
-        currentValue: currentValue,
-        loanAmountLeft: loanAmountLeft,
+        currentValue: currentParsed.unknown ? null : currentValue,
+        currentValueUnknown: currentParsed.unknown,
+        loanAmountLeft: loanParsed.unknown ? null : loanAmountLeft,
+        loanAmountLeftUnknown: loanParsed.unknown,
         valuationDate: valuationDateStr,
         seededMonthLabel: seededMonthLabel,
+        historicalValuation: !!(valuationDateWasProvided && !seedDate && !currentParsed.unknown),
         houseSheet: 'HOUSES - ' + houseName,
         houseSheetCreated: sheetCreationInfo ? sheetCreationInfo.created : false,
         houseSheetTemplate: sheetCreationInfo ? sheetCreationInfo.templateSheetName : ''
@@ -2043,7 +2092,7 @@ function addHouseFromDashboardLocked_(payload) {
   fitContentColumnsToContents_([
     { sheet: hvSheet, col: 1 },
     { sheet: hvSheet, col: 2 },
-    { sheet: hvSheet, col: getMonthColumnByDate_(hvSheet, seedDate, block.headerRow) },
+    { sheet: hvSheet, col: getMonthColumnByDate_(hvSheet, seedDate || stripTime_(new Date()), block.headerRow) },
     { sheet: haSheet, col: houseAssetsFitMap.houseCol },
     { sheet: haSheet, col: houseAssetsFitMap.typeCol },
     { sheet: haSheet, col: houseAssetsFitMap.loanCol },

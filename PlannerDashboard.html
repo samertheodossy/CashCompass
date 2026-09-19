@@ -318,13 +318,14 @@
       <div><strong>Stored value for selected month:</strong> <span id="house_selectedMonthValue" class="muted">—</span></div>
       <div><strong>Current House Assets value:</strong> <span id="house_currentAssetValue" class="muted">—</span></div>
       <div><strong>Property type:</strong> <span id="house_propertyType" class="muted">—</span></div>
-      <div><strong>Loan amount left:</strong> <span id="house_loanAmountLeft" class="muted">—</span></div>
+      <div><strong>Remaining loan balance:</strong> <span id="house_loanAmountLeft" class="muted">—</span></div>
       <div class="house-value-delta-sep" aria-hidden="true"></div>
       <div class="house-value-delta-row"><strong>Change vs prior month:</strong> <span id="house_deltaPriorMonth" class="muted">—</span></div>
     </div>
 
-    <label>Value</label>
+    <label for="house_value">Value</label>
     <input type="text" id="house_value" inputmode="decimal" onfocus="currencyFocus('house_value')" onblur="currencyBlur('house_value')">
+    <div class="muted" style="margin-top:4px;font-size:12px;">Saves this month’s property value only. Other months, remaining loan, and expense history stay as they are. Enter <strong>$0.00</strong> only when the property value is actually zero. Choose a date in this calendar year; a date from another year is not saved as this month.</div>
 
     <div class="house-update-actions">
       <button onclick="saveHouse()">Save House Value</button>
@@ -332,22 +333,25 @@
   </div>
 
   <div id="house_mode_add_wrap" class="bank-mode-wrap">
-    <label>House name</label>
+    <label for="house_add_name">House name (required)</label>
     <input type="text" id="house_add_name" maxlength="120" autocomplete="off" oninput="if (typeof clearHouseAddNameError_==='function') clearHouseAddNameError_();">
     <div id="house_add_name_error" class="field-error" role="alert" aria-live="polite"></div>
 
-    <label>Property type</label>
+    <label for="house_add_type">Property type (required)</label>
     <input type="text" id="house_add_type" maxlength="80" list="house_add_type_list" autocomplete="off">
     <datalist id="house_add_type_list"></datalist>
 
-    <label>Current value</label>
+    <label for="house_add_current_value">Current value (optional)</label>
     <input type="text" id="house_add_current_value" inputmode="decimal" onfocus="currencyFocus('house_add_current_value')" onblur="currencyBlur('house_add_current_value')">
+    <div class="muted" style="margin-top:4px;font-size:12px;">Enter <strong>$0.00</strong> only when the property is actually worth zero. Leave blank if you do not know the value yet. CashCompass still creates the house, and Monthly Review will show that month as missing.</div>
 
-    <label>Loan amount left</label>
+    <label for="house_add_loan">Remaining loan balance (optional)</label>
     <input type="text" id="house_add_loan" inputmode="decimal" onfocus="currencyFocus('house_add_loan')" onblur="currencyBlur('house_add_loan')">
+    <div class="muted" style="margin-top:4px;font-size:12px;">Enter <strong>$0.00</strong> only when there is no remaining loan. Leave blank if you do not know it yet. A blank remaining loan is not recorded as $0.</div>
 
-    <label>Valuation date (optional)</label>
+    <label for="house_add_valuation_date">Valuation date (optional)</label>
     <input type="date" id="house_add_valuation_date">
+    <div class="muted" style="margin-top:4px;font-size:12px;">Used only when you enter a current value, including $0.00. If that date is left blank, this month is used. A date in this calendar year is saved in that month. A date from another year is kept in Activity and does not fill this year’s tracking. Monthly Review stays missing until you save a value for this year.</div>
 
     <button onclick="createHouse()">Create house</button>
   </div>
@@ -382,19 +386,20 @@
       <div class="house-value-delta-row"><strong>Change vs prior month:</strong> <span id="bank_deltaPriorMonth" class="muted">—</span></div>
     </div>
 
-    <label>Value</label>
+    <label for="bank_value">Monthly balance</label>
     <input type="text" id="bank_value" inputmode="decimal" onfocus="currencyFocus('bank_value', true)" onblur="currencyBlur('bank_value')" oninput="evaluateBankBufferWarning()">
+    <div class="muted" style="margin-top:4px;font-size:12px;">Saves this month’s account balance only. Available Now, Min Buffer, Use policy, and Priority stay as they are unless you explicitly change them. Enter <strong>$0.00</strong> only when the account is actually at zero. A blank balance is not saved as $0.</div>
 
     <div id="bank_bufferWarning" class="warning-box"></div>
 
     <div class="check-row">
-      <input type="checkbox" id="bank_updateAvailableNow" checked>
-      <label for="bank_updateAvailableNow" style="margin:0;font-weight:normal;">Also update Available Now</label>
+      <input type="checkbox" id="bank_updateAvailableNow">
+      <label for="bank_updateAvailableNow" style="margin:0;font-weight:normal;">Also update Available Now. This changes the amount Planning may use.</label>
     </div>
 
     <div class="check-row">
       <input type="checkbox" id="bank_updateMinBuffer" onchange="evaluateBankBufferWarning()">
-      <label for="bank_updateMinBuffer" style="margin:0;font-weight:normal;">Also update Min Buffer</label>
+      <label for="bank_updateMinBuffer" style="margin:0;font-weight:normal;">Also update Min Buffer. This changes the protected minimum for this account.</label>
     </div>
 
     <div class="house-update-actions">
@@ -486,11 +491,17 @@
     </select>
     <div class="muted" style="margin-top:4px;font-size:12px;">Choose from investment types already used in CashCompass.</div>
 
-    <label>Starting value (optional)</label>
+    <label for="inv_add_starting_value">Starting value</label>
     <input type="text" id="inv_add_starting_value" inputmode="decimal" onfocus="currencyFocus('inv_add_starting_value')" onblur="currencyBlur('inv_add_starting_value')">
+    <label for="inv_add_balance_unknown" style="display:flex;align-items:flex-start;gap:8px;font-weight:600;margin-top:8px;">
+      <input type="checkbox" id="inv_add_balance_unknown" style="width:auto;margin-top:3px;" onchange="onInvAddBalanceUnknownChange_()">
+      <span>Balance is unknown / not available yet</span>
+    </label>
+    <div class="muted" style="margin-top:4px;font-size:12px;">Enter <strong>$0.00</strong> only when you have confirmed the balance is actually zero. If you do not know it yet, check the box and leave the starting value blank. CashCompass will create the account without recording a value for this month.</div>
 
-    <label>Starting value date (optional)</label>
+    <label for="inv_add_starting_date">Starting value date (optional)</label>
     <input type="date" id="inv_add_starting_date">
+    <div class="muted" style="margin-top:4px;font-size:12px;">Used only when you enter a starting value, including $0.00. If that date is left blank, the current month is used. A date is not recorded when the balance is unknown.</div>
 
     <button onclick="createInvestmentAccount()">Create account</button>
   </div>
@@ -911,10 +922,18 @@ function loadHouseData() {
 
 function saveHouse() {
   const rawValue = document.getElementById('house_value').value;
+  if (!String(rawValue || '').trim()) {
+    setStatus('house_status', 'Enter a value, including $0.00 if the property value is actually zero.', true);
+    return;
+  }
   const numericValue = toNumber(rawValue);
 
-  if (String(rawValue || '').trim() && isNaN(numericValue)) {
+  if (isNaN(numericValue)) {
     setStatus('house_status', 'Value must be a valid number.', true);
+    return;
+  }
+  if (numericValue < 0) {
+    setStatus('house_status', 'Value cannot be negative.', true);
     return;
   }
 
@@ -994,33 +1013,39 @@ function createHouse() {
     setStatus('house_status', 'Property type is required.', true);
     return;
   }
-  if (!String(curRaw || '').trim()) {
-    setStatus('house_status', 'Current value is required.', true);
-    return;
-  }
-  if (!String(loanRaw || '').trim()) {
-    setStatus('house_status', 'Loan amount left is required.', true);
-    return;
-  }
 
-  const currentValue = toNumber(curRaw);
-  if (isNaN(currentValue)) {
-    setStatus('house_status', 'Current value must be a valid number.', true);
-    return;
+  let currentValue = null;
+  if (String(curRaw || '').trim()) {
+    currentValue = toNumber(curRaw);
+    if (isNaN(currentValue)) {
+      setStatus('house_status', 'Current value must be a valid number.', true);
+      return;
+    }
+    if (currentValue < 0) {
+      setStatus('house_status', 'Current value cannot be negative.', true);
+      return;
+    }
   }
-  const loanAmountLeft = toNumber(loanRaw);
-  if (isNaN(loanAmountLeft)) {
-    setStatus('house_status', 'Loan amount left must be a valid number.', true);
-    return;
+  let loanAmountLeft = null;
+  if (String(loanRaw || '').trim()) {
+    loanAmountLeft = toNumber(loanRaw);
+    if (isNaN(loanAmountLeft)) {
+      setStatus('house_status', 'Remaining loan balance must be a valid number.', true);
+      return;
+    }
+    if (loanAmountLeft < 0) {
+      setStatus('house_status', 'Remaining loan balance cannot be negative.', true);
+      return;
+    }
   }
 
   const payload = {
     houseName: name,
-    propertyType: typeStr,
-    currentValue: currentValue,
-    loanAmountLeft: loanAmountLeft
+    propertyType: typeStr
   };
-  if (valDate) payload.valuationDate = valDate;
+  if (currentValue !== null) payload.currentValue = currentValue;
+  if (loanAmountLeft !== null) payload.loanAmountLeft = loanAmountLeft;
+  if (valDate && currentValue !== null) payload.valuationDate = valDate;
 
   // Ignore a second submit while the first is still in flight (double-click).
   if (houseCreateInFlight_) return;
@@ -1408,10 +1433,14 @@ function stopTrackingBank() {
 
 function saveBank() {
   const rawValue = document.getElementById('bank_value').value;
+  if (!String(rawValue || '').trim()) {
+    setStatus('bank_status', 'Enter a monthly balance, including $0.00 if the account is actually at zero.', true);
+    return;
+  }
   const numericValue = toNumber(rawValue);
 
-  if (String(rawValue || '').trim() && isNaN(numericValue)) {
-    setStatus('bank_status', 'Value must be a valid number.', true);
+  if (isNaN(numericValue)) {
+    setStatus('bank_status', 'Monthly balance must be a valid number.', true);
     return;
   }
 
@@ -1467,11 +1496,31 @@ function populateInvestmentAddDatalists_(data) {
   }
 }
 
+function onInvAddBalanceUnknownChange_() {
+  const box = document.getElementById('inv_add_balance_unknown');
+  const valueEl = document.getElementById('inv_add_starting_value');
+  const dateEl = document.getElementById('inv_add_starting_date');
+  const unknown = !!(box && box.checked);
+  if (valueEl) {
+    valueEl.disabled = unknown;
+    if (unknown) valueEl.value = '';
+  }
+  if (dateEl) {
+    dateEl.disabled = unknown;
+    if (unknown) dateEl.value = '';
+  }
+}
+
 function resetInvestmentAddForm_() {
   ['inv_add_name','inv_add_type','inv_add_starting_value','inv_add_starting_date'].forEach(function(id) {
     const el = document.getElementById(id);
-    if (el) el.value = '';
+    if (el) {
+      el.disabled = false;
+      el.value = '';
+    }
   });
+  const unknown = document.getElementById('inv_add_balance_unknown');
+  if (unknown) unknown.checked = false;
   clearInvestmentAddNameError_();
 }
 
@@ -1636,10 +1685,10 @@ function createInvestmentAccount() {
 
   const name = document.getElementById('inv_add_name').value.trim();
   const typeStr = document.getElementById('inv_add_type').value.trim();
+  const unknownEl = document.getElementById('inv_add_balance_unknown');
+  const balanceUnknown = !!(unknownEl && unknownEl.checked);
   const startRaw = document.getElementById('inv_add_starting_value').value;
-  const startDate = document.getElementById('inv_add_starting_date').value.trim();
-  const hasAmt = String(startRaw || '').trim() !== '';
-  const hasDate = !!startDate;
+  const startDate = balanceUnknown ? '' : document.getElementById('inv_add_starting_date').value.trim();
 
   if (!name) {
     showInvestmentAddNameError_('Account name is required.');
@@ -1650,21 +1699,26 @@ function createInvestmentAccount() {
     setStatus('inv_status', 'Type is required.', true);
     return;
   }
-  if (hasDate !== hasAmt) {
-    setStatus('inv_status', 'For a starting value, enter both date and amount (or leave both blank).', true);
-    return;
-  }
 
-  const startNum = hasAmt ? toNumber(startRaw) : NaN;
-  if (hasAmt && isNaN(startNum)) {
-    setStatus('inv_status', 'Starting value must be a valid number.', true);
-    return;
+  let startNum = null;
+  if (!balanceUnknown) {
+    if (String(startRaw || '').trim() === '') {
+      setStatus('inv_status', 'Enter a starting value, including $0.00 if the balance is actually zero, or confirm the balance is unknown.', true);
+      return;
+    }
+    startNum = toNumber(startRaw);
+    if (isNaN(startNum)) {
+      setStatus('inv_status', 'Starting value must be a valid number.', true);
+      return;
+    }
   }
 
   const payload = { accountName: name, type: typeStr };
-  if (hasDate && hasAmt) {
-    payload.startingBalanceDate = startDate;
+  if (balanceUnknown) {
+    payload.startingBalanceUnknown = true;
+  } else {
     payload.startingBalance = startNum;
+    if (startDate) payload.startingBalanceDate = startDate;
   }
 
   setStatusLoading('inv_status', 'Creating investment account…');

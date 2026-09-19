@@ -985,12 +985,7 @@ function writeActivityOperationTargetStateInSpreadsheet_(ss, target, desiredStat
       round2_(toNumber_(desiredState.value)),
       1
     );
-    recalcDebtPctAvailForRow_(debtSheet, matches[0], {
-      creditLimitCol: debtMap.creditLimitColZero,
-      creditLeftCol: debtMap.creditLeftColZero,
-      balanceCol: debtMap.balanceColZero,
-      pctAvailCol: debtMap.pctAvailColZero
-    });
+    recalcDebtDerivedCreditFieldsForRow_(debtSheet, matches[0], debtMap);
     return;
   }
 
@@ -1166,12 +1161,7 @@ function adjustDebtsBalanceAfterQuickPayment_(ss, payee, entryType, paymentAmoun
 
     setCurrencyCellPreserveRowFormat_(debtSheet, targetRow, targetCol, newBal, 1);
 
-    recalcDebtPctAvailForRow_(debtSheet, targetRow, {
-      creditLimitCol: headerMap.creditLimitColZero,
-      creditLeftCol: headerMap.creditLeftColZero,
-      balanceCol: headerMap.balanceColZero,
-      pctAvailCol: headerMap.pctAvailColZero
-    });
+    recalcDebtDerivedCreditFieldsForRow_(debtSheet, targetRow, headerMap);
 
     touchDashboardSourceUpdated_('debts');
 

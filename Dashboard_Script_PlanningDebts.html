@@ -360,6 +360,81 @@ function debtManageMoney_(v) {
   return (typeof fmtCurrency === 'function') ? fmtCurrency(n) : String(n);
 }
 
+function debtManageMoneyText_(v) {
+  const n = Number(v);
+  if (!isFinite(n)) return '';
+  if (typeof fmtCurrency === 'function') return fmtCurrency(n);
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function debtManageIsCreditCardType_(type) {
+  return /^credit\s*cards?$/i.test(String(type || '').trim());
+}
+
+function debtManageRoundMoney_(n) {
+  return Math.round(Number(n) * 100) / 100;
+}
+
+function debtManageAvailableCreditDisplay_(row) {
+  const na = { kind: 'na', text: '—', html: '<span class="muted">—</span>' };
+  if (!debtManageIsCreditCardType_(row && row.type)) return na;
+  const limitRaw = row.creditLimit;
+  const balanceRaw = row.accountBalance;
+  const leftRaw = row.creditLeft;
+  const limit = Number(limitRaw);
+  const balance = Number(balanceRaw);
+  const hasLimit = limitRaw !== '' && limitRaw !== null && typeof limitRaw !== 'undefined' &&
+    isFinite(limit) && limit > 0;
+  if (!hasLimit) return na;
+  const hasBalance = balanceRaw !== '' && balanceRaw !== null && typeof balanceRaw !== 'undefined' &&
+    isFinite(balance);
+  let available;
+  if (hasBalance) {
+    // Authoritative remaining credit is Credit Limit − Balance. Ignore stored
+    // Credit Left and Acct PCT Avail here so a stale percentage cannot mix with
+    // a newly calculated dollar amount.
+    available = debtManageRoundMoney_(limit - balance);
+  } else {
+    const hasLeft = leftRaw !== '' && leftRaw !== null && typeof leftRaw !== 'undefined' &&
+      isFinite(Number(leftRaw));
+    if (!hasLeft) return na;
+    available = Number(leftRaw);
+  }
+  if (!isFinite(available)) return na;
+  if (available < -0.005) {
+    const text = 'Over limit by ' + debtManageMoneyText_(Math.abs(available));
+    const html =
+      '<span class="debt-over-limit-warning" role="status">' +
+        '<span class="cc-sr-only">Warning. </span>' +
+        text +
+      '</span>';
+    return { kind: 'over', text: text, html: html };
+  }
+  const html = debtManageMoney_(Math.max(0, available));
+  return { kind: 'ok', text: String(html).replace(/<[^>]+>/g, '') || '—', html: html };
+}
+
+function debtManageAvailableCreditHtml_(row) {
+  return debtManageAvailableCreditDisplay_(row).html;
+}
+
+function debtManageAvailableCreditText_(row) {
+  return debtManageAvailableCreditDisplay_(row).text;
+}
+
+function debtManagePaintAvailableCreditEl_(el, row) {
+  if (!el) return;
+  const display = debtManageAvailableCreditDisplay_(row);
+  el.classList.remove('debt-over-limit-warning');
+  if (display.kind === 'over') {
+    el.classList.add('debt-over-limit-warning');
+    el.setAttribute('role', 'status');
+  } else if (el.getAttribute && el.getAttribute('role') === 'status') {
+    el.removeAttribute('role');
+  }
+  el.textContent = display.kind === 'over' ? ('Warning. ' + display.text) : display.text;
+}
+
 function toggleDebtManageSort(column) {
   if (column !== 'accountName' && column !== 'type' && column !== 'accountBalance') return;
   if (__debtManageSort.column === column) {
@@ -416,10 +491,10 @@ function buildDebtSortableHeader_(column, label, extraClass) {
 
   return (
     '<th scope="col" class="' + classAttr + '" ' +
-      'aria-sort="' + ariaSort + '" tabindex="0" role="button" ' +
+      'aria-sort="' + ariaSort + '" tabindex="0" ' +
       'onclick="toggleDebtManageSort(\'' + column + '\')" ' +
       'onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();toggleDebtManageSort(\'' + column + '\');}">' +
-      '<span class="bills-sort-label">' + escapeHtml(label) + '</span>' + indicator +
+      escapeHtml(label) + indicator +
     '</th>'
   );
 }
@@ -450,7 +525,7 @@ function renderActiveDebtsList_(rows) {
     const intRateStr = (r.intRate !== '' && r.intRate !== null && typeof r.intRate !== 'undefined')
       ? escapeHtml(String(r.intRate))
       : '<span class="muted">—</span>';
-    const pctStr = r.acctPctAvail ? escapeHtml(String(r.acctPctAvail)) : '<span class="muted">—</span>';
+    const availableCreditStr = debtManageAvailableCreditHtml_(r);
 
     return (
       '<tr>' +
@@ -459,7 +534,7 @@ function renderActiveDebtsList_(rows) {
         '<td class="bills-manage-num">' + debtManageMoney_(r.accountBalance) + '</td>' +
         '<td class="bills-manage-num">' + debtManageMoney_(r.minimumPayment) + '</td>' +
         '<td class="bills-manage-num">' + intRateStr + '</td>' +
-        '<td class="bills-manage-num">' + pctStr + '</td>' +
+        '<td class="bills-manage-num">' + availableCreditStr + '</td>' +
         '<td class="bills-manage-actions">' +
           '<button class="small-btn bill-edit-btn" title="Edit this debt" ' +
             'onclick="openDebtEditForm(\'' + escapeJs(key) + '\')" style="margin-right:6px;">Edit</button>' +
@@ -476,12 +551,12 @@ function renderActiveDebtsList_(rows) {
     '<div class="bills-manage-tablewrap">' +
       '<table class="bills-manage-table">' +
         '<thead><tr>' +
-          buildDebtSortableHeader_('accountName', 'Account Name', '') +
+          buildDebtSortableHeader_('accountName', 'Account', '') +
           buildDebtSortableHeader_('type', 'Type', '') +
           buildDebtSortableHeader_('accountBalance', 'Balance', 'bills-manage-num') +
-          '<th scope="col" class="bills-manage-num">Min Payment</th>' +
-          '<th scope="col" class="bills-manage-num">Int Rate</th>' +
-          '<th scope="col" class="bills-manage-num">Pct Avail</th>' +
+          '<th scope="col" class="bills-manage-num">Minimum payment</th>' +
+          '<th scope="col" class="bills-manage-num">APR</th>' +
+          '<th scope="col" class="bills-manage-num">Available credit</th>' +
           '<th scope="col" class="bills-manage-actions">Actions</th>' +
         '</tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody>' +
@@ -572,7 +647,6 @@ function openDebtEditForm(key) {
   };
   setMoney('debt_edit_balance', row.accountBalance);
   setMoney('debt_edit_credit_limit', row.creditLimit);
-  setMoney('debt_edit_credit_left', row.creditLeft);
   setMoney('debt_edit_min_payment', row.minimumPayment);
   setVal('debt_edit_due_date', (row.dueDate === '' ? '' : row.dueDate));
   setVal('debt_edit_int_rate', (row.intRate === '' ? '' : row.intRate));
@@ -580,8 +654,8 @@ function openDebtEditForm(key) {
     document.getElementById('debt_edit_linked_property'), row.linkedProperty || '');
   updateDebtLinkedPropertyVisibility_('edit');
 
-  const pctEl = document.getElementById('debt_edit_pct_avail');
-  if (pctEl) pctEl.textContent = row.acctPctAvail ? row.acctPctAvail : '—';
+  debtManagePaintAvailableCreditEl_(document.getElementById('debt_edit_credit_left'), row);
+  debtManagePaintAvailableCreditEl_(document.getElementById('debt_edit_pct_avail'), row);
 
   const titleEl = document.getElementById('debt_edit_title');
   if (titleEl) titleEl.textContent = 'Edit debt — ' + (row.accountName || '');
@@ -649,14 +723,12 @@ function submitDebtEdit_() {
 
   const balance = numFromInput('debt_edit_balance');
   const creditLimit = numFromInput('debt_edit_credit_limit');
-  const creditLeft = numFromInput('debt_edit_credit_left');
   const minPayment = numFromInput('debt_edit_min_payment');
   const intRate = numFromInput('debt_edit_int_rate');
 
   const numericChecks = [
     { v: balance, label: 'Account Balance' },
     { v: creditLimit, label: 'Credit Limit' },
-    { v: creditLeft, label: 'Credit Left' },
     { v: minPayment, label: 'Minimum Payment' },
     { v: intRate, label: 'Interest Rate' }
   ];
@@ -687,7 +759,6 @@ function submitDebtEdit_() {
     accountBalance: balance,
     dueDate: dueRaw,
     creditLimit: creditLimit,
-    creditLeft: creditLeft,
     minimumPayment: minPayment,
     intRate: intRate,
     linkedProperty: (function() {
@@ -873,7 +944,7 @@ function renderInactiveDebtsList_(rows) {
     '<div class="bills-manage-tablewrap">' +
       '<table class="bills-manage-table">' +
         '<thead><tr>' +
-          '<th scope="col">Account Name</th>' +
+          '<th scope="col">Account</th>' +
           '<th scope="col">Type</th>' +
           '<th scope="col" class="bills-manage-num">Balance</th>' +
           '<th scope="col" class="bills-manage-actions">Actions</th>' +
@@ -1077,7 +1148,12 @@ function loadDebtFieldValue(quiet) {
         return;
       }
       document.getElementById('debt_type').textContent = data.type || '—';
-      document.getElementById('debt_pctAvail').textContent = data.pctAvail || '—';
+      debtManagePaintAvailableCreditEl_(document.getElementById('debt_pctAvail'), {
+        type: data.type,
+        creditLimit: data.creditLimit,
+        creditLeft: data.creditLeft,
+        accountBalance: data.accountBalance
+      });
 
       if (debtFieldTypes[fieldName] === 'currency') {
         document.getElementById('debt_currentValue').textContent =
