@@ -1099,12 +1099,10 @@ function addStagedBankAccountAsNew(payload) {
       accountName: String(payload.accountName || stagedRow.displayName || '').trim(),
       type: String(payload.type || stagedRow.type || '').trim(),
       usePolicy: String(payload.usePolicy || '').trim(),
-      priority: payload.priority
-      // Step 2d: do NOT forward the staged balance or its date. The
-      // imported snapshot is applied separately via Apply balance —
-      // this resolution is link-only. setAvailableFromOpening /
-      // setMinBufferFromOpening are intentionally omitted as well;
-      // there is no opening balance for them to mirror.
+      priority: payload.priority,
+      // Link-only: the staged snapshot is not an opening balance. Mark
+      // the opening balance unknown so Add new does not invent $0.
+      openingBalanceUnknown: true
     };
     if (!addPayload.accountName) throw new Error('Account name is required.');
     if (!addPayload.type) throw new Error('Type is required.');

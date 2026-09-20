@@ -3913,8 +3913,20 @@ assert.match(body,
   /id=["']bank_mode_manage_wrap["'][\s\S]*?id=["']bank_account_activity_btn["'][\s\S]*?Account activity/,
   'Bank Manage must open Account activity instead of a second import page');
 assert.match(body,
-  /id=["']bank_activity_drawer["'][\s\S]*?Review pending imports[\s\S]*?id=["']bank_activity_import_btn["'][\s\S]*?Paste CSV/,
-  'Account activity must contain pending review and Paste CSV');
+  /id=["']bank_activity_drawer["'][\s\S]*?id=["']bank_activity_csv_btn["'][\s\S]*?CSV[\s\S]*?id=["']bank_activity_provider_btn["'][\s\S]*?Connected provider \/ Plaid[\s\S]*?Review pending imports[\s\S]*?id=["']bank_activity_import_btn["'][\s\S]*?Paste CSV/,
+  'Account activity must keep CSV and Connected provider as distinct sources');
+assert.doesNotMatch(
+  files['Dashboard_Script_AssetsBankInvestments.html'].match(
+    /function renderBankActivityProviderCard_[\s\S]*?function previewBankActivityProviderAccount_/
+  )[0],
+  /textContent = 'CURRENT_BALANCE'|Preview CURRENT_BALANCE/,
+  'Account activity provider labels must not render CURRENT_BALANCE to customers'
+);
+assert.match(
+  files['Dashboard_Script_AssetsBankInvestments.html'],
+  /factType \|\| ''\) === 'CURRENT_BALANCE'/,
+  'Account activity provider preview must still read the CURRENT_BALANCE field key'
+);
 assert.doesNotMatch(body, /id=["']bank_mode_import_btn["']/,
   'The old Manage-page Paste CSV link must be removed once Account activity owns it');
 assert.ok(

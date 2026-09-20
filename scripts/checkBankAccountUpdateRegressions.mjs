@@ -40,6 +40,29 @@ assert.match(
   /function updateBankAccountValueByDate_\(payload, trustedProvenance\)[\s\S]*?const updateAvailableNow = !!payload\.updateAvailableNow/
 );
 
+const bankAdd = body.slice(body.indexOf('id="bank_mode_add_wrap"'), body.indexOf('id="bank_mode_manage_wrap"'));
+const sidebarAdd = sidebar.slice(sidebar.indexOf('id="bank_mode_add_wrap"'), sidebar.indexOf('id="bank_status"'));
+assert.match(bankAdd, /id="bank_add_balance_unknown"/);
+assert.match(bankAdd, /Opening balance is unknown \/ not available yet/);
+assert.match(bankAdd, /This changes the amount Planning may use/);
+assert.match(bankAdd, /This changes the protected minimum/);
+assert.doesNotMatch(bankAdd, /enter\s+(?:<code>)?0(?:<\/code>)?\s+if unknown/i);
+assert.doesNotMatch(bankAdd, /id="bank_add_opening_value"[^>]*value="0\.00"/);
+assert.doesNotMatch(bankAdd, /id="bank_add_set_available"\s+checked/);
+assert.doesNotMatch(bankAdd, /id="bank_add_set_min_buffer"\s+checked/);
+assert.match(sidebarAdd, /id="bank_add_balance_unknown"/);
+assert.match(sidebarAdd, /Opening balance is unknown \/ not available yet/);
+assert.doesNotMatch(sidebarAdd, /id="bank_add_set_available"\s+checked/);
+assert.doesNotMatch(sidebarAdd, /id="bank_add_set_min_buffer"\s+checked/);
+assert.match(help, /Opening balance is unknown \/ not available yet/);
+assert.match(help, /A blank opening balance is not saved as \$0/);
+assert.match(client, /function createBankAccount\(\)[\s\S]*?openingBalanceUnknown\s*=\s*true/);
+assert.doesNotMatch(client, /Enter 0 if unknown/);
+assert.match(sidebar, /function createBankAccount\(\)[\s\S]*?openingBalanceUnknown\s*=\s*true/);
+assert.match(bankSource, /function resolveBankOpeningBalance_/);
+assert.match(bankSource, /confirm the opening balance is unknown/);
+assert.match(read('bank_import.js'), /openingBalanceUnknown:\s*true/);
+
 class FakeRange {
   constructor(sheet, row, col, numRows = 1, numCols = 1) {
     this.sheet = sheet;
@@ -365,5 +388,118 @@ assert.equal(latest.Savings, 0);
 assert.deepEqual(snapshotRows(['Old Checking']), [preservedBefore[0]],
   'updates must preserve existing prior-year house history analog: bank history');
 assert.equal(rowByName(bankAccounts, 'Checking')[monthCol], 2300);
+
+context.ensureOnboardingBankAccountsSheetFromDashboard = () => {};
+context.writeActiveCellWithRowFormat_ = (sheet, row, col, value) => {
+  sheet.getRange(row, col).setValue(value == null ? '' : value);
+};
+
+function monthCells(name) {
+  const row = rowByName(bankAccounts, name);
+  assert.ok(row, name + ' history row must exist');
+  return row.slice(1, 13);
+}
+function assertOnlyMonth(name, index, value) {
+  monthCells(name).forEach((cell, i) => {
+    assert.equal(cell, i === index ? value : '', name + ' must write only the selected month');
+  });
+}
+const historyBeforeAdd = snapshotRows(['Old Checking', 'Checking', 'Savings']);
+const checkingBeforeAdd = JSON.stringify(accountRow('Checking'));
+const savingsBeforeAdd = JSON.stringify(accountRow('Savings'));
+
+assert.throws(() => context.addBankAccountFromDashboard({
+  accountName: 'Rejected Blank',
+  type: 'Checking',
+  usePolicy: 'USE_FOR_BILLS',
+  openingBalance: '   '
+}), /confirm the opening balance is unknown/);
+assert.throws(() => context.addBankAccountFromDashboard({
+  accountName: 'Rejected Both',
+  type: 'Checking',
+  usePolicy: 'USE_FOR_BILLS',
+  openingBalanceUnknown: true,
+  openingBalance: 0,
+  setAvailableFromOpening: true,
+  setMinBufferFromOpening: true
+}), /Clear the opening balance/);
+assert.equal(rowByName(bankAccounts, 'Rejected Blank'), null);
+assert.equal(rowByName(accounts, 'Rejected Both'), null);
+assert.deepEqual(snapshotRows(['Old Checking', 'Checking', 'Savings']), historyBeforeAdd,
+  'a rejected Add new must not rewrite existing history');
+
+context.addBankAccountFromDashboard({
+  accountName: 'Zero Cash',
+  type: 'Checking',
+  usePolicy: 'USE_FOR_BILLS',
+  openingBalance: 0
+});
+assertOnlyMonth('Zero Cash', monthIndex, 0);
+assert.equal(accountRow('Zero Cash')[1], 0, 'explicit $0 is current-month SYS evidence');
+assert.equal(accountRow('Zero Cash')[2], '', 'Available Now stays unset by default');
+assert.equal(accountRow('Zero Cash')[3], '', 'Min Buffer stays unset by default');
+
+context.addBankAccountFromDashboard({
+  accountName: 'Unknown Cash',
+  type: 'Savings',
+  usePolicy: 'DO_NOT_TOUCH',
+  openingBalanceUnknown: true,
+  setAvailableFromOpening: true,
+  setMinBufferFromOpening: true
+});
+monthCells('Unknown Cash').forEach((cell) => {
+  assert.equal(cell, '', 'unknown opening balance must not write a month, including $0');
+});
+assert.equal(accountRow('Unknown Cash')[1], '', 'unknown opening balance must not write SYS current balance');
+assert.equal(accountRow('Unknown Cash')[2], '', 'unknown opening balance must not write Available Now');
+assert.equal(accountRow('Unknown Cash')[3], '', 'unknown opening balance must not write Min Buffer');
+
+context.addBankAccountFromDashboard({
+  accountName: 'Available Opt In',
+  type: 'Checking',
+  usePolicy: 'USE_FOR_BILLS',
+  openingBalance: 400,
+  openingBalanceDate: isoDate,
+  setAvailableFromOpening: true,
+  setMinBufferFromOpening: false
+});
+assertOnlyMonth('Available Opt In', monthIndex, 400);
+assert.equal(accountRow('Available Opt In')[1], 400);
+assert.equal(accountRow('Available Opt In')[2], 400, 'Available Now is written only when opted in');
+assert.equal(accountRow('Available Opt In')[3], '', 'Available Now opt-in must not set Min Buffer');
+
+context.addBankAccountFromDashboard({
+  accountName: 'Buffer Opt In',
+  type: 'Savings',
+  usePolicy: 'DO_NOT_TOUCH',
+  openingBalance: 125,
+  openingBalanceDate: isoDate,
+  setAvailableFromOpening: false,
+  setMinBufferFromOpening: true
+});
+assertOnlyMonth('Buffer Opt In', monthIndex, 125);
+assert.equal(accountRow('Buffer Opt In')[1], 125);
+assert.equal(accountRow('Buffer Opt In')[2], '', 'Min Buffer opt-in must not set Available Now');
+assert.equal(accountRow('Buffer Opt In')[3], 125);
+
+if (earlierMonthIndex !== null) {
+  const earlierDate = year + '-01-10';
+  context.addBankAccountFromDashboard({
+    accountName: 'Earlier Month',
+    type: 'Checking',
+    usePolicy: 'USE_FOR_BILLS',
+    openingBalance: 55,
+    openingBalanceDate: earlierDate
+  });
+  assertOnlyMonth('Earlier Month', earlierMonthIndex, 55);
+  assert.equal(accountRow('Earlier Month')[1], 55, 'SYS current balance follows the selected opening month');
+  assert.equal(accountRow('Earlier Month')[2], '');
+  assert.equal(accountRow('Earlier Month')[3], '');
+}
+
+assert.deepEqual(snapshotRows(['Old Checking', 'Checking', 'Savings']), historyBeforeAdd,
+  'Add new must preserve existing account history');
+assert.equal(JSON.stringify(accountRow('Checking')), checkingBeforeAdd);
+assert.equal(JSON.stringify(accountRow('Savings')), savingsBeforeAdd);
 
 console.log('bank account update regressions passed');

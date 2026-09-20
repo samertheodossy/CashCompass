@@ -671,7 +671,7 @@ function findAccountsTemplateRow_(sheet, headerMap) {
   return -1;
 }
 
-function appendAccountsRowForNewBank_(sheet, accountName, typeStr, policyStr, priorityNum) {
+function appendAccountsRowForNewBank_(sheet, accountName, typeStr, policyStr, priorityNum, currentBalance) {
   const headerMap = ensureAccountsActiveColumn_(sheet);
   const lastCol = Math.max(sheet.getLastColumn(), headerMap.nameCol, headerMap.activeCol);
 
@@ -681,9 +681,12 @@ function appendAccountsRowForNewBank_(sheet, accountName, typeStr, policyStr, pr
   }
 
   row[headerMap.nameColZero] = accountName;
-  if (headerMap.balanceColZero !== -1) row[headerMap.balanceColZero] = 0;
-  if (headerMap.availableColZero !== -1) row[headerMap.availableColZero] = 0;
-  if (headerMap.bufferColZero !== -1) row[headerMap.bufferColZero] = 0;
+  // A missing opening balance is not $0. Callers pass a number, including
+  // an explicit 0, only when that balance is confirmed. Available Now and
+  // Min Buffer stay blank here; Add new writes them only on an explicit opt-in.
+  if (headerMap.balanceColZero !== -1 && bankNumericEvidencePresent_(currentBalance)) {
+    row[headerMap.balanceColZero] = round2_(currentBalance);
+  }
   if (headerMap.typeColZero !== -1) row[headerMap.typeColZero] = typeStr;
   if (headerMap.policyColZero !== -1) row[headerMap.policyColZero] = policyStr;
   if (headerMap.priorityColZero !== -1) {
@@ -754,7 +757,9 @@ function deleteAccountsRowByExactName_(sheet, accountName) {
 
 /**
  * Creates INPUT - Bank Accounts row (current year block) + SYS - Accounts row.
- * Optional opening balance for the current calendar year only.
+ * An explicit opening balance, including $0, is current-month evidence.
+ * openingBalanceUnknown creates the account without a monthly balance,
+ * SYS current balance, Available Now, or Min Buffer.
  * @param {{
  *   accountName: string,
  *   type: string,
@@ -762,6 +767,7 @@ function deleteAccountsRowByExactName_(sheet, accountName) {
  *   priority?: number|string,
  *   openingBalanceDate?: string,
  *   openingBalance?: number|string,
+ *   openingBalanceUnknown?: boolean,
  *   setAvailableFromOpening?: boolean,
  *   setMinBufferFromOpening?: boolean
  * }} payload
@@ -845,32 +851,27 @@ function addBankAccountFromDashboard(payload) {
     priorityNum = parsed;
   }
 
-  const openingDateStr = String(payload.openingBalanceDate || '').trim();
-  const obRaw = payload.openingBalance;
-  const hasOpeningDate = !!openingDateStr;
-  const hasOpeningAmount =
-    obRaw !== '' && obRaw !== null && obRaw !== undefined && String(obRaw).trim() !== '';
-
+  const opening = resolveBankOpeningBalance_(payload);
+  const openingDateStr = opening.unknown ? '' : String(payload.openingBalanceDate || '').trim();
   let openingDate = null;
-  let openingAmount = null;
-
-  if (hasOpeningDate || hasOpeningAmount) {
-    if (!hasOpeningDate || !hasOpeningAmount) {
-      throw new Error('For an opening balance, provide both date and amount.');
-    }
-    openingDate = parseIsoDateLocal_(openingDateStr);
-    if (isNaN(openingDate.getTime())) throw new Error('Invalid opening balance date.');
-    openingAmount = round2_(toNumber_(obRaw));
-    if (isNaN(openingAmount)) throw new Error('Opening balance must be a valid number.');
-
-    const cy = getCurrentYear_();
-    if (openingDate.getFullYear() !== cy) {
-      throw new Error('Opening balance date must be in ' + cy + ' (same year as the bank block you are extending).');
+  if (!opening.unknown) {
+    if (openingDateStr) {
+      openingDate = parseIsoDateLocal_(openingDateStr);
+      if (isNaN(openingDate.getTime())) throw new Error('Invalid opening balance date.');
+      const cy = getCurrentYear_();
+      if (openingDate.getFullYear() !== cy) {
+        throw new Error('Opening balance date must be in ' + cy + ' (same year as the bank block you are extending).');
+      }
+    } else {
+      openingDate = stripTime_(new Date());
     }
   }
 
-  const setAvail = !!payload.setAvailableFromOpening;
-  const setMin = !!payload.setMinBufferFromOpening;
+  // Planning settings are opt-in and only exist when the opening balance
+  // is a confirmed number, including an explicit 0. Unknown never copies
+  // a balance into Available Now or Min Buffer.
+  const setAvail = !opening.unknown && !!payload.setAvailableFromOpening;
+  const setMin = !opening.unknown && !!payload.setMinBufferFromOpening;
 
   // Get a fresh Spreadsheet handle AFTER the inserts so bankSheet
   // resolves reliably on a brand-new workbook. ensureSysAccountsSheet_
@@ -888,23 +889,30 @@ function addBankAccountFromDashboard(payload) {
   }
 
   try {
-    appendAccountsRowForNewBank_(accountsSheet, accountName, typeStr, policyStr, priorityNum);
+    appendAccountsRowForNewBank_(
+      accountsSheet,
+      accountName,
+      typeStr,
+      policyStr,
+      priorityNum,
+      opening.unknown ? null : opening.amount
+    );
   } catch (e2) {
     bankSheet.deleteRow(bankRowNum);
     throw new Error('Could not add the account (rolled back the bank sheet row): ' + (e2.message || e2));
   }
 
   try {
-    if (openingDate && openingAmount !== null) {
-      updateBankAccountsHistory_(accountName, currentYear, openingDate, openingAmount);
+    if (!opening.unknown) {
+      updateBankAccountsHistory_(accountName, currentYear, openingDate, opening.amount);
     }
 
     syncAllAccountsFromLatestCurrentYear_();
 
-    if (openingDate && openingAmount !== null && (setAvail || setMin)) {
+    if (!opening.unknown && (setAvail || setMin)) {
       const opt = {};
-      if (setAvail) opt.availableNow = openingAmount;
-      if (setMin) opt.minBuffer = openingAmount;
+      if (setAvail) opt.availableNow = opening.amount;
+      if (setMin) opt.minBuffer = opening.amount;
       updateAccountsSheetFields_(accountName, opt);
     }
 
@@ -934,7 +942,7 @@ function addBankAccountFromDashboard(payload) {
     appendActivityLog_(ss, {
       eventType: 'bank_account_add',
       entryDate: Utilities.formatDate(stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
-      amount: openingAmount !== null ? Math.abs(openingAmount) : 0,
+      amount: opening.unknown ? '' : Math.abs(opening.amount),
       direction: 'expense',
       payee: accountName,
       category: typeStr,
@@ -947,7 +955,8 @@ function addBankAccountFromDashboard(payload) {
         year: currentYear,
         priority: priorityNum,
         openingBalanceDate: openingDateStr,
-        openingBalance: openingAmount,
+        openingBalance: opening.unknown ? null : opening.amount,
+        openingBalanceUnknown: opening.unknown,
         setAvailableFromOpening: setAvail,
         setMinBufferFromOpening: setMin
       })
@@ -1132,6 +1141,40 @@ function resolveBankMonthlyBalance_(raw) {
   const amount = round2_(typeof raw === 'number' ? raw : Number(text));
   if (!isFinite(amount)) throw new Error('Monthly balance must be a valid number.');
   return { unknown: false, amount: amount };
+}
+
+/**
+ * Explicit $0 is a confirmed opening balance. A blank amount is not $0.
+ * openingBalanceUnknown creates the account with no monthly balance and
+ * no SYS current balance, Available Now, or Min Buffer.
+ * @param {Object} payload
+ * @returns {{unknown: boolean, amount: (number|null)}}
+ */
+function resolveBankOpeningBalance_(payload) {
+  const unknown = !!(payload && payload.openingBalanceUnknown === true);
+  const obRaw = payload ? payload.openingBalance : undefined;
+  const hasAmount = bankNumericEvidencePresent_(obRaw) && String(obRaw).trim() !== '';
+  if (unknown && hasAmount) {
+    throw new Error('Clear the opening balance when it is unknown.');
+  }
+  if (unknown) return { unknown: true, amount: null };
+  if (!hasAmount) {
+    throw new Error(
+      'Enter an opening balance, including 0.00 if the account is actually at zero, or confirm the opening balance is unknown.'
+    );
+  }
+  let parsed;
+  try {
+    parsed = resolveBankMonthlyBalance_(obRaw);
+  } catch (_parseErr) {
+    throw new Error('Opening balance must be a valid number.');
+  }
+  if (parsed.unknown) {
+    throw new Error(
+      'Enter an opening balance, including 0.00 if the account is actually at zero, or confirm the opening balance is unknown.'
+    );
+  }
+  return parsed;
 }
 
 function updateBankAccountValueByDate(payload) {

@@ -490,25 +490,29 @@
               <option value="9" selected>Use last (backup)</option>
             </select>
             <div class="muted" style="margin-top:4px;font-size:12px;">Which account should be used first when multiple accounts are available.</div>
-            <label>Opening balance date</label>
+            <label>Opening balance date (optional)</label>
             <input type="date" id="bank_add_opening_date">
-            <div class="muted" style="margin-top:4px;font-size:12px;">Required if opening balance is non-zero. Leave blank if opening balance is 0.</div>
-            <label>Opening balance amount</label>
-            <input type="text" id="bank_add_opening_value" inputmode="decimal" value="0.00" onfocus="currencyFocus('bank_add_opening_value')" onblur="currencyBlur('bank_add_opening_value')">
-            <div class="muted" style="margin-top:4px;font-size:12px;">Enter <code>0</code> if unknown. Cannot be empty.</div>
+            <div class="muted" style="margin-top:4px;font-size:12px;">Used only when you enter an opening balance, including $0.00. If that date is left blank, the current month is used. A date is not recorded when the opening balance is unknown.</div>
+            <label for="bank_add_opening_value">Opening balance</label>
+            <input type="text" id="bank_add_opening_value" inputmode="decimal" onfocus="currencyFocus('bank_add_opening_value')" onblur="currencyBlur('bank_add_opening_value')">
+            <label for="bank_add_balance_unknown" style="display:flex;align-items:flex-start;gap:8px;font-weight:600;margin-top:8px;">
+              <input type="checkbox" id="bank_add_balance_unknown" style="width:auto;margin-top:3px;" onchange="onBankAddBalanceUnknownChange_()">
+              <span>Opening balance is unknown / not available yet.</span>
+            </label>
+            <div class="muted" style="margin-top:4px;font-size:12px;">Enter <strong>$0.00</strong> only when you have confirmed the balance is actually zero. If you do not know it yet, check the box and leave the opening balance blank. CashCompass will create the account without a monthly balance, current balance, Available Now, or Min Buffer. A blank opening balance is not saved as $0.</div>
             <div class="check-row">
-              <input type="checkbox" id="bank_add_set_available" checked>
-              <label for="bank_add_set_available" style="margin:0;font-weight:normal;">Also set Available Now to opening amount</label>
+              <input type="checkbox" id="bank_add_set_available">
+              <label for="bank_add_set_available" style="margin:0;font-weight:normal;">Also set Available Now to the opening amount. This changes the amount Planning may use.</label>
             </div>
             <div class="check-row">
-              <input type="checkbox" id="bank_add_set_min_buffer" checked>
-              <label for="bank_add_set_min_buffer" style="margin:0;font-weight:normal;">Also set Min Buffer to opening amount</label>
+              <input type="checkbox" id="bank_add_set_min_buffer">
+              <label for="bank_add_set_min_buffer" style="margin:0;font-weight:normal;">Also set Min Buffer to the opening amount. This changes the protected minimum for this account.</label>
             </div>
             <button onclick="createBankAccount()">Create account</button>
           </div>
           <div class="info muted">
             <p style="margin-top:0;">Creates the account and prepares the current year's tracking area automatically when needed.</p>
-            <p>If you use an opening balance, the date must fall in that same year. Type uses common choices plus types already in use; Use policy includes a custom option when needed.</p>
+            <p>An explicit <strong>$0.00</strong> is saved as this month's balance. <strong>Opening balance is unknown / not available yet</strong> creates the account with no monthly balance, current balance, Available Now, or Min Buffer. Available Now and Min Buffer stay unset unless you check those boxes. Checking either one changes Planning settings for this account.</p>
           </div>
         </div>
       </div>
@@ -608,7 +612,13 @@
             <button type="button" id="bank_activity_drawer_close" class="bill-pay-drawer-close" aria-label="Close Account activity" onclick="closeBankAccountActivityDrawer_()">×</button>
           </div>
           <div class="bill-pay-drawer-body">
-            <div class="investment-portfolio-tabs" role="tablist" aria-label="Account activity views">
+            <div class="investment-portfolio-tabs" role="tablist" aria-label="Account activity sources">
+              <button type="button" id="bank_activity_csv_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setBankAccountActivityView_('csv')">CSV</button>
+              <button type="button" id="bank_activity_provider_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setBankAccountActivityView_('provider')">Connected provider / Plaid</button>
+            </div>
+
+            <section id="bank_activity_csv_view">
+            <div class="investment-portfolio-tabs" role="tablist" aria-label="CSV import views" style="margin-top:10px;">
               <button type="button" id="bank_activity_review_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setBankAccountActivityView_('review')">Review pending imports<span id="bank_mode_review_badge" class="muted" style="margin-left:6px;display:none;"></span></button>
               <button type="button" id="bank_activity_import_btn" class="segment-btn" role="tab" aria-selected="false" hidden onclick="setBankAccountActivityView_('import')">Paste CSV</button>
             </div>
@@ -657,6 +667,14 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                   <button type="button" id="bank_import_csv_stage_btn" class="small-btn primary" onclick="confirmBankImportCsvPasteStage_()" disabled>Stage rows for review</button>
                 </div>
               </div>
+            </section>
+            </section>
+
+            <section id="bank_activity_provider_view" hidden>
+              <div class="muted" style="margin-bottom:8px;font-size:13px;line-height:1.4;">
+                Preview Plaid balances for bank accounts that are already connected and already mapped. This preview is read-only. It does not match, stage, or apply. CashCompass values stay authoritative until you use <strong>Apply Selected Updates</strong> on Connected.
+              </div>
+              <div id="bank_activity_provider_list"></div>
             </section>
             <div id="bank_activity_status" class="status" aria-live="polite"></div>
           </div>

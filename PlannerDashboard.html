@@ -428,18 +428,24 @@
 
     <label>Opening balance date (optional)</label>
     <input type="date" id="bank_add_opening_date">
+    <div class="muted" style="margin-top:4px;font-size:12px;">Used only when you enter an opening balance, including $0.00. If that date is left blank, the current month is used. A date is not recorded when the opening balance is unknown.</div>
 
-    <label>Opening balance amount (optional)</label>
+    <label for="bank_add_opening_value">Opening balance</label>
     <input type="text" id="bank_add_opening_value" inputmode="decimal" onfocus="currencyFocus('bank_add_opening_value')" onblur="currencyBlur('bank_add_opening_value')">
+    <label for="bank_add_balance_unknown" style="display:flex;align-items:flex-start;gap:8px;font-weight:600;margin-top:8px;">
+      <input type="checkbox" id="bank_add_balance_unknown" style="width:auto;margin-top:3px;" onchange="onBankAddBalanceUnknownChange_()">
+      <span>Opening balance is unknown / not available yet.</span>
+    </label>
+    <div class="muted" style="margin-top:4px;font-size:12px;">Enter <strong>$0.00</strong> only when you have confirmed the balance is actually zero. If you do not know it yet, check the box and leave the opening balance blank. A blank opening balance is not saved as $0.</div>
 
     <div class="check-row">
-      <input type="checkbox" id="bank_add_set_available" checked>
-      <label for="bank_add_set_available" style="margin:0;font-weight:normal;">Also set Available Now to opening amount</label>
+      <input type="checkbox" id="bank_add_set_available">
+      <label for="bank_add_set_available" style="margin:0;font-weight:normal;">Also set Available Now to the opening amount. This changes the amount Planning may use.</label>
     </div>
 
     <div class="check-row">
       <input type="checkbox" id="bank_add_set_min_buffer">
-      <label for="bank_add_set_min_buffer" style="margin:0;font-weight:normal;">Also set Min Buffer to opening amount</label>
+      <label for="bank_add_set_min_buffer" style="margin:0;font-weight:normal;">Also set Min Buffer to the opening amount. This changes the protected minimum for this account.</label>
     </div>
 
     <button onclick="createBankAccount()">Create account</button>
@@ -1128,17 +1134,56 @@ function resetBankAddForm_() {
   const pr = document.getElementById('bank_add_priority');
   const d = document.getElementById('bank_add_opening_date');
   const v = document.getElementById('bank_add_opening_value');
+  const unknown = document.getElementById('bank_add_balance_unknown');
   const ca = document.getElementById('bank_add_set_available');
   const cm = document.getElementById('bank_add_set_min_buffer');
   if (n) n.value = '';
   if (t) t.value = '';
   if (p) p.value = '';
   if (pr) pr.value = '9';
-  if (d) d.value = '';
-  if (v) v.value = '';
-  if (ca) ca.checked = true;
-  if (cm) cm.checked = false;
+  if (unknown) unknown.checked = false;
+  if (d) {
+    d.disabled = false;
+    d.value = '';
+  }
+  if (v) {
+    v.disabled = false;
+    v.value = '';
+  }
+  if (ca) {
+    ca.disabled = false;
+    ca.checked = false;
+  }
+  if (cm) {
+    cm.disabled = false;
+    cm.checked = false;
+  }
   clearBankAddNameError_();
+}
+
+function onBankAddBalanceUnknownChange_() {
+  const box = document.getElementById('bank_add_balance_unknown');
+  const valueEl = document.getElementById('bank_add_opening_value');
+  const dateEl = document.getElementById('bank_add_opening_date');
+  const availableEl = document.getElementById('bank_add_set_available');
+  const bufferEl = document.getElementById('bank_add_set_min_buffer');
+  const unknown = !!(box && box.checked);
+  if (valueEl) {
+    valueEl.disabled = unknown;
+    if (unknown) valueEl.value = '';
+  }
+  if (dateEl) {
+    dateEl.disabled = unknown;
+    if (unknown) dateEl.value = '';
+  }
+  if (availableEl) {
+    availableEl.disabled = unknown;
+    if (unknown) availableEl.checked = false;
+  }
+  if (bufferEl) {
+    bufferEl.disabled = unknown;
+    if (unknown) bufferEl.checked = false;
+  }
 }
 
 function clearBankAddNameError_() {
@@ -1329,7 +1374,6 @@ function createBankAccount() {
   const openDate = document.getElementById('bank_add_opening_date').value.trim();
   const openRaw = document.getElementById('bank_add_opening_value').value;
   const hasDate = !!openDate;
-  const hasAmt = String(openRaw || '').trim() !== '';
 
   if (!name) {
     showBankAddNameError_('Account name is required.');
@@ -1352,15 +1396,25 @@ function createBankAccount() {
     return;
   }
 
-  if (hasDate !== hasAmt) {
-    setStatus('bank_status', 'For an opening balance, enter both date and amount (or leave both blank).', true);
+  const unknownEl = document.getElementById('bank_add_balance_unknown');
+  const openingUnknown = !!(unknownEl && unknownEl.checked);
+  const openRawStr = String(openRaw == null ? '' : openRaw).trim();
+  if (openingUnknown && openRawStr) {
+    setStatus('bank_status', 'Clear the opening balance when it is unknown.', true);
+    return;
+  }
+  if (!openingUnknown && !openRawStr) {
+    setStatus('bank_status', 'Enter an opening balance, including $0.00 if the account is actually at zero, or confirm the opening balance is unknown.', true);
     return;
   }
 
-  const openNum = hasAmt ? toNumber(openRaw) : NaN;
-  if (hasAmt && isNaN(openNum)) {
-    setStatus('bank_status', 'Opening balance must be a valid number.', true);
-    return;
+  let openNum = null;
+  if (!openingUnknown) {
+    openNum = toNumber(openRaw);
+    if (isNaN(openNum)) {
+      setStatus('bank_status', 'Opening balance must be a valid number.', true);
+      return;
+    }
   }
 
   const payload = {
@@ -1368,12 +1422,14 @@ function createBankAccount() {
     type: typeStr,
     usePolicy: policyStr,
     priority: priNum,
-    setAvailableFromOpening: document.getElementById('bank_add_set_available').checked,
-    setMinBufferFromOpening: document.getElementById('bank_add_set_min_buffer').checked
+    setAvailableFromOpening: openingUnknown ? false : document.getElementById('bank_add_set_available').checked,
+    setMinBufferFromOpening: openingUnknown ? false : document.getElementById('bank_add_set_min_buffer').checked
   };
-  if (hasDate && hasAmt) {
-    payload.openingBalanceDate = openDate;
+  if (openingUnknown) {
+    payload.openingBalanceUnknown = true;
+  } else {
     payload.openingBalance = openNum;
+    if (hasDate) payload.openingBalanceDate = openDate;
   }
 
   setStatusLoading('bank_status', 'Creating bank account…');
