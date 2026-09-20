@@ -8,6 +8,45 @@
 
 ---
 
+## Activity architecture status (2026-09-19)
+
+This is the current import and review model. It does not reopen frozen Planning Overview or Debt UX, and it does not create a second import system. CSV/PDF file adapters and Connected Plaid retrieval are separate sources that must converge on preview-first, explicit confirmation, and CashCompass INPUT/SYS authority until the user confirms.
+
+### Completed foundations
+
+- Manual **Update / Add new / Manage** for Bank Accounts, Investments, Houses, and Debts: Update records a confirmed monthly (or field) value; Add new creates the account or property; Manage edits identity/settings or stops tracking.
+- Explicit **$0.00** is valid confirmed evidence. Unknown or blank is not $0 and does not create evidence (Bank Update/Add new, Investments Add new, Houses Add/Update).
+- Bank monthly-balance saves leave **Available Now**, **Minimum Buffer**, **Use Policy**, and **Priority** unchanged unless the user explicitly opts in. Planning continues to use CashCompass INPUT/SYS values.
+- **Investments → Portfolio activity** is the existing investment import/review surface (Robinhood CSV, M1 statement PDF, Fidelity 401(k) statement PDF, and E*TRADE preview adapters as implemented). Preview does not write until an explicit save/apply in that drawer.
+- **Bank Accounts → Account activity** is the CSV and Connected provider/Plaid review surface. CSV paste remains feature-flagged off. Review pending imports supports explicit Add as new, Match, Ignore, preview, and confirmed apply. Staging and ingest do not auto-match-write a balance.
+- Account activity **Connected provider / Plaid** currently previews **Current balance** only for already-connected, already-mapped bank accounts. That preview is read-only and does not apply.
+- **Connected** tabs remain institution connection management: Connect, Reload, mapping, reconnect, disconnect, and provider retrieval (**Import Data**). Bank and Debt **Apply Selected Updates** still live on Connected. Connected is not the CSV/PDF import surface. Optional provider data does not create a Data Readiness action by itself.
+- Data Readiness treats a valid current monthly CashCompass value as Current even when provider evidence is stale, unmatched, or unused.
+
+### Current in-progress work
+
+- Keep CSV and Plaid distinct inside Account activity. Do not move Plaid apply off Connected until the drawer has equivalent provider preview and explicit apply.
+- Do not enable CSV paste for customers until the Account activity CSV workflow is accepted as complete.
+- Do not start Debt activity, Property valuations, or a second provider-apply workflow in this cluster.
+
+### Next implementation slices
+
+These are planned, not complete:
+
+- **a. CSV enablement and full Account activity workflow** — turn on Paste CSV only after preview, link, apply, and ignore coverage is accepted in the drawer.
+- **b. Moving confirmed Plaid bank apply into Account activity after parity** — reuse `plaidImportApplyCashUpdates_`; then remove the duplicate Connected apply UI. Do not run two bank apply surfaces.
+- **c. Debt activity drawer** — same drawer pattern as Portfolio activity / Account activity; do not add a top-level import page.
+- **d. Debt provider/file review and explicit apply** — Connected Import Data may open Debt activity with the provider source preselected. `debt_import.js` stays shadow-only. Provider facts must not write `INPUT - Debts` until the user confirms in Debt activity.
+- **e. Property valuations drawer** — dated house evidence review; no live listing APIs in this slice.
+
+### Deferred / future work
+
+- **f. Optional Zillow/Redfin or uploaded valuation evidence** — provider-neutral property evidence only if later approved. No live Zillow/Redfin APIs are in the current product.
+- **g. Remaining investment imports** — 401(k) follow-ups, Schwab, Stash, E*TRADE, and Robinhood/M1 follow-ups beyond the adapters already in Portfolio activity. Do not invent a second investment import page.
+- **h. Income, debt payoff, HELOC, mortgage, tax, and portfolio decision features** — including residual Rolling Financial Plan / Multi-Broker Portfolio Intelligence ranking, Whole-Household Debt Freedom Planner, and related north-star work. These do not interrupt the activity-drawer sequence.
+
+---
+
 ## Current status (2026-09-09)
 
 **Completed:**
@@ -63,19 +102,23 @@
   or broadly import transactions. Any authority migration requires a later
   explicit checkpoint.
 - **Current milestone cluster:** **Connected Accounts — Plaid Import, Review, and
-  Controlled Debt Apply.** Trial backend revision
-  `cashcompass-plaid-backend-00006-lgd` and isolated Central `@403` established
-  read-only import and comparison. **Bounded runtime has proven controlled Debt
-  Apply** (Chase / Credit Card - SW: Current Balance and Credit Limit) through
-  the canonical `updateDebtField` writer with server-side revalidation, Activity
-  Log provenance `source=PLAID`, and review-table refresh without full reconnect.
-  Apply latency optimization is in progress. **Bank Account Apply** and
-  **Investment Apply** remain out of scope for this cluster. **PLAID IS A
-  REVIEWED IMPORT CHANNEL:** Plaid retrieves candidate data, CashCompass previews
-  it, the user selects approved fields, and Apply writes only through reviewed
-  canonical writers; no silent overwrite. Central remains on GCP Default, Beta
-  stays `@106`, bounded deployment is owner-operated, Sandbox remains intact,
-  and `cashcompass-application` remains **PREPARED BUT UNATTACHED / PARKED**.
+  Controlled Apply, with Account activity as the Bank CSV/Plaid review host.**
+  See **Activity architecture status (2026-09-19)** for completed vs planned
+  slices. Trial backend revision `cashcompass-plaid-backend-00006-lgd` and
+  isolated Central `@403` established read-only import and comparison.
+  **Bounded runtime has proven controlled Debt Apply** (Chase / Credit Card - SW:
+  Current Balance and Credit Limit) through the canonical `updateDebtField`
+  writer with server-side revalidation, Activity Log provenance `source=PLAID`,
+  and review-table refresh without full reconnect. **Bank Apply Selected Updates
+  exists on Connected** and Account activity currently previews Current balance
+  only; moving bank apply into the drawer waits for parity. **Investment Apply**
+  remains out of scope for this cluster. **PLAID IS A REVIEWED IMPORT CHANNEL,
+  NOT A FILE IMPORT:** Plaid retrieves candidate data; CSV/PDF stay file
+  adapters in the domain activity drawer. CashCompass previews values, the user
+  selects approved fields, and Apply writes only through reviewed canonical
+  writers; no silent overwrite. Central remains on GCP Default, Beta stays
+  `@106`, bounded deployment is owner-operated, Sandbox remains intact, and
+  `cashcompass-application` remains **PREPARED BUT UNATTACHED / PARKED**.
   Existing Part 2A-1 through 2A-5 remain enabling foundation, not
   production-ready Planning authority for all domains.
 - **E*TRADE Phase A (preview-only Transactions CSV):** implemented locally — synthetic fixtures, `investment_etrade_csv.js`, adapter registry entries, regression tests. **Not** committed/deployed until owner approval; **not** persistence, dashboard upload, or production import. **Next:** Phase B Positions PDF + Phase C Gains & Losses PDF preview (`ETRADE_SOURCE_MAPPING.md`). M1 and Schwab source inspection remain future.
@@ -91,7 +134,7 @@
   `3j` responsive/accessibility closeout remain deferred, not waived. Beta
   remains `@106`; bounded deployment and workbook control remain with the user.
 - **Independent advocate gate added 2026-07-23:** the approved isolated interactive writer journey confirmed P1 trust defects in formatted bank-amount replacement, Income/Setup classification consistency, Bills Pay handoff/occurrence feedback, and normal-path implementation terminology. The bank replacement defect is runtime-closed on isolated `@175`, the Income/Setup fix on `@176`/`@178`, the contained language/responsive wave on `@177`, `REG-017` on `@179`, exact-owner `REG-015` on `@181`, readiness-refresh `REG-019` on `@182`, Bills completion semantics on `@193`, controlled failure evidence through `@203`, and Retirement runtime truth on `@211`. The last formal advocate score is **8.3/10** pending a fresh full-score run. Medium/narrow replay and accessibility remain open. No Beta, mapped-user, Golden, or configured-default workbook was used by the Harness; bounded inspection remained user-controlled. These findings are sequenced in `TODO.md → UX Backlog (Version 1) → Independent advocate priorities`.
-- **Tracked-editor consistency polish completed 2026-07-24:** Bills use **Due · Add · Manage**. Houses, Bank Accounts, Investments, and Debts use **Update · Add · Manage**, with explicit Setup Add/Manage handoffs, responsive active-item inventories, and a shared UI layer for mode selection, list rendering, focus, and empty states. Update is Save-only; Manage is the single lifecycle-maintenance surface for guarded Stop tracking. Bank Import / Review imports remain secondary tools under Manage accounts. First-Run V4 run `FR-a1df6d9b-c123-4759-b08e-438d4047bf4c` passed 10/10 and Populated V3 run `FR-158bd6a2-bcb9-41b3-addc-180369266010` passed 13/13 on isolated Central `@195`, each with Restricted single-owner sharing, zero browser errors, and verified Trash cleanup.
+- **Tracked-editor consistency polish completed 2026-07-24:** Bills use **Due · Add · Manage**. Houses, Bank Accounts, Investments, and Debts use **Update · Add · Manage**, with explicit Setup Add/Manage handoffs, responsive active-item inventories, and a shared UI layer for mode selection, list rendering, focus, and empty states. Update is Save-only; Manage is the single lifecycle-maintenance surface for guarded Stop tracking. Bank CSV and Connected provider review live in **Account activity** under Manage; Connected remains connection management and provider retrieval, not the CSV/PDF import surface. First-Run V4 run `FR-a1df6d9b-c123-4759-b08e-438d4047bf4c` passed 10/10 and Populated V3 run `FR-158bd6a2-bcb9-41b3-addc-180369266010` passed 13/13 on isolated Central `@195`, each with Restricted single-owner sharing, zero browser errors, and verified Trash cleanup.
 - **Activity correction elevated to the broad-Beta gate 2026-07-26:** Activity must distinguish audit evidence from correctable financial operations. The first slice (`5g`) replaces the misleading Remove-for-every-row presentation with an **Action** column, shows **Remove donation** only for eligible Donation rows, exposes no action control for Planner/email/import or other unsupported rows, and preserves the server-side donation-only rejection. Later slices add immutable, precondition-gated correction for Quick Add, linked Bill occurrences, Upcoming payments/lifecycle, and compound House Expenses; entity lifecycle events route to their owning Manage workflow and system/import rows remain audit-only. Full scope and estimates: `FULL_BETA_REMAINING_PLAN.md → 5g–5m`; safety contract: `TODO.md → Activity — Correction / reverse transaction`.
 - **Isolated `@196` advocate reconciliation:** `5g` passed interactively. The read-only **7.2/10** run is evidence-limited and does not replace the formal writer-inclusive **8.3/10** score. The resulting Beta work is mapped as `3l` Overview health prerequisite/freshness trust, expanded `3j` programmatic labels and target sizes, `3m` form readiness/customer language, plus `3b`, `3c`, `3h`, and `3i`; `2d` is now closed as `REG-026`. Each fix must add or extend the exact permanent UI/server/browser regression described in `FULL_BETA_REMAINING_PLAN.md`; generic page-load coverage is not sufficient.
 - **Isolated `@197` Overview trust closure:** First-Run V5 run `FR-23fd31cb-df7b-4f2e-8202-586e70254af0` passed 11/11 and Populated V4 run `FR-9a7b266a-681e-467d-8489-cf8218be666f` passed 14/14. Both used a new Restricted, single-owner disposable workbook, passed `health_prerequisite_truth`, recorded zero errors, and verified exact-fixture Trash cleanup. The console-owned disposable-runner flag returned to **OFF**. Beta remained `@106`; no bounded, mapped-user, configured-default, Golden, or administrator workbook was a writer target.
@@ -103,9 +146,9 @@
 
 ## Reconciled remaining-work inventory (2026-08-23)
 
-This classification is the current answer to what is complete, current,
-Beta-gating, intentionally deferred, and future. Detailed IDs and estimates
-remain in `FULL_BETA_REMAINING_PLAN.md`.
+Import and review sequencing is superseded by **Activity architecture status
+(2026-09-19)** above. This table remains the broader Beta inventory. Detailed
+IDs and estimates remain in `FULL_BETA_REMAINING_PLAN.md`.
 
 | Category | Item | Current status | Broad-Beta blocker? | Dependency / timing |
 |---|---|---|---|---|

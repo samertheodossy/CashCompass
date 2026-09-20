@@ -237,13 +237,13 @@ assert.match(body,
   /Portfolio activity[\s\S]*?inv_portfolio_drawer_backdrop[\s\S]*?inv_activity_account[\s\S]*?inv_portfolio_account_content[\s\S]*?Portfolio[\s\S]*?Import CSV[\s\S]*?inv_activity_file[\s\S]*?Preview import[\s\S]*?Save imported activity/,
   'Manage Investments must open an account-first Portfolio Activity drawer with Portfolio and Import views');
 assert.match(body,
-  /Choose an account to view its holdings, update recurring plans, or import activity\. Each account is kept separate\./,
+  /Choose an account to view portfolio holdings and import statements when available for that provider\./,
   'Portfolio Activity account guidance must use customer-facing language');
 assert.doesNotMatch(investmentClient,
   /select\.options\.length === 2\) select\.selectedIndex = 1/,
   'Portfolio Activity must not auto-select the only eligible account');
 assert.match(investmentClient,
-  /function openInvestmentPortfolioDrawer_[\s\S]*?function onInvestmentPortfolioAccountChanged_[\s\S]*?getInvestmentPortfolioActivityFromDashboard[\s\S]*?function previewInvestmentActivityImport_[\s\S]*?tickerDecisions[\s\S]*?function saveInvestmentActivityImport_[\s\S]*?expectedDigest/,
+  /function openInvestmentPortfolioDrawer_[\s\S]*?function onInvestmentPortfolioAccountChanged_[\s\S]*?getInvestmentPortfolioDrawerFromDashboard[\s\S]*?function previewInvestmentActivityImport_[\s\S]*?tickerDecisions[\s\S]*?function saveInvestmentActivityImport_[\s\S]*?expectedDigest/,
   'Client must choose an account, load its portfolio, review ticker decisions, and preview before guarded Save');
 assert.match(investmentClient,
   /function saveInvestmentTickerPlan_[\s\S]*?New recurring purchases detected[\s\S]*?your plan remains/,
