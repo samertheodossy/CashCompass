@@ -11,7 +11,7 @@
     "test:plaid-main-app": "node scripts/checkPlaidMainAppRegressions.mjs",
     "test:plaid-provisioning": "node scripts/checkPlaidProvisioningRegressions.mjs",
     "test:maintenance": "node scripts/checkMaintenanceRegressions.mjs && node scripts/checkCashFlowAutoEntryFormatRegressions.mjs",
-    "test:dashboard-ux": "node scripts/checkDashboardUxRegressions.mjs",
+    "test:dashboard-ux": "node scripts/checkDashboardUxRegressions.mjs && node scripts/checkDebtAccountActivityRegressions.mjs",
     "test:rfp-metadata": "node scripts/checkRfpMetadataRegressions.mjs",
     "test:rfp-capital-allocation": "node scripts/checkRfpCapitalAllocationRegressions.mjs",
     "test:portfolio-foundation": "node scripts/checkPortfolioFoundationRegressions.mjs && node scripts/checkPortfolioIntelligenceHoldingsContractRegressions.mjs && node scripts/checkRobinhoodCsvImportRegressions.mjs && node scripts/checkInvestmentPortfolioDrawerRegressions.mjs && node scripts/checkInvestmentUnknownBalanceRegressions.mjs",

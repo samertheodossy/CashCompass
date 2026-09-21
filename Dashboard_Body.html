@@ -2248,7 +2248,8 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <div>
             <p class="muted" style="margin:0;">Every debt account you currently track. Use <strong>Edit</strong> to update details, or <strong>Stop tracking</strong> to deactivate (history is preserved).</p>
           </div>
-          <div>
+          <div class="tracked-editor-actions">
+            <button type="button" id="debt_account_activity_btn" class="small-btn" onclick="openDebtAccountActivityDrawer_('provider')">Debt activity</button>
             <button type="button" id="debt_show_inactive_btn" class="small-btn debt-inactive-toggle" style="display:none;" onclick="toggleInactiveDebtsView_()" aria-expanded="false" aria-controls="debt_inactive_wrap"><span class="debt-caret" aria-hidden="true">&#9656;</span>Show inactive debts</button>
           </div>
         </div>
@@ -2309,7 +2310,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
 
       <div id="debt_mode_connected_wrap" class="bank-mode-wrap">
         <h3>Optional provider connections</h3>
-        <p class="muted">Connect institutions only when you want to compare provider data with your CashCompass debt values. Planning continues to use your CashCompass balances and terms.</p>
+        <p class="muted">Connect institutions only when you want to compare provider data with your CashCompass debt values. Planning continues to use your CashCompass balances and terms. Connected manages the provider connection. Import Data opens Debt activity with Connected provider / Plaid selected. CashCompass values change only after explicit confirmation. <strong>Apply Selected Updates</strong> on Connected remains available.</p>
         <div class="warning-box">Plaid is optional. Connected debt evidence is managed securely by CashCompass and remains comparison-only.</div>
         <div class="tracked-editor-actions" style="margin-top:12px;">
           <button type="button" id="plaid_main_debt_connect_btn" class="small-btn primary" onclick="plaidMainConnect_('DEBT')">Connect institution</button>
@@ -2320,6 +2321,33 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       </div>
 
       <div id="debt_status" class="status"></div>
+
+      <div id="debt_activity_drawer_backdrop" class="bill-pay-drawer-backdrop" hidden onclick="onDebtAccountActivityDrawerBackdropClick_(event)">
+        <aside id="debt_activity_drawer" class="bill-pay-drawer investment-portfolio-drawer" role="dialog" aria-modal="true" aria-labelledby="debt_activity_drawer_title" tabindex="-1">
+          <div class="bill-pay-drawer-head">
+            <div>
+              <div class="bill-pay-drawer-eyebrow">Debt accounts</div>
+              <h2 id="debt_activity_drawer_title">Debt activity</h2>
+            </div>
+            <button type="button" id="debt_activity_drawer_close" class="bill-pay-drawer-close" aria-label="Close Debt activity" onclick="closeDebtAccountActivityDrawer_()">×</button>
+          </div>
+          <div class="bill-pay-drawer-body">
+            <div class="investment-portfolio-tabs" role="tablist" aria-label="Debt activity sources">
+              <button type="button" id="debt_activity_provider_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setDebtAccountActivityView_('provider')">Connected provider / Plaid</button>
+            </div>
+            <section id="debt_activity_provider_view">
+              <div class="muted" style="margin-bottom:8px;font-size:13px;line-height:1.4;">
+                This review uses the same Connected provider field mapping. Preview does not write. Matching fields show <strong>Same</strong> and cannot be selected. Select changed fields, then confirm the account, field, and value. Credit Left and Provider Available Credit are derived or informational only. Connection management stays on Connected. <strong>Apply Selected Updates</strong> on Connected remains available.
+              </div>
+              <div id="debt_activity_provider_list"></div>
+            </section>
+            <div id="debt_activity_status" class="status" aria-live="polite"></div>
+          </div>
+          <div class="bill-pay-drawer-actions">
+            <button type="button" class="small-btn" onclick="closeDebtAccountActivityDrawer_()">Close</button>
+          </div>
+        </aside>
+      </div>
     </div>
 
     <div id="retirement" class="panel" role="tabpanel" aria-labelledby="planning_tool_retirement">

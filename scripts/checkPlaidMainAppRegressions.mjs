@@ -146,11 +146,14 @@ assert(client.includes('plaidMainApplySelectedUpdates_') &&
 assert(client.includes('plaidMainOpenBankAccountActivityFromImportData_') &&
   client.includes("openBankAccountActivityDrawer_('provider')") &&
   /plaidMainRenderAccountActions_[\s\S]{0,2200}plaidMainOpenBankAccountActivityFromImportData_\(\)/.test(client) &&
-  /plaidMainRenderAccountActions_[\s\S]{0,2800}plaidMainImportData_\(domain, connection, account\)/.test(client) &&
+  /plaidMainRenderAccountActions_[\s\S]{0,3600}plaidMainImportData_\(domain, connection, account\)/.test(client) &&
   /function plaidMainOpenBankAccountActivityFromImportData_[\s\S]{0,400}openBankAccountActivityDrawer_\('provider'\)/.test(client) &&
+  client.includes('plaidMainOpenDebtAccountActivityFromImportData_') &&
+  /plaidMainRenderAccountActions_[\s\S]{0,2800}plaidMainOpenDebtAccountActivityFromImportData_\(connection, account\)/.test(client) &&
+  /function plaidMainOpenDebtAccountActivityFromImportData_[\s\S]{0,500}openDebtAccountActivityDrawer_\('provider'/.test(client) &&
   /plaidMainBuildAccountCard_[\s\S]{0,2500}showInlineReview[\s\S]{0,200}plaidMainAccountDomain_\(account\) !== 'CASH'/.test(client) &&
   /function loadPlaidConnectedAccounts_[\s\S]{0,2800}var cached = plaidMainState_\.metadataByDomain/.test(client),
-  'Bank Import Data opens Account activity, hides inline bank review, and keeps cached connections if Plaid is unavailable');
+  'Bank Import Data opens Account activity, Debt Import Data opens Debt activity, inline debt review remains, and cached connections stay if Plaid is unavailable');
 
 assert(client.includes('Importing data…') &&
   !client.includes('Importing provider data…') &&

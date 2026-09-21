@@ -262,6 +262,22 @@ assert(bridge.includes('function plaidImportApplyCashUpdatesFromAccountActivity'
   cashApplyInner.includes('updateMinBuffer: false'),
   'Account activity bank apply must confirm Current balance then reuse the canonical cash Apply writer');
 
+assert(bridge.includes('function plaidImportApplyDebtUpdatesFromAccountActivity') &&
+  /plaidImportApplyDebtUpdatesFromAccountActivity[\s\S]{0,1200}plaidImportApplyDebtUpdates_\(input/.test(bridge) &&
+  /plaidImportApplyDebtUpdatesFromAccountActivity[\s\S]{0,1200}guardStaleDueDate: true/.test(bridge) &&
+  /plaidImportAssertAccountActivityDebtApplyPayload_[\s\S]{0,400}confirmed !== true/.test(bridge) &&
+  /plaidImportAssertAccountActivityDebtApplyPayload_[\s\S]{0,900}PLAID_IMPORT_DEBT_APPLY_KEYS_/.test(bridge) &&
+  /plaidImportAssertAccountActivityDebtApplyPayload_[\s\S]{0,900}PLAID_IMPORT_DEBT_DERIVED_KEYS_/.test(bridge),
+  'Debt activity apply must confirm selected fields then reuse the canonical debt Apply writer');
+assert(/function plaidImportApplyDebtUpdates\(payload\)[\s\S]{0,500}plaidImportApplyDebtUpdates_\(payload\)/.test(bridge) &&
+  !/function plaidImportApplyDebtUpdates\(payload\)[\s\S]{0,500}guardStaleDueDate/.test(bridge),
+  'Connected Apply Selected Updates must not use the Debt activity stale due-date guard');
+assert(!client.includes('plaidImportApplyDebtUpdatesFromAccountActivity') &&
+  client.includes('plaidMainOpenDebtAccountActivityFromImportData_') &&
+  /openDebtAccountActivityDrawer_\('provider'/.test(client) &&
+  !client.includes('confirmDebtActivityProviderApply_'),
+  'Connected Import Data opens Debt activity and does not call the Debt activity apply wrapper');
+
 assert(/plaidMainApplySelectedUpdates_[\s\S]{0,1500}plaidMainEnsureAccountReviewExpanded_/.test(client) &&
   /plaidMainShouldForceReviewExpanded_[\s\S]{0,400}applyingKeys/.test(client) &&
   /plaidMainShouldForceReviewExpanded_[\s\S]{0,400}isError/.test(client),

@@ -16,8 +16,11 @@
  *   updateBankAccountValueByDate_ after server-side revalidation; records Activity
  *   Log provenance source=PLAID. Account activity bank apply
  *   (plaidImportApplyCashUpdatesFromAccountActivity) requires confirmed Current
- *   balance selection and reuses plaidImportApplyCashUpdates_. Investment Apply
- *   is out of scope.
+ *   balance selection and reuses plaidImportApplyCashUpdates_. Debt activity
+ *   (plaidImportApplyDebtUpdatesFromAccountActivity) requires confirmed
+ *   Balance, APR, Minimum payment, Due date, and/or Credit Limit selection and
+ *   reuses plaidImportApplyDebtUpdates_. Derived Credit Left and Available
+ *   credit cannot be selected. Investment Apply is out of scope.
  */
 var PLAID_IMPORT_ENABLED_KEY_ = 'PLAID_IMPORT_ENABLED';
 var PLAID_IMPORT_REVIEW_BASELINE_KEY_PREFIX_ = 'PLAID_IMPORT_REVIEW_BASELINE_V1_';
@@ -1426,6 +1429,48 @@ function plaidImportDueDayFromIso_(value) {
   return day >= 1 && day <= 31 ? day : null;
 }
 
+function plaidImportParseIsoDateParts_(value) {
+  var match = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
+}
+
+function plaidImportCalendarDateIsPast_(importedParts, todayParts) {
+  if (!importedParts || !todayParts) return false;
+  if (importedParts.year !== todayParts.year) return importedParts.year < todayParts.year;
+  if (importedParts.month !== todayParts.month) return importedParts.month < todayParts.month;
+  return importedParts.day < todayParts.day;
+}
+
+function plaidImportProviderEffectiveTimestamp_(previewRow) {
+  return String((previewRow && previewRow.effectiveAsOf) ||
+    (previewRow && previewRow.candidate && previewRow.candidate.providerEffectiveAsOf) || '').trim();
+}
+
+function plaidImportProviderDueDateNeedsStaleReview_(previewRow, reviewAnchorDate) {
+  if (!previewRow || !previewRow.candidate) return false;
+  var importedIso = String(previewRow.candidate.textValue || previewRow.candidate.value || '').trim();
+  var importedParts = plaidImportParseIsoDateParts_(importedIso);
+  if (!importedParts) return false;
+  var todayParts = plaidImportParseIsoDateParts_(reviewAnchorDate);
+  if (!todayParts) return false;
+  if (!plaidImportCalendarDateIsPast_(importedParts, todayParts)) return false;
+  return !plaidImportProviderEffectiveTimestamp_(previewRow);
+}
+
+function plaidImportAssertSelectedDueDateNotStale_(selectedKeys, accountPreview, reviewAnchorDate) {
+  var keys = Array.isArray(selectedKeys) ? selectedKeys : [];
+  var wantsDueDate = false;
+  keys.forEach(function(key) {
+    if (String(key || '') === 'NEXT_PAYMENT_DATE') wantsDueDate = true;
+  });
+  if (!wantsDueDate) return;
+  var dateRow = plaidImportFindPreviewRow_(accountPreview && accountPreview.rows, 'NEXT_PAYMENT_DATE');
+  if (plaidImportProviderDueDateNeedsStaleReview_(dateRow, reviewAnchorDate)) {
+    throw new Error('Not applied — this provider due date has already passed and no valid effective date was provided.');
+  }
+}
+
 function plaidImportParseDueDayFromLegacy_(value) {
   if (value === null || value === undefined || value === '') return null;
   var str = String(value).trim();
@@ -1542,9 +1587,10 @@ function plaidImportApplyDebtUpdates(payload) {
   }
 }
 
-function plaidImportApplyDebtUpdates_(payload) {
+function plaidImportApplyDebtUpdates_(payload, options) {
   var timing = plaidImportApplyTimingCreate_();
   var input = payload && typeof payload === 'object' ? payload : {};
+  options = options || {};
   plaidImportRejectBrowserAuthority_(input);
   plaidImportRejectApplyFinancialAuthority_(input);
   plaidImportAssertAllowed_();
@@ -1610,6 +1656,10 @@ function plaidImportApplyDebtUpdates_(payload) {
     }
     if (plaidImportStableJsonHash_(plaidImportCandidatesHashPayload_(accountPreview, aprPref, 'DEBT')) !== baseline.candidateHash) {
       throw new Error('Imported values changed since review. Import Data again.');
+    }
+    if (options.guardStaleDueDate) {
+      plaidImportAssertSelectedDueDateNotStale_(selectedKeys, accountPreview,
+        previewResult.reviewAnchorDate || plaidImportReviewAnchorDate_());
     }
     timing.mark('freshnessValidation');
     var accountName = String(canonicalTarget.legacyKey || '').trim();
@@ -1913,6 +1963,47 @@ function plaidImportApplyCashUpdatesFromAccountActivity(payload) {
   } catch (error) {
     var message = String(error && error.message || '');
     if (/Browser-provided|Import Data again|cannot be applied|not accepted|unavailable for apply|Confirm the account|Current balance only|Select Current balance/i.test(message)) {
+      return { ok: false, error: message };
+    }
+    if (message === 'FINANCIAL_IDENTITY_REVIEW_REQUIRED') {
+      return { ok: false, error: PLAID_IMPORT_IDENTITY_REVIEW_ERROR_ };
+    }
+    return { ok: false, error: PLAID_IMPORT_PUBLIC_ERROR_ };
+  }
+}
+
+function plaidImportAssertAccountActivityDebtApplyPayload_(input) {
+  if (!input || input.confirmed !== true) {
+    throw new Error('Confirm the account, field, and value before applying.');
+  }
+  var selectedKeys = Array.isArray(input.selectedApplyKeys) ? input.selectedApplyKeys : [];
+  if (!selectedKeys.length) throw new Error('Select at least one field before applying.');
+  var seen = {};
+  selectedKeys.forEach(function(key) {
+    var applyKey = String(key || '');
+    if (PLAID_IMPORT_DEBT_DERIVED_KEYS_[applyKey]) {
+      throw new Error('Selected field cannot be applied: ' + applyKey);
+    }
+    if (!PLAID_IMPORT_DEBT_APPLY_KEYS_[applyKey]) {
+      throw new Error('Debt activity can apply Balance, APR, Minimum payment, Due date, and Credit Limit only.');
+    }
+    if (seen[applyKey]) {
+      throw new Error('Select each field only once.');
+    }
+    seen[applyKey] = true;
+  });
+}
+
+function plaidImportApplyDebtUpdatesFromAccountActivity(payload) {
+  try {
+    var input = payload && typeof payload === 'object' ? payload : {};
+    plaidImportRejectBrowserAuthority_(input);
+    plaidImportRejectApplyFinancialAuthority_(input);
+    plaidImportAssertAccountActivityDebtApplyPayload_(input);
+    return plaidImportApplyDebtUpdates_(input, { guardStaleDueDate: true });
+  } catch (error) {
+    var message = String(error && error.message || '');
+    if (/Browser-provided|Import Data again|cannot be applied|not accepted|unavailable for apply|Confirm the account|Balance, APR|Select at least one field|Select each field|already passed and no valid effective date/i.test(message)) {
       return { ok: false, error: message };
     }
     if (message === 'FINANCIAL_IDENTITY_REVIEW_REQUIRED') {

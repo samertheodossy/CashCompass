@@ -373,7 +373,7 @@ const cashApplyInner = sliceFn(
 const activityApplyWrapper = sliceFn(
   bridge,
   'plaidImportApplyCashUpdatesFromAccountActivity(',
-  'plaidImportDisconnect('
+  'plaidImportAssertAccountActivityDebtApplyPayload_('
 );
 assert.match(activityApplyWrapper, /plaidImportAssertAccountActivityCashApplyPayload_/);
 assert.match(activityApplyWrapper, /plaidImportApplyCashUpdates_\(input\)/);
@@ -425,6 +425,9 @@ assert.doesNotMatch(drawer, /Apply Selected Updates/);
 assert.match(drawer, /Import Data opens Account activity|Select <strong>Current balance<\/strong>/);
 assert.match(help, /currently applies <strong>Current balance<\/strong> only/);
 assert.match(help, /Import Data[\s\S]*?opens Account activity/);
-assert.doesNotMatch(help, /Apply Selected Updates/);
+{
+  const helpBank = help.slice(help.indexOf('<h4>Bank accounts</h4>'), help.indexOf('<h4>Investments</h4>'));
+  assert.doesNotMatch(helpBank, /Apply Selected Updates/);
+}
 
 console.log('bank account activity regressions passed');

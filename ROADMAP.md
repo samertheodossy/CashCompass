@@ -20,23 +20,24 @@ This is the current import and review model. It does not reopen frozen Planning 
 - **Investments → Portfolio activity** is the existing investment import/review surface (Robinhood CSV, M1 statement PDF, Fidelity 401(k) statement PDF, and E*TRADE preview adapters as implemented). Preview does not write until an explicit save/apply in that drawer.
 - **Bank Accounts → Account activity** is the CSV and Connected provider/Plaid review surface. CSV paste remains feature-flagged off. Review pending imports supports explicit Add as new, Match, Ignore, preview, and confirmed apply. Staging and ingest do not auto-match-write a balance.
 - Account activity **Connected provider / Plaid** previews **Current balance** for already-connected, already-mapped bank accounts and can apply a selected, confirmed Current balance through `plaidImportApplyCashUpdatesFromAccountActivity` → `plaidImportApplyCashUpdates_`. Preview still does not write. Available Now, Minimum Buffer, Use Policy, and Priority are not updated.
-- **Connected** bank accounts are connection and mapping management: Connect, Reload, mapping, reconnect, and disconnect. **Import Data** opens Account activity, where you can preview provider data and confirm any balance changes. Debt **Apply Selected Updates** still lives on Connected. Connected is not the CSV/PDF import surface. Optional provider data does not create a Data Readiness action by itself.
+- **Debt activity** is a moved/shared version of the Connected debt review for already-connected, already-mapped debts. Connected **Import Data** opens this drawer with Connected provider / Plaid selected and preserves the triggering institution/account. It reuses `plaidMainBuildDomainReview_` / `plaidMainRenderPreviewAccount_` field mappings, labels, Same/New/Changed status, technical details, and apply safeguards. Preview does not write. Matching fields show Same and cannot be selected. Changed fields apply only after explicit account, field, and value confirmation through `plaidImportApplyDebtUpdatesFromAccountActivity` → `plaidImportApplyDebtUpdates_` → `updateDebtField`. Credit Left and Provider Available Credit stay derived or informational. `debt_import.js` stays shadow-only. Connected **Apply Selected Updates** remains until live review confirms drawer parity.
+- **Connected** bank accounts are connection and mapping management: Connect, Reload, mapping, reconnect, and disconnect. **Import Data** opens Account activity, where you can preview provider data and confirm any balance changes. Debt Connected **Import Data** opens Debt activity with Connected provider / Plaid selected and preserves the triggering institution/account. Connected debt connection management and inline **Apply Selected Updates** remain. Connected is not the CSV/PDF import surface. Optional provider data does not create a Data Readiness action by itself.
 - Data Readiness treats a valid current monthly CashCompass value as Current even when provider evidence is stale, unmatched, or unused.
 
 ### Current in-progress work
 
 - Keep CSV and Plaid distinct inside Account activity.
 - Do not enable CSV paste for customers until the Account activity CSV workflow is accepted as complete.
-- Do not start Debt activity, Property valuations, or a second provider-apply workflow in this cluster.
+- Keep Connected debt **Apply Selected Updates** until Debt activity passes parity tests and live review.
+- Do not start Property valuations or a second provider-apply workflow in this cluster.
 
 ### Next implementation slices
 
 These are planned, not complete:
 
 - **a. CSV enablement and full Account activity workflow** — turn on Paste CSV only after preview, link, apply, and ignore coverage is accepted in the drawer.
-- **b. Debt activity drawer** — same drawer pattern as Portfolio activity / Account activity; do not add a top-level import page.
-- **c. Debt provider/file review and explicit apply** — Connected Import Data may open Debt activity with the provider source preselected. `debt_import.js` stays shadow-only. Provider facts must not write `INPUT - Debts` until the user confirms in Debt activity.
-- **d. Property valuations drawer** — dated house evidence review; no live listing APIs in this slice.
+- **b. Debt provider/file review and explicit apply** — later sources (CSV/OFX/PDF) wait for Balance-preview parity. Connected Import Data already opens Debt activity. `debt_import.js` stays shadow-only. Provider facts must not write `INPUT - Debts` until the user confirms in Debt activity.
+- **c. Property valuations drawer** — dated house evidence review; no live listing APIs in this slice.
 
 ### Deferred / future work
 

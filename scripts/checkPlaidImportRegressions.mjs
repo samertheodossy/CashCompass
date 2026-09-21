@@ -45,7 +45,8 @@ assert(bridge.includes("['owner', 'email', 'userKey', 'workbookId', 'spreadsheet
 for (const operation of ['plaidImportExchangePublicToken', 'plaidImportReconnect',
   'plaidImportCompleteReconnect', 'plaidImportSaveMapping', 'plaidImportPreviewMapped',
   'plaidImportApplyDebtUpdates', 'plaidImportApplyCashUpdates',
-  'plaidImportApplyCashUpdatesFromAccountActivity', 'plaidImportInvalidateMapping',
+  'plaidImportApplyCashUpdatesFromAccountActivity',
+  'plaidImportApplyDebtUpdatesFromAccountActivity', 'plaidImportInvalidateMapping',
   'plaidImportDisconnect']) {
   const start = bridge.indexOf(`function ${operation}`);
   const end = bridge.indexOf('\nfunction ', start + 1);
@@ -164,6 +165,13 @@ assert(client.includes("plaidMainCall_('plaidImportPreviewMapped'") &&
   !client.includes('updateDebtField(') &&
   !client.includes('updateBankAccountValueByDate('),
   'Connected client must preview read-only and Apply through bridge only');
+assert(client.includes('plaidImportApplyDebtUpdates') &&
+  client.includes("'Apply Selected Updates'") &&
+  client.includes('function plaidMainApplySelectedUpdates_') &&
+  !client.includes('plaidImportApplyDebtUpdatesFromAccountActivity') &&
+  client.includes('plaidMainOpenDebtAccountActivityFromImportData_') &&
+  client.includes('openDebtAccountActivityDrawer_'),
+  'Connected debt Import Data opens Debt activity while Apply Selected Updates stays on the existing inline apply path');
 assert(client.includes('plaidMainEnsureAccountReviewExpanded_') &&
   /plaidMainImportData_[\s\S]{0,900}plaidMainEnsureAccountReviewExpanded_/.test(client) &&
   !/plaidMainEnsureAccountReviewExpanded_[\s\S]{0,200}plaidMainCall_/.test(client),

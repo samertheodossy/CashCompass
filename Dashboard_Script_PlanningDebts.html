@@ -1411,3 +1411,556 @@ function stopTrackingDebt() {
     }
   });
 }
+
+var __debtAccountActivityDrawerKeyHandlerInstalled = false;
+var __debtAccountActivityDrawerPreviousFocus = null;
+var __debtActivityProviderState = {
+  rows: [],
+  loading: false,
+  previewingKeys: Object.create(null),
+  applyingKey: '',
+  requestSeq: 0,
+  focusKey: '',
+  autoPreviewFocus: false
+};
+
+function installDebtAccountActivityDrawerKeyHandler_() {
+  if (__debtAccountActivityDrawerKeyHandlerInstalled) return;
+  __debtAccountActivityDrawerKeyHandlerInstalled = true;
+  document.addEventListener('keydown', function(event) {
+    var backdrop = document.getElementById('debt_activity_drawer_backdrop');
+    if (!backdrop || backdrop.hidden) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeDebtAccountActivityDrawer_();
+    }
+  });
+}
+
+function openDebtAccountActivityDrawer_(view, context) {
+  var backdrop = document.getElementById('debt_activity_drawer_backdrop');
+  var drawer = document.getElementById('debt_activity_drawer');
+  if (!backdrop || !drawer) {
+    setStatus('debt_status', 'Debt activity could not open. Refresh and try again.', true);
+    return;
+  }
+  __debtAccountActivityDrawerPreviousFocus = document.activeElement;
+  backdrop.hidden = false;
+  document.body.classList.add('bill-pay-drawer-open');
+  installDebtAccountActivityDrawerKeyHandler_();
+  if (typeof plaidMainEnsureStyles_ === 'function') plaidMainEnsureStyles_();
+  debtActivityProviderSetFocusContext_(context);
+  setDebtAccountActivityView_('provider');
+  setTimeout(function() {
+    try { drawer.focus(); } catch (_e) {}
+  }, 0);
+}
+
+function closeDebtAccountActivityDrawer_() {
+  var backdrop = document.getElementById('debt_activity_drawer_backdrop');
+  if (backdrop) backdrop.hidden = true;
+  var otherBank = document.getElementById('bank_activity_drawer_backdrop');
+  var otherInv = document.getElementById('inv_portfolio_drawer_backdrop');
+  var otherOpen = (otherBank && !otherBank.hidden) || (otherInv && !otherInv.hidden);
+  if (!otherOpen) document.body.classList.remove('bill-pay-drawer-open');
+  var prior = __debtAccountActivityDrawerPreviousFocus;
+  __debtAccountActivityDrawerPreviousFocus = null;
+  if (prior && typeof prior.focus === 'function') {
+    try { prior.focus(); } catch (_e) {}
+  }
+}
+
+function onDebtAccountActivityDrawerBackdropClick_(event) {
+  if (event && event.target && event.target.id === 'debt_activity_drawer_backdrop') {
+    closeDebtAccountActivityDrawer_();
+  }
+}
+
+function setDebtAccountActivityView_(view) {
+  var providerBtn = document.getElementById('debt_activity_provider_btn');
+  var providerView = document.getElementById('debt_activity_provider_view');
+  if (providerBtn) {
+    providerBtn.classList.add('active');
+    providerBtn.setAttribute('aria-selected', 'true');
+  }
+  if (providerView) providerView.hidden = false;
+  if (String(view || 'provider') === 'provider') loadDebtActivityProviderPreview_();
+}
+
+function debtActivityProviderCall_(name, payload, success, failure) {
+  if (typeof plaidMainCall_ === 'function') {
+    plaidMainCall_(name, payload, success, failure);
+    return;
+  }
+  var reject = failure || function() {};
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (!result || result.ok !== true) {
+        reject({ message: (result && result.error) || 'Connected preview is unavailable.' });
+        return;
+      }
+      success(result);
+    })
+    .withFailureHandler(function(err) {
+      reject(err || { message: 'Connected preview is unavailable.' });
+    })[name](payload);
+}
+
+function debtActivityProviderIsMappedDebt_(connection, account) {
+  if (String(connection && connection.lifecycleStatus || '') !== 'ACTIVE') return false;
+  var domain = '';
+  if (typeof plaidMainAccountDomain_ === 'function') {
+    domain = plaidMainAccountDomain_(account);
+  } else {
+    var type = String(account && account.type || '').toLowerCase();
+    var subtype = String(account && account.subtype || '').toLowerCase();
+    if (type === 'credit' || type === 'loan' || subtype === 'mortgage') domain = 'DEBT';
+  }
+  if (domain !== 'DEBT') return false;
+  var mapping = (account && account.mapping) || {};
+  return String(mapping.status || '') === 'CONFIRMED' &&
+    !!String(mapping.stableAccountId || '').trim();
+}
+
+function debtActivityProviderTargetName_(targets, stableAccountId, account) {
+  var wanted = String(stableAccountId || '');
+  var match = (targets || []).filter(function(target) {
+    return String(target && target.stableAccountId || '') === wanted;
+  })[0];
+  if (match) return String(match.accountName || match.displayName || '').trim();
+  if (typeof plaidMainTargetLabel_ === 'function') {
+    return String(plaidMainTargetLabel_(wanted, account) || '').trim();
+  }
+  return '';
+}
+
+function debtActivityProviderAccountKey_(row) {
+  var connection = (row && row.connection) || {};
+  var account = (row && row.account) || {};
+  return String(connection.protectedConnectionKey || '') + '::' +
+    String(account.protectedAccountKey || '');
+}
+
+function debtActivityProviderFocusKey_(connectionKey, accountKey) {
+  var connection = String(connectionKey || '').trim();
+  var account = String(accountKey || '').trim();
+  return connection && account ? (connection + '::' + account) : '';
+}
+
+function debtActivityProviderSetFocusContext_(context) {
+  context = context || {};
+  __debtActivityProviderState.focusKey = debtActivityProviderFocusKey_(
+    context.protectedConnectionKey, context.protectedAccountKey);
+  __debtActivityProviderState.autoPreviewFocus =
+    !!context.autoPreview && !!__debtActivityProviderState.focusKey;
+}
+
+function debtActivityProviderCardDomId_(key) {
+  return 'debt-activity-provider-' + String(key || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function debtActivityProviderSortFocusFirst_(rows) {
+  var focusKey = String(__debtActivityProviderState.focusKey || '');
+  if (!focusKey) return rows || [];
+  return (rows || []).slice().sort(function(a, b) {
+    var aFocus = debtActivityProviderAccountKey_(a) === focusKey ? 0 : 1;
+    var bFocus = debtActivityProviderAccountKey_(b) === focusKey ? 0 : 1;
+    return aFocus - bFocus;
+  });
+}
+
+function debtActivityProviderScrollFocusIntoView_() {
+  var focusKey = String(__debtActivityProviderState.focusKey || '');
+  if (!focusKey) return;
+  var card = document.getElementById(debtActivityProviderCardDomId_(focusKey));
+  if (!card || typeof card.scrollIntoView !== 'function') return;
+  try { card.scrollIntoView({ block: 'nearest' }); } catch (_e) {
+    try { card.scrollIntoView(); } catch (__e) {}
+  }
+}
+
+function debtActivityProviderMaybeAutoPreviewFocus_() {
+  if (!__debtActivityProviderState.autoPreviewFocus) return;
+  var focusKey = String(__debtActivityProviderState.focusKey || '');
+  __debtActivityProviderState.autoPreviewFocus = false;
+  if (!focusKey) return;
+  var rows = __debtActivityProviderState.rows || [];
+  var index = -1;
+  for (var i = 0; i < rows.length; i++) {
+    if (debtActivityProviderAccountKey_(rows[i]) === focusKey) {
+      index = i;
+      break;
+    }
+  }
+  if (index < 0) {
+    setStatus('debt_status',
+      'The selected Connected account is not available in Debt activity. Confirm the mapping and try again.',
+      true);
+    return;
+  }
+  previewDebtActivityProviderAccount_(index);
+}
+
+function debtActivityProviderPreviewingMap_(state) {
+  state = state || __debtActivityProviderState;
+  if (!state.previewingKeys || typeof state.previewingKeys !== 'object') {
+    state.previewingKeys = Object.create(null);
+  }
+  return state.previewingKeys;
+}
+
+function debtActivityProviderStartPreviewRequest_(state, key) {
+  key = String(key || '');
+  if (!key) return false;
+  var map = debtActivityProviderPreviewingMap_(state);
+  if (map[key]) return false;
+  map[key] = true;
+  return true;
+}
+
+function debtActivityProviderFinishPreviewRequest_(state, key) {
+  delete debtActivityProviderPreviewingMap_(state)[String(key || '')];
+}
+
+function debtActivityProviderIsPreviewing_(state, key) {
+  return !!debtActivityProviderPreviewingMap_(state)[String(key || '')];
+}
+
+function debtActivityProviderFindRowByKey_(rows, key) {
+  var wanted = String(key || '');
+  return (rows || []).filter(function(row) {
+    return debtActivityProviderAccountKey_(row) === wanted;
+  })[0] || null;
+}
+
+function debtActivityProviderKeepOtherPreviews_(rows, updatedKey, previewByKey) {
+  var wanted = String(updatedKey || '');
+  var next = {};
+  (rows || []).forEach(function(row) {
+    var rowKey = debtActivityProviderAccountKey_(row);
+    if (!rowKey) return;
+    if (rowKey === wanted) next[rowKey] = previewByKey;
+    else next[rowKey] = row.preview || null;
+  });
+  return next;
+}
+
+function debtActivityProviderPreviewBundle_(connection, account, result) {
+  if (typeof plaidMainNormalizeAccountPreviewBundle_ === 'function') {
+    return plaidMainNormalizeAccountPreviewBundle_(connection, account, result);
+  }
+  var accountPreview = ((result && result.accounts) || []).filter(function(item) {
+    return String(item && item.protectedAccountKey || '') === String(account.protectedAccountKey || '');
+  })[0] || null;
+  if (!accountPreview) return null;
+  return {
+    observedAt: String(result && result.observedAt || ''),
+    reviewAnchorDate: (result && result.reviewAnchorDate) || '',
+    accounts: [accountPreview]
+  };
+}
+
+function debtActivityProviderStorePreview_(connection, account, bundle) {
+  if (!bundle) return;
+  if (typeof plaidMainStoreAccountPreviewBundle_ === 'function') {
+    plaidMainStoreAccountPreviewBundle_(connection, account, bundle);
+  }
+}
+
+function loadDebtActivityProviderPreview_() {
+  var list = document.getElementById('debt_activity_provider_list');
+  if (!list) return;
+  var requestSeq = ++__debtActivityProviderState.requestSeq;
+  __debtActivityProviderState.loading = true;
+  __debtActivityProviderState.applyingKey = '';
+  var previousByKey = Object.create(null);
+  (__debtActivityProviderState.rows || []).forEach(function(row) {
+    var prevKey = debtActivityProviderAccountKey_(row);
+    if (prevKey) previousByKey[prevKey] = row;
+  });
+  list.innerHTML = '<div class="muted" style="padding:12px 0;">Loading connected debt accounts…</div>';
+  setStatus('debt_status', 'Loading connected debt accounts…', false);
+  debtActivityProviderCall_('plaidImportConnectedAccountsState', { domain: 'DEBT' }, function(result) {
+    if (requestSeq !== __debtActivityProviderState.requestSeq) return;
+    __debtActivityProviderState.loading = false;
+    var rows = [];
+    (result.connections || []).forEach(function(connection) {
+      (connection.accounts || []).forEach(function(account) {
+        if (!debtActivityProviderIsMappedDebt_(connection, account)) return;
+        var mapping = account.mapping || {};
+        var nextRow = {
+          connection: connection,
+          account: account,
+          mapping: mapping,
+          cashCompassName: debtActivityProviderTargetName_(
+            result.targets || [], mapping.stableAccountId, account),
+          preview: null,
+          previewError: ''
+        };
+        var previous = previousByKey[debtActivityProviderAccountKey_(nextRow)];
+        if (previous) {
+          nextRow.preview = previous.preview || null;
+          nextRow.previewError = previous.previewError || '';
+        }
+        rows.push(nextRow);
+      });
+    });
+    __debtActivityProviderState.rows = debtActivityProviderSortFocusFirst_(rows);
+    renderDebtActivityProviderList_();
+    if (!__debtActivityProviderState.rows.length) {
+      __debtActivityProviderState.autoPreviewFocus = false;
+      setStatus('debt_status', 'No connected and mapped debt accounts to preview.', false);
+    } else if (!__debtActivityProviderState.autoPreviewFocus) {
+      setStatus('debt_status', '', false);
+    }
+    debtActivityProviderMaybeAutoPreviewFocus_();
+  }, function(err) {
+    if (requestSeq !== __debtActivityProviderState.requestSeq) return;
+    __debtActivityProviderState.loading = false;
+    var message = (err && err.message) ? String(err.message) : 'Could not load connected debt accounts.';
+    list.innerHTML = '<div class="muted" style="padding:12px 0;"></div>';
+    list.firstChild.textContent = message;
+    setStatus('debt_status', message, true);
+  });
+}
+
+function renderDebtActivityProviderList_() {
+  var list = document.getElementById('debt_activity_provider_list');
+  if (!list) return;
+  list.innerHTML = '';
+  var rows = __debtActivityProviderState.rows || [];
+  if (!rows.length) {
+    var empty = document.createElement('div');
+    empty.className = 'muted';
+    empty.style.padding = '12px 0';
+    empty.textContent = 'No connected and mapped debt accounts. Connect an institution and confirm a CashCompass mapping under Connected first.';
+    list.appendChild(empty);
+    return;
+  }
+  rows.forEach(function(row, index) {
+    list.appendChild(renderDebtActivityProviderCard_(row, index));
+  });
+  debtActivityProviderScrollFocusIntoView_();
+}
+
+function renderDebtActivityProviderCard_(row, index) {
+  var card = document.createElement('div');
+  var key = debtActivityProviderAccountKey_(row);
+  var focused = !!key && key === String(__debtActivityProviderState.focusKey || '');
+  card.className = focused ? 'info debt-activity-focus-card' : 'info';
+  card.id = debtActivityProviderCardDomId_(key);
+  if (focused) card.setAttribute('aria-current', 'true');
+  card.style.marginTop = '10px';
+  var account = row.account || {};
+  var connection = row.connection || {};
+  var title = document.createElement('div');
+  var strong = document.createElement('strong');
+  strong.textContent = String(account.displayName || account.officialName || 'Provider account') +
+    (account.mask ? ' ••••' + account.mask : '');
+  title.appendChild(strong);
+  card.appendChild(title);
+  var meta = document.createElement('div');
+  meta.className = 'muted';
+  meta.style.marginTop = '4px';
+  meta.textContent = String(connection.institutionName || 'Connected institution') +
+    ' · CashCompass debt account: ' + (row.cashCompassName || 'CashCompass account');
+  card.appendChild(meta);
+  if (typeof plaidMainRenderAccountLocalStatus_ === 'function') {
+    var localStatus = plaidMainRenderAccountLocalStatus_(connection, account);
+    if (localStatus) card.appendChild(localStatus);
+  }
+  var actions = document.createElement('div');
+  actions.className = 'tracked-editor-actions';
+  actions.style.marginTop = '8px';
+  var previewing = debtActivityProviderIsPreviewing_(__debtActivityProviderState, key);
+  var applying = __debtActivityProviderState.applyingKey === key;
+  var previewBtn = document.createElement('button');
+  previewBtn.type = 'button';
+  previewBtn.className = 'small-btn';
+  previewBtn.textContent = previewing ? 'Loading preview…' : (row.preview ? 'Refresh preview' : 'Preview');
+  previewBtn.disabled = previewing || applying;
+  previewBtn.onclick = function() {
+    previewDebtActivityProviderAccount_(index);
+  };
+  actions.appendChild(previewBtn);
+  card.appendChild(actions);
+  if (row.previewError) {
+    var err = document.createElement('div');
+    err.className = 'status error';
+    err.style.marginTop = '8px';
+    err.textContent = row.previewError;
+    card.appendChild(err);
+  }
+  if (row.preview) card.appendChild(renderDebtActivityProviderComparison_(row, index));
+  return card;
+}
+
+function renderDebtActivityProviderComparison_(row, index) {
+  var wrap = document.createElement('div');
+  wrap.style.marginTop = '10px';
+  if (typeof plaidMainEnsureStyles_ === 'function') plaidMainEnsureStyles_();
+  if (!row.preview || typeof plaidMainRenderPreviewAccount_ !== 'function') {
+    var missing = document.createElement('div');
+    missing.className = 'muted';
+    missing.textContent = 'Connected review is unavailable.';
+    wrap.appendChild(missing);
+    return wrap;
+  }
+  plaidMainRenderPreviewAccount_('DEBT', row.connection, row.account, wrap, row.preview, '', {
+    applyHost: 'debtActivity',
+    onRerender: function() { renderDebtActivityProviderList_(); },
+    onApply: function() { confirmDebtActivityProviderApply_(index); }
+  });
+  return wrap;
+}
+
+function previewDebtActivityProviderAccount_(index) {
+  var row = (__debtActivityProviderState.rows || [])[index];
+  if (!row) return;
+  var connection = row.connection || {};
+  var account = row.account || {};
+  var key = debtActivityProviderAccountKey_(row);
+  if (!connection.protectedConnectionKey || !account.protectedAccountKey) {
+    row.previewError = 'This connected account is missing a preview key.';
+    renderDebtActivityProviderList_();
+    return;
+  }
+  if (!debtActivityProviderStartPreviewRequest_(__debtActivityProviderState, key)) return;
+  row.previewError = '';
+  renderDebtActivityProviderList_();
+  setStatus('debt_status', 'Loading Plaid preview…', false);
+  debtActivityProviderCall_('plaidImportPreviewMapped', {
+    protectedConnectionKey: connection.protectedConnectionKey,
+    protectedAccountKey: account.protectedAccountKey
+  }, function(result) {
+    debtActivityProviderFinishPreviewRequest_(__debtActivityProviderState, key);
+    var current = debtActivityProviderFindRowByKey_(__debtActivityProviderState.rows, key);
+    if (!current) return;
+    var bundle = debtActivityProviderPreviewBundle_(connection, account, result);
+    if (!bundle) {
+      current.preview = null;
+      current.previewError = 'No imported fields are available to review.';
+      renderDebtActivityProviderList_();
+      setStatus('debt_status', current.previewError, true);
+      return;
+    }
+    current.preview = bundle;
+    current.previewError = '';
+    debtActivityProviderStorePreview_(connection, account, bundle);
+    if (typeof plaidMainClearAccountSelections_ === 'function') {
+      plaidMainClearAccountSelections_(connection, account);
+    }
+    renderDebtActivityProviderList_();
+    setStatus('debt_status', 'Plaid preview loaded. CashCompass values were not changed.', false);
+  }, function(err) {
+    debtActivityProviderFinishPreviewRequest_(__debtActivityProviderState, key);
+    var current = debtActivityProviderFindRowByKey_(__debtActivityProviderState.rows, key);
+    if (!current) return;
+    current.previewError = (err && err.message) ? String(err.message) : 'Could not load Plaid preview.';
+    renderDebtActivityProviderList_();
+    setStatus('debt_status', current.previewError, true);
+  });
+}
+
+function confirmDebtActivityProviderApply_(index) {
+  var row = (__debtActivityProviderState.rows || [])[index];
+  if (!row) return;
+  var connection = row.connection || {};
+  var account = row.account || {};
+  var preview = row.preview;
+  var key = debtActivityProviderAccountKey_(row);
+  if (!preview) {
+    setStatus('debt_status', 'Preview again before applying.', true);
+    return;
+  }
+  var accountPreview = ((preview.accounts) || []).filter(function(item) {
+    return String(item && item.protectedAccountKey || '') === String(account.protectedAccountKey || '');
+  })[0] || ((preview.accounts && preview.accounts[0]) || null);
+  if (!accountPreview) {
+    setStatus('debt_status', 'Preview again before applying.', true);
+    return;
+  }
+  if (typeof plaidMainPruneStaleApplySelections_ === 'function') {
+    plaidMainPruneStaleApplySelections_(connection, account, accountPreview, preview, 'DEBT', {
+      applyHost: 'debtActivity'
+    });
+  }
+  var selectionKey = typeof plaidMainApplySelectionKey_ === 'function'
+    ? plaidMainApplySelectionKey_(connection, account)
+    : key;
+  var selected = (typeof plaidMainState_ !== 'undefined' && plaidMainState_.selectedApplyKeys)
+    ? (plaidMainState_.selectedApplyKeys[selectionKey] || {})
+    : {};
+  var eligible = typeof plaidMainEligibleApplyKeySet_ === 'function'
+    ? plaidMainEligibleApplyKeySet_(connection, account, accountPreview, preview, 'DEBT', {
+      applyHost: 'debtActivity'
+    })
+    : {};
+  var keys = Object.keys(selected).filter(function(applyKey) {
+    return selected[applyKey] && eligible[applyKey];
+  });
+  if (!keys.length) {
+    setStatus('debt_status', 'Select a changed field before applying.', true);
+    return;
+  }
+  var reviewObservedAt = String(accountPreview.reviewObservedAt || '');
+  var mapping = account.mapping || row.mapping || {};
+  var stableAccountId = String(mapping.stableAccountId || '');
+  if (!reviewObservedAt || !stableAccountId || !connection.protectedConnectionKey ||
+      !account.protectedAccountKey) {
+    setStatus('debt_status', 'Preview again before applying.', true);
+    return;
+  }
+  if (__debtActivityProviderState.applyingKey) return;
+  __debtActivityProviderState.applyingKey = key;
+  if (typeof plaidMainState_ !== 'undefined') {
+    if (!plaidMainState_.applyingKeys) plaidMainState_.applyingKeys = {};
+    plaidMainState_.applyingKeys[selectionKey] = true;
+  }
+  row.previewError = '';
+  renderDebtActivityProviderList_();
+  setStatus('debt_status', 'Applying confirmed fields…', false);
+  debtActivityProviderCall_('plaidImportApplyDebtUpdatesFromAccountActivity', {
+    protectedConnectionKey: connection.protectedConnectionKey,
+    protectedAccountKey: account.protectedAccountKey,
+    stableAccountId: stableAccountId,
+    reviewObservedAt: reviewObservedAt,
+    selectedApplyKeys: keys,
+    confirmed: true
+  }, function(result) {
+    if (__debtActivityProviderState.applyingKey !== key) return;
+    __debtActivityProviderState.applyingKey = '';
+    if (typeof plaidMainState_ !== 'undefined' && plaidMainState_.applyingKeys) {
+      plaidMainState_.applyingKeys[selectionKey] = false;
+    }
+    if (typeof plaidMainClearAccountSelections_ === 'function') {
+      plaidMainClearAccountSelections_(connection, account);
+    }
+    if (result && result.preview) {
+      var bundle = debtActivityProviderPreviewBundle_(connection, account, result.preview);
+      if (bundle) {
+        row.preview = bundle;
+        debtActivityProviderStorePreview_(connection, account, bundle);
+      }
+    }
+    renderDebtActivityProviderList_();
+    var appliedCount = Number(result && result.appliedCount || 0);
+    setStatus('debt_status', appliedCount
+      ? 'Selected fields applied. Credit Left and Provider Available Credit stay derived or informational.'
+      : 'Apply finished. CashCompass values stay authoritative.', false);
+    if (typeof loadDebtSection === 'function') loadDebtSection();
+    if (typeof refreshSnapshot === 'function') refreshSnapshot();
+    if (typeof refreshMonthlyCheckinAfterDebtMutation_ === 'function') {
+      refreshMonthlyCheckinAfterDebtMutation_();
+    }
+  }, function(err) {
+    if (__debtActivityProviderState.applyingKey !== key) return;
+    __debtActivityProviderState.applyingKey = '';
+    if (typeof plaidMainState_ !== 'undefined' && plaidMainState_.applyingKeys) {
+      plaidMainState_.applyingKeys[selectionKey] = false;
+    }
+    row.previewError = (err && err.message) ? String(err.message) : 'Could not apply the selected fields.';
+    renderDebtActivityProviderList_();
+    setStatus('debt_status', row.previewError, true);
+  });
+}

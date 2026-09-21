@@ -3169,6 +3169,142 @@
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
+  #debt_activity_drawer {
+    overflow-x: hidden;
+  }
+  #debt_activity_drawer .bill-pay-drawer-body,
+  #debt_activity_drawer .bill-pay-drawer-actions {
+    overflow-x: hidden;
+    min-width: 0;
+  }
+  #debt_activity_provider_list,
+  #debt_activity_provider_list .info,
+  #debt_activity_provider_list .plaid-main-review-panel,
+  #debt_activity_provider_list .plaid-main-review-section,
+  #debt_activity_provider_list .plaid-main-review {
+    min-width: 0;
+    max-width: 100%;
+  }
+  #debt_activity_drawer .plaid-main-review-panel {
+    max-width: none;
+    margin: 12px 0 0;
+    padding: 12px;
+    overflow-x: hidden;
+  }
+  #debt_activity_drawer .plaid-main-comparison-table {
+    table-layout: fixed;
+    width: 100%;
+    max-width: 100%;
+  }
+  #debt_activity_drawer .plaid-main-comparison-table th:first-child,
+  #debt_activity_drawer .plaid-main-comparison-table td:first-child {
+    width: 3rem;
+  }
+  #debt_activity_drawer .plaid-main-comparison-table th.plaid-main-num,
+  #debt_activity_drawer .plaid-main-comparison-table td.plaid-main-num:not(.plaid-main-change-cell) {
+    width: 18%;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  #debt_activity_drawer .plaid-main-comparison-table td:not(.plaid-main-num) {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+  #debt_activity_drawer .plaid-main-comparison-table td.plaid-main-change-cell {
+    width: auto;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    font-variant-numeric: tabular-nums;
+  }
+  #debt_activity_drawer .plaid-main-comparison-table th.plaid-main-num[data-label="Imported"],
+  #debt_activity_drawer .plaid-main-comparison-table td.plaid-main-num[data-label="Imported"] {
+    width: 26%;
+  }
+  #debt_activity_drawer .debt-activity-apr-row td.plaid-main-num[data-label="Imported"] {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    min-width: 0;
+    overflow: visible;
+  }
+  #debt_activity_drawer .debt-activity-apr-imported-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    min-width: 0;
+    max-width: 100%;
+  }
+  #debt_activity_drawer .debt-activity-apr-imported-value {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  #debt_activity_drawer .debt-activity-apr-imported-source {
+    display: block;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    text-align: right;
+    line-height: 1.35;
+  }
+  #debt_activity_drawer .debt-activity-apr-row .plaid-main-change-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    min-width: 0;
+    overflow: visible;
+  }
+  #debt_activity_drawer .debt-activity-apr-change-value {
+    display: block;
+    width: 100%;
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  #debt_activity_drawer .debt-activity-apr-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: flex-start;
+    gap: 6px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  #debt_activity_drawer .debt-activity-apr-actions .plaid-main-inline-apr {
+    margin-top: 0;
+    justify-content: flex-start;
+    width: 100%;
+    max-width: 100%;
+  }
+  #debt_activity_drawer .debt-activity-apr-actions .plaid-main-apr-source-toggle,
+  #debt_activity_drawer .debt-activity-apr-actions .small-btn {
+    flex: 0 1 auto;
+    white-space: nowrap;
+    max-width: 100%;
+    visibility: visible;
+  }
+  #debt_activity_drawer .plaid-main-inline-apr {
+    justify-content: flex-start;
+    max-width: 100%;
+  }
+  #debt_activity_drawer .tracked-editor-actions {
+    justify-content: flex-start;
+    max-width: 100%;
+  }
+  #debt_activity_drawer .plaid-main-review-note,
+  #debt_activity_drawer .plaid-main-footnote {
+    overflow-wrap: anywhere;
+  }
+  #debt_activity_drawer .debt-activity-focus-card {
+    outline: 2px solid #1a5276;
+    outline-offset: 2px;
+  }
   @media (max-width: 640px) {
     #bank_activity_provider_list .bank-activity-provider-comparison-table {
       table-layout: auto;
@@ -3176,6 +3312,41 @@
     #bank_activity_provider_list .bank-activity-provider-col-item,
     #bank_activity_provider_list .bank-activity-provider-col-num {
       width: auto;
+    }
+    #debt_activity_drawer .plaid-main-comparison-table {
+      table-layout: auto;
+    }
+    #debt_activity_drawer .plaid-main-comparison-table th:first-child,
+    #debt_activity_drawer .plaid-main-comparison-table td:first-child,
+    #debt_activity_drawer .plaid-main-comparison-table th.plaid-main-num,
+    #debt_activity_drawer .plaid-main-comparison-table td.plaid-main-num:not(.plaid-main-change-cell) {
+      width: auto;
+    }
+    #debt_activity_drawer .plaid-main-comparison-table td.plaid-main-num:not(.plaid-main-change-cell) {
+      white-space: nowrap;
+    }
+    #debt_activity_drawer .plaid-main-comparison-table td.plaid-main-change-cell {
+      align-items: flex-start;
+    }
+    #debt_activity_drawer .debt-activity-apr-row td.plaid-main-num[data-label="Imported"] {
+      flex-wrap: wrap;
+      align-items: flex-start;
+      white-space: normal;
+    }
+    #debt_activity_drawer .debt-activity-apr-imported-wrap {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    #debt_activity_drawer .debt-activity-apr-row .plaid-main-change-cell {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
+    #debt_activity_drawer .debt-activity-apr-change-value {
+      align-self: flex-end;
+    }
+    #debt_activity_drawer .debt-activity-apr-actions {
+      align-self: stretch;
     }
   }
   .investment-portfolio-account-help {

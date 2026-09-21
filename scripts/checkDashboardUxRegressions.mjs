@@ -3305,6 +3305,23 @@ assert.match(files['Dashboard_Help.html'],
   /Planning continues to use CashCompass balances and terms/,
   'Help must keep Planning on CashCompass debt values');
 assert.match(files['Dashboard_Help.html'],
+  /Debt activity previews provider data and requires explicit confirmation/,
+  'Help must explain Debt activity requires confirmation before CashCompass values change');
+assert.match(files['Dashboard_Help.html'],
+  /Apply Selected Updates[\s\S]*on Connected remains available/,
+  'Help must keep Connected Apply Selected Updates until Debt activity reaches parity');
+assert.match(body,
+  /id=["']debt_mode_manage_wrap["'][\s\S]*?id=["']debt_account_activity_btn["'][\s\S]*?Debt activity/,
+  'Manage debts must open Debt activity');
+assert.match(body,
+  /id=["']debt_activity_drawer["'][\s\S]*?id=["']debt_activity_provider_btn["'][\s\S]*?Connected provider \/ Plaid/,
+  'Debt activity must expose Connected provider / Plaid as the first source');
+assert.doesNotMatch(
+  body.slice(body.indexOf('id="debt_activity_drawer_backdrop"'), body.indexOf('id="retirement"')),
+  /Paste CSV|OFX|PDF/,
+  'This Debt activity slice must not add CSV, OFX, or PDF sources'
+);
+assert.match(files['Dashboard_Help.html'],
   /Over limit by \$X/,
   'Help must explain over-limit credit-card display without rewriting stored values');
 
@@ -3918,6 +3935,9 @@ assert.match(body,
 assert.match(body,
   /Import Data opens Account activity, where you can preview provider data and confirm any balance changes\./,
   'Connected Import Data must explain that preview and apply live in Account activity');
+assert.match(body,
+  /Import Data opens Debt activity with Connected provider \/ Plaid selected/,
+  'Connected debt Import Data must open Debt activity on the Plaid source');
 assert.doesNotMatch(
   body.slice(body.indexOf('id="bank_mode_connected_wrap"'), body.indexOf('id="bank_status"')),
   /Apply Selected Updates/,

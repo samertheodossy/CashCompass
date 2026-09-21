@@ -4,8 +4,9 @@
  * Import Data = read-only provider retrieval.
  * Bank (CASH): Import Data opens Account activity with Connected provider / Plaid
  * selected. Preview and confirmed Current balance apply happen in that drawer.
- * Debt: Import Data still previews inline (plaidImportPreviewMapped). Apply Selected
- * Updates remains on Connected via plaidImportApplyDebtUpdates.
+ * Debt: Import Data opens Debt activity with Connected provider / Plaid selected
+ * and preserves the triggering institution/account. Preview and confirmed apply
+ * happen in that drawer. Connected Apply Selected Updates remains a fallback.
  * Import alone must not log financial updates.
  */
 var plaidMainState_ = {
@@ -713,8 +714,35 @@ function plaidMainBuildCurrencyRow_(config, previewRow, legacyKey, legacy, accou
   };
 }
 
-function plaidMainBuildDueDateRow_(previewRow, legacy, preview) {
+function plaidMainCalendarDateIsPast_(importedParts, todayParts) {
+  if (!importedParts || !todayParts) return false;
+  if (importedParts.year !== todayParts.year) return importedParts.year < todayParts.year;
+  if (importedParts.month !== todayParts.month) return importedParts.month < todayParts.month;
+  return importedParts.day < todayParts.day;
+}
+
+function plaidMainProviderEffectiveTimestamp_(previewRow) {
+  return String((previewRow && previewRow.effectiveAsOf) ||
+    (previewRow && previewRow.candidate && previewRow.candidate.providerEffectiveAsOf) || '').trim();
+}
+
+function plaidMainProviderDueDateNeedsStaleReview_(previewRow, preview) {
+  if (!previewRow || !previewRow.candidate) return false;
+  var importedIso = String(previewRow.candidate.textValue || previewRow.candidate.value || '').trim();
+  var importedParts = plaidMainParseIsoDateParts_(importedIso);
+  if (!importedParts) return false;
+  var todayParts = plaidMainReviewAnchorParts_(preview);
+  if (!todayParts) {
+    var now = new Date();
+    todayParts = { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() };
+  }
+  if (!plaidMainCalendarDateIsPast_(importedParts, todayParts)) return false;
+  return !plaidMainProviderEffectiveTimestamp_(previewRow);
+}
+
+function plaidMainBuildDueDateRow_(previewRow, legacy, preview, hostOptions) {
   if (!previewRow || !previewRow.candidate) return null;
+  hostOptions = hostOptions || {};
   var existingRaw = plaidMainLegacyValue_(legacy, 'NEXT_PAYMENT_DATE');
   var existingDay = plaidMainParseDueDay_(existingRaw);
   var importedIso = String(previewRow.candidate.textValue || previewRow.candidate.value || '').trim();
@@ -735,6 +763,9 @@ function plaidMainBuildDueDateRow_(previewRow, legacy, preview) {
     change = plaidMainFormatCalendarParts_(cashCompassParts) + ' → ' +
       plaidMainFormatCalendarParts_(importedParts);
   } else change = 'Changed';
+  var staleProviderDueDate = hostOptions.applyHost === 'debtActivity' &&
+    plaidMainProviderDueDateNeedsStaleReview_(previewRow, preview);
+  if (staleProviderDueDate) change = 'Not applied — this provider due date has already passed and no valid effective date was provided.';
   return {
     item: 'Due Date',
     cashCompass: cashCompassDisplay,
@@ -744,6 +775,7 @@ function plaidMainBuildDueDateRow_(previewRow, legacy, preview) {
     proposedCanonical: importedDay !== null ? String(importedDay) : '',
     factType: 'NEXT_PAYMENT_DATE',
     applyKey: 'NEXT_PAYMENT_DATE',
+    staleProviderDueDate: staleProviderDueDate,
     technical: previewRow
   };
 }
@@ -850,6 +882,8 @@ function plaidMainBuildIntRateReview_(aprRows, legacy, preference) {
           item: 'Int Rate',
           cashCompass: cashCompassDisplay,
           imported: plaidMainFormatPercent_(importedNum) + ' (' + plaidMainFactLabel_(preference.sourceSemantic) + ')',
+          importedAprValue: plaidMainFormatPercent_(importedNum),
+          importedAprSourceLabel: plaidMainFactLabel_(preference.sourceSemantic),
           change: change,
           writerField: 'Int Rate',
           factType: 'INT_RATE',
@@ -898,7 +932,8 @@ function plaidMainLegacyKeyForFact_(factType) {
   return factType;
 }
 
-function plaidMainBuildDomainReview_(accountPreview, domain, preview) {
+function plaidMainBuildDomainReview_(accountPreview, domain, preview, hostOptions) {
+  hostOptions = hostOptions || {};
   var rows = accountPreview.rows || [];
   var byType = plaidMainRowByFactType_(rows);
   var legacy = accountPreview.cashCompassLegacy || {};
@@ -914,7 +949,7 @@ function plaidMainBuildDomainReview_(accountPreview, domain, preview) {
     var previewRow = byType[factType];
     if (!previewRow) return;
     var built;
-    if (config.kind === 'dueDate') built = plaidMainBuildDueDateRow_(previewRow, legacy, preview);
+    if (config.kind === 'dueDate') built = plaidMainBuildDueDateRow_(previewRow, legacy, preview, hostOptions);
     else if (config.kind === 'date') {
       built = plaidMainBuildDateRow_(config, previewRow, factType, legacy);
     } else if (domain === 'CASH' && factType === 'CURRENT_BALANCE') {
@@ -958,6 +993,7 @@ function plaidMainApplySelectable_(row, accountDomain) {
   if (!row || row.derivedOnly || row.informational) return false;
   if (row.change === 'Same') return false;
   if (row.needsAprSelection) return false;
+  if (row.staleProviderDueDate) return false;
   if (row.applyKey === 'INT_RATE' && !row.sourceSemantic) return false;
   if (accountDomain === 'DEBT') {
     return !!row.applyKey && !!PLAID_MAIN_DEBT_APPLY_KEYS_[row.applyKey];
@@ -1188,31 +1224,31 @@ function plaidMainLastImportedAt_(connection, account) {
   return importState.observedAt;
 }
 
-function plaidMainEligibleApplyKeySet_(connection, account, accountPreview, preview, accountDomain) {
+function plaidMainEligibleApplyKeySet_(connection, account, accountPreview, preview, accountDomain, hostOptions) {
   var keys = {};
   if (!accountPreview) return keys;
-  var groups = plaidMainBuildDomainReview_(accountPreview, accountDomain, preview);
+  var groups = plaidMainBuildDomainReview_(accountPreview, accountDomain, preview, hostOptions);
   (groups.ready || []).forEach(function(row) {
     if (plaidMainApplySelectable_(row, accountDomain) && row.applyKey) keys[row.applyKey] = true;
   });
   return keys;
 }
 
-function plaidMainPruneStaleApplySelections_(connection, account, accountPreview, preview, accountDomain) {
+function plaidMainPruneStaleApplySelections_(connection, account, accountPreview, preview, accountDomain, hostOptions) {
   var selectionKey = plaidMainApplySelectionKey_(connection, account);
   var selected = plaidMainState_.selectedApplyKeys[selectionKey];
   if (!selected || !accountPreview) return;
-  var eligible = plaidMainEligibleApplyKeySet_(connection, account, accountPreview, preview, accountDomain);
+  var eligible = plaidMainEligibleApplyKeySet_(connection, account, accountPreview, preview, accountDomain, hostOptions);
   Object.keys(selected).forEach(function(key) {
     if (!eligible[key]) delete selected[key];
   });
 }
 
-function plaidMainSelectedEligibleApplyCount_(connection, account, accountPreview, preview, accountDomain) {
-  plaidMainPruneStaleApplySelections_(connection, account, accountPreview, preview, accountDomain);
+function plaidMainSelectedEligibleApplyCount_(connection, account, accountPreview, preview, accountDomain, hostOptions) {
+  plaidMainPruneStaleApplySelections_(connection, account, accountPreview, preview, accountDomain, hostOptions);
   var selectionKey = plaidMainApplySelectionKey_(connection, account);
   var selected = plaidMainState_.selectedApplyKeys[selectionKey] || {};
-  var eligible = plaidMainEligibleApplyKeySet_(connection, account, accountPreview, preview, accountDomain);
+  var eligible = plaidMainEligibleApplyKeySet_(connection, account, accountPreview, preview, accountDomain, hostOptions);
   return Object.keys(selected).filter(function(key) {
     return selected[key] && eligible[key];
   }).length;
@@ -1280,6 +1316,15 @@ function plaidMainApplyRpcName_(accountDomain) {
   return accountDomain === 'CASH' ? 'plaidImportApplyCashUpdates' : 'plaidImportApplyDebtUpdates';
 }
 
+function plaidMainReviewRerender_(options) {
+  options = options || {};
+  if (typeof options.onRerender === 'function') {
+    options.onRerender();
+    return;
+  }
+  plaidMainRenderDomain_(options.domain);
+}
+
 function plaidMainApplySelectedUpdates_(domain, connection, account, accountPreview, preview, accountDomain) {
   var selectionKey = plaidMainApplySelectionKey_(connection, account);
   var requestId = plaidMainBeginApplyRequest_(connection, account);
@@ -1328,8 +1373,10 @@ function plaidMainApplySelectedUpdates_(domain, connection, account, accountPrev
   });
 }
 
-function plaidMainRenderInlineAprControls_(domain, connection, account, row, container) {
+function plaidMainRenderInlineAprControls_(domain, connection, account, row, container, options) {
   if (!row || !row.aprRows || !row.aprRows.length) return;
+  options = options || { domain: domain };
+  options.domain = options.domain || domain;
   var mapping = account.mapping || {};
   var editKey = plaidMainAssociationKey_(connection, account);
   var wrap = plaidMainElement_('div', 'plaid-main-inline-apr');
@@ -1338,7 +1385,7 @@ function plaidMainRenderInlineAprControls_(domain, connection, account, row, con
     toggle.type = 'button';
     toggle.addEventListener('click', function() {
       plaidMainState_.aprSourceEditing[editKey] = true;
-      plaidMainRenderDomain_(domain);
+      plaidMainReviewRerender_(options);
     });
     container.appendChild(toggle);
     return;
@@ -1346,11 +1393,20 @@ function plaidMainRenderInlineAprControls_(domain, connection, account, row, con
   row.aprRows.forEach(function(aprRow) {
     var shortLabel = plaidMainFactLabel_(aprRow.factType).replace(/ APR/i, '');
     wrap.appendChild(plaidMainButton_('Use ' + shortLabel, 'small-btn', function() {
-      plaidMainSaveAprPreference_(domain, connection, account, mapping.stableAccountId, aprRow.factType);
+      plaidMainSaveAprPreference_(domain, connection, account, mapping.stableAccountId, aprRow.factType, options);
       plaidMainState_.aprSourceEditing[editKey] = false;
     }, { title: 'Sets Int Rate source for review and Apply' }));
   });
   container.appendChild(wrap);
+}
+
+function plaidMainIsAprReviewRow_(row) {
+  return !!(row && (
+    row.factType === 'INT_RATE' ||
+    row.canChangeAprSource ||
+    row.needsAprSelection ||
+    (row.aprRows && row.aprRows.length)
+  ));
 }
 
 function plaidMainRenderComparisonTable_(title, rows, options) {
@@ -1359,6 +1415,9 @@ function plaidMainRenderComparisonTable_(title, rows, options) {
   var wrap = plaidMainElement_('div', 'plaid-main-review-section');
   wrap.appendChild(plaidMainElement_('div', 'plaid-main-review-heading', title));
   var table = plaidMainElement_('table', 'plaid-main-comparison-table');
+  if (options.applyHost === 'debtActivity') {
+    table.className += ' debt-activity-review-table';
+  }
   var thead = document.createElement('thead');
   var headerRow = document.createElement('tr');
   var columnLabels = options.allowApplySelection
@@ -1367,6 +1426,7 @@ function plaidMainRenderComparisonTable_(title, rows, options) {
   columnLabels.forEach(function(label, index) {
     var th = document.createElement('th');
     th.textContent = label;
+    if (options.applyHost === 'debtActivity') th.setAttribute('data-label', label);
     if (index > (options.allowApplySelection ? 1 : 0)) th.className = 'plaid-main-num';
     headerRow.appendChild(th);
   });
@@ -1376,6 +1436,10 @@ function plaidMainRenderComparisonTable_(title, rows, options) {
   rows.forEach(function(row) {
     var tr = document.createElement('tr');
     tr.className = plaidMainChangeRowClass_(row);
+    var fromActivityApr = options.applyHost === 'debtActivity' && plaidMainIsAprReviewRow_(row);
+    if (fromActivityApr) {
+      tr.className = (tr.className ? tr.className + ' ' : '') + 'debt-activity-apr-row';
+    }
     if (options.allowApplySelection && plaidMainApplySelectable_(row, options.accountDomain)) {
       var applyTd = document.createElement('td');
       applyTd.setAttribute('data-label', 'Apply');
@@ -1389,7 +1453,7 @@ function plaidMainRenderComparisonTable_(title, rows, options) {
       checkbox.addEventListener('change', function() {
         if (checkbox.disabled) return;
         plaidMainToggleApplySelection_(options.connection, options.account, row.applyKey, checkbox.checked);
-        plaidMainRenderDomain_(options.domain);
+        plaidMainReviewRerender_(options);
       });
       applyTd.appendChild(checkbox);
       tr.appendChild(applyTd);
@@ -1409,10 +1473,28 @@ function plaidMainRenderComparisonTable_(title, rows, options) {
       if (cell.key === 'change') {
         td.className = (td.className ? td.className + ' ' : '') + 'plaid-main-change-cell';
       }
-      if (cell.key === 'change' && (row.needsAprSelection || row.canChangeAprSource)) {
-        td.appendChild(plaidMainElement_('span', '', String(row[cell.key] || PLAID_MAIN_MISSING_)));
+      if (fromActivityApr && cell.key === 'imported') {
+        td.className = (td.className ? td.className + ' ' : '') + 'debt-activity-apr-imported';
+        var importedWrap = plaidMainElement_('div', 'debt-activity-apr-imported-wrap');
+        if (row.importedAprValue && row.importedAprSourceLabel) {
+          importedWrap.appendChild(plaidMainElement_('span', 'debt-activity-apr-imported-value', row.importedAprValue));
+          importedWrap.appendChild(plaidMainElement_('span', 'debt-activity-apr-imported-source', row.importedAprSourceLabel));
+        } else {
+          importedWrap.appendChild(plaidMainElement_('span', 'debt-activity-apr-imported-value',
+            String(row.imported || PLAID_MAIN_MISSING_)));
+        }
+        td.appendChild(importedWrap);
+      } else if (cell.key === 'change' && (row.needsAprSelection || row.canChangeAprSource)) {
+        td.appendChild(plaidMainElement_('span',
+          fromActivityApr ? 'debt-activity-apr-change-value' : '',
+          String(row[cell.key] || PLAID_MAIN_MISSING_)));
         if (options.renderAprControls) {
-          plaidMainRenderInlineAprControls_(options.domain, options.connection, options.account, row, td);
+          var controlHost = td;
+          if (fromActivityApr) {
+            controlHost = plaidMainElement_('div', 'debt-activity-apr-actions');
+            td.appendChild(controlHost);
+          }
+          plaidMainRenderInlineAprControls_(options.domain, options.connection, options.account, row, controlHost, options);
         }
       } else {
         td.textContent = String(row[cell.key] || PLAID_MAIN_MISSING_);
@@ -1429,9 +1511,11 @@ function plaidMainRenderComparisonTable_(title, rows, options) {
   return wrap;
 }
 
-function plaidMainSaveAprPreference_(domain, connection, account, stableAccountId, sourceSemantic) {
+function plaidMainSaveAprPreference_(domain, connection, account, stableAccountId, sourceSemantic, options) {
+  options = options || { domain: domain };
+  options.domain = options.domain || domain;
   plaidMainSetAccountMessage_(connection, account, 'Saving APR source preference…', false, true);
-  plaidMainRenderDomain_(domain);
+  plaidMainReviewRerender_(options);
   plaidMainCall_('plaidImportSaveAprSourcePreference', {
     protectedConnectionKey: connection.protectedConnectionKey,
     protectedAccountKey: account.protectedAccountKey,
@@ -1443,10 +1527,10 @@ function plaidMainSaveAprPreference_(domain, connection, account, stableAccountI
       preview.accounts[0].aprSourcePreference = result.preference || { sourceSemantic: sourceSemantic };
     }
     plaidMainSetAccountMessage_(connection, account, 'APR source preference saved for review.', false, false);
-    plaidMainRenderDomain_(domain);
+    plaidMainReviewRerender_(options);
   }, function(err) {
     plaidMainSetAccountMessage_(connection, account, plaidMainUserMessage_(err), true, false);
-    plaidMainRenderDomain_(domain);
+    plaidMainReviewRerender_(options);
   });
 }
 
@@ -1475,16 +1559,20 @@ function plaidMainRenderTechnicalDetails_(technicalRows, observedAt) {
   return details;
 }
 
-function plaidMainRenderPreviewAccount_(domain, connection, account, accountCard, preview, reviewPanelId) {
+function plaidMainRenderPreviewAccount_(domain, connection, account, accountCard, preview, reviewPanelId, hostOptions) {
+  hostOptions = hostOptions || {};
   var accountPreview = (preview.accounts || []).filter(function(row) {
     return String(row.protectedAccountKey || '') === String(account.protectedAccountKey || '');
   })[0];
   if (!accountPreview) return;
 
   var accountDomain = plaidMainAccountDomain_(account);
-  plaidMainPruneStaleApplySelections_(connection, account, accountPreview, preview, accountDomain);
+  plaidMainPruneStaleApplySelections_(connection, account, accountPreview, preview, accountDomain, hostOptions);
 
   var panel = plaidMainElement_('div', 'plaid-main-review-panel');
+  if (hostOptions.applyHost === 'debtActivity') {
+    panel.className += ' debt-activity-review-panel';
+  }
   if (reviewPanelId) panel.id = reviewPanelId;
   var reviewWrap = plaidMainElement_('div', 'plaid-main-review');
   reviewWrap.appendChild(plaidMainElement_('div', 'plaid-main-review-title', 'Review imported changes'));
@@ -1504,8 +1592,13 @@ function plaidMainRenderPreviewAccount_(domain, connection, account, accountCard
     return;
   }
 
-  var groups = plaidMainBuildDomainReview_(accountPreview, accountDomain, preview);
-  var footnote = groups.hasMissing ? PLAID_MAIN_MISSING_NOTE_ : '';
+  var groups = plaidMainBuildDomainReview_(accountPreview, accountDomain, preview, hostOptions);
+  var fromActivity = hostOptions.applyHost === 'debtActivity';
+  var footnote = groups.hasMissing
+    ? (fromActivity
+      ? 'Provider information only — not stored in CashCompass.'
+      : PLAID_MAIN_MISSING_NOTE_)
+    : '';
   var applyEnabled = String((account.mapping || {}).status || '') === 'CONFIRMED' &&
     accountDomain === 'DEBT';
   var tableOptions = {
@@ -1515,7 +1608,9 @@ function plaidMainRenderPreviewAccount_(domain, connection, account, accountCard
     account: account,
     accountDomain: accountDomain,
     renderAprControls: accountDomain === 'DEBT',
-    allowApplySelection: applyEnabled
+    allowApplySelection: applyEnabled,
+    onRerender: hostOptions.onRerender,
+    applyHost: hostOptions.applyHost
   };
 
   var applySuccess = plaidMainRenderApplySuccess_(connection, account);
@@ -1525,7 +1620,8 @@ function plaidMainRenderPreviewAccount_(domain, connection, account, accountCard
   var additionalTable = plaidMainRenderComparisonTable_('Additional information', groups.additional, tableOptions);
   var reviewTable = plaidMainRenderComparisonTable_('Needs review', groups.review, {
     needsReview: true,
-    columns: ['Item', 'Imported', 'Status']
+    columns: ['Item', 'Imported', 'Status'],
+    applyHost: hostOptions.applyHost
   });
 
   if (changesTable) reviewWrap.appendChild(changesTable);
@@ -1539,17 +1635,27 @@ function plaidMainRenderPreviewAccount_(domain, connection, account, accountCard
     var applyRow = plaidMainElement_('div', 'tracked-editor-actions');
     applyRow.style.marginTop = '12px';
     var selectionKey = plaidMainApplySelectionKey_(connection, account);
-    var applyCount = plaidMainSelectedEligibleApplyCount_(connection, account, accountPreview, preview, accountDomain);
+    var applyCount = plaidMainSelectedEligibleApplyCount_(connection, account, accountPreview, preview, accountDomain, hostOptions);
     var applying = !!plaidMainState_.applyingKeys[selectionKey];
-    var applyBtn = plaidMainButton_(applying ? 'Applying…' : 'Apply Selected Updates', 'small-btn primary', function() {
+    var applyLabel = applying ? 'Applying…' : 'Apply Selected Updates';
+    if (!applying && fromActivity) applyLabel = 'Confirm account, field, and value';
+    var applyBtn = plaidMainButton_(applyLabel, 'small-btn primary', function() {
       if (applying) return;
+      if (fromActivity) {
+        if (typeof hostOptions.onApply === 'function') {
+          hostOptions.onApply(domain, connection, account, accountPreview, preview, accountDomain);
+        }
+        return;
+      }
       plaidMainApplySelectedUpdates_(domain, connection, account, accountPreview, preview, accountDomain);
     });
     applyBtn.disabled = applying || applyCount < 1;
     applyRow.appendChild(applyBtn);
     reviewWrap.appendChild(applyRow);
     reviewWrap.appendChild(plaidMainElement_('div', 'plaid-main-review-note muted',
-      'Select approved fields, then Apply Selected Updates. Credit Left and Provider Available Credit are derived or informational only.'));
+      fromActivity
+        ? 'Select approved fields, then confirm the account, field, and value. Credit Left and Provider Available Credit are derived or informational only.'
+        : 'Select approved fields, then Apply Selected Updates. Credit Left and Provider Available Credit are derived or informational only.'));
   } else {
     reviewWrap.appendChild(plaidMainElement_('div', 'plaid-main-review-note muted',
       'Review only — no CashCompass values have been changed.'));
@@ -1646,9 +1752,18 @@ function plaidMainRenderAccountActions_(domain, connection, account, accountCard
         }
         return;
       }
+      if (plaidMainDomain_(domain) === 'DEBT' || plaidMainAccountDomain_(account) === 'DEBT') {
+        if (!plaidMainOpenDebtAccountActivityFromImportData_(connection, account)) {
+          plaidMainSetAccountMessage_(connection, account,
+            'Debt activity could not open. Refresh and try again.', true, false);
+          plaidMainPatchAccountCard_(domain, connection, account);
+        }
+        return;
+      }
       if (importing) return;
       plaidMainImportData_(domain, connection, account);
-    }, { disabled: importing && plaidMainAccountDomain_(account) !== 'CASH' });
+    }, { disabled: importing && plaidMainAccountDomain_(account) !== 'CASH' &&
+      plaidMainAccountDomain_(account) !== 'DEBT' });
     actions.appendChild(importBtn);
   }
 
@@ -1809,6 +1924,18 @@ function plaidMainSaveMapping_(domain, connection, account, stableAccountId, sta
 function plaidMainOpenBankAccountActivityFromImportData_() {
   if (typeof openBankAccountActivityDrawer_ === 'function') {
     openBankAccountActivityDrawer_('provider');
+    return true;
+  }
+  return false;
+}
+
+function plaidMainOpenDebtAccountActivityFromImportData_(connection, account) {
+  if (typeof openDebtAccountActivityDrawer_ === 'function') {
+    openDebtAccountActivityDrawer_('provider', {
+      protectedConnectionKey: connection && connection.protectedConnectionKey,
+      protectedAccountKey: account && account.protectedAccountKey,
+      autoPreview: true
+    });
     return true;
   }
   return false;
