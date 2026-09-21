@@ -249,9 +249,18 @@ assert(banks.includes("importSource: plaidApply ? 'PLAID'") &&
 assert(client.includes('plaidImportApplyCashUpdates') &&
   client.includes('PLAID_MAIN_CASH_APPLY_KEYS_') &&
   client.includes('plaidMainApplyRpcName_') &&
-  client.includes('Available Balance is informational only') &&
-  !client.includes('updateBankAccountValueByDate('),
-  'Connected client routes Bank Apply through bridge only');
+  client.includes("openBankAccountActivityDrawer_('provider')") &&
+  !client.includes('updateBankAccountValueByDate(') &&
+  !client.includes('plaidImportApplyCashUpdatesFromAccountActivity') &&
+  !client.includes("accountDomain === 'DEBT' || accountDomain === 'CASH'"),
+  'Connected bank Import Data opens Account activity and does not apply cash updates inline');
+
+assert(bridge.includes('function plaidImportApplyCashUpdatesFromAccountActivity') &&
+  /plaidImportApplyCashUpdatesFromAccountActivity[\s\S]{0,1200}plaidImportApplyCashUpdates_\(input\)/.test(bridge) &&
+  /plaidImportAssertAccountActivityCashApplyPayload_[\s\S]{0,400}confirmed !== true/.test(bridge) &&
+  cashApplyInner.includes('updateAvailableNow: false') &&
+  cashApplyInner.includes('updateMinBuffer: false'),
+  'Account activity bank apply must confirm Current balance then reuse the canonical cash Apply writer');
 
 assert(/plaidMainApplySelectedUpdates_[\s\S]{0,1500}plaidMainEnsureAccountReviewExpanded_/.test(client) &&
   /plaidMainShouldForceReviewExpanded_[\s\S]{0,400}applyingKeys/.test(client) &&

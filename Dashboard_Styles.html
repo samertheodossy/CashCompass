@@ -3153,6 +3153,31 @@
   .investment-portfolio-drawer {
     width: min(760px, 100vw);
   }
+  #bank_activity_provider_list .bank-activity-provider-comparison-table {
+    table-layout: fixed;
+    width: 100%;
+  }
+  #bank_activity_provider_list .bank-activity-provider-col-item {
+    width: 28%;
+  }
+  #bank_activity_provider_list .bank-activity-provider-col-num {
+    width: 24%;
+  }
+  #bank_activity_provider_list .bank-activity-provider-comparison-table th.bank-activity-provider-num,
+  #bank_activity_provider_list .bank-activity-provider-comparison-table td.bank-activity-provider-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  @media (max-width: 640px) {
+    #bank_activity_provider_list .bank-activity-provider-comparison-table {
+      table-layout: auto;
+    }
+    #bank_activity_provider_list .bank-activity-provider-col-item,
+    #bank_activity_provider_list .bank-activity-provider-col-num {
+      width: auto;
+    }
+  }
   .investment-portfolio-account-help {
     margin: 8px 0 18px;
     font-size: 12px;

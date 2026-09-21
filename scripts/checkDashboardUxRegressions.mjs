@@ -3915,6 +3915,14 @@ assert.match(body,
 assert.match(body,
   /id=["']bank_activity_drawer["'][\s\S]*?id=["']bank_activity_csv_btn["'][\s\S]*?CSV[\s\S]*?id=["']bank_activity_provider_btn["'][\s\S]*?Connected provider \/ Plaid[\s\S]*?Review pending imports[\s\S]*?id=["']bank_activity_import_btn["'][\s\S]*?Paste CSV/,
   'Account activity must keep CSV and Connected provider as distinct sources');
+assert.match(body,
+  /Import Data opens Account activity, where you can preview provider data and confirm any balance changes\./,
+  'Connected Import Data must explain that preview and apply live in Account activity');
+assert.doesNotMatch(
+  body.slice(body.indexOf('id="bank_mode_connected_wrap"'), body.indexOf('id="bank_status"')),
+  /Apply Selected Updates/,
+  'Connected bank accounts must not tell users to apply updates on Connected'
+);
 assert.doesNotMatch(
   files['Dashboard_Script_AssetsBankInvestments.html'].match(
     /function renderBankActivityProviderCard_[\s\S]*?function previewBankActivityProviderAccount_/
@@ -3927,6 +3935,55 @@ assert.match(
   /factType \|\| ''\) === 'CURRENT_BALANCE'/,
   'Account activity provider preview must still read the CURRENT_BALANCE field key'
 );
+{
+  const bankProviderClient = files['Dashboard_Script_AssetsBankInvestments.html'];
+  const bankProviderPreview = bankProviderClient.slice(
+    bankProviderClient.indexOf('function renderBankActivityProviderComparison_('),
+    bankProviderClient.indexOf('function previewBankActivityProviderAccount_(')
+  );
+  const bankProviderApplyControls = bankProviderClient.slice(
+    bankProviderClient.indexOf('function renderBankActivityProviderApplyControls_('),
+    bankProviderClient.indexOf('function previewBankActivityProviderAccount_(')
+  );
+  assert.match(bankProviderPreview, /bank-activity-provider-comparison-table/,
+    'Account activity Plaid preview must use a fixed comparison table class');
+  assert.match(bankProviderPreview, /plaid-main-num bank-activity-provider-num/,
+    'Account activity Plaid preview numeric cells must share alignment classes');
+  assert.match(bankProviderPreview, /data-label/,
+    'Account activity Plaid preview numeric cells must keep stacked-row labels');
+  assert.match(bankProviderPreview, /Preview does not write/,
+    'Account activity Plaid preview remains read-only');
+  assert.match(bankProviderApplyControls, /Already matches\./,
+    'Matching Plaid balances must show Already matches');
+  assert.doesNotMatch(
+    bankProviderApplyControls.slice(0, bankProviderApplyControls.indexOf('return wrap')),
+    /Apply this Current balance|Confirm account, month, and balance/,
+    'Matching Plaid balances must not offer apply controls'
+  );
+  assert.match(bankProviderApplyControls, /Apply this Current balance/,
+    'Changed Plaid balances must retain the apply control');
+  assert.match(bankProviderApplyControls, /Confirm account, month, and balance/,
+    'Changed Plaid balances must retain explicit confirmation');
+  assert.match(styles, /#bank_activity_provider_list[\s\S]*?table-layout:\s*fixed/,
+    'Account activity Plaid comparison columns must stay fixed across account cards');
+  assert.match(styles, /#bank_activity_provider_list[\s\S]*?text-align:\s*right/,
+    'Account activity Plaid currency values must right-align');
+  assert.match(
+    styles,
+    /@media \(max-width:\s*640px\)\s*\{\s*#bank_activity_provider_list[\s\S]*?table-layout:\s*auto/,
+    'Account activity Plaid comparison tables must remain responsive on narrow screens'
+  );
+  assert.match(plaidConnected, /openBankAccountActivityDrawer_\('provider'\)/,
+    'Connected bank Import Data opens Account activity on the Plaid source');
+  assert.match(plaidConnected, /function plaidMainApplySelectedUpdates_/,
+    'Debt Connected Apply Selected Updates handler must stay in place');
+  assert.match(plaidConnected, /Apply Selected Updates/,
+    'Debt Connected still exposes Apply Selected Updates');
+  assert.doesNotMatch(plaidConnected, /accountDomain === 'DEBT' \|\| accountDomain === 'CASH'/,
+    'Connected bank cards must not enable inline Apply Selected Updates');
+  assert.doesNotMatch(plaidConnected, /plaidImportApplyCashUpdatesFromAccountActivity/,
+    'Connected Apply must not call the Account activity apply wrapper');
+}
 assert.doesNotMatch(body, /id=["']bank_mode_import_btn["']/,
   'The old Manage-page Paste CSV link must be removed once Account activity owns it');
 assert.ok(

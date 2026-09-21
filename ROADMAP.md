@@ -19,13 +19,13 @@ This is the current import and review model. It does not reopen frozen Planning 
 - Bank monthly-balance saves leave **Available Now**, **Minimum Buffer**, **Use Policy**, and **Priority** unchanged unless the user explicitly opts in. Planning continues to use CashCompass INPUT/SYS values.
 - **Investments → Portfolio activity** is the existing investment import/review surface (Robinhood CSV, M1 statement PDF, Fidelity 401(k) statement PDF, and E*TRADE preview adapters as implemented). Preview does not write until an explicit save/apply in that drawer.
 - **Bank Accounts → Account activity** is the CSV and Connected provider/Plaid review surface. CSV paste remains feature-flagged off. Review pending imports supports explicit Add as new, Match, Ignore, preview, and confirmed apply. Staging and ingest do not auto-match-write a balance.
-- Account activity **Connected provider / Plaid** currently previews **Current balance** only for already-connected, already-mapped bank accounts. That preview is read-only and does not apply.
-- **Connected** tabs remain institution connection management: Connect, Reload, mapping, reconnect, disconnect, and provider retrieval (**Import Data**). Bank and Debt **Apply Selected Updates** still live on Connected. Connected is not the CSV/PDF import surface. Optional provider data does not create a Data Readiness action by itself.
+- Account activity **Connected provider / Plaid** previews **Current balance** for already-connected, already-mapped bank accounts and can apply a selected, confirmed Current balance through `plaidImportApplyCashUpdatesFromAccountActivity` → `plaidImportApplyCashUpdates_`. Preview still does not write. Available Now, Minimum Buffer, Use Policy, and Priority are not updated.
+- **Connected** bank accounts are connection and mapping management: Connect, Reload, mapping, reconnect, and disconnect. **Import Data** opens Account activity, where you can preview provider data and confirm any balance changes. Debt **Apply Selected Updates** still lives on Connected. Connected is not the CSV/PDF import surface. Optional provider data does not create a Data Readiness action by itself.
 - Data Readiness treats a valid current monthly CashCompass value as Current even when provider evidence is stale, unmatched, or unused.
 
 ### Current in-progress work
 
-- Keep CSV and Plaid distinct inside Account activity. Do not move Plaid apply off Connected until the drawer has equivalent provider preview and explicit apply.
+- Keep CSV and Plaid distinct inside Account activity.
 - Do not enable CSV paste for customers until the Account activity CSV workflow is accepted as complete.
 - Do not start Debt activity, Property valuations, or a second provider-apply workflow in this cluster.
 
@@ -34,10 +34,9 @@ This is the current import and review model. It does not reopen frozen Planning 
 These are planned, not complete:
 
 - **a. CSV enablement and full Account activity workflow** — turn on Paste CSV only after preview, link, apply, and ignore coverage is accepted in the drawer.
-- **b. Moving confirmed Plaid bank apply into Account activity after parity** — reuse `plaidImportApplyCashUpdates_`; then remove the duplicate Connected apply UI. Do not run two bank apply surfaces.
-- **c. Debt activity drawer** — same drawer pattern as Portfolio activity / Account activity; do not add a top-level import page.
-- **d. Debt provider/file review and explicit apply** — Connected Import Data may open Debt activity with the provider source preselected. `debt_import.js` stays shadow-only. Provider facts must not write `INPUT - Debts` until the user confirms in Debt activity.
-- **e. Property valuations drawer** — dated house evidence review; no live listing APIs in this slice.
+- **b. Debt activity drawer** — same drawer pattern as Portfolio activity / Account activity; do not add a top-level import page.
+- **c. Debt provider/file review and explicit apply** — Connected Import Data may open Debt activity with the provider source preselected. `debt_import.js` stays shadow-only. Provider facts must not write `INPUT - Debts` until the user confirms in Debt activity.
+- **d. Property valuations drawer** — dated house evidence review; no live listing APIs in this slice.
 
 ### Deferred / future work
 
@@ -109,9 +108,9 @@ These are planned, not complete:
   **Bounded runtime has proven controlled Debt Apply** (Chase / Credit Card - SW:
   Current Balance and Credit Limit) through the canonical `updateDebtField`
   writer with server-side revalidation, Activity Log provenance `source=PLAID`,
-  and review-table refresh without full reconnect. **Bank Apply Selected Updates
-  exists on Connected** and Account activity currently previews Current balance
-  only; moving bank apply into the drawer waits for parity. **Investment Apply**
+  and review-table refresh without full reconnect.   **Bank Current balance apply lives in Account activity** through
+  `plaidImportApplyCashUpdatesFromAccountActivity`. Connected bank **Import Data**
+  opens that drawer; the duplicate Connected bank apply UI is removed. **Investment Apply**
   remains out of scope for this cluster. **PLAID IS A REVIEWED IMPORT CHANNEL,
   NOT A FILE IMPORT:** Plaid retrieves candidate data; CSV/PDF stay file
   adapters in the domain activity drawer. CashCompass previews values, the user

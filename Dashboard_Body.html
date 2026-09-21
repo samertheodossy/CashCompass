@@ -590,7 +590,7 @@
 
       <div id="bank_mode_connected_wrap" class="bank-mode-wrap">
         <h3>Connected bank accounts</h3>
-        <p class="muted">Connect institutions, match depository accounts to CashCompass bank accounts, and review current balance evidence here.</p>
+        <p class="muted">Connect institutions, map depository accounts to CashCompass bank accounts, reconnect, and disconnect here. Import Data opens Account activity, where you can preview provider data and confirm any balance changes.</p>
         <div class="warning-box">Plaid is optional. Connected evidence is managed securely by CashCompass and never silently changes your bank accounts.</div>
         <div class="tracked-editor-actions" style="margin-top:12px;">
           <button type="button" id="plaid_main_cash_connect_btn" class="small-btn primary" onclick="plaidMainConnect_('CASH')">Connect institution</button>
@@ -672,7 +672,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
 
             <section id="bank_activity_provider_view" hidden>
               <div class="muted" style="margin-bottom:8px;font-size:13px;line-height:1.4;">
-                Preview Plaid balances for bank accounts that are already connected and already mapped. This preview is read-only. It does not match, stage, or apply. CashCompass values stay authoritative until you use <strong>Apply Selected Updates</strong> on Connected.
+                Preview Plaid current balances for bank accounts that are already connected and already mapped. Preview does not write. Select <strong>Current balance</strong>, then confirm the account, month, and balance to apply. Available Now, Min Buffer, Use policy, and Priority are not updated.
               </div>
               <div id="bank_activity_provider_list"></div>
             </section>

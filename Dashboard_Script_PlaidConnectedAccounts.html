@@ -1,10 +1,11 @@
 /**
  * Connected Accounts inline client.
  *
- * Import Data = read-only provider retrieval and comparison (plaidImportPreviewMapped).
- * Apply Selected Updates = explicit Debt or Bank Account financial mutation via
- * plaidImportApplyDebtUpdates / plaidImportApplyCashUpdates, which revalidate
- * server-side and write through updateDebtField / updateBankAccountValueByDate only.
+ * Import Data = read-only provider retrieval.
+ * Bank (CASH): Import Data opens Account activity with Connected provider / Plaid
+ * selected. Preview and confirmed Current balance apply happen in that drawer.
+ * Debt: Import Data still previews inline (plaidImportPreviewMapped). Apply Selected
+ * Updates remains on Connected via plaidImportApplyDebtUpdates.
  * Import alone must not log financial updates.
  */
 var plaidMainState_ = {
@@ -352,7 +353,6 @@ function loadPlaidConnectedAccounts_(force, domain) {
   plaidMainState_.loading[targetDomain] = true;
   plaidMainSetBusy_(targetDomain, true);
   plaidMainSetStatus_(targetDomain, 'Loading connected ' + plaidMainDomainLabel_(targetDomain) + '…', false);
-  root.textContent = '';
   root.setAttribute('data-plaid-metadata-source', 'network');
   plaidMainCall_('plaidImportConnectedAccountsState', { domain: targetDomain }, function(result) {
     plaidMainStoreMetadataCache_(targetDomain, result);
@@ -365,7 +365,15 @@ function loadPlaidConnectedAccounts_(force, domain) {
     plaidMainSetBusy_(targetDomain, false);
     var message = plaidMainUserMessage_(err);
     plaidMainSetStatus_(targetDomain, message, true);
-    root.appendChild(plaidMainElement_('p', 'muted', message));
+    var cached = plaidMainState_.metadataByDomain && plaidMainState_.metadataByDomain[targetDomain];
+    if (cached) {
+      plaidMainState_.data = cached;
+      plaidMainRenderDomain_(targetDomain);
+      return;
+    }
+    if (!root.childNodes.length) {
+      root.appendChild(plaidMainElement_('p', 'muted', message));
+    }
   });
 }
 
@@ -1499,7 +1507,7 @@ function plaidMainRenderPreviewAccount_(domain, connection, account, accountCard
   var groups = plaidMainBuildDomainReview_(accountPreview, accountDomain, preview);
   var footnote = groups.hasMissing ? PLAID_MAIN_MISSING_NOTE_ : '';
   var applyEnabled = String((account.mapping || {}).status || '') === 'CONFIRMED' &&
-    (accountDomain === 'DEBT' || accountDomain === 'CASH');
+    accountDomain === 'DEBT';
   var tableOptions = {
     footnote: footnote,
     domain: domain,
@@ -1540,13 +1548,8 @@ function plaidMainRenderPreviewAccount_(domain, connection, account, accountCard
     applyBtn.disabled = applying || applyCount < 1;
     applyRow.appendChild(applyBtn);
     reviewWrap.appendChild(applyRow);
-    if (accountDomain === 'CASH') {
-      reviewWrap.appendChild(plaidMainElement_('div', 'plaid-main-review-note muted',
-        'Select approved fields, then Apply Selected Updates. Available Balance is informational only in v1.'));
-    } else {
-      reviewWrap.appendChild(plaidMainElement_('div', 'plaid-main-review-note muted',
-        'Select approved fields, then Apply Selected Updates. Credit Left and Provider Available Credit are derived or informational only.'));
-    }
+    reviewWrap.appendChild(plaidMainElement_('div', 'plaid-main-review-note muted',
+      'Select approved fields, then Apply Selected Updates. Credit Left and Provider Available Credit are derived or informational only.'));
   } else {
     reviewWrap.appendChild(plaidMainElement_('div', 'plaid-main-review-note muted',
       'Review only — no CashCompass values have been changed.'));
@@ -1635,9 +1638,17 @@ function plaidMainRenderAccountActions_(domain, connection, account, accountCard
     var selectionKey = plaidMainApplySelectionKey_(connection, account);
     var importing = !!plaidMainState_.importingKeys[selectionKey];
     var importBtn = plaidMainButton_(importing ? 'Importing…' : 'Import Data', 'small-btn primary', function() {
+      if (plaidMainDomain_(domain) === 'CASH' || plaidMainAccountDomain_(account) === 'CASH') {
+        if (!plaidMainOpenBankAccountActivityFromImportData_()) {
+          plaidMainSetAccountMessage_(connection, account,
+            'Account activity could not open. Refresh and try again.', true, false);
+          plaidMainPatchAccountCard_(domain, connection, account);
+        }
+        return;
+      }
       if (importing) return;
       plaidMainImportData_(domain, connection, account);
-    }, { disabled: importing });
+    }, { disabled: importing && plaidMainAccountDomain_(account) !== 'CASH' });
     actions.appendChild(importBtn);
   }
 
@@ -1692,8 +1703,11 @@ function plaidMainBuildAccountCard_(domain, connection, account) {
     '  ' + String(account.type || 'unknown').toUpperCase() +
     (account.subtype ? ' · ' + account.subtype : '')));
   header.appendChild(identity);
+  var showInlineReview = hasPreview && plaidMainAccountDomain_(account) !== 'CASH';
   if (hasPreview) {
-    header.appendChild(plaidMainRenderReviewToggleButton_(domain, connection, account, collapsed, reviewPanelId));
+    if (showInlineReview) {
+      header.appendChild(plaidMainRenderReviewToggleButton_(domain, connection, account, collapsed, reviewPanelId));
+    }
   }
   accountCard.appendChild(header);
   plaidMainRenderAssociation_(domain, connection, account, accountCard);
@@ -1704,7 +1718,7 @@ function plaidMainBuildAccountCard_(domain, connection, account) {
   var importedAt = plaidMainLastImportedAt_(connection, account);
   accountCard.appendChild(plaidMainElement_('div', 'muted',
     plaidMainImportStatusText_(domain, importedAt)));
-  if (hasPreview && preview) {
+  if (showInlineReview && preview) {
     var accountPreview = (preview.accounts || []).filter(function(row) {
       return String(row.protectedAccountKey || '') === String(account.protectedAccountKey || '');
     })[0];
@@ -1713,14 +1727,18 @@ function plaidMainBuildAccountCard_(domain, connection, account) {
   }
 
   if (hasPreview && collapsed) {
-    var summary = plaidMainRenderCollapsedReviewSummary_(connection, account, preview);
-    if (summary) accountCard.appendChild(summary);
+    if (showInlineReview) {
+      var summary = plaidMainRenderCollapsedReviewSummary_(connection, account, preview);
+      if (summary) accountCard.appendChild(summary);
+    }
   }
 
   plaidMainRenderAccountActions_(domain, connection, account, accountCard);
 
   if (hasPreview && !collapsed) {
-    plaidMainRenderPreviewAccount_(domain, connection, account, accountCard, preview, reviewPanelId);
+    if (showInlineReview) {
+      plaidMainRenderPreviewAccount_(domain, connection, account, accountCard, preview, reviewPanelId);
+    }
   }
   return accountCard;
 }
@@ -1786,6 +1804,14 @@ function plaidMainSaveMapping_(domain, connection, account, stableAccountId, sta
     plaidMainSetAccountMessage_(connection, account, plaidMainUserMessage_(err), true, false);
     plaidMainRenderDomain_(domain);
   });
+}
+
+function plaidMainOpenBankAccountActivityFromImportData_() {
+  if (typeof openBankAccountActivityDrawer_ === 'function') {
+    openBankAccountActivityDrawer_('provider');
+    return true;
+  }
+  return false;
 }
 
 function plaidMainImportData_(domain, connection, account) {

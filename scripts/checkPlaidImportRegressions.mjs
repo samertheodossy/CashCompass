@@ -44,7 +44,9 @@ assert(bridge.includes("['owner', 'email', 'userKey', 'workbookId', 'spreadsheet
   'browser ownership fields are not rejected');
 for (const operation of ['plaidImportExchangePublicToken', 'plaidImportReconnect',
   'plaidImportCompleteReconnect', 'plaidImportSaveMapping', 'plaidImportPreviewMapped',
-  'plaidImportApplyDebtUpdates', 'plaidImportApplyCashUpdates', 'plaidImportInvalidateMapping', 'plaidImportDisconnect']) {
+  'plaidImportApplyDebtUpdates', 'plaidImportApplyCashUpdates',
+  'plaidImportApplyCashUpdatesFromAccountActivity', 'plaidImportInvalidateMapping',
+  'plaidImportDisconnect']) {
   const start = bridge.indexOf(`function ${operation}`);
   const end = bridge.indexOf('\nfunction ', start + 1);
   const source = bridge.slice(start, end < 0 ? bridge.length : end);

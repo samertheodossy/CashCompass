@@ -14,7 +14,10 @@
  *   Apply Selected Updates (plaidImportApplyDebtUpdates / plaidImportApplyCashUpdates)
  *   = explicit Debt or Bank Account mutation via updateDebtField /
  *   updateBankAccountValueByDate_ after server-side revalidation; records Activity
- *   Log provenance source=PLAID. Investment Apply is out of scope.
+ *   Log provenance source=PLAID. Account activity bank apply
+ *   (plaidImportApplyCashUpdatesFromAccountActivity) requires confirmed Current
+ *   balance selection and reuses plaidImportApplyCashUpdates_. Investment Apply
+ *   is out of scope.
  */
 var PLAID_IMPORT_ENABLED_KEY_ = 'PLAID_IMPORT_ENABLED';
 var PLAID_IMPORT_REVIEW_BASELINE_KEY_PREFIX_ = 'PLAID_IMPORT_REVIEW_BASELINE_V1_';
@@ -1886,6 +1889,36 @@ function plaidImportApplyCashUpdates_(payload) {
     };
   } finally {
     plaidImportEndRequestSession_();
+  }
+}
+
+function plaidImportAssertAccountActivityCashApplyPayload_(input) {
+  if (!input || input.confirmed !== true) {
+    throw new Error('Confirm the account, month, and balance before applying.');
+  }
+  var selectedKeys = Array.isArray(input.selectedApplyKeys) ? input.selectedApplyKeys : [];
+  if (!selectedKeys.length) throw new Error('Select Current balance before applying.');
+  if (selectedKeys.length !== 1 || String(selectedKeys[0] || '') !== 'CURRENT_BALANCE') {
+    throw new Error('Account activity can apply Current balance only.');
+  }
+}
+
+function plaidImportApplyCashUpdatesFromAccountActivity(payload) {
+  try {
+    var input = payload && typeof payload === 'object' ? payload : {};
+    plaidImportRejectBrowserAuthority_(input);
+    plaidImportRejectApplyFinancialAuthority_(input);
+    plaidImportAssertAccountActivityCashApplyPayload_(input);
+    return plaidImportApplyCashUpdates_(input);
+  } catch (error) {
+    var message = String(error && error.message || '');
+    if (/Browser-provided|Import Data again|cannot be applied|not accepted|unavailable for apply|Confirm the account|Current balance only|Select Current balance/i.test(message)) {
+      return { ok: false, error: message };
+    }
+    if (message === 'FINANCIAL_IDENTITY_REVIEW_REQUIRED') {
+      return { ok: false, error: PLAID_IMPORT_IDENTITY_REVIEW_ERROR_ };
+    }
+    return { ok: false, error: PLAID_IMPORT_PUBLIC_ERROR_ };
   }
 }
 

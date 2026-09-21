@@ -481,7 +481,8 @@ function setBankAccountActivityView_(view) {
 var __bankActivityProviderState = {
   rows: [],
   loading: false,
-  previewingKey: '',
+  previewingKeys: Object.create(null),
+  applyingKey: '',
   requestSeq: 0
 };
 
@@ -547,6 +548,28 @@ function bankActivityProviderSignedMoney_(value) {
   return bankActivityProviderMoney_(0);
 }
 
+function bankActivityProviderDiffMatches_(diff) {
+  if (diff === null || diff === undefined || diff === '') return false;
+  var num = Number(diff);
+  if (!isFinite(num)) return false;
+  return Math.round(num * 100) === 0;
+}
+
+function bankActivityProviderIsAlreadyCurrent_(facts) {
+  facts = facts || {};
+  return !!facts.hasMonth && facts.providerValue !== null &&
+    isFinite(Number(facts.providerValue)) &&
+    bankActivityProviderDiffMatches_(facts.diff);
+}
+
+function bankActivityProviderNumericCell_(label, text) {
+  var td = document.createElement('td');
+  td.className = 'plaid-main-num bank-activity-provider-num';
+  td.setAttribute('data-label', label);
+  td.textContent = text;
+  return td;
+}
+
 function bankActivityProviderTimestamp_(iso) {
   if (!iso) return '';
   if (typeof plaidMainFormatImportedAt_ === 'function') return plaidMainFormatImportedAt_(iso);
@@ -555,11 +578,111 @@ function bankActivityProviderTimestamp_(iso) {
   return d.toLocaleString();
 }
 
+function bankActivityProviderAccountKey_(row) {
+  var connection = (row && row.connection) || {};
+  var account = (row && row.account) || {};
+  return String(connection.protectedConnectionKey || '') + '::' +
+    String(account.protectedAccountKey || '');
+}
+
+function bankActivityProviderPreviewingMap_(state) {
+  state = state || __bankActivityProviderState;
+  if (!state.previewingKeys || typeof state.previewingKeys !== 'object') {
+    state.previewingKeys = Object.create(null);
+  }
+  return state.previewingKeys;
+}
+
+function bankActivityProviderStartPreviewRequest_(state, key) {
+  key = String(key || '');
+  if (!key) return false;
+  var map = bankActivityProviderPreviewingMap_(state);
+  if (map[key]) return false;
+  map[key] = true;
+  return true;
+}
+
+function bankActivityProviderFinishPreviewRequest_(state, key) {
+  delete bankActivityProviderPreviewingMap_(state)[String(key || '')];
+}
+
+function bankActivityProviderIsPreviewing_(state, key) {
+  return !!bankActivityProviderPreviewingMap_(state)[String(key || '')];
+}
+
+function bankActivityProviderFindRowByKey_(rows, key) {
+  var wanted = String(key || '');
+  return (rows || []).filter(function(row) {
+    return bankActivityProviderAccountKey_(row) === wanted;
+  })[0] || null;
+}
+
+function bankActivityProviderKeepOtherPreviews_(rows, updatedKey, previewByKey) {
+  var wanted = String(updatedKey || '');
+  var next = {};
+  (rows || []).forEach(function(row) {
+    var rowKey = bankActivityProviderAccountKey_(row);
+    if (!rowKey) return;
+    if (rowKey === wanted) next[rowKey] = previewByKey;
+    else next[rowKey] = row.preview || null;
+  });
+  return next;
+}
+
+function bankActivityProviderCurrentBalanceFacts_(row) {
+  var preview = (row && row.preview) || {};
+  var accountPreview = preview.accountPreview || {};
+  var applyContext = accountPreview.cashCompassApplyContext || {};
+  var balanceRow = (accountPreview.rows || []).filter(function(item) {
+    return String(item && item.factType || '') === 'CURRENT_BALANCE';
+  })[0] || null;
+  var candidate = balanceRow && balanceRow.candidate ? balanceRow.candidate : null;
+  var providerValue = null;
+  if (candidate && candidate.numericValue !== undefined && candidate.numericValue !== null &&
+      isFinite(Number(candidate.numericValue))) {
+    providerValue = Number(candidate.numericValue);
+  }
+  var hasMonth = !!applyContext.hasMonthValue;
+  var monthValue = hasMonth && isFinite(Number(applyContext.monthBalance))
+    ? Number(applyContext.monthBalance)
+    : null;
+  var diff = (providerValue !== null && monthValue !== null)
+    ? providerValue - monthValue
+    : null;
+  var monthLabel = String(applyContext.monthLabel || applyContext.balanceMonthKey || '').trim() || '—';
+  var retrievedAt = String(preview.observedAt ||
+    accountPreview.reviewObservedAt ||
+    (balanceRow && (balanceRow.observedAt || balanceRow.effectiveAsOf)) ||
+    (candidate && candidate.providerEffectiveAsOf) || '').trim();
+  return {
+    accountName: String((row && row.cashCompassName) || '').trim() || '—',
+    monthLabel: monthLabel,
+    hasMonth: hasMonth,
+    monthValue: monthValue,
+    providerValue: providerValue,
+    diff: diff,
+    retrievedAt: retrievedAt,
+    reviewObservedAt: String(accountPreview.reviewObservedAt || '').trim(),
+    stableAccountId: String((row && row.mapping && row.mapping.stableAccountId) || '').trim(),
+    protectedConnectionKey: String((row && row.connection && row.connection.protectedConnectionKey) || '').trim(),
+    protectedAccountKey: String((row && row.account && row.account.protectedAccountKey) || '').trim(),
+    factType: 'CURRENT_BALANCE',
+    alreadyMatches: !!hasMonth && providerValue !== null &&
+      bankActivityProviderDiffMatches_(diff)
+  };
+}
+
 function loadBankActivityProviderPreview_() {
   var list = document.getElementById('bank_activity_provider_list');
   if (!list) return;
   var requestSeq = ++__bankActivityProviderState.requestSeq;
   __bankActivityProviderState.loading = true;
+  __bankActivityProviderState.applyingKey = '';
+  var previousByKey = Object.create(null);
+  (__bankActivityProviderState.rows || []).forEach(function(row) {
+    var prevKey = bankActivityProviderAccountKey_(row);
+    if (prevKey) previousByKey[prevKey] = row;
+  });
   list.innerHTML = '<div class="muted" style="padding:12px 0;">Loading connected bank accounts…</div>';
   setStatus('bank_status', 'Loading connected bank accounts…', false);
   bankActivityProviderCall_('plaidImportConnectedAccountsState', { domain: 'CASH' }, function(result) {
@@ -570,14 +693,23 @@ function loadBankActivityProviderPreview_() {
       (connection.accounts || []).forEach(function(account) {
         if (!bankActivityProviderIsMappedCash_(connection, account)) return;
         var mapping = account.mapping || {};
-        rows.push({
+        var nextRow = {
           connection: connection,
           account: account,
           mapping: mapping,
           cashCompassName: bankActivityProviderTargetName_(
             result.targets || [], mapping.stableAccountId, account),
-          preview: null
-        });
+          preview: null,
+          previewError: '',
+          selectedCurrentBalance: false
+        };
+        var previous = previousByKey[bankActivityProviderAccountKey_(nextRow)];
+        if (previous) {
+          nextRow.preview = previous.preview || null;
+          nextRow.previewError = previous.previewError || '';
+          nextRow.selectedCurrentBalance = !!previous.selectedCurrentBalance;
+        }
+        rows.push(nextRow);
       });
     });
     __bankActivityProviderState.rows = rows;
@@ -586,7 +718,6 @@ function loadBankActivityProviderPreview_() {
   }, function(err) {
     if (requestSeq !== __bankActivityProviderState.requestSeq) return;
     __bankActivityProviderState.loading = false;
-    __bankActivityProviderState.rows = [];
     var message = (err && err.message) ? String(err.message) : 'Could not load connected bank accounts.';
     list.innerHTML = '<div class="muted" style="padding:12px 0;"></div>';
     list.firstChild.textContent = message;
@@ -633,14 +764,14 @@ function renderBankActivityProviderCard_(row, index) {
   var actions = document.createElement('div');
   actions.className = 'tracked-editor-actions';
   actions.style.marginTop = '8px';
-  var key = String(connection.protectedConnectionKey || '') + '::' +
-    String(account.protectedAccountKey || '');
-  var previewing = __bankActivityProviderState.previewingKey === key;
+  var key = bankActivityProviderAccountKey_(row);
+  var previewing = bankActivityProviderIsPreviewing_(__bankActivityProviderState, key);
+  var applying = __bankActivityProviderState.applyingKey === key;
   var previewBtn = document.createElement('button');
   previewBtn.type = 'button';
   previewBtn.className = 'small-btn';
   previewBtn.textContent = previewing ? 'Loading preview…' : (row.preview ? 'Refresh preview' : 'Preview current balance');
-  previewBtn.disabled = previewing;
+  previewBtn.disabled = previewing || applying;
   previewBtn.onclick = function() {
     previewBankActivityProviderAccount_(index);
   };
@@ -653,61 +784,63 @@ function renderBankActivityProviderCard_(row, index) {
     err.textContent = row.previewError;
     card.appendChild(err);
   }
-  if (row.preview) card.appendChild(renderBankActivityProviderComparison_(row));
+  if (row.preview) card.appendChild(renderBankActivityProviderComparison_(row, index));
   return card;
 }
 
-function renderBankActivityProviderComparison_(row) {
+function renderBankActivityProviderComparison_(row, index) {
   var wrap = document.createElement('div');
   wrap.style.marginTop = '10px';
+  var facts = bankActivityProviderCurrentBalanceFacts_(row);
+  var alreadyMatches = bankActivityProviderIsAlreadyCurrent_(facts);
   var note = document.createElement('div');
   note.className = 'muted';
   note.style.marginBottom = '8px';
   note.style.fontSize = '12px';
-  note.textContent = 'Read-only preview. INPUT/SYS stay unchanged. Available Now, Min Buffer, Use policy, and Priority are not shown and are not updated here.';
+  note.textContent = alreadyMatches
+    ? 'Preview does not write. This Current balance already matches CashCompass.'
+    : 'Preview does not write. Select Current balance, then confirm the account, month, and balance to apply. Available Now, Min Buffer, Use policy, and Priority are not updated.';
   wrap.appendChild(note);
   var table = document.createElement('table');
-  table.className = 'plaid-main-comparison-table';
+  table.className = 'plaid-main-comparison-table bank-activity-provider-comparison-table';
   table.style.width = '100%';
+  var colgroup = document.createElement('colgroup');
+  ['bank-activity-provider-col-item', 'bank-activity-provider-col-num',
+    'bank-activity-provider-col-num', 'bank-activity-provider-col-num'].forEach(function(cls) {
+    var col = document.createElement('col');
+    col.className = cls;
+    colgroup.appendChild(col);
+  });
+  table.appendChild(colgroup);
   var thead = document.createElement('thead');
   var headRow = document.createElement('tr');
-  ['Item', 'CashCompass', 'Provider', 'Difference'].forEach(function(label) {
+  [
+    { label: 'Item', numeric: false },
+    { label: 'CashCompass', numeric: true },
+    { label: 'Provider', numeric: true },
+    { label: 'Difference', numeric: true }
+  ].forEach(function(col) {
     var th = document.createElement('th');
-    th.textContent = label;
+    th.textContent = col.label;
+    if (col.numeric) th.className = 'plaid-main-num bank-activity-provider-num';
     headRow.appendChild(th);
   });
   thead.appendChild(headRow);
   table.appendChild(thead);
   var tbody = document.createElement('tbody');
-  var preview = row.preview || {};
-  var accountPreview = preview.accountPreview || {};
-  var applyContext = accountPreview.cashCompassApplyContext || {};
-  var balanceRow = (accountPreview.rows || []).filter(function(item) {
-    return String(item && item.factType || '') === 'CURRENT_BALANCE';
-  })[0] || null;
-  var candidate = balanceRow && balanceRow.candidate ? balanceRow.candidate : null;
-  var providerValue = candidate && candidate.numericValue !== undefined && candidate.numericValue !== null
-    ? candidate.numericValue
-    : null;
-  var hasMonth = !!applyContext.hasMonthValue;
-  var monthValue = hasMonth ? applyContext.monthBalance : null;
-  var diff = (providerValue !== null && monthValue !== null && isFinite(Number(providerValue)) &&
-    isFinite(Number(monthValue)))
-    ? Number(providerValue) - Number(monthValue)
-    : null;
   var bodyRow = document.createElement('tr');
   var itemCell = document.createElement('td');
+  itemCell.setAttribute('data-label', 'Item');
   itemCell.textContent = 'Current balance';
   bodyRow.appendChild(itemCell);
-  var ccCell = document.createElement('td');
-  ccCell.textContent = hasMonth ? bankActivityProviderMoney_(monthValue) : '—';
-  bodyRow.appendChild(ccCell);
-  var providerCell = document.createElement('td');
-  providerCell.textContent = providerValue === null ? '—' : bankActivityProviderMoney_(providerValue);
-  bodyRow.appendChild(providerCell);
-  var diffCell = document.createElement('td');
-  diffCell.textContent = diff === null ? '—' : bankActivityProviderSignedMoney_(diff);
-  bodyRow.appendChild(diffCell);
+  bodyRow.appendChild(bankActivityProviderNumericCell_('CashCompass',
+    facts.hasMonth ? bankActivityProviderMoney_(facts.monthValue) : '—'));
+  bodyRow.appendChild(bankActivityProviderNumericCell_('Provider',
+    facts.providerValue === null ? '—' : bankActivityProviderMoney_(facts.providerValue)));
+  var diffText = facts.diff === null
+    ? '—'
+    : (alreadyMatches ? bankActivityProviderMoney_(0) : bankActivityProviderSignedMoney_(facts.diff));
+  bodyRow.appendChild(bankActivityProviderNumericCell_('Difference', diffText));
   tbody.appendChild(bodyRow);
   table.appendChild(tbody);
   wrap.appendChild(table);
@@ -716,17 +849,96 @@ function renderBankActivityProviderComparison_(row) {
   details.style.marginTop = '8px';
   details.style.fontSize = '12px';
   details.style.lineHeight = '1.4';
-  var monthLabel = String(applyContext.monthLabel || applyContext.balanceMonthKey || '').trim() || '—';
-  var retrievedAt = String(preview.observedAt ||
-    (balanceRow && (balanceRow.observedAt || balanceRow.effectiveAsOf)) ||
-    (candidate && candidate.providerEffectiveAsOf) || '').trim();
-  details.appendChild(document.createTextNode('CashCompass account: ' + (row.cashCompassName || '—')));
+  details.appendChild(document.createTextNode('CashCompass account: ' + facts.accountName));
   details.appendChild(document.createElement('br'));
-  details.appendChild(document.createTextNode('Target month: ' + monthLabel));
+  details.appendChild(document.createTextNode('Target month: ' + facts.monthLabel));
   details.appendChild(document.createElement('br'));
   details.appendChild(document.createTextNode(
-    'Source timestamp: ' + (retrievedAt ? bankActivityProviderTimestamp_(retrievedAt) : 'not reported')));
+    'Source timestamp: ' + (facts.retrievedAt ? bankActivityProviderTimestamp_(facts.retrievedAt) : 'not reported')));
   wrap.appendChild(details);
+  if (!facts.hasMonth) {
+    var missing = document.createElement('div');
+    missing.className = 'muted';
+    missing.style.marginTop = '6px';
+    missing.style.fontSize = '12px';
+    missing.textContent = 'This month has no CashCompass balance yet. Unknown is not $0.';
+    wrap.appendChild(missing);
+  }
+  wrap.appendChild(renderBankActivityProviderApplyControls_(row, index, facts));
+  return wrap;
+}
+
+function renderBankActivityProviderApplyControls_(row, index, facts) {
+  var wrap = document.createElement('div');
+  wrap.style.marginTop = '10px';
+  if (bankActivityProviderIsAlreadyCurrent_(facts)) {
+    row.selectedCurrentBalance = false;
+    var matchNote = document.createElement('div');
+    matchNote.className = 'muted bank-activity-provider-already-matches';
+    matchNote.style.fontSize = '13px';
+    matchNote.textContent = 'Already matches.';
+    wrap.appendChild(matchNote);
+    return wrap;
+  }
+  var canApply = facts.providerValue !== null &&
+    !!facts.reviewObservedAt &&
+    !!facts.stableAccountId &&
+    !!facts.protectedConnectionKey &&
+    !!facts.protectedAccountKey;
+  if (!canApply) {
+    var blocked = document.createElement('div');
+    blocked.className = 'muted';
+    blocked.style.fontSize = '12px';
+    blocked.textContent = facts.providerValue === null
+      ? 'No provider current balance is available to apply.'
+      : 'Preview again before applying this current balance.';
+    wrap.appendChild(blocked);
+    return wrap;
+  }
+  var key = bankActivityProviderAccountKey_(row);
+  var applying = __bankActivityProviderState.applyingKey === key;
+  var selected = !!row.selectedCurrentBalance;
+  var label = document.createElement('label');
+  label.style.display = 'flex';
+  label.style.alignItems = 'flex-start';
+  label.style.gap = '8px';
+  label.style.fontWeight = '600';
+  label.style.fontSize = '13px';
+  var checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.style.width = 'auto';
+  checkbox.style.marginTop = '3px';
+  checkbox.checked = selected;
+  checkbox.disabled = applying;
+  checkbox.setAttribute('aria-label', 'Select Current balance');
+  checkbox.onchange = function() {
+    row.selectedCurrentBalance = !!checkbox.checked;
+    renderBankActivityProviderList_();
+  };
+  label.appendChild(checkbox);
+  var labelText = document.createElement('span');
+  labelText.textContent = 'Apply this Current balance';
+  label.appendChild(labelText);
+  wrap.appendChild(label);
+  var actions = document.createElement('div');
+  actions.className = 'tracked-editor-actions';
+  actions.style.marginTop = '8px';
+  var confirmBtn = document.createElement('button');
+  confirmBtn.type = 'button';
+  confirmBtn.className = 'small-btn primary';
+  confirmBtn.textContent = applying ? 'Applying…' : 'Confirm account, month, and balance';
+  confirmBtn.disabled = applying || !selected;
+  confirmBtn.onclick = function() {
+    confirmBankActivityProviderApply_(index);
+  };
+  actions.appendChild(confirmBtn);
+  wrap.appendChild(actions);
+  var applyNote = document.createElement('div');
+  applyNote.className = 'muted';
+  applyNote.style.marginTop = '6px';
+  applyNote.style.fontSize = '12px';
+  applyNote.textContent = 'Applying writes only the selected Current balance. Available Now, Min Buffer, Use policy, and Priority stay unchanged.';
+  wrap.appendChild(applyNote);
   return wrap;
 }
 
@@ -735,14 +947,13 @@ function previewBankActivityProviderAccount_(index) {
   if (!row) return;
   var connection = row.connection || {};
   var account = row.account || {};
-  var key = String(connection.protectedConnectionKey || '') + '::' +
-    String(account.protectedAccountKey || '');
+  var key = bankActivityProviderAccountKey_(row);
   if (!connection.protectedConnectionKey || !account.protectedAccountKey) {
     row.previewError = 'This connected account is missing a preview key.';
     renderBankActivityProviderList_();
     return;
   }
-  __bankActivityProviderState.previewingKey = key;
+  if (!bankActivityProviderStartPreviewRequest_(__bankActivityProviderState, key)) return;
   row.previewError = '';
   renderBankActivityProviderList_();
   setStatus('bank_status', 'Loading Plaid preview…', false);
@@ -750,23 +961,86 @@ function previewBankActivityProviderAccount_(index) {
     protectedConnectionKey: connection.protectedConnectionKey,
     protectedAccountKey: account.protectedAccountKey
   }, function(result) {
-    if (__bankActivityProviderState.previewingKey !== key) return;
-    __bankActivityProviderState.previewingKey = '';
+    bankActivityProviderFinishPreviewRequest_(__bankActivityProviderState, key);
+    var current = bankActivityProviderFindRowByKey_(__bankActivityProviderState.rows, key);
+    if (!current) return;
     var accountPreview = ((result && result.accounts) || []).filter(function(item) {
       return String(item && item.protectedAccountKey || '') === String(account.protectedAccountKey || '');
     })[0] || ((result && result.accounts && result.accounts[0]) || null);
-    row.preview = {
+    current.preview = {
       observedAt: result && result.observedAt,
       accountPreview: accountPreview || {}
     };
-    row.previewError = '';
+    current.previewError = '';
+    current.selectedCurrentBalance = false;
     renderBankActivityProviderList_();
     setStatus('bank_status', 'Plaid preview loaded. CashCompass values were not changed.', false);
   }, function(err) {
-    if (__bankActivityProviderState.previewingKey !== key) return;
-    __bankActivityProviderState.previewingKey = '';
-    row.preview = null;
-    row.previewError = (err && err.message) ? String(err.message) : 'Could not load Plaid preview.';
+    bankActivityProviderFinishPreviewRequest_(__bankActivityProviderState, key);
+    var current = bankActivityProviderFindRowByKey_(__bankActivityProviderState.rows, key);
+    if (!current) return;
+    current.previewError = (err && err.message) ? String(err.message) : 'Could not load Plaid preview.';
+    renderBankActivityProviderList_();
+    setStatus('bank_status', current.previewError, true);
+  });
+}
+
+function confirmBankActivityProviderApply_(index) {
+  var row = (__bankActivityProviderState.rows || [])[index];
+  if (!row) return;
+  var facts = bankActivityProviderCurrentBalanceFacts_(row);
+  var key = bankActivityProviderAccountKey_(row);
+  if (bankActivityProviderIsAlreadyCurrent_(facts)) {
+    row.selectedCurrentBalance = false;
+    renderBankActivityProviderList_();
+    setStatus('bank_status', 'Already matches. No update is needed.', false);
+    return;
+  }
+  if (!row.selectedCurrentBalance) {
+    setStatus('bank_status', 'Select Current balance before applying.', true);
+    return;
+  }
+  if (facts.providerValue === null || !facts.reviewObservedAt || !facts.stableAccountId ||
+      !facts.protectedConnectionKey || !facts.protectedAccountKey) {
+    setStatus('bank_status', 'Preview again before applying this current balance.', true);
+    return;
+  }
+  if (__bankActivityProviderState.applyingKey) return;
+  __bankActivityProviderState.applyingKey = key;
+  row.previewError = '';
+  renderBankActivityProviderList_();
+  setStatus('bank_status', 'Applying confirmed current balance…', false);
+  bankActivityProviderCall_('plaidImportApplyCashUpdatesFromAccountActivity', {
+    protectedConnectionKey: facts.protectedConnectionKey,
+    protectedAccountKey: facts.protectedAccountKey,
+    stableAccountId: facts.stableAccountId,
+    reviewObservedAt: facts.reviewObservedAt,
+    selectedApplyKeys: ['CURRENT_BALANCE'],
+    confirmed: true
+  }, function(result) {
+    if (__bankActivityProviderState.applyingKey !== key) return;
+    __bankActivityProviderState.applyingKey = '';
+    row.selectedCurrentBalance = false;
+    if (result && result.preview) {
+      var accountPreview = ((result.preview.accounts) || []).filter(function(item) {
+        return String(item && item.protectedAccountKey || '') === facts.protectedAccountKey;
+      })[0] || ((result.preview.accounts && result.preview.accounts[0]) || null);
+      row.preview = {
+        observedAt: result.preview.observedAt || (row.preview && row.preview.observedAt),
+        accountPreview: accountPreview || (row.preview && row.preview.accountPreview) || {}
+      };
+    }
+    renderBankActivityProviderList_();
+    var appliedCount = Number(result && result.appliedCount || 0);
+    setStatus('bank_status', appliedCount
+      ? 'Current balance applied. Available Now, Min Buffer, Use policy, and Priority were not changed.'
+      : 'Current balance apply finished. CashCompass values stay authoritative.', false);
+    if (typeof loadBankSection === 'function') loadBankSection();
+    if (typeof refreshSnapshot === 'function') refreshSnapshot();
+  }, function(err) {
+    if (__bankActivityProviderState.applyingKey !== key) return;
+    __bankActivityProviderState.applyingKey = '';
+    row.previewError = (err && err.message) ? String(err.message) : 'Could not apply the current balance.';
     renderBankActivityProviderList_();
     setStatus('bank_status', row.previewError, true);
   });

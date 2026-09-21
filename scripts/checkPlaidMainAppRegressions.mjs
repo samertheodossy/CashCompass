@@ -141,7 +141,16 @@ assert(client.includes('plaidMainApplySelectedUpdates_') &&
   client.includes('plaidMainSelectedEligibleApplyCount_') &&
   client.includes('importingKeys') &&
   client.includes('plaidMainRenderAccountLocalStatus_'),
-  'Debt and Bank Apply selection UX and account-local status are present in Connected client');
+  'Debt Apply selection UX and account-local status are present in Connected client');
+
+assert(client.includes('plaidMainOpenBankAccountActivityFromImportData_') &&
+  client.includes("openBankAccountActivityDrawer_('provider')") &&
+  /plaidMainRenderAccountActions_[\s\S]{0,2200}plaidMainOpenBankAccountActivityFromImportData_\(\)/.test(client) &&
+  /plaidMainRenderAccountActions_[\s\S]{0,2800}plaidMainImportData_\(domain, connection, account\)/.test(client) &&
+  /function plaidMainOpenBankAccountActivityFromImportData_[\s\S]{0,400}openBankAccountActivityDrawer_\('provider'\)/.test(client) &&
+  /plaidMainBuildAccountCard_[\s\S]{0,2500}showInlineReview[\s\S]{0,200}plaidMainAccountDomain_\(account\) !== 'CASH'/.test(client) &&
+  /function loadPlaidConnectedAccounts_[\s\S]{0,2800}var cached = plaidMainState_\.metadataByDomain/.test(client),
+  'Bank Import Data opens Account activity, hides inline bank review, and keeps cached connections if Plaid is unavailable');
 
 assert(client.includes('Importing data…') &&
   !client.includes('Importing provider data…') &&
@@ -182,8 +191,8 @@ assert(client.includes('collapsedAccountKeys') &&
   /plaidMainActionableReviewSummaryText_[\s\S]{0,600}derivedOnly/.test(client) &&
   /plaidMainActionableReviewSummaryText_[\s\S]{0,600}informational/.test(client) &&
   /plaidMainActionableReviewSummaryText_[\s\S]{0,600}change === 'Same'/.test(client) &&
-  /plaidMainBuildAccountCard_[\s\S]{0,2500}!collapsed[\s\S]{0,400}plaidMainRenderPreviewAccount_/.test(client) &&
-  /plaidMainBuildAccountCard_[\s\S]{0,2500}collapsed[\s\S]{0,400}plaidMainRenderCollapsedReviewSummary_/.test(client) &&
+  /plaidMainBuildAccountCard_[\s\S]{0,3500}hasPreview && !collapsed[\s\S]{0,250}plaidMainRenderPreviewAccount_/.test(client) &&
+  /plaidMainBuildAccountCard_[\s\S]{0,3500}hasPreview && collapsed[\s\S]{0,250}plaidMainRenderCollapsedReviewSummary_/.test(client) &&
   /plaidMainToggleAccountReviewCollapsed_[\s\S]{0,300}plaidMainPatchAccountCard_/.test(client) &&
   !/plaidMainToggleAccountReviewCollapsed_[\s\S]{0,300}plaidMainCall_/.test(client) &&
   /plaidMainImportData_[\s\S]{0,900}plaidMainEnsureAccountReviewExpanded_/.test(client) &&
