@@ -248,7 +248,7 @@ assert.match(
 );
 assert.match(plaidClient, /openBankAccountActivityDrawer_\('provider'\)/);
 assert.match(plaidClient, /function plaidMainOpenBankAccountActivityFromImportData_/);
-assert.match(plaidClient, /Apply Selected Updates/);
+assert.match(plaidClient, /function plaidMainApplySelectedUpdates_/);
 assert.match(plaidClient, /plaidImportApplyCashUpdates/);
 assert.match(plaidClient, /function plaidMainImportData_/);
 assert.match(plaidClient, /function plaidMainApplySelectedUpdates_/);

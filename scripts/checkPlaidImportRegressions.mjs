@@ -166,12 +166,13 @@ assert(client.includes("plaidMainCall_('plaidImportPreviewMapped'") &&
   !client.includes('updateBankAccountValueByDate('),
   'Connected client must preview read-only and Apply through bridge only');
 assert(client.includes('plaidImportApplyDebtUpdates') &&
-  client.includes("'Apply Selected Updates'") &&
   client.includes('function plaidMainApplySelectedUpdates_') &&
   !client.includes('plaidImportApplyDebtUpdatesFromAccountActivity') &&
   client.includes('plaidMainOpenDebtAccountActivityFromImportData_') &&
-  client.includes('openDebtAccountActivityDrawer_'),
-  'Connected debt Import Data opens Debt activity while Apply Selected Updates stays on the existing inline apply path');
+  client.includes('openDebtAccountActivityDrawer_') &&
+  /accountDomain === 'DEBT' && fromActivity/.test(client) &&
+  !/function plaidMainRenderPreviewAccount_[\s\S]*?'Apply Selected Updates'/.test(client),
+  'Connected debt Import Data opens Debt activity and does not present Apply Selected Updates');
 assert(client.includes('plaidMainEnsureAccountReviewExpanded_') &&
   /plaidMainImportData_[\s\S]{0,900}plaidMainEnsureAccountReviewExpanded_/.test(client) &&
   !/plaidMainEnsureAccountReviewExpanded_[\s\S]{0,200}plaidMainCall_/.test(client),

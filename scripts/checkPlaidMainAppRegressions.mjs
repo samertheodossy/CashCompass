@@ -84,10 +84,11 @@ assert(client.includes('CashCompass account') && !client.includes('Confirm mappi
   !client.includes('Mapping: Confirmed') && !client.includes('Mapping: '),
   'Connected association must not expose mapping terminology');
 assert(client.includes('Manage connection') &&
-  client.includes("'Apply Selected Updates'") &&
   client.includes('allowApplySelection') &&
-  client.includes('Select approved fields, then Apply Selected Updates'),
-  'Debt Connected review must expose controlled Apply selection UX');
+  client.includes('Select approved fields, then confirm the account, field, and value') &&
+  /accountDomain === 'DEBT' && fromActivity/.test(client) &&
+  !/function plaidMainRenderPreviewAccount_[\s\S]{0,2500}'Apply Selected Updates'/.test(client),
+  'Debt activity review exposes controlled Apply selection UX; Connected does not present Apply Selected Updates');
 assert(client.includes('Review imported changes') && client.includes('Changes to review') &&
   client.includes('Additional information') && client.includes('Needs review') &&
   client.includes('plaid-main-review-panel') && client.includes('max-width:920px') &&
@@ -135,7 +136,6 @@ assert(client.includes('plaidMainApplySelectedUpdates_') &&
   client.includes('plaidImportApplyDebtUpdates') &&
   client.includes('plaidImportApplyCashUpdates') &&
   client.includes('PLAID_MAIN_CASH_APPLY_KEYS_') &&
-  client.includes("'Apply Selected Updates'") &&
   client.includes('allowApplySelection') &&
   client.includes('plaidMainApplySelectable_') &&
   client.includes('plaidMainSelectedEligibleApplyCount_') &&

@@ -47,17 +47,20 @@ assert.match(drawer, /Preview does not write/);
 assert.match(drawer, /same Connected provider field mapping/);
 assert.match(drawer, /Matching fields show <strong>Same<\/strong>/);
 assert.match(drawer, /Connection management stays on Connected/);
-assert.match(drawer, /Apply Selected Updates<\/strong> on Connected remains available/);
+assert.doesNotMatch(drawer, /Apply Selected Updates/);
+assert.doesNotMatch(drawer, /remains available|fallback/);
 assert.doesNotMatch(drawer, /Paste CSV|OFX|PDF|CURRENT_BALANCE/);
 assert.doesNotMatch(drawer, /id="debt_activity_csv_btn"|id="debt_activity_ofx_btn"|id="debt_activity_pdf_btn"/);
 assert.doesNotMatch(drawer, /Provider did not provide this field|Apply this Balance/);
 
 assert.match(connected, /Connected manages the provider connection/);
-assert.match(connected, /Import Data opens Debt activity with Connected provider \/ Plaid selected/);
-assert.match(connected, /CashCompass values change only after explicit confirmation/);
-assert.match(connected, /Apply Selected Updates<\/strong> on Connected remains available/);
+assert.match(connected, /Import Data opens Debt activity/);
+assert.match(connected, /preview, review, and apply selected field updates/);
+assert.match(connected, /Preview does not write/);
+assert.match(connected, /explicit field and value confirmation/);
 assert.match(connected, /Planning continues to use your CashCompass balances and terms/);
 assert.doesNotMatch(connected, /automatically updates Planning|provider data automatically/);
+assert.doesNotMatch(connected, /Apply Selected Updates|fallback|remains available/);
 
 assert.match(help, /Open <strong>Debt activity<\/strong> under <strong>Manage debts<\/strong>/);
 assert.match(help, /Connected <strong>Import Data<\/strong>/);
@@ -69,15 +72,18 @@ assert.match(help, /Matching fields show <strong>Same<\/strong>/);
 assert.match(help, /Provider information only — not stored in CashCompass/);
 assert.match(help, /Credit Left and Provider Available Credit cannot be imported or applied/);
 assert.match(help, /Debt activity previews provider data and requires explicit confirmation before CashCompass values change/);
+assert.match(help, /Debt activity is the preview, review, and apply path/);
 assert.match(help, /Connected manages the provider connection/);
-assert.match(help, /Apply Selected Updates[\s\S]*on Connected remains available/);
+assert.doesNotMatch(help, /Apply Selected Updates[\s\S]*on Connected remains available/);
 assert.match(help, /Planning continues to use CashCompass balances and terms/);
 assert.doesNotMatch(help, /automatically updates Planning|provider data automatically updates Planning/);
 assert.doesNotMatch(help, /Provider did not provide this field/);
 
 assert.match(roadmap, /Debt activity/);
 assert.match(roadmap, /plaidMainBuildDomainReview_|plaidMainRenderPreviewAccount_/);
-assert.match(roadmap, /Apply Selected Updates[\s\S]*until live review|Keep Connected debt[\s\S]*Apply Selected Updates/);
+assert.match(roadmap, /Debt activity is the user-facing preview, review, and apply path/);
+assert.match(roadmap, /Connected does not present \*\*Apply Selected Updates\*\*/);
+assert.doesNotMatch(roadmap, /Apply Selected Updates[\s\S]*until live review|Keep Connected debt[\s\S]*Apply Selected Updates|inline \*\*Apply Selected Updates\*\* remain/);
 
 assert.match(client, /function openDebtAccountActivityDrawer_/);
 assert.match(client, /function debtActivityProviderSetFocusContext_/);
@@ -356,12 +362,13 @@ assert.equal(previewState.rows[1].preview.observedAt, 'B-done',
   'Account B eventually renders');
 
 const connectedPreview = sliceFn(plaidClient, 'plaidMainRenderPreviewAccount_(', 'plaidMainRenderAssociationSelect_(');
-assert.match(connectedPreview, /'Apply Selected Updates'/);
-assert.match(connectedPreview, /Select approved fields, then Apply Selected Updates/);
+assert.match(connectedPreview, /accountDomain === 'DEBT' && fromActivity/);
+assert.match(connectedPreview, /Confirm account, field, and value/);
 assert.match(connectedPreview, /plaidMainApplySelectedUpdates_/);
 assert.match(connectedPreview, /applyHost === 'debtActivity'/);
-assert.match(connectedPreview, /Confirm account, field, and value/);
 assert.match(connectedPreview, /applyBtn\.disabled = applying \|\| applyCount < 1/);
+assert.doesNotMatch(connectedPreview, /'Apply Selected Updates'/);
+assert.doesNotMatch(connectedPreview, /Select approved fields, then Apply Selected Updates/);
 assert.doesNotMatch(connectedPreview, /plaidImportApplyDebtUpdatesFromAccountActivity/);
 assert.doesNotMatch(
   sliceFn(plaidClient, 'plaidMainBuildAccountCard_(', 'plaidMainPatchAccountCard_('),
@@ -500,8 +507,15 @@ assert.match(
 
 assert.match(plaidClient, /function plaidMainImportData_/);
 assert.match(plaidClient, /function plaidMainApplySelectedUpdates_/);
-assert.match(plaidClient, /Apply Selected Updates/);
 assert.match(plaidClient, /plaidImportApplyDebtUpdates/);
+assert.doesNotMatch(
+  sliceFn(plaidClient, 'plaidMainRenderAccountActions_(', 'plaidMainAccountDomId_('),
+  /Apply Selected Updates/
+);
+assert.doesNotMatch(
+  sliceFn(plaidClient, 'plaidMainBuildAccountCard_(', 'plaidMainPatchAccountCard_('),
+  /Apply Selected Updates/
+);
 assert.match(plaidClient, /function plaidMainOpenDebtAccountActivityFromImportData_/);
 assert.match(
   sliceFn(plaidClient, 'plaidMainRenderAccountActions_(', 'plaidMainAccountDomId_('),

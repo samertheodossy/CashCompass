@@ -92,12 +92,14 @@ assert(applyInner.includes('partialApplied') || applyInner.includes('Apply stopp
 
 assert(client.includes('plaidImportApplyDebtUpdates') &&
   client.includes('plaidMainDebtApplySelectable_') &&
-  client.includes("'Apply Selected Updates'") &&
+  client.includes('function plaidMainApplySelectedUpdates_') &&
   client.includes('allowApplySelection') &&
   client.includes('derivedOnly: true') &&
   client.includes('CREDIT_LEFT_DERIVED') &&
-  !client.includes('updateDebtField('),
-  'client uses Apply RPC only and exposes Debt field selection UX');
+  !client.includes('updateDebtField(') &&
+  /accountDomain === 'DEBT' && fromActivity/.test(client) &&
+  !/function plaidMainRenderPreviewAccount_[\s\S]*?'Apply Selected Updates'/.test(client),
+  'client uses Apply RPC only and exposes Debt field selection only in Debt activity');
 
 assert(debts.includes('plaidImportDebtApplyWriteSession_') &&
   debts.includes('plaidImportApplyBatch') &&

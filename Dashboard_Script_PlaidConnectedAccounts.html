@@ -6,7 +6,8 @@
  * selected. Preview and confirmed Current balance apply happen in that drawer.
  * Debt: Import Data opens Debt activity with Connected provider / Plaid selected
  * and preserves the triggering institution/account. Preview and confirmed apply
- * happen in that drawer. Connected Apply Selected Updates remains a fallback.
+ * happen in that drawer. Connected manages connection, mapping, reload,
+ * reconnect, and disconnect and does not present Apply Selected Updates.
  * Import alone must not log financial updates.
  */
 var plaidMainState_ = {
@@ -1600,7 +1601,7 @@ function plaidMainRenderPreviewAccount_(domain, connection, account, accountCard
       : PLAID_MAIN_MISSING_NOTE_)
     : '';
   var applyEnabled = String((account.mapping || {}).status || '') === 'CONFIRMED' &&
-    accountDomain === 'DEBT';
+    accountDomain === 'DEBT' && fromActivity;
   var tableOptions = {
     footnote: footnote,
     domain: domain,
@@ -1637,8 +1638,7 @@ function plaidMainRenderPreviewAccount_(domain, connection, account, accountCard
     var selectionKey = plaidMainApplySelectionKey_(connection, account);
     var applyCount = plaidMainSelectedEligibleApplyCount_(connection, account, accountPreview, preview, accountDomain, hostOptions);
     var applying = !!plaidMainState_.applyingKeys[selectionKey];
-    var applyLabel = applying ? 'Applying…' : 'Apply Selected Updates';
-    if (!applying && fromActivity) applyLabel = 'Confirm account, field, and value';
+    var applyLabel = applying ? 'Applying…' : 'Confirm account, field, and value';
     var applyBtn = plaidMainButton_(applyLabel, 'small-btn primary', function() {
       if (applying) return;
       if (fromActivity) {
@@ -1653,9 +1653,7 @@ function plaidMainRenderPreviewAccount_(domain, connection, account, accountCard
     applyRow.appendChild(applyBtn);
     reviewWrap.appendChild(applyRow);
     reviewWrap.appendChild(plaidMainElement_('div', 'plaid-main-review-note muted',
-      fromActivity
-        ? 'Select approved fields, then confirm the account, field, and value. Credit Left and Provider Available Credit are derived or informational only.'
-        : 'Select approved fields, then Apply Selected Updates. Credit Left and Provider Available Credit are derived or informational only.'));
+      'Select approved fields, then confirm the account, field, and value. Credit Left and Provider Available Credit are derived or informational only.'));
   } else {
     reviewWrap.appendChild(plaidMainElement_('div', 'plaid-main-review-note muted',
       'Review only — no CashCompass values have been changed.'));

@@ -3308,8 +3308,11 @@ assert.match(files['Dashboard_Help.html'],
   /Debt activity previews provider data and requires explicit confirmation/,
   'Help must explain Debt activity requires confirmation before CashCompass values change');
 assert.match(files['Dashboard_Help.html'],
+  /Debt activity is the preview, review, and apply path/,
+  'Help must name Debt activity as the preview, review, and apply path');
+assert.doesNotMatch(files['Dashboard_Help.html'],
   /Apply Selected Updates[\s\S]*on Connected remains available/,
-  'Help must keep Connected Apply Selected Updates until Debt activity reaches parity');
+  'Help must not describe Connected Apply Selected Updates as a fallback');
 assert.match(body,
   /id=["']debt_mode_manage_wrap["'][\s\S]*?id=["']debt_account_activity_btn["'][\s\S]*?Debt activity/,
   'Manage debts must open Debt activity');
@@ -3936,7 +3939,7 @@ assert.match(body,
   /Import Data opens Account activity, where you can preview provider data and confirm any balance changes\./,
   'Connected Import Data must explain that preview and apply live in Account activity');
 assert.match(body,
-  /Import Data opens Debt activity with Connected provider \/ Plaid selected/,
+  /Import Data opens Debt activity/,
   'Connected debt Import Data must open Debt activity on the Plaid source');
 assert.doesNotMatch(
   body.slice(body.indexOf('id="bank_mode_connected_wrap"'), body.indexOf('id="bank_status"')),
@@ -3996,9 +3999,19 @@ assert.match(
   assert.match(plaidConnected, /openBankAccountActivityDrawer_\('provider'\)/,
     'Connected bank Import Data opens Account activity on the Plaid source');
   assert.match(plaidConnected, /function plaidMainApplySelectedUpdates_/,
-    'Debt Connected Apply Selected Updates handler must stay in place');
-  assert.match(plaidConnected, /Apply Selected Updates/,
-    'Debt Connected still exposes Apply Selected Updates');
+    'Debt apply compatibility handler may remain');
+  assert.doesNotMatch(
+    functionSource_(plaidConnected, 'plaidMainRenderPreviewAccount_'),
+    /'Apply Selected Updates'/,
+    'Debt Connected must not render a user-facing Apply Selected Updates control'
+  );
+  assert.match(
+    functionSource_(plaidConnected, 'plaidMainRenderPreviewAccount_'),
+    /accountDomain === 'DEBT' && fromActivity/,
+    'Debt apply controls render only in Debt activity'
+  );
+  assert.match(files['Dashboard_Script_PlanningDebts.html'], /confirmDebtActivityProviderApply_/,
+    'Debt activity retains the explicit apply flow');
   assert.doesNotMatch(plaidConnected, /accountDomain === 'DEBT' \|\| accountDomain === 'CASH'/,
     'Connected bank cards must not enable inline Apply Selected Updates');
   assert.doesNotMatch(plaidConnected, /plaidImportApplyCashUpdatesFromAccountActivity/,
