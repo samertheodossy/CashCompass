@@ -28,7 +28,7 @@ This is the current import and review model. It does not reopen frozen Planning 
 
 - Keep CSV and Plaid distinct inside Account activity.
 - Do not enable CSV paste for customers until the Account activity CSV workflow is accepted as complete.
-- Do not start Property valuations or a second provider-apply workflow in this cluster.
+- Do not start Property valuations or a second provider-apply workflow in this cluster. Houses → Update remains the only manual house-value entry path; do not present an empty Property valuations button or drawer.
 
 ### Next implementation slices
 
@@ -36,7 +36,7 @@ These are planned, not complete:
 
 - **a. CSV enablement and full Account activity workflow** — turn on Paste CSV only after preview, link, apply, and ignore coverage is accepted in the drawer.
 - **b. Debt provider/file review and explicit apply** — later sources (CSV/OFX/PDF) wait for Balance-preview parity. Connected Import Data already opens Debt activity. `debt_import.js` stays shadow-only. Provider facts must not write `INPUT - Debts` until the user confirms in Debt activity.
-- **c. Property valuations drawer** — dated house evidence review; no live listing APIs in this slice.
+- **c. Property valuations drawer** — returns when an external evidence source is implemented. Until then, Houses → Update remains the only manual house-value entry path. Do not present an empty drawer or a second manual valuation form. No live listing APIs in this slice.
 
 ### Deferred / future work
 
