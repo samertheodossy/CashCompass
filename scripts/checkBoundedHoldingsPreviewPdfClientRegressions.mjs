@@ -32,6 +32,7 @@ assert.notEqual(
 const context = {
   Promise,
   String, Number, Object, Array, Math, isFinite, Error, JSON, console,
+  Buffer, Uint8Array, ArrayBuffer, crypto,
   FileReader: null
 };
 vm.createContext(context);
@@ -221,6 +222,7 @@ assert.match(boundedHtml, /id="documentFile"/);
 assert.match(boundedHtml, /id="fileMeta"/);
 assert.match(boundedHtml, /boundedHoldingsPreviewIncludePdfClient_/);
 assert.match(clientJs, /boundedHoldingsPreviewShouldUseM1PdfLoadPath_/);
+assert.match(clientJs, /boundedHoldingsPreviewShouldUseStandardHoldingsPdfLoadPath_/);
 assert.match(clientJs, /groupedMode/);
 assert.match(clientJs, /boundedHoldingsPreviewBuildStandardPdfLoadResult_/);
 assert.match(clientJs, /Browser mirror of investment_etrade_client_statement_pdf\.js/);
@@ -291,6 +293,10 @@ const m1Fixture = fs.readFileSync(
   new URL('../test/fixtures/m1/synthetic_m1_statement_minimal.txt', import.meta.url),
   'utf8'
 );
+const schwabFixture = fs.readFileSync(
+  new URL('../test/fixtures/schwab/synthetic_schwab_brokerage_statement_minimal.txt', import.meta.url),
+  'utf8'
+);
 
 assert.equal(
   context.boundedHoldingsPreviewShouldUseM1PdfLoadPath_(
@@ -313,6 +319,70 @@ assert.equal(
   ),
   true
 );
+assert.equal(context.boundedHoldingsPreviewLooksLikeM1StatementPdf_(schwabFixture), false);
+assert.equal(context.boundedHoldingsPreviewLooksLikeSchwabBrokerageStatementPdf_(schwabFixture), true);
+assert.equal(
+  context.boundedHoldingsPreviewShouldUseM1PdfLoadPath_(
+    { source: 'SCHWAB_BROKERAGE_STATEMENT_PDF', groupedMode: false, accountProvider: 'SCHWAB' },
+    schwabFixture
+  ),
+  false
+);
+assert.equal(
+  context.boundedHoldingsPreviewShouldUseM1PdfLoadPath_(
+    { source: 'M1_STATEMENT_PDF', groupedMode: false, accountProvider: 'SCHWAB' },
+    schwabFixture
+  ),
+  false
+);
+assert.equal(
+  context.boundedHoldingsPreviewShouldUseStandardHoldingsPdfLoadPath_({
+    source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+    groupedMode: false,
+    accountProvider: 'SCHWAB'
+  }),
+  true
+);
+assert.equal(
+  context.boundedHoldingsPreviewShouldUseStandardHoldingsPdfLoadPath_({
+    source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+    groupedMode: false,
+    accountProvider: ''
+  }),
+  true
+);
+assert.equal(
+  context.boundedHoldingsPreviewShouldUseStandardHoldingsPdfLoadPath_({
+    source: '',
+    groupedMode: false,
+    accountProvider: 'SCHWAB'
+  }),
+  true
+);
+assert.equal(
+  context.boundedHoldingsPreviewShouldUseStandardHoldingsPdfLoadPath_({
+    source: 'FIDELITY_401K_STATEMENT_PDF',
+    groupedMode: false,
+    accountProvider: 'FIDELITY'
+  }),
+  true
+);
+assert.equal(
+  context.boundedHoldingsPreviewShouldUseStandardHoldingsPdfLoadPath_({
+    source: 'ETRADE_CLIENT_STATEMENT_PDF',
+    groupedMode: false,
+    accountProvider: 'ETRADE'
+  }),
+  false
+);
+assert.equal(
+  context.boundedHoldingsPreviewShouldUseStandardHoldingsPdfLoadPath_({
+    source: 'M1_STATEMENT_PDF',
+    groupedMode: false,
+    accountProvider: 'M1'
+  }),
+  false
+);
 
 const ocrRequired = context.boundedHoldingsPreviewBuildClientStatementOcrRequiredResult_(
   { text: encodingFixture, extractedTextLength: encodingFixture.length, extractionStatus: 'extracted locally from PDF' },
@@ -334,6 +404,68 @@ const m1Standard = context.boundedHoldingsPreviewBuildStandardPdfLoadResult_(
 );
 assert.equal(m1Standard.effectiveSource, 'M1_STATEMENT_PDF');
 assert.equal(m1Standard.displayTextInEditor, true);
+
+const schwabStandard = context.boundedHoldingsPreviewBuildStandardPdfLoadResult_(
+  { text: schwabFixture, extractedTextLength: schwabFixture.length, extractionStatus: 'extracted locally from PDF' },
+  { source: 'SCHWAB_BROKERAGE_STATEMENT_PDF', groupedMode: false, accountProvider: 'SCHWAB' },
+  'FP-SCHWAB'
+);
+assert.equal(schwabStandard.effectiveSource, 'SCHWAB_BROKERAGE_STATEMENT_PDF');
+assert.equal(schwabStandard.detectedSource, '');
+assert.equal(schwabStandard.displayTextInEditor, true);
+assert.equal(schwabStandard.text, schwabFixture);
+assert.equal(schwabStandard.previewText, schwabFixture);
+assert.equal(schwabStandard.ocrRequired, false);
+assert.notEqual(schwabStandard.effectiveSource, 'ETRADE_CLIENT_STATEMENT_PDF');
+
+function fakePdfFile(pdfBuffer, fileName) {
+  const copy = Buffer.from(pdfBuffer);
+  return {
+    name: fileName || 'statement.pdf',
+    type: 'application/pdf',
+    arrayBuffer() {
+      return Promise.resolve(copy.buffer.slice(copy.byteOffset, copy.byteOffset + copy.byteLength));
+    }
+  };
+}
+
+const longNonPositionsPdf = buildMinimalTextPdf(
+  'Charles Schwab Brokerage Statement Positions Equities Account Holdings Detail ' +
+    'Cisco Systems Incorporated common stock CSCO shares '.repeat(80)
+);
+
+const schwabLoad = await context.boundedHoldingsPreviewLoadDocumentTextFromFile_(
+  fakePdfFile(longNonPositionsPdf, 'Brokerage Statement.pdf'),
+  pdfjsLib,
+  {
+    source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+    groupedMode: false,
+    accountProvider: 'SCHWAB'
+  }
+);
+assert.ok(String(schwabLoad.text || '').length > 0, 'Schwab PDF load must preserve extracted text');
+assert.ok(String(schwabLoad.previewText || '').length > 0, 'Schwab PDF load must preserve preview text');
+assert.equal(schwabLoad.effectiveSource, 'SCHWAB_BROKERAGE_STATEMENT_PDF');
+assert.notEqual(schwabLoad.detectedSource, 'ETRADE_CLIENT_STATEMENT_PDF');
+assert.notEqual(schwabLoad.effectiveSource, 'ETRADE_CLIENT_STATEMENT_PDF');
+assert.equal(schwabLoad.ocrRequired, false);
+assert.equal(schwabLoad.displayTextInEditor, true);
+assert.ok(Number(schwabLoad.extractedTextLength) > 0);
+
+const etradeFallbackLoad = await context.boundedHoldingsPreviewLoadDocumentTextFromFile_(
+  fakePdfFile(longNonPositionsPdf, 'Brokerage Statement.pdf'),
+  pdfjsLib,
+  {
+    source: 'ETRADE_CLIENT_STATEMENT_PDF',
+    groupedMode: false,
+    accountProvider: 'ETRADE'
+  }
+);
+assert.equal(etradeFallbackLoad.effectiveSource, 'ETRADE_CLIENT_STATEMENT_PDF');
+assert.equal(etradeFallbackLoad.detectedSource, 'ETRADE_CLIENT_STATEMENT_PDF');
+assert.equal(etradeFallbackLoad.ocrRequired, true);
+assert.equal(etradeFallbackLoad.displayTextInEditor, false);
+assert.equal(etradeFallbackLoad.text, '');
 
 assert.match(boundedHtml, /applyAccountSourceDefaults_/);
 assert.match(boundedHtml, /accountProvider: currentAccountProvider_\(\)/);

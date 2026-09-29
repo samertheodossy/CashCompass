@@ -819,6 +819,13 @@ function investmentM1DetectStatementPdf_(input) {
   if (!rawText.trim()) {
     return { ok: false, reason: 'No M1 statement PDF text supplied.' };
   }
+  if (typeof investmentSchwabLooksLikeBrokerageStatementPdf_ === 'function' &&
+      investmentSchwabLooksLikeBrokerageStatementPdf_(rawText)) {
+    return {
+      ok: false,
+      reason: 'Document matches a Schwab brokerage statement, not an M1 statement.'
+    };
+  }
   var layout = investmentM1AssessStatementLayout_(
     investmentM1PrepareStatementTextForParsing_(rawText));
   if (!layout.ok) {

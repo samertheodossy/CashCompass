@@ -1,0 +1,29 @@
+# Synthetic Schwab brokerage statement PDF text extract — structure only (no real balances)
+Charles Schwab
+Schwab One Brokerage Statement
+Statement Period: July 1–31, 2026
+Account Number: XXXX0000
+Account Value: $13,000.00
+Cash & Cash Investments: $0.00
+
+Positions - Equities
+Symbol | Description | Quantity | Price | Market Value | Cost Basis | Unrealized Gain/Loss | Est. Yield | Est. Income | % of Account
+CSCO | Cisco Systems Inc | 100 | $50.00 | $5,000.00 | $4,000.00 | $1,000.00 | 2.4% | $120.00 | 38.5%
+DIS | Walt Disney Co | 20 | $100.00 | $2,000.00 | $1,800.00 | $200.00 | 1.0% | $20.00 | 15.4%
+DXC | DXC Technology Co | 50 | $20.00 | $1,000.00 | $900.00 | $100.00 | 0.5% | $5.00 | 7.7%
+INTC | Intel Corp | 40 | $25.00 | $1,000.00 | $800.00 | $200.00 | 1.2% | $12.00 | 7.7%
+MSFT | Microsoft Corp | 10 | $400.00 | $4,000.00 | $3,500.00 | $500.00 | 0.8% | $32.00 | 30.8%
+Total |  |  |  | $13,000.00 | $11,000.00 | $2,000.00 |  |  | 100.0%
+
+Positions - Unpriced Securities
+Symbol | Description | Quantity | Cost Basis
+PRIV | Synthetic Unpriced Co | 25 | $2,500.00
+
+Transactions
+Trade Date | Settlement Date | Symbol | Description | Quantity | Price | Amount
+07/15/2026 | 07/17/2026 | CSCO | Bought | 10 | $50.00 | ($500.00)
+07/20/2026 | 07/22/2026 | MSFT | Sold | 1 | $400.00 | $400.00
+
+Realized Gain/Loss
+Symbol | Description | Quantity | Proceeds | Cost Basis | Realized Gain/Loss
+MSFT | Microsoft Corp | 1 | $400.00 | $350.00 | $50.00

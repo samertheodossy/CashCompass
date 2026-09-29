@@ -123,6 +123,21 @@ var INVESTMENT_ADAPTER_REGISTRY_ = {
     detect: investmentAdapterDetectFidelity401kStatementPdf_,
     preview: investmentAdapterPreviewFidelity401kStatementPdf_,
     normalize: investmentAdapterNormalizeFidelity401kStatementPdf_
+  },
+  SCHWAB_BROKERAGE_STATEMENT_PDF: {
+    source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+    parserVersion: SCHWAB_BROKERAGE_STATEMENT_PDF_PARSER_VERSION_,
+    capabilities: {
+      activities: false,
+      holdings: true,
+      taxLots: false,
+      accountSnapshot: true,
+      dividendHistory: false,
+      realizedGainLoss: false
+    },
+    detect: investmentSchwabDetectBrokerageStatementPdf_,
+    preview: investmentAdapterPreviewSchwabBrokerageStatementPdf_,
+    normalize: investmentAdapterNormalizeSchwabBrokerageStatementPdf_
   }
 };
 
@@ -271,6 +286,19 @@ function investmentAdapterNormalizeFidelity401kStatementPdf_(input, optionalSs) 
   var preview = investmentAdapterPreviewFidelity401kStatementPdf_(input, optionalSs);
   if (!preview.ok) return preview;
   return preview.preview;
+}
+
+function investmentAdapterPreviewSchwabBrokerageStatementPdf_(input, optionalSs) {
+  var payload = input || {};
+  payload.source = investmentPortfolioNormalizeSource_(payload.source) ||
+    'SCHWAB_BROKERAGE_STATEMENT_PDF';
+  return investmentSchwabPreviewBrokerageStatementPdfUnified_(payload);
+}
+
+function investmentAdapterNormalizeSchwabBrokerageStatementPdf_(input, optionalSs) {
+  var preview = investmentAdapterPreviewSchwabBrokerageStatementPdf_(input, optionalSs);
+  if (!preview.ok) return preview;
+  return preview.normalized;
 }
 
 function investmentAdapterBuildPackagePreview_(input, optionalSs) {

@@ -2126,18 +2126,23 @@ function onInvestmentPortfolioDrawerBackdropClick_(event) {
 
 function setInvestmentPortfolioDrawerView_(view) {
   var mode = view === 'import' ? 'import'
-    : (view === 'm1' ? 'm1' : (view === '401k' ? '401k' : 'portfolio'));
+    : (view === 'm1' ? 'm1'
+      : (view === 'schwab' ? 'schwab'
+        : (view === '401k' ? '401k' : 'portfolio')));
   var portfolio = document.getElementById('inv_portfolio_view');
   var importView = document.getElementById('inv_portfolio_import_view');
   var m1View = document.getElementById('inv_portfolio_m1_import_view');
+  var schwabView = document.getElementById('inv_portfolio_schwab_import_view');
   var k401View = document.getElementById('inv_portfolio_401k_import_view');
   var portfolioBtn = document.getElementById('inv_portfolio_view_btn');
   var importBtn = document.getElementById('inv_portfolio_import_btn');
   var m1Btn = document.getElementById('inv_portfolio_m1_import_btn');
+  var schwabBtn = document.getElementById('inv_portfolio_schwab_import_btn');
   var k401Btn = document.getElementById('inv_portfolio_401k_import_btn');
   if (portfolio) portfolio.hidden = mode !== 'portfolio';
   if (importView) importView.hidden = mode !== 'import';
   if (m1View) m1View.hidden = mode !== 'm1';
+  if (schwabView) schwabView.hidden = mode !== 'schwab';
   if (k401View) k401View.hidden = mode !== '401k';
   if (portfolioBtn) {
     portfolioBtn.classList.toggle('active', mode === 'portfolio');
@@ -2151,6 +2156,10 @@ function setInvestmentPortfolioDrawerView_(view) {
     m1Btn.classList.toggle('active', mode === 'm1');
     m1Btn.setAttribute('aria-selected', mode === 'm1' ? 'true' : 'false');
   }
+  if (schwabBtn) {
+    schwabBtn.classList.toggle('active', mode === 'schwab');
+    schwabBtn.setAttribute('aria-selected', mode === 'schwab' ? 'true' : 'false');
+  }
   if (k401Btn) {
     k401Btn.classList.toggle('active', mode === '401k');
     k401Btn.setAttribute('aria-selected', mode === '401k' ? 'true' : 'false');
@@ -2162,6 +2171,10 @@ function setInvestmentPortfolioDrawerView_(view) {
       typeof initInvestmentPortfolioDrawerM1Import_ === 'function') {
     initInvestmentPortfolioDrawerM1Import_(__investmentPortfolioSelectedId, __investmentPortfolioData);
   }
+  if (mode === 'schwab' && __investmentPortfolioData && __investmentPortfolioData.schwabImportAvailable &&
+      typeof initInvestmentPortfolioDrawerSchwabImport_ === 'function') {
+    initInvestmentPortfolioDrawerSchwabImport_(__investmentPortfolioSelectedId, __investmentPortfolioData);
+  }
   if (mode === '401k' && __investmentPortfolioData && __investmentPortfolioData.fidelity401kImportAvailable &&
       typeof initInvestmentPortfolioDrawer401kImport_ === 'function') {
     initInvestmentPortfolioDrawer401kImport_(__investmentPortfolioSelectedId, __investmentPortfolioData);
@@ -2172,6 +2185,7 @@ function syncInvestmentPortfolioDrawerImportTabs_(data) {
   data = data || {};
   var importBtn = document.getElementById('inv_portfolio_import_btn');
   var m1Btn = document.getElementById('inv_portfolio_m1_import_btn');
+  var schwabBtn = document.getElementById('inv_portfolio_schwab_import_btn');
   var k401Btn = document.getElementById('inv_portfolio_401k_import_btn');
   if (importBtn) {
     importBtn.hidden = !data.robinhoodCsvImportAvailable;
@@ -2180,6 +2194,10 @@ function syncInvestmentPortfolioDrawerImportTabs_(data) {
   if (m1Btn) {
     m1Btn.hidden = !data.m1ImportAvailable;
     m1Btn.textContent = 'Import M1 statement PDF';
+  }
+  if (schwabBtn) {
+    schwabBtn.hidden = !data.schwabImportAvailable;
+    schwabBtn.textContent = 'Import Schwab statement PDF';
   }
   if (k401Btn) {
     k401Btn.hidden = !data.fidelity401kImportAvailable;

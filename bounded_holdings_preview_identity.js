@@ -19,6 +19,7 @@ function boundedHoldingsPreviewInferIdentityProvider_(accountName, groupProvider
   if (/\bm1\b/.test(name)) return 'M1';
   if (/e\*?trade|etrade/.test(name)) return 'ETRADE';
   if (/robinhood/.test(name)) return 'ROBINHOOD';
+  if (/schwab/.test(name)) return 'SCHWAB';
   return 'OTHER';
 }
 
@@ -27,6 +28,7 @@ function boundedHoldingsPreviewFindIdentityProvider_(providerKey) {
     { providerKey: 'M1', label: 'M1', institution: 'M1 Finance' },
     { providerKey: 'ETRADE', label: 'E*TRADE', institution: 'E*TRADE' },
     { providerKey: 'ROBINHOOD', label: 'Robinhood', institution: 'Robinhood' },
+    { providerKey: 'SCHWAB', label: 'Schwab', institution: 'Charles Schwab' },
     { providerKey: 'OTHER', label: 'Other investment account', institution: '' }
   ];
   var wanted = String(providerKey || '').trim().toUpperCase();

@@ -18,6 +18,7 @@ const validationSource = read('validation_testing_server.js');
 assert.doesNotMatch(dashboardBody, /id="inv_holdings_preview_btn"/);
 assert.doesNotMatch(dashboardBody, /Preview holdings \(PDF\)/);
 assert.match(dashboardBody, /Import M1 statement PDF/);
+assert.match(dashboardBody, /Import Schwab statement PDF/);
 assert.doesNotMatch(dashboardBody, /href="\?view=portfolio-holdings-preview"/);
 assert.doesNotMatch(dashboardBody, /holdings-preview-lab/);
 assert.match(dashboardInvestments, /boundedHoldingsPreviewNavigateTop_/);
@@ -26,6 +27,7 @@ assert.match(dashboardInvestments, /function openBoundedHoldingsPreview_/);
 assert.match(dashboardInvestments, /syncInvestmentPortfolioDrawerImportTabs_/);
 assert.match(plannerWeb, /boundedHoldingsPreviewIncludePdfClient_/);
 assert.match(plannerWeb, /Dashboard_Script_InvestmentPortfolioDrawerM1/);
+assert.match(plannerWeb, /Dashboard_Script_InvestmentPortfolioDrawerSchwab/);
 
 // --- Server resolves deployed /exec URL via ScriptApp.getService().getUrl() ---
 assert.match(boundedSource, /ScriptApp\.getService\(\)\.getUrl\(\)/);

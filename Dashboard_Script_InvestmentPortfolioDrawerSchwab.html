@@ -1,0 +1,441 @@
+/* Portfolio activity drawer — Schwab brokerage statement PDF import (reuses bounded preview RPCs). */
+var __invDrawerSchwabSetupAccounts = null;
+var __invDrawerSchwabSetupPromise = null;
+var __invDrawerSchwabState = {
+  selectedAccount: null,
+  fileName: '',
+  extractionStatus: '',
+  extractedTextLength: 0,
+  extractionError: '',
+  trustedDocumentText: '',
+  documentFingerprint: '',
+  registrationTouched: false,
+  lastSinglePreview: null,
+  lastPreviewDocumentText: '',
+  applyReviewed: false,
+  applyDiff: null,
+  applyDiffDigest: '',
+  applyStatusMessage: ''
+};
+
+function invDrawerSchwabEscape_(value) {
+  return typeof escapeHtml === 'function' ? escapeHtml(value) : String(value || '');
+}
+
+function invDrawerSchwabCurrentText_() {
+  var el = document.getElementById('inv_schwab_document_text');
+  return String(__invDrawerSchwabState.trustedDocumentText || (el && el.value) || '').trim();
+}
+
+function invDrawerSchwabHasDocumentReady_() {
+  return !!invDrawerSchwabCurrentText_();
+}
+
+function invDrawerSchwabRestoreTrustedDocumentText_() {
+  var textEl = document.getElementById('inv_schwab_document_text');
+  var trusted = String(__invDrawerSchwabState.trustedDocumentText || '').trim();
+  if (textEl && trusted && !String(textEl.value || '').trim()) {
+    textEl.value = trusted;
+  }
+}
+
+function syncInvestmentPortfolioDrawerSchwabReadyState_() {
+  invDrawerSchwabRestoreTrustedDocumentText_();
+  updateInvestmentPortfolioDrawerSchwabControls_();
+}
+
+function ensureInvDrawerSchwabSetupAccounts_(onReady, onError) {
+  if (__invDrawerSchwabSetupAccounts) {
+    onReady(__invDrawerSchwabSetupAccounts);
+    return;
+  }
+  if (__invDrawerSchwabSetupPromise) {
+    __invDrawerSchwabSetupPromise.then(onReady).catch(onError);
+    return;
+  }
+  __invDrawerSchwabSetupPromise = new Promise(function(resolve, reject) {
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (!res || !res.ok) {
+          reject(new Error(res && res.error ? res.error : 'Could not load Schwab import setup.'));
+          return;
+        }
+        __invDrawerSchwabSetupAccounts = res.accounts || [];
+        resolve(__invDrawerSchwabSetupAccounts);
+      })
+      .withFailureHandler(function(err) {
+        reject(new Error(err && err.message ? err.message : String(err)));
+      })
+      .getBoundedHoldingsPreviewSetupFromDashboard();
+  });
+  __invDrawerSchwabSetupPromise.then(onReady).catch(onError);
+}
+
+function resetInvestmentPortfolioDrawerSchwabImport_(keepAccount) {
+  __invDrawerSchwabState.fileName = '';
+  __invDrawerSchwabState.extractionStatus = '';
+  __invDrawerSchwabState.extractedTextLength = 0;
+  __invDrawerSchwabState.extractionError = '';
+  __invDrawerSchwabState.trustedDocumentText = '';
+  __invDrawerSchwabState.documentFingerprint = '';
+  __invDrawerSchwabState.lastSinglePreview = null;
+  __invDrawerSchwabState.lastPreviewDocumentText = '';
+  __invDrawerSchwabState.applyReviewed = false;
+  __invDrawerSchwabState.applyDiff = null;
+  __invDrawerSchwabState.applyDiffDigest = '';
+  __invDrawerSchwabState.applyStatusMessage = '';
+  if (!keepAccount) {
+    __invDrawerSchwabState.selectedAccount = null;
+    __invDrawerSchwabState.registrationTouched = false;
+  }
+  var fileEl = document.getElementById('inv_schwab_document_file');
+  if (fileEl) fileEl.value = '';
+  var textEl = document.getElementById('inv_schwab_document_text');
+  if (textEl) textEl.value = '';
+  var metaEl = document.getElementById('inv_schwab_file_meta');
+  if (metaEl) metaEl.textContent = 'No file selected.';
+  var regEl = document.getElementById('inv_schwab_registration_type');
+  if (regEl && !keepAccount) regEl.value = '';
+  var matchEl = document.getElementById('inv_schwab_explicit_match');
+  if (matchEl) matchEl.checked = false;
+  ['inv_schwab_results', 'inv_schwab_apply_area'].forEach(function(id) {
+    var node = document.getElementById(id);
+    if (node) node.innerHTML = '';
+  });
+  updateInvestmentPortfolioDrawerSchwabControls_();
+}
+
+function initInvestmentPortfolioDrawerSchwabImport_(pickerValue, portfolioData) {
+  pickerValue = String(pickerValue || '').trim();
+  portfolioData = portfolioData || {};
+  resetInvestmentPortfolioDrawerSchwabImport_(false);
+  if (!pickerValue || !portfolioData.schwabImportAvailable) return;
+  ensureInvDrawerSchwabSetupAccounts_(function(accounts) {
+    var match = (accounts || []).filter(function(row) {
+      return String(row.pickerValue || row.investmentId || '') === pickerValue;
+    })[0];
+    if (!match) {
+      setStatus('inv_schwab_status', 'Schwab import setup could not resolve this account.', true);
+      return;
+    }
+    __invDrawerSchwabState.selectedAccount = match;
+    var hintEl = document.getElementById('inv_schwab_account_hint');
+    if (hintEl) {
+      hintEl.textContent = match.identityMessage ||
+        ('Import one Schwab brokerage statement PDF for ' + match.accountName + '.');
+    }
+    var matchText = document.getElementById('inv_schwab_explicit_match_text');
+    if (matchText) {
+      matchText.textContent = 'I confirm this document belongs to ' +
+        (match.accountName || 'the selected account') + '.';
+    }
+    if (match.suggestedRegistrationType && !__invDrawerSchwabState.registrationTouched) {
+      var regEl = document.getElementById('inv_schwab_registration_type');
+      if (regEl) regEl.value = match.suggestedRegistrationType;
+    }
+    updateInvestmentPortfolioDrawerSchwabControls_();
+  }, function(err) {
+    setStatus('inv_schwab_status', err.message || String(err), true);
+  });
+}
+
+function updateInvestmentPortfolioDrawerSchwabControls_() {
+  var previewBtn = document.getElementById('inv_schwab_preview_btn');
+  var hasText = invDrawerSchwabHasDocumentReady_();
+  var reg = String(document.getElementById('inv_schwab_registration_type') &&
+    document.getElementById('inv_schwab_registration_type').value || '').trim();
+  var confirmed = !!(document.getElementById('inv_schwab_explicit_match') &&
+    document.getElementById('inv_schwab_explicit_match').checked);
+  var ready = !!__invDrawerSchwabState.selectedAccount && hasText && !!reg && confirmed;
+  if (previewBtn) previewBtn.disabled = !ready;
+}
+
+function onInvestmentPortfolioDrawerSchwabRegistrationChanged_() {
+  __invDrawerSchwabState.registrationTouched = true;
+  if (__invDrawerSchwabState.lastSinglePreview ||
+      __invDrawerSchwabState.applyDiff ||
+      __invDrawerSchwabState.applyReviewed ||
+      __invDrawerSchwabState.applyDiffDigest) {
+    var results = document.getElementById('inv_schwab_results');
+    if (results) results.innerHTML = '';
+    clearInvestmentPortfolioDrawerSchwabApply_(false);
+  }
+  syncInvestmentPortfolioDrawerSchwabReadyState_();
+}
+
+function onInvestmentPortfolioDrawerSchwabFileChanged_() {
+  var fileEl = document.getElementById('inv_schwab_document_file');
+  var file = fileEl && fileEl.files && fileEl.files[0];
+  var metaEl = document.getElementById('inv_schwab_file_meta');
+  var textEl = document.getElementById('inv_schwab_document_text');
+  __invDrawerSchwabState.extractionError = '';
+  if (!file) {
+    if (metaEl) metaEl.textContent = 'No file selected.';
+    if (textEl) textEl.value = '';
+    updateInvestmentPortfolioDrawerSchwabControls_();
+    return;
+  }
+  if (metaEl) metaEl.textContent = 'Reading ' + file.name + '…';
+  ensureInvDrawerPdfClientReady_(function() {
+    boundedHoldingsPreviewLoadDocumentTextFromFile_(file, pdfjsLib, {
+      source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+      groupedMode: false,
+      accountProvider: 'SCHWAB'
+    }).then(function(result) {
+      result = result || {};
+      __invDrawerSchwabState.fileName = file.name;
+      __invDrawerSchwabState.extractionStatus = result.extractionStatus || '';
+      __invDrawerSchwabState.extractedTextLength = Number(result.extractedTextLength || 0);
+      __invDrawerSchwabState.trustedDocumentText = String(result.text || '');
+      __invDrawerSchwabState.documentFingerprint = String(result.documentFingerprint || '');
+      if (textEl) textEl.value = result.displayTextInEditor === false ? '' : String(result.text || '');
+      if (metaEl) {
+        metaEl.textContent = file.name + ' · ' +
+          (__invDrawerSchwabState.extractedTextLength || invDrawerSchwabCurrentText_().length) + ' chars';
+      }
+      clearInvestmentPortfolioDrawerSchwabApply_(true);
+      syncInvestmentPortfolioDrawerSchwabReadyState_();
+    }).catch(function(err) {
+      __invDrawerSchwabState.extractionError = err && err.message ? err.message : String(err);
+      if (metaEl) metaEl.textContent = __invDrawerSchwabState.extractionError;
+      if (textEl) textEl.value = '';
+      updateInvestmentPortfolioDrawerSchwabControls_();
+    });
+  }, function(err) {
+    if (metaEl) metaEl.textContent = err.message || String(err);
+  });
+}
+
+function buildInvDrawerSchwabPayload_(extra) {
+  var account = __invDrawerSchwabState.selectedAccount || {};
+  var payload = {
+    pickerValue: String(account.pickerValue || __investmentPortfolioSelectedId || '').trim(),
+    sysAssetsRow: account.sysAssetsRow,
+    accountName: account.accountName || '',
+    source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+    rawDocumentText: invDrawerSchwabCurrentText_(),
+    extractionMeta: null,
+    documentFingerprint: String(__invDrawerSchwabState.documentFingerprint || '').trim(),
+    registrationType: document.getElementById('inv_schwab_registration_type').value,
+    explicitAccountMatch: document.getElementById('inv_schwab_explicit_match').checked,
+    statementProvider: 'SCHWAB',
+    previewMode: account.previewMode || 'SINGLE_ACCOUNT'
+  };
+  if (extra) Object.keys(extra).forEach(function(key) { payload[key] = extra[key]; });
+  return payload;
+}
+
+function clearInvestmentPortfolioDrawerSchwabApply_(keepPreview) {
+  __invDrawerSchwabState.applyReviewed = false;
+  __invDrawerSchwabState.applyDiff = null;
+  __invDrawerSchwabState.applyDiffDigest = '';
+  __invDrawerSchwabState.applyStatusMessage = '';
+  if (!keepPreview) {
+    __invDrawerSchwabState.lastSinglePreview = null;
+    __invDrawerSchwabState.lastPreviewDocumentText = '';
+  }
+  var applyArea = document.getElementById('inv_schwab_apply_area');
+  if (applyArea) applyArea.innerHTML = '';
+}
+
+function invDrawerSchwabFormatMoney_(value) {
+  if (value === null || typeof value === 'undefined' || value === '') return '—';
+  var n = Number(value);
+  if (!isFinite(n)) return '—';
+  return (n < 0 ? '-$' : '$') + Math.abs(n).toFixed(2);
+}
+
+function invDrawerSchwabFormatAsOf_(value) {
+  var text = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+  return text;
+}
+
+function invDrawerSchwabEndingValue_(preview) {
+  preview = preview || {};
+  if (preview.reconciliation && preview.reconciliation.endingTotalValue != null &&
+      preview.reconciliation.endingTotalValue !== '') {
+    return preview.reconciliation.endingTotalValue;
+  }
+  return preview.totalAccountValue;
+}
+
+function renderInvDrawerSchwabSingleResults_(res) {
+  var host = document.getElementById('inv_schwab_results');
+  if (!host) return;
+  if (!res || !res.ok) {
+    host.innerHTML = '<div class="error-box">' +
+      invDrawerSchwabEscape_(res && res.error ? res.error : 'Preview failed.') + '</div>';
+    return;
+  }
+  var preview = res;
+  __invDrawerSchwabState.lastSinglePreview = res;
+  __invDrawerSchwabState.lastPreviewDocumentText = invDrawerSchwabCurrentText_();
+  clearInvestmentPortfolioDrawerSchwabApply_(true);
+  var trusted = !!(preview.readiness && preview.readiness.trustedForHoldingsVisibility);
+  var asOf = invDrawerSchwabFormatAsOf_(preview.asOf);
+  var endingValue = invDrawerSchwabEndingValue_(preview);
+  var html = '<div class="card"><div class="pill ' + (trusted ? 'pill-ok' : 'pill-warn') + '">' +
+    (trusted ? 'Schwab preview ready' : 'Schwab preview needs review') + '</div> ' +
+    invDrawerSchwabEscape_(asOf ? ('As-of ' + asOf) : '') +
+    (endingValue != null && endingValue !== ''
+      ? invDrawerSchwabEscape_(' · Ending ' + invDrawerSchwabFormatMoney_(endingValue))
+      : '') +
+    '</div>';
+  var holdings = preview.holdingsRows || [];
+  if (holdings.length) {
+    html += '<div class="card"><div class="card-title">Priced holdings</div><ul>';
+    holdings.forEach(function(row) {
+      html += '<li>' + invDrawerSchwabEscape_(row.symbol || '') + ' · ' +
+        invDrawerSchwabEscape_(row.description || '') + ' · ' +
+        invDrawerSchwabEscape_(String(row.quantity != null ? row.quantity : '—')) +
+        ' @ ' + invDrawerSchwabEscape_(invDrawerSchwabFormatMoney_(row.price)) +
+        ' = ' + invDrawerSchwabEscape_(invDrawerSchwabFormatMoney_(row.marketValue)) + '</li>';
+    });
+    html += '</ul></div>';
+  }
+  var unsupported = preview.unsupportedRows || [];
+  if (unsupported.length) {
+    html += '<div class="card"><div class="card-title">Unsupported rows</div><ul>';
+    unsupported.forEach(function(row) {
+      html += '<li>' + invDrawerSchwabEscape_(row.symbol || row.ticker || 'Row') +
+        (row.description ? (' · ' + invDrawerSchwabEscape_(row.description)) : '') +
+        ' · ' + invDrawerSchwabEscape_(row.reason || 'UNSUPPORTED') + '</li>';
+    });
+    html += '</ul></div>';
+  }
+  (preview.warnings || []).forEach(function(warning) {
+    html += '<div class="card muted">' + invDrawerSchwabEscape_(warning) + '</div>';
+  });
+  if (!trusted) {
+    html += '<div class="error-box">Holdings preview is not trusted for Apply.</div>';
+  }
+  host.innerHTML = html;
+  renderInvestmentPortfolioDrawerSchwabApplySection_();
+}
+
+function previewInvestmentPortfolioDrawerSchwab_() {
+  var btn = document.getElementById('inv_schwab_preview_btn');
+  if (btn) btn.disabled = true;
+  setStatusLoading('inv_schwab_status', 'Parsing Schwab statement in memory…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (btn) btn.disabled = false;
+      setStatus('inv_schwab_status', '', false);
+      renderInvDrawerSchwabSingleResults_(res);
+      updateInvestmentPortfolioDrawerSchwabControls_();
+    })
+    .withFailureHandler(function(err) {
+      if (btn) btn.disabled = false;
+      setStatus('inv_schwab_status', err.message || String(err), true);
+    })
+    .boundedHoldingsPreviewRunFromDashboard(buildInvDrawerSchwabPayload_());
+}
+
+function renderInvestmentPortfolioDrawerSchwabApplySection_() {
+  var applyArea = document.getElementById('inv_schwab_apply_area');
+  if (!applyArea) return;
+  var preview = __invDrawerSchwabState.lastSinglePreview;
+  if (!preview) {
+    applyArea.innerHTML = '';
+    return;
+  }
+  var trusted = !!(preview.readiness && preview.readiness.trustedForHoldingsVisibility);
+  applyArea.innerHTML = '<div class="card"><h3>Apply approved holdings</h3>' +
+    '<p class="muted">Review the diff, then apply to SYS - Investment Holdings Unified only. ' +
+    'Unpriced securities are never included.</p>' +
+    '<div class="investment-import-actions">' +
+    '<button type="button" class="small-btn" id="inv_schwab_review_apply_btn">Review holdings changes</button>' +
+    '<button type="button" class="small-btn primary" id="inv_schwab_confirm_apply_btn" disabled>Apply approved holdings</button>' +
+    '</div><div id="inv_schwab_apply_message" class="muted">' +
+    (trusted ? '' : 'Apply is blocked until the statement reconciles.') + '</div></div>';
+  var reviewBtn = document.getElementById('inv_schwab_review_apply_btn');
+  var confirmBtn = document.getElementById('inv_schwab_confirm_apply_btn');
+  if (reviewBtn) {
+    reviewBtn.disabled = !trusted;
+    reviewBtn.onclick = reviewInvestmentPortfolioDrawerSchwabApplyDiff_;
+  }
+  if (confirmBtn) {
+    confirmBtn.disabled = true;
+    confirmBtn.onclick = confirmInvestmentPortfolioDrawerSchwabApply_;
+  }
+}
+
+function invDrawerSchwabResolveApplyDiffBundle_(bundle) {
+  if (!bundle || bundle.ok === false) {
+    return {
+      ok: false,
+      error: String((bundle && bundle.error) || '').trim() || 'Could not build diff.',
+      applyDiff: null,
+      applyDiffDigest: '',
+      applyReviewed: false,
+      message: String((bundle && bundle.error) || '').trim() || 'Could not build diff.'
+    };
+  }
+  if (!bundle.diff) {
+    return {
+      ok: false,
+      error: 'Could not build diff.',
+      applyDiff: null,
+      applyDiffDigest: '',
+      applyReviewed: false,
+      message: 'Could not build diff.'
+    };
+  }
+  var digest = String(bundle.diffDigest || '').trim();
+  var diff = bundle.diff;
+  var message = 'Creates: ' + String((diff.summary && diff.summary.createCount) || 0) +
+    ' · Updates: ' + String((diff.summary && diff.summary.updateCount) || 0) +
+    (diff.blocked ? (' · Blocked: ' + (diff.blockReason || 'review required')) : '');
+  return {
+    ok: true,
+    error: '',
+    applyDiff: diff,
+    applyDiffDigest: digest,
+    applyReviewed: !!digest,
+    message: message
+  };
+}
+
+function reviewInvestmentPortfolioDrawerSchwabApplyDiff_() {
+  setStatusLoading('inv_schwab_status', 'Building holdings diff…');
+  google.script.run
+    .withSuccessHandler(function(bundle) {
+      setStatus('inv_schwab_status', '', false);
+      var resolved = invDrawerSchwabResolveApplyDiffBundle_(bundle);
+      __invDrawerSchwabState.applyDiff = resolved.applyDiff;
+      __invDrawerSchwabState.applyDiffDigest = resolved.applyDiffDigest;
+      __invDrawerSchwabState.applyReviewed = resolved.applyReviewed;
+      var msgEl = document.getElementById('inv_schwab_apply_message');
+      var confirmBtn = document.getElementById('inv_schwab_confirm_apply_btn');
+      if (msgEl) msgEl.textContent = resolved.message;
+      if (confirmBtn) {
+        confirmBtn.disabled = !(resolved.applyReviewed && resolved.applyDiff &&
+          !resolved.applyDiff.blocked && !resolved.applyDiff.duplicateNoop);
+      }
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_schwab_status', err.message || String(err), true);
+    })
+    .boundedHoldingsPreviewBuildApplyDiffFromDashboard(buildInvDrawerSchwabPayload_());
+}
+
+function confirmInvestmentPortfolioDrawerSchwabApply_() {
+  if (!__invDrawerSchwabState.applyReviewed || !__invDrawerSchwabState.applyDiffDigest) return;
+  setStatusLoading('inv_schwab_status', 'Applying approved holdings…');
+  var payload = buildInvDrawerSchwabPayload_();
+  payload.diffDigest = __invDrawerSchwabState.applyDiffDigest;
+  payload.explicitApplyConfirm = true;
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('inv_schwab_status', res && res.message ? res.message : 'Apply completed.', false);
+      clearInvestmentPortfolioDrawerSchwabApply_(true);
+      var picker = __investmentPortfolioSelectedId;
+      if (picker) applyInvestmentPortfolioAccountChange_(
+        document.getElementById('inv_activity_account'), picker);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_schwab_status', err.message || String(err), true);
+    })
+    .boundedHoldingsPreviewApplyFromDashboard(payload);
+}

@@ -69,6 +69,12 @@ function buildContext(overrides = {}) {
     filename: 'investment_etrade_client_statement_pdf.js'
   });
   vm.runInContext(read('investment_m1_statement_pdf.js'), context, { filename: 'investment_m1_statement_pdf.js' });
+  vm.runInContext(read('investment_schwab_brokerage_statement_pdf.js'), context, {
+    filename: 'investment_schwab_brokerage_statement_pdf.js'
+  });
+  vm.runInContext(read('investment_fidelity_401k_statement_pdf.js'), context, {
+    filename: 'investment_fidelity_401k_statement_pdf.js'
+  });
   vm.runInContext(adaptersSource, context, { filename: 'investment_adapters.js' });
   vm.runInContext(previewLabSource, context, { filename: 'central_etrade_preview_lab.js' });
   return context;

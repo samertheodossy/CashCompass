@@ -52,6 +52,12 @@ vm.runInContext(read('investment_etrade_client_statement_pdf.js'), context, {
 vm.runInContext(read('investment_m1_statement_pdf.js'), context, {
   filename: 'investment_m1_statement_pdf.js'
 });
+vm.runInContext(read('investment_schwab_brokerage_statement_pdf.js'), context, {
+  filename: 'investment_schwab_brokerage_statement_pdf.js'
+});
+vm.runInContext(read('investment_fidelity_401k_statement_pdf.js'), context, {
+  filename: 'investment_fidelity_401k_statement_pdf.js'
+});
 vm.runInContext(read('investment_adapters.js'), context, { filename: 'investment_adapters.js' });
 
 const statementFixture = fixture('synthetic_m1_statement_minimal.txt');
@@ -72,7 +78,9 @@ const accountMeta = {
 
 // --- Registry ---
 assert.deepEqual(context.listInvestmentAdapterSources_().sort(), [
-  'ETRADE_CSV', 'ETRADE_PACKAGE', 'ETRADE_POSITIONS_PDF', 'M1_STATEMENT_PDF', 'ROBINHOOD_CSV'
+  'ETRADE_CLIENT_STATEMENT_PDF', 'ETRADE_CSV', 'ETRADE_PACKAGE', 'ETRADE_POSITIONS_PDF',
+  'FIDELITY_401K_STATEMENT_PDF', 'M1_STATEMENT_PDF', 'ROBINHOOD_CSV',
+  'SCHWAB_BROKERAGE_STATEMENT_PDF'
 ]);
 assert.throws(() => context.getInvestmentAdapter_('M1_CSV'), /not implemented/);
 assert.equal(context.getInvestmentAdapter_('M1_STATEMENT_PDF').source, 'M1_STATEMENT_PDF');
@@ -96,6 +104,12 @@ const nonM1Detect = context.investmentM1DetectStatementPdf_({
 });
 assert.equal(nonM1Detect.ok, false);
 assert.match(nonM1Detect.reason, /Missing required marker\(s\): Statement period/);
+
+const schwabNotM1 = context.investmentM1DetectStatementPdf_({
+  rawStatementText: read('test/fixtures/schwab/synthetic_schwab_brokerage_statement_minimal.txt')
+});
+assert.equal(schwabNotM1.ok, false);
+assert.match(schwabNotM1.reason, /Schwab brokerage statement/);
 
 // --- Parse structure ---
 const parsed = context.investmentM1ParseStatementPdfText_(statementFixture);

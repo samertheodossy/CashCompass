@@ -26,27 +26,33 @@ var BOUNDED_HOLDINGS_UNIFIED_HEADERS_ = [
   'Import run/reference'
 ];
 
+/**
+ * Maximum post-auto-size widths (px). Columns are first fitted to headers and
+ * current values, then capped so long source labels or security names cannot
+ * make the Unified sheet unusably wide. Shared across every provider Apply path.
+ */
 var BOUNDED_HOLDINGS_UNIFIED_WIDTHS_ = {
-  'Source': 165,
-  'Provider': 102,
-  'Parent CashCompass account': 248,
+  'Source': 280,
+  'Provider': 120,
+  'Parent CashCompass account': 280,
   'Child account/partition': 220,
   'Investment Id': 140,
   'Source security key': 168,
-  'Symbol': 78,
-  'Security name': 240,
-  'Shares': 96,
-  'Price': 92,
-  'Market value': 118,
-  'Cost basis': 108,
-  'Unrealized gain/loss': 148,
-  'Cash balance': 112,
-  'As-of date': 108,
+  'Symbol': 96,
+  'Security name': 280,
+  'Shares': 110,
+  'Price': 110,
+  'Market value': 130,
+  'Cost basis': 120,
+  'Unrealized gain/loss': 200,
+  'Cash balance': 120,
+  'As-of date': 120,
   'Document fingerprint': 168,
   'Import status': 118,
   'Imported at': 168,
   'Import run/reference': 168
 };
+var BOUNDED_HOLDINGS_UNIFIED_WIDTH_GUTTER_PX_ = 24;
 
 var BOUNDED_HOLDINGS_UNIFIED_HEADER_ROW_HEIGHT_ = 32;
 var BOUNDED_HOLDINGS_UNIFIED_BODY_ROW_HEIGHT_ = 22;
@@ -214,6 +220,13 @@ function boundedHoldingsPreviewApplyUnifiedBodyRowCount_(sheet) {
   } catch (_e) { return 0; }
 }
 
+function boundedHoldingsPreviewApplyUnifiedWidthGutter_() {
+  if (typeof CONTENT_COLUMN_FIT_GUTTER_PX_ === 'number' && CONTENT_COLUMN_FIT_GUTTER_PX_ > 0) {
+    return CONTENT_COLUMN_FIT_GUTTER_PX_;
+  }
+  return BOUNDED_HOLDINGS_UNIFIED_WIDTH_GUTTER_PX_;
+}
+
 function boundedHoldingsPreviewApplySetUnifiedColumnWidths_(sheet) {
   if (!sheet) return;
   var width = BOUNDED_HOLDINGS_UNIFIED_HEADERS_.length;
@@ -221,11 +234,26 @@ function boundedHoldingsPreviewApplySetUnifiedColumnWidths_(sheet) {
   try {
     headers = sheet.getRange(1, 1, 1, width).getValues()[0] || [];
   } catch (_headerErr) { return; }
+  var gutter = boundedHoldingsPreviewApplyUnifiedWidthGutter_();
   for (var i = 0; i < headers.length; i += 1) {
     var header = String(headers[i] || '').trim();
-    var targetWidth = BOUNDED_HOLDINGS_UNIFIED_WIDTHS_[header];
-    if (!(targetWidth > 0)) continue;
-    try { sheet.setColumnWidth(i + 1, targetWidth); } catch (_widthErr) { /* cosmetic */ }
+    var maxWidth = BOUNDED_HOLDINGS_UNIFIED_WIDTHS_[header];
+    if (!(maxWidth > 0)) continue;
+    var col = i + 1;
+    var resized = false;
+    try {
+      if (typeof sheet.autoResizeColumn === 'function') {
+        sheet.autoResizeColumn(col);
+        resized = true;
+      }
+    } catch (_autoErr) { /* cosmetic */ }
+    var autoWidth = 0;
+    try { autoWidth = Number(sheet.getColumnWidth(col)) || 0; } catch (_getErr) { autoWidth = 0; }
+    var targetWidth = maxWidth;
+    if (resized && autoWidth > 0) {
+      targetWidth = Math.min(maxWidth, autoWidth + gutter);
+    }
+    try { sheet.setColumnWidth(col, targetWidth); } catch (_widthErr) { /* cosmetic */ }
   }
 }
 

@@ -14,6 +14,10 @@ function boundedHoldingsPreviewApplyBuildDocumentFingerprint_(source, rawText, d
       typeof investmentM1BuildStatementFileFingerprint_ === 'function') {
     return investmentM1BuildStatementFileFingerprint_(raw);
   }
+  if (normalizedSource === 'SCHWAB_BROKERAGE_STATEMENT_PDF' &&
+      typeof investmentSchwabBuildStatementFileFingerprint_ === 'function') {
+    return investmentSchwabBuildStatementFileFingerprint_(raw);
+  }
   if (normalizedSource === 'ETRADE_POSITIONS_PDF' &&
       typeof investmentEtradeBuildPositionsFileFingerprint_ === 'function') {
     return investmentEtradeBuildPositionsFileFingerprint_(raw);

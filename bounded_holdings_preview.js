@@ -188,6 +188,7 @@ function boundedHoldingsPreviewDefaultSourceForAccount_(accountMeta) {
   var provider = boundedHoldingsPreviewResolveStatementProvider_(accountMeta);
   if (provider === 'M1') return 'M1_STATEMENT_PDF';
   if (provider === 'ETRADE') return 'ETRADE_CLIENT_STATEMENT_PDF';
+  if (provider === 'SCHWAB') return 'SCHWAB_BROKERAGE_STATEMENT_PDF';
   return 'ETRADE_POSITIONS_PDF';
 }
 
@@ -199,6 +200,9 @@ function boundedHoldingsPreviewAllowedSourcesForAccount_(accountMeta) {
   }
   if (provider === 'ETRADE') {
     return ['ETRADE_POSITIONS_PDF', 'ETRADE_CLIENT_STATEMENT_PDF'];
+  }
+  if (provider === 'SCHWAB') {
+    return ['SCHWAB_BROKERAGE_STATEMENT_PDF'];
   }
   return ['ETRADE_POSITIONS_PDF', 'ETRADE_CLIENT_STATEMENT_PDF', 'M1_STATEMENT_PDF'];
 }
@@ -233,6 +237,14 @@ function boundedHoldingsPreviewValidatePreviewSourceForAccount_(accountMeta, sou
       return {
         ok: false,
         error: 'M1 accounts require M1_STATEMENT_PDF source.',
+        source: normalizedSource,
+        provider: provider
+      };
+    }
+    if (provider === 'SCHWAB') {
+      return {
+        ok: false,
+        error: 'Schwab accounts require SCHWAB_BROKERAGE_STATEMENT_PDF source.',
         source: normalizedSource,
         provider: provider
       };

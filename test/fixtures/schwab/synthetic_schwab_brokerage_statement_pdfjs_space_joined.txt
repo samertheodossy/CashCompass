@@ -1,0 +1,13 @@
+# Sanitized Schwab brokerage statement PDF.js extract (space-joined; no personal name/address/account)
+# Layout mirrors the July 2026 PDF.js extract: few newlines, no pipes, glued Price($)Market Value($)
+Charles Schwab Schwab One Brokerage Statement
+1 of 6 Statement Period July 1-31, 2026 Brokerage Account Account Number XXXX-0000
+Account Summary Ending Account Value as of 07/31 Beginning Account Value as of 07/01 $47,778.84$44,677.09
+This Period YTD Beginning Account Value $44,677.09$45,051.82 Deposits 0.00 0.00 Withdrawals 0.00 0.00 Dividends and Interest 25.36 194.12 Market Appreciation/(Depreciation) 3,076.39 2,532.90 Expenses 0.00 0.00 Ending Account Value $47,778.84$47,778.84
+i Top Account Holdings This Period SYMBOL CUSIP Description Market Value % of Accounts MSFT MICROSOFT CORP 36,416.67 76% INTC INTEL CORP 7,591.18 16% DIS DISNEY WALT CO 3,083.25 6% CSCO CISCO SYS INC 415.97 <1% DXC DXC TECHNOLOGY CO 271.77 <1%
+Positions - Equities Symbol Description Quantity Price($)Market Value($)Cost Basis($)Unrealized Gain/(Loss)($)Est. Yield Est. Annual Income($)%of Acct CSCO CISCO SYS INC (M),⁺ 3.5863 115.99000 415.97 120.17 295.80 1.49% 6.02 <1% DIS DISNEY WALT CO (M),⁺ 32.0537 96.19000 3,083.25 1,503.11 1,580.14 1.52% 48.08 6% DXC DXC TECHNOLOGY CO (M),⁺ 24.1784 11.24000 271.77 739.03 (467.26) N/A N/A <1% INTC INTEL CORP (M),⁺ 84.1594 90.20000 7,591.18 2,156.46 5,434.72 N/A N/A 16% MSFT MICROSOFT CORP (M),⁺ 78.3626 464.72000 36,416.67 5,156.42 31,260.25 0.93% 285.24 76% Total Equities $47,778.84$9,675.19$38,103.65$339.34100%
+Positions - Unpriced Securities Symbol Description Quantity Price($)Market Value($)Cost Basis($)Unrealized Gain/(Loss)($)Est. Yield Est. Annual Income($)CHINA TIANREN ORGANC 12.0000 3.00 e N/A N/A N/A Total Unpriced Securities $3.00N/A N/A
+Transactions - Summary Beginning Cash* as of 07/01 + Deposits + Withdrawals + Purchases + Sales/Redemptions + Dividends/Interest + Expenses = Ending Cash* as of 07/31 $0.00$0.00$0.00($25.36)$0.00$25.36$0.00$0.00
+Transaction Details Date Category Action Symbol/ CUSIP Description Quantity Price/Rate per Share($)Charges/ Interest($)Amount($) 07/15/2026 Buy CSCO CISCO SYS INC 10 50.00 0.00 (500.00) 07/20/2026 Sell MSFT MICROSOFT CORP 1 400.00 0.00 400.00
+Estimated Annual Income ("EAI") and Estimated Yield ("EY") calculations are for informational purposes only.
+Terms and Conditions This Statement does not create holdings. Ignore dividends and account-summary activity.

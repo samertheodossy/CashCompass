@@ -167,10 +167,24 @@ function investmentEtradeClientStatementClassifyDocumentType_(text) {
   };
 }
 
-function boundedHoldingsPreviewLooksLikeM1StatementPdf_(text) {
+function boundedHoldingsPreviewCompactExtractText_(text) {
   var readable = boundedHoldingsPreviewReadableExtractText_(text);
   var sample = String((readable && readable.text) || text || '');
-  var compact = investmentEtradeClientStatementCompactText_(sample);
+  if (typeof investmentEtradeClientStatementCompactText_ === 'function') {
+    return investmentEtradeClientStatementCompactText_(sample);
+  }
+  return sample.replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function boundedHoldingsPreviewLooksLikeSchwabBrokerageStatementPdf_(text) {
+  var compact = boundedHoldingsPreviewCompactExtractText_(text);
+  return /Charles\s+Schwab|Schwab\s+One|Schwab\s+Brokerage|\bSchwab\b/i.test(compact) &&
+    /Positions\s*[-–]\s*Equities/i.test(compact);
+}
+
+function boundedHoldingsPreviewLooksLikeM1StatementPdf_(text) {
+  if (boundedHoldingsPreviewLooksLikeSchwabBrokerageStatementPdf_(text)) return false;
+  var compact = boundedHoldingsPreviewCompactExtractText_(text);
   return /M1:|Finance Super App|Total account value \/ 1-month change/i.test(compact) ||
     (/Statement period:/i.test(compact) &&
       (/Account breakdown/i.test(compact) ||
@@ -180,11 +194,21 @@ function boundedHoldingsPreviewLooksLikeM1StatementPdf_(text) {
 function boundedHoldingsPreviewShouldUseM1PdfLoadPath_(options, text) {
   if (options && options.groupedMode === true) return true;
   var provider = String((options || {}).accountProvider || '').trim().toUpperCase();
-  if (provider === 'ETRADE') return false;
+  if (provider === 'ETRADE' || provider === 'SCHWAB') return false;
   if (provider === 'M1') return true;
   var source = String((options || {}).source || '').trim().toUpperCase();
+  if (source === 'SCHWAB_BROKERAGE_STATEMENT_PDF') return false;
   if (source !== 'M1_STATEMENT_PDF') return false;
   return boundedHoldingsPreviewLooksLikeM1StatementPdf_(text);
+}
+
+function boundedHoldingsPreviewShouldUseStandardHoldingsPdfLoadPath_(options) {
+  var provider = String((options || {}).accountProvider || '').trim().toUpperCase();
+  var source = String((options || {}).source || '').trim().toUpperCase();
+  if (source === 'FIDELITY_401K_STATEMENT_PDF') return true;
+  if (source === 'SCHWAB_BROKERAGE_STATEMENT_PDF') return true;
+  if (provider === 'SCHWAB') return true;
+  return false;
 }
 
 function boundedHoldingsPreviewBuildStandardPdfLoadResult_(finalized, options, documentFingerprint) {
@@ -672,9 +696,16 @@ function boundedHoldingsPreviewLoadDocumentTextFromFile_(file, pdfjsLib, options
           var finalized = boundedHoldingsPreviewFinalizeLoadedDocumentText_(text, 'pdf');
           var accountProvider = String((options || {}).accountProvider || '').trim().toUpperCase();
           var normalizedSource = String((options || {}).source || '').trim().toUpperCase();
-          if (normalizedSource === 'FIDELITY_401K_STATEMENT_PDF') {
+          if (boundedHoldingsPreviewShouldUseStandardHoldingsPdfLoadPath_(options)) {
+            var standardOptions = options;
+            if (accountProvider === 'SCHWAB' ||
+                normalizedSource === 'SCHWAB_BROKERAGE_STATEMENT_PDF') {
+              standardOptions = Object.assign({}, options, {
+                source: 'SCHWAB_BROKERAGE_STATEMENT_PDF'
+              });
+            }
             return boundedHoldingsPreviewBuildStandardPdfLoadResult_(
-              finalized, options, documentFingerprint);
+              finalized, standardOptions, documentFingerprint);
           }
           if (accountProvider === 'M1' && options.groupedMode !== true) {
             return boundedHoldingsPreviewBuildStandardPdfLoadResult_(

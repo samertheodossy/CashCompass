@@ -162,6 +162,14 @@ function investmentEtradeClientStatementClassifyDocumentType_(text) {
     };
   }
   var compact = investmentEtradeClientStatementCompactText_(text);
+  if (/Charles\s+Schwab|Schwab\s+One|Schwab\s+Brokerage/i.test(compact) &&
+      /Positions\s*[-–]\s*Equities/i.test(compact)) {
+    return {
+      documentType: 'UNKNOWN',
+      confidence: 'LOW',
+      reason: 'Document appears to be a Schwab brokerage statement.'
+    };
+  }
   if (/M1:|Finance Super App|Total account value \/ 1-month change/i.test(compact) ||
       (/Statement period:/i.test(compact) &&
         (/Account breakdown/i.test(compact) ||

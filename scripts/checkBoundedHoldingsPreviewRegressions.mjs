@@ -243,6 +243,9 @@ function buildContext(overrides = {}) {
   vm.runInContext(read('investment_m1_statement_pdf.js'), context, {
     filename: 'investment_m1_statement_pdf.js'
   });
+  vm.runInContext(read('investment_schwab_brokerage_statement_pdf.js'), context, {
+    filename: 'investment_schwab_brokerage_statement_pdf.js'
+  });
   vm.runInContext(read('investment_fidelity_401k_statement_pdf.js'), context, {
     filename: 'investment_fidelity_401k_statement_pdf.js'
   });
@@ -321,6 +324,7 @@ assert.match(boundedHtml, /Preview only — not loaded into CashCompass/);
 assert.doesNotMatch(dashboardBody, /id="inv_holdings_preview_btn"/);
 assert.doesNotMatch(dashboardBody, /Preview holdings \(PDF\)/);
 assert.match(dashboardBody, /Import M1 statement PDF/);
+assert.match(dashboardBody, /Import Schwab statement PDF/);
 assert.match(dashboardBody, /CashCompass investment account/);
 assert.match(dashboardInvestments, /function openBoundedHoldingsPreview_/);
 assert.match(boundedSource, /boundedHoldingsPreviewLaunchUrl_/);
@@ -586,6 +590,34 @@ assert.equal(
   ctx.boundedHoldingsPreviewAllowedSourcesForAccount_(m1Account).join(','),
   'M1_STATEMENT_PDF'
 );
+const schwabAccountMeta = {
+  accountName: 'Charles Schwab - Personal',
+  statementProvider: 'SCHWAB',
+  previewMode: 'SINGLE_ACCOUNT'
+};
+assert.equal(
+  ctx.boundedHoldingsPreviewInferIdentityProvider_('Charles Schwab - Personal', null),
+  'SCHWAB'
+);
+assert.equal(
+  ctx.boundedHoldingsPreviewDefaultSourceForAccount_(schwabAccountMeta),
+  'SCHWAB_BROKERAGE_STATEMENT_PDF'
+);
+assert.equal(
+  ctx.boundedHoldingsPreviewAllowedSourcesForAccount_(schwabAccountMeta).join(','),
+  'SCHWAB_BROKERAGE_STATEMENT_PDF'
+);
+assert.equal(
+  ctx.boundedHoldingsPreviewCoerceSourceForAccount_(schwabAccountMeta, 'M1_STATEMENT_PDF'),
+  'SCHWAB_BROKERAGE_STATEMENT_PDF'
+);
+const schwabWrongSource = ctx.boundedHoldingsPreviewValidatePreviewSourceForAccount_(
+  schwabAccountMeta,
+  'M1_STATEMENT_PDF',
+  m1Fixture
+);
+assert.equal(schwabWrongSource.ok, false);
+assert.match(String(schwabWrongSource.error), /SCHWAB_BROKERAGE_STATEMENT_PDF/);
 assert.equal(
   ctx.boundedHoldingsPreviewCoerceSourceForAccount_(etradeAccount, 'M1_STATEMENT_PDF'),
   'ETRADE_CLIENT_STATEMENT_PDF'

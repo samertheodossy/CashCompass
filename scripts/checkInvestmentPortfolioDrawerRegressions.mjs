@@ -21,6 +21,7 @@ const dashboardBody = read('Dashboard_Body.html');
 const dashboardInvestments = read('Dashboard_Script_AssetsBankInvestments.html');
 const dashboardStyles = read('Dashboard_Styles.html');
 const drawerM1Source = read('Dashboard_Script_InvestmentPortfolioDrawerM1.html');
+const drawerSchwabSource = read('Dashboard_Script_InvestmentPortfolioDrawerSchwab.html');
 const drawer401kSource = read('Dashboard_Script_InvestmentPortfolioDrawer401k.html');
 const webappSource = read('webapp.js');
 const drawerSource = read('investment_portfolio_drawer.js');
@@ -50,6 +51,7 @@ vm.runInContext(`
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerInferProvider_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerMapAccountRow_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerRobinhoodImportEligible_')}
+  ${extractFunction(drawerSource, 'investmentPortfolioDrawerSupportedImportFormats_')}
   function boundedHoldingsPreviewApplyNormalizeAsOfDate_(value) {
     var raw = String(value || '').trim();
     if (!raw) return '';
@@ -222,6 +224,11 @@ const schwabAccount = context.investmentPortfolioDrawerMapAccountRow_({
   planningPurpose: ''
 });
 assert.equal(context.investmentPortfolioDrawerRobinhoodImportEligible_(schwabAccount), false);
+const schwabFormats = context.investmentPortfolioDrawerSupportedImportFormats_('SCHWAB', 'SINGLE_ACCOUNT');
+assert.equal(schwabFormats.length, 1);
+assert.equal(schwabFormats[0].source, 'SCHWAB_BROKERAGE_STATEMENT_PDF');
+assert.equal(schwabFormats[0].label, 'Schwab brokerage statement PDF');
+assert.equal(schwabFormats[0].productionReady, true);
 
 // --- Provider metadata: explicit broker names only; ambiguous names stay unknown ---
 assert.equal(
@@ -255,6 +262,8 @@ assert.doesNotMatch(dashboardBody, /id="inv_holdings_preview_btn"/);
 assert.doesNotMatch(dashboardBody, /Preview holdings \(PDF\)/);
 assert.match(dashboardBody, /Import M1 statement PDF/);
 assert.match(dashboardBody, /inv_portfolio_m1_import_view/);
+assert.match(dashboardBody, /Import Schwab statement PDF/);
+assert.match(dashboardBody, /inv_portfolio_schwab_import_view/);
 assert.match(dashboardBody, /CashCompass investment account/);
 assert.match(dashboardBody, /view portfolio holdings and import statements when available/);
 assert.doesNotMatch(dashboardBody, /update recurring plans/);
@@ -265,6 +274,7 @@ assert.match(drawerM1Source, /boundedHoldingsPreviewBuildGroupedApplyDiffFromDas
 assert.match(drawerM1Source, /boundedHoldingsPreviewApplyFromDashboard/);
 assert.match(drawerM1Source, /boundedHoldingsPreviewApplyGroupedFromDashboard/);
 assert.match(drawerSource, /m1ImportAvailable/);
+assert.match(drawerSource, /schwabImportAvailable/);
 assert.match(drawerSource, /parentAggregateExcluded/);
 assert.match(drawerSource, /fidelity401kImportAvailable/);
 assert.match(drawerSource, /FIDELITY_401K_BALANCE/);
@@ -280,6 +290,341 @@ assert.doesNotMatch(drawer401kSource, /boundedHoldingsPreviewApplyFromDashboard/
 assert.doesNotMatch(drawer401kSource, /\bsetValues\b|\bappendRow\b/);
 assert.match(webappSource, /view === 'portfolio-holdings-preview' && !isCentralModeEnabled_\(\)/);
 assert.doesNotMatch(drawerM1Source, /\bsetValues\b|\bappendRow\b/);
+assert.match(drawerSchwabSource, /boundedHoldingsPreviewRunFromDashboard/);
+assert.match(drawerSchwabSource, /boundedHoldingsPreviewBuildApplyDiffFromDashboard/);
+assert.match(drawerSchwabSource, /boundedHoldingsPreviewApplyFromDashboard/);
+assert.match(drawerSchwabSource, /payload\.explicitApplyConfirm = true/);
+assert.doesNotMatch(drawerSchwabSource, /boundedHoldingsPreviewRunGroupedChildFromDashboard/);
+assert.doesNotMatch(drawerSchwabSource, /\bsetValues\b|\bappendRow\b/);
+assert.doesNotMatch(drawerSchwabSource, /id="inv_schwab_stable_account"/);
+assert.doesNotMatch(drawerSchwabSource, /res\.preview\s*\|\|/);
+assert.match(drawerSchwabSource, /lastSinglePreview = res;/);
+assert.match(drawerSchwabSource, /preview\.holdingsRows/);
+assert.match(drawerSchwabSource, /preview\.unsupportedRows/);
+assert.match(drawerSchwabSource, /preview\.readiness/);
+assert.match(drawerSchwabSource, /preview\.warnings/);
+assert.match(drawerSchwabSource, /preview\.reconciliation/);
+
+const schwabDrawerDom = (function() {
+  const nodes = {};
+  function ensure(id) {
+    if (!nodes[id]) {
+      nodes[id] = {
+        id,
+        innerHTML: '',
+        disabled: false,
+        onclick: null,
+        textContent: '',
+        value: '',
+        checked: false
+      };
+    }
+    return nodes[id];
+  }
+  ensure('inv_schwab_results');
+  ensure('inv_schwab_apply_area');
+  ensure('inv_schwab_document_text').value = 'schwab-extract';
+  return {
+    nodes,
+    document: {
+      getElementById(id) {
+        if (id === 'inv_schwab_review_apply_btn' ||
+            id === 'inv_schwab_confirm_apply_btn' ||
+            id === 'inv_schwab_apply_message') {
+          const applyHtml = String(nodes.inv_schwab_apply_area.innerHTML || '');
+          if (applyHtml.indexOf(id) < 0) return null;
+        }
+        return ensure(id);
+      }
+    }
+  };
+})();
+
+const schwabDrawerUi = {
+  String, Number, Object, Array, Math, isFinite, Error, JSON, console,
+  document: schwabDrawerDom.document,
+  escapeHtml: (value) => String(value == null ? '' : value)
+};
+vm.createContext(schwabDrawerUi);
+vm.runInContext(`
+  var __invDrawerSchwabState = {
+    selectedAccount: { pickerValue: 'STABLE-SCHWAB-1', accountName: 'Charles Schwab - Personal' },
+    lastSinglePreview: null,
+    lastPreviewDocumentText: '',
+    applyReviewed: false,
+    applyDiff: null,
+    applyDiffDigest: '',
+    applyStatusMessage: ''
+  };
+  ${extractFunction(drawerSchwabSource, 'invDrawerSchwabEscape_')}
+  ${extractFunction(drawerSchwabSource, 'invDrawerSchwabCurrentText_')}
+  ${extractFunction(drawerSchwabSource, 'invDrawerSchwabFormatMoney_')}
+  ${extractFunction(drawerSchwabSource, 'invDrawerSchwabFormatAsOf_')}
+  ${extractFunction(drawerSchwabSource, 'invDrawerSchwabEndingValue_')}
+  ${extractFunction(drawerSchwabSource, 'clearInvestmentPortfolioDrawerSchwabApply_')}
+  function reviewInvestmentPortfolioDrawerSchwabApplyDiff_() {}
+  function confirmInvestmentPortfolioDrawerSchwabApply_() {}
+  ${extractFunction(drawerSchwabSource, 'renderInvestmentPortfolioDrawerSchwabApplySection_')}
+  ${extractFunction(drawerSchwabSource, 'renderInvDrawerSchwabSingleResults_')}
+`, schwabDrawerUi, { filename: 'schwab-drawer-ui.js' });
+
+const flatSchwabLabResponse = {
+  ok: true,
+  source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+  provider: 'SCHWAB',
+  asOf: '2026-07-31T00:00:00.000Z',
+  totalAccountValue: 47778.84,
+  holdingsRows: [
+    { symbol: 'CSCO', description: 'CISCO SYS INC', quantity: 3.5863, price: 115.99, marketValue: 415.97 },
+    { symbol: 'DIS', description: 'DISNEY WALT CO', quantity: 32.0537, price: 96.19, marketValue: 3083.25 },
+    { symbol: 'DXC', description: 'DXC TECHNOLOGY CO', quantity: 24.1784, price: 11.24, marketValue: 271.77 },
+    { symbol: 'INTC', description: 'INTEL CORP', quantity: 84.1594, price: 90.2, marketValue: 7591.18 },
+    { symbol: 'MSFT', description: 'MICROSOFT CORP', quantity: 78.3626, price: 464.72, marketValue: 36416.67 }
+  ],
+  unsupportedRows: [{
+    symbol: '',
+    description: 'CHINA TIANREN ORGANC',
+    reason: 'UNPRICED_SECURITY',
+    price: null,
+    marketValue: null
+  }],
+  warnings: [],
+  readiness: {
+    trustedForHoldingsVisibility: true,
+    trustedForIncomeAnalysis: false,
+    trustedForTaxLotSalePlanning: false,
+    blockingReasons: []
+  },
+  reconciliation: {
+    ok: true,
+    endingTotalValue: 47778.84
+  }
+};
+
+schwabDrawerUi.renderInvDrawerSchwabSingleResults_(flatSchwabLabResponse);
+const schwabResultsHtml = String(schwabDrawerDom.nodes.inv_schwab_results.innerHTML);
+assert.match(schwabResultsHtml, /Schwab preview ready/);
+assert.match(schwabResultsHtml, /As-of 2026-07-31/);
+assert.match(schwabResultsHtml, /47778\.84/);
+assert.match(schwabResultsHtml, /CSCO /);
+assert.match(schwabResultsHtml, /DIS /);
+assert.match(schwabResultsHtml, /DXC /);
+assert.match(schwabResultsHtml, /INTC /);
+assert.match(schwabResultsHtml, /MSFT /);
+assert.match(schwabResultsHtml, /UNPRICED_SECURITY/);
+assert.doesNotMatch(schwabResultsHtml, /needs review/);
+assert.doesNotMatch(schwabResultsHtml, /not trusted for Apply/);
+assert.equal(schwabDrawerUi.__invDrawerSchwabState.lastSinglePreview, flatSchwabLabResponse);
+assert.equal(schwabDrawerUi.__invDrawerSchwabState.lastSinglePreview.holdingsRows.length, 5);
+assert.equal(schwabDrawerUi.__invDrawerSchwabState.lastSinglePreview.unsupportedRows[0].reason, 'UNPRICED_SECURITY');
+assert.equal(
+  schwabDrawerUi.__invDrawerSchwabState.lastSinglePreview.readiness.trustedForHoldingsVisibility,
+  true
+);
+assert.equal(
+  schwabDrawerUi.__invDrawerSchwabState.lastSinglePreview.reconciliation.endingTotalValue,
+  47778.84
+);
+const reviewBtn = schwabDrawerDom.document.getElementById('inv_schwab_review_apply_btn');
+const confirmBtn = schwabDrawerDom.document.getElementById('inv_schwab_confirm_apply_btn');
+assert.ok(reviewBtn, 'Review holdings changes button must exist');
+assert.equal(reviewBtn.disabled, false);
+assert.ok(confirmBtn, 'Apply approved holdings button must exist');
+assert.equal(confirmBtn.disabled, true);
+assert.match(String(schwabDrawerDom.nodes.inv_schwab_apply_area.innerHTML), /Review holdings changes/);
+assert.doesNotMatch(
+  String(schwabDrawerDom.nodes.inv_schwab_apply_area.innerHTML),
+  /Apply is blocked until the statement reconciles/
+);
+assert.doesNotMatch(drawerSchwabSource, /bundle\.diffPreview/);
+assert.match(drawerSchwabSource, /invDrawerSchwabResolveApplyDiffBundle_/);
+assert.doesNotMatch(drawerM1Source, /bundle\.diffPreview/);
+assert.match(drawerM1Source, /invDrawerM1ResolveApplyDiffBundle_/);
+assert.match(drawerM1Source, /boundedHoldingsPreviewBuildApplyDiffFromDashboard/);
+assert.match(drawerM1Source, /boundedHoldingsPreviewBuildGroupedApplyDiffFromDashboard/);
+
+const applyDiffResolverUi = {
+  String, Number, Object, Array, Math, isFinite, Error, JSON, console
+};
+vm.createContext(applyDiffResolverUi);
+vm.runInContext(`
+  ${extractFunction(drawerSchwabSource, 'invDrawerSchwabResolveApplyDiffBundle_')}
+  ${extractFunction(drawerM1Source, 'invDrawerM1ResolveApplyDiffBundle_')}
+`, applyDiffResolverUi, { filename: 'drawer-apply-diff-resolvers.js' });
+
+const schwabDiffBundle = {
+  ok: true,
+  diffDigest: 'DIGEST-SCHWAB-1',
+  diff: {
+    summary: { createCount: 5, updateCount: 1 },
+    blocked: false,
+    duplicateNoop: false
+  }
+};
+const schwabResolved = applyDiffResolverUi.invDrawerSchwabResolveApplyDiffBundle_(schwabDiffBundle);
+assert.equal(schwabResolved.ok, true);
+assert.equal(schwabResolved.applyDiff, schwabDiffBundle.diff);
+assert.equal(schwabResolved.applyReviewed, true);
+assert.match(schwabResolved.message, /Creates: 5/);
+assert.match(schwabResolved.message, /Updates: 1/);
+assert.doesNotMatch(schwabResolved.message, /Creates: 0 · Updates: 0/);
+assert.equal(
+  !!(schwabResolved.applyReviewed && schwabResolved.applyDiff &&
+    !schwabResolved.applyDiff.blocked && !schwabResolved.applyDiff.duplicateNoop),
+  true
+);
+
+const schwabMissingDiff = applyDiffResolverUi.invDrawerSchwabResolveApplyDiffBundle_({
+  ok: true,
+  diffDigest: 'DIGEST-SCHWAB-MISSING',
+  diffPreview: { summary: { createCount: 5, updateCount: 0 } }
+});
+assert.equal(schwabMissingDiff.ok, false);
+assert.equal(schwabMissingDiff.applyReviewed, false);
+assert.equal(schwabMissingDiff.applyDiff, null);
+assert.equal(schwabMissingDiff.message, 'Could not build diff.');
+assert.doesNotMatch(schwabMissingDiff.message, /Creates: 0/);
+assert.doesNotMatch(schwabMissingDiff.message, /Updates: 0/);
+
+const m1DiffBundle = {
+  ok: true,
+  diffDigest: 'DIGEST-M1-1',
+  diff: {
+    summary: { createCount: 3, updateCount: 2 },
+    blocked: false,
+    duplicateNoop: false
+  }
+};
+const m1Resolved = applyDiffResolverUi.invDrawerM1ResolveApplyDiffBundle_(m1DiffBundle);
+assert.equal(m1Resolved.ok, true);
+assert.equal(m1Resolved.applyDiff, m1DiffBundle.diff);
+assert.equal(m1Resolved.applyReviewed, true);
+assert.match(m1Resolved.message, /Creates: 3/);
+assert.match(m1Resolved.message, /Updates: 2/);
+
+const m1MissingDiff = applyDiffResolverUi.invDrawerM1ResolveApplyDiffBundle_({
+  ok: true,
+  diffDigest: 'DIGEST-M1-MISSING'
+});
+assert.equal(m1MissingDiff.ok, false);
+assert.equal(m1MissingDiff.applyReviewed, false);
+assert.equal(m1MissingDiff.message, 'Could not build diff.');
+assert.doesNotMatch(m1MissingDiff.message, /Creates: 0/);
+
+const schwabNoDigest = applyDiffResolverUi.invDrawerSchwabResolveApplyDiffBundle_({
+  ok: true,
+  diff: { summary: { createCount: 5, updateCount: 0 }, blocked: false, duplicateNoop: false }
+});
+assert.equal(schwabNoDigest.applyReviewed, false);
+assert.equal(
+  !!(schwabNoDigest.applyReviewed && schwabNoDigest.applyDiff &&
+    !schwabNoDigest.applyDiff.blocked && !schwabNoDigest.applyDiff.duplicateNoop),
+  false
+);
+
+assert.match(drawerSchwabSource, /syncInvestmentPortfolioDrawerSchwabReadyState_/);
+assert.match(drawerSchwabSource, /invDrawerSchwabHasDocumentReady_/);
+assert.match(drawerSchwabSource, /invDrawerSchwabRestoreTrustedDocumentText_/);
+assert.match(
+  drawerSchwabSource,
+  /clearInvestmentPortfolioDrawerSchwabApply_\(true\);\s*syncInvestmentPortfolioDrawerSchwabReadyState_/
+);
+assert.match(dashboardBody, /onchange="onInvestmentPortfolioDrawerSchwabRegistrationChanged_\(\)"/);
+
+const schwabReadyDom = (function() {
+  const nodes = {};
+  function ensure(id) {
+    if (!nodes[id]) {
+      nodes[id] = {
+        id,
+        innerHTML: '',
+        disabled: true,
+        onclick: null,
+        textContent: '',
+        value: '',
+        checked: false
+      };
+    }
+    return nodes[id];
+  }
+  ['inv_schwab_preview_btn', 'inv_schwab_registration_type', 'inv_schwab_explicit_match',
+    'inv_schwab_document_text', 'inv_schwab_results', 'inv_schwab_apply_area'].forEach(ensure);
+  return {
+    nodes,
+    document: { getElementById: (id) => ensure(id) }
+  };
+})();
+
+const schwabReadyUi = {
+  String, Number, Object, Array, Math, isFinite, Error, JSON, console,
+  document: schwabReadyDom.document
+};
+vm.createContext(schwabReadyUi);
+vm.runInContext(`
+  var __invDrawerSchwabState = {
+    selectedAccount: { pickerValue: 'STABLE-SCHWAB-1', accountName: 'Charles Schwab - Personal' },
+    trustedDocumentText: '',
+    lastSinglePreview: null,
+    lastPreviewDocumentText: '',
+    applyReviewed: false,
+    applyDiff: null,
+    applyDiffDigest: '',
+    applyStatusMessage: '',
+    registrationTouched: false
+  };
+  ${extractFunction(drawerSchwabSource, 'invDrawerSchwabCurrentText_')}
+  ${extractFunction(drawerSchwabSource, 'invDrawerSchwabHasDocumentReady_')}
+  ${extractFunction(drawerSchwabSource, 'invDrawerSchwabRestoreTrustedDocumentText_')}
+  ${extractFunction(drawerSchwabSource, 'updateInvestmentPortfolioDrawerSchwabControls_')}
+  ${extractFunction(drawerSchwabSource, 'clearInvestmentPortfolioDrawerSchwabApply_')}
+  ${extractFunction(drawerSchwabSource, 'syncInvestmentPortfolioDrawerSchwabReadyState_')}
+  ${extractFunction(drawerSchwabSource, 'onInvestmentPortfolioDrawerSchwabRegistrationChanged_')}
+`, schwabReadyUi, { filename: 'schwab-drawer-ready-state.js' });
+
+const readyNodes = schwabReadyDom.nodes;
+readyNodes.inv_schwab_explicit_match.checked = true;
+readyNodes.inv_schwab_preview_btn.disabled = true;
+
+readyNodes.inv_schwab_document_text.value = '';
+schwabReadyUi.__invDrawerSchwabState.trustedDocumentText = 'extracted-schwab-statement';
+readyNodes.inv_schwab_registration_type.value = '';
+schwabReadyUi.syncInvestmentPortfolioDrawerSchwabReadyState_();
+assert.equal(readyNodes.inv_schwab_preview_btn.disabled, true, 'Preview stays disabled until registration is selected');
+
+readyNodes.inv_schwab_registration_type.value = 'TAXABLE';
+schwabReadyUi.onInvestmentPortfolioDrawerSchwabRegistrationChanged_();
+assert.equal(schwabReadyUi.__invDrawerSchwabState.registrationTouched, true);
+assert.equal(readyNodes.inv_schwab_document_text.value, 'extracted-schwab-statement');
+assert.equal(schwabReadyUi.invDrawerSchwabCurrentText_(), 'extracted-schwab-statement');
+assert.equal(readyNodes.inv_schwab_preview_btn.disabled, false, 'File then TAXABLE must enable Preview');
+
+readyNodes.inv_schwab_document_text.value = '';
+readyNodes.inv_schwab_registration_type.value = 'TAXABLE';
+readyNodes.inv_schwab_preview_btn.disabled = true;
+schwabReadyUi.__invDrawerSchwabState.trustedDocumentText = '';
+schwabReadyUi.syncInvestmentPortfolioDrawerSchwabReadyState_();
+assert.equal(readyNodes.inv_schwab_preview_btn.disabled, true, 'TAXABLE without a file stays disabled');
+
+schwabReadyUi.__invDrawerSchwabState.trustedDocumentText = 'extracted-schwab-statement';
+schwabReadyUi.syncInvestmentPortfolioDrawerSchwabReadyState_();
+assert.equal(readyNodes.inv_schwab_document_text.value, 'extracted-schwab-statement');
+assert.equal(readyNodes.inv_schwab_preview_btn.disabled, false, 'TAXABLE then file must enable Preview');
+
+readyNodes.inv_schwab_results.innerHTML = '<div>stale preview</div>';
+schwabReadyUi.__invDrawerSchwabState.lastSinglePreview = { ok: true, holdingsRows: [{ symbol: 'CSCO' }] };
+schwabReadyUi.__invDrawerSchwabState.applyDiff = { summary: { createCount: 5, updateCount: 0 } };
+schwabReadyUi.__invDrawerSchwabState.applyReviewed = true;
+schwabReadyUi.__invDrawerSchwabState.applyDiffDigest = 'DIGEST-STALE';
+readyNodes.inv_schwab_registration_type.value = 'ROTH_IRA';
+schwabReadyUi.onInvestmentPortfolioDrawerSchwabRegistrationChanged_();
+assert.equal(schwabReadyUi.__invDrawerSchwabState.lastSinglePreview, null);
+assert.equal(schwabReadyUi.__invDrawerSchwabState.applyDiff, null);
+assert.equal(schwabReadyUi.__invDrawerSchwabState.applyReviewed, false);
+assert.equal(schwabReadyUi.__invDrawerSchwabState.applyDiffDigest, '');
+assert.equal(readyNodes.inv_schwab_results.innerHTML, '');
+assert.equal(readyNodes.inv_schwab_apply_area.innerHTML, '');
+assert.equal(readyNodes.inv_schwab_document_text.value, 'extracted-schwab-statement');
+assert.equal(readyNodes.inv_schwab_preview_btn.disabled, false, 'Registration change must not require re-upload');
 
 const k401Account = context.investmentPortfolioDrawerMapAccountRow_({
   sysAssetsRow: 10,

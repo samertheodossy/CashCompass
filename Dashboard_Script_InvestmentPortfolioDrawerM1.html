@@ -444,29 +444,56 @@ function renderInvestmentPortfolioDrawerM1ApplySection_() {
   if (confirmBtn) confirmBtn.onclick = confirmInvestmentPortfolioDrawerM1Apply_;
 }
 
+function invDrawerM1ResolveApplyDiffBundle_(bundle) {
+  if (!bundle || bundle.ok === false) {
+    return {
+      ok: false,
+      error: String((bundle && bundle.error) || '').trim() || 'Could not build diff.',
+      applyDiff: null,
+      applyDiffDigest: '',
+      applyReviewed: false,
+      message: String((bundle && bundle.error) || '').trim() || 'Could not build diff.'
+    };
+  }
+  if (!bundle.diff) {
+    return {
+      ok: false,
+      error: 'Could not build diff.',
+      applyDiff: null,
+      applyDiffDigest: '',
+      applyReviewed: false,
+      message: 'Could not build diff.'
+    };
+  }
+  var digest = String(bundle.diffDigest || '').trim();
+  var diff = bundle.diff;
+  var message = 'Creates: ' + String((diff.summary && diff.summary.createCount) || 0) +
+    ' · Updates: ' + String((diff.summary && diff.summary.updateCount) || 0) +
+    (diff.blocked ? (' · Blocked: ' + (diff.blockReason || 'review required')) : '');
+  return {
+    ok: true,
+    error: '',
+    applyDiff: diff,
+    applyDiffDigest: digest,
+    applyReviewed: !!digest,
+    message: message
+  };
+}
+
 function reviewInvestmentPortfolioDrawerM1ApplyDiff_() {
   setStatusLoading('inv_m1_status', 'Building holdings diff…');
   var successHandler = function(bundle) {
     setStatus('inv_m1_status', '', false);
-    __invDrawerM1State.applyDiff = bundle && bundle.diffPreview ? bundle.diffPreview : null;
-    __invDrawerM1State.applyDiffDigest = bundle && bundle.diffDigest ? bundle.diffDigest : '';
-    __invDrawerM1State.applyReviewed = !!(bundle && bundle.ok && __invDrawerM1State.applyDiffDigest);
+    var resolved = invDrawerM1ResolveApplyDiffBundle_(bundle);
+    __invDrawerM1State.applyDiff = resolved.applyDiff;
+    __invDrawerM1State.applyDiffDigest = resolved.applyDiffDigest;
+    __invDrawerM1State.applyReviewed = resolved.applyReviewed;
     var msgEl = document.getElementById('inv_m1_apply_message');
     var confirmBtn = document.getElementById('inv_m1_confirm_apply_btn');
-    if (!bundle || !bundle.ok) {
-      if (msgEl) msgEl.textContent = bundle && bundle.error ? bundle.error : 'Could not build diff.';
-      return;
-    }
-    if (msgEl) {
-      var diff = __invDrawerM1State.applyDiff || {};
-      msgEl.textContent = 'Creates: ' + String((diff.summary && diff.summary.createCount) || 0) +
-        ' · Updates: ' + String((diff.summary && diff.summary.updateCount) || 0) +
-        (diff.blocked ? (' · Blocked: ' + (diff.blockReason || 'review required')) : '');
-    }
+    if (msgEl) msgEl.textContent = resolved.message;
     if (confirmBtn) {
-      confirmBtn.disabled = !(__invDrawerM1State.applyReviewed &&
-        !(__invDrawerM1State.applyDiff && (__invDrawerM1State.applyDiff.blocked ||
-          __invDrawerM1State.applyDiff.duplicateNoop)));
+      confirmBtn.disabled = !(resolved.applyReviewed && resolved.applyDiff &&
+        !resolved.applyDiff.blocked && !resolved.applyDiff.duplicateNoop);
     }
   };
   if (invDrawerM1IsGrouped_()) {

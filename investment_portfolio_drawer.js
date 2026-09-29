@@ -135,7 +135,11 @@ function investmentPortfolioDrawerSupportedImportFormats_(provider, previewMode)
     }];
   }
   if (provider === 'SCHWAB') {
-    return [{ source: 'SCHWAB_CSV', label: 'Schwab CSV (future)', productionReady: false }];
+    return [{
+      source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+      label: 'Schwab brokerage statement PDF',
+      productionReady: true
+    }];
   }
   if (provider === 'STASH') {
     return [{ source: 'MANUAL_STRUCTURED', label: 'Stash import (future)', productionReady: false }];
@@ -525,6 +529,7 @@ function investmentPortfolioDrawerBuildPayload_(ss, account) {
     robinhoodImportEligible: investmentPortfolioDrawerRobinhoodImportEligible_(account),
     robinhoodCsvImportAvailable: investmentPortfolioDrawerRobinhoodImportEligible_(account),
     m1ImportAvailable: provider === 'M1' || account.previewMode === 'GROUPED_PROVIDER',
+    schwabImportAvailable: provider === 'SCHWAB',
     supportedImportFormats: investmentPortfolioDrawerSupportedImportFormats_(
       provider, account.previewMode),
     viewKind: 'EMPTY',
@@ -593,6 +598,7 @@ function investmentPortfolioDrawerBuildPayload_(ss, account) {
     payload.viewKind = 'FIDELITY_401K_BALANCE';
     payload.fidelity401kImportAvailable = true;
     payload.m1ImportAvailable = false;
+    payload.schwabImportAvailable = false;
     payload.robinhoodCsvImportAvailable = false;
     payload.portfolioStatus = {
       holdingsImported: false,

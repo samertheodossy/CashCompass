@@ -132,6 +132,15 @@ class FakeSheet {
   setFrozenColumns(count) { this.frozenColumns = count; }
   setColumnWidth(col, width) { this.columnWidths[col] = width; }
   getColumnWidth(col) { return this.columnWidths[col] || 100; }
+  autoResizeColumn(col) {
+    let maxLen = 0;
+    for (const row of this.rows) {
+      const text = String(row[col - 1] ?? '');
+      if (text.length > maxLen) maxLen = text.length;
+    }
+    this.columnWidths[col] = Math.max(50, Math.round(maxLen * 7 + 16));
+    return this;
+  }
   setRowHeight(row, height) { this.rowHeights[row] = height; }
   setRowHeights(startRow, count, height) {
     for (let i = 0; i < count; i += 1) this.rowHeights[startRow + i] = height;
@@ -160,6 +169,41 @@ class FakeSpreadsheet {
 function cloneSheetRows(sheet) {
   return sheet ? sheet.rows.map((row) => [...row]) : [];
 }
+
+function fakeAutoWidthForColumn(sheet, col) {
+  let maxLen = 0;
+  for (const row of sheet.rows) {
+    const text = String(row[col - 1] ?? '');
+    if (text.length > maxLen) maxLen = text.length;
+  }
+  return Math.max(50, Math.round(maxLen * 7 + 16));
+}
+
+function expectedUnifiedColumnWidth(sheet, col, maxWidth) {
+  return Math.min(maxWidth, fakeAutoWidthForColumn(sheet, col) + 24);
+}
+
+const UNIFIED_MAX_WIDTHS_ = {
+  Source: 280,
+  Provider: 120,
+  'Parent CashCompass account': 280,
+  Symbol: 96,
+  'Security name': 280,
+  Shares: 110,
+  Price: 110,
+  'Market value': 130,
+  'Cost basis': 120,
+  'Unrealized gain/loss': 200,
+  'Cash balance': 120,
+  'Document fingerprint': 168,
+  'Import status': 118,
+  'Import run/reference': 168
+};
+
+const READABLE_UNIFIED_HEADERS = [
+  'Source', 'Provider', 'Parent CashCompass account', 'Symbol', 'Security name',
+  'Shares', 'Price', 'Market value', 'Cost basis', 'Unrealized gain/loss', 'Cash balance'
+];
 
 function registryRow(row) {
   return [
@@ -398,6 +442,9 @@ function buildContext(options = {}) {
   vm.runInContext(read('investment_m1_statement_pdf.js'), context, {
     filename: 'investment_m1_statement_pdf.js'
   });
+  vm.runInContext(read('investment_schwab_brokerage_statement_pdf.js'), context, {
+    filename: 'investment_schwab_brokerage_statement_pdf.js'
+  });
   vm.runInContext(read('investment_fidelity_401k_statement_pdf.js'), context, {
     filename: 'investment_fidelity_401k_statement_pdf.js'
   });
@@ -467,6 +514,14 @@ assert.match(applySource, /boundedHoldingsPreviewApplySanitizeDiffBundleForClien
 assert.match(boundedHtml, /boundedHoldingsPreviewBuildGroupedApplyDiffFromDashboard/);
 assert.match(applySheetSource, /boundedHoldingsPreviewApplyFormatUnifiedSheet_/);
 assert.match(applySheetSource, /boundedHoldingsPreviewApplySetUnifiedColumnWidths_/);
+assert.match(applySheetSource, /autoResizeColumn/);
+assert.match(applySheetSource, /boundedHoldingsPreviewApplyUnifiedWidthGutter_/);
+assert.match(extractFunction(applySheetSource, 'boundedHoldingsPreviewApplySetUnifiedColumnWidths_'),
+  /autoResizeColumn/);
+assert.doesNotMatch(extractFunction(applySheetSource, 'boundedHoldingsPreviewApplySetUnifiedColumnWidths_'),
+  /SCHWAB|M1_|ETRADE/);
+assert.doesNotMatch(extractFunction(applySheetSource, 'boundedHoldingsPreviewApplyFormatUnifiedSheet_'),
+  /getSheetByName|getSheets\(/);
 assert.match(applySheetSource, /function adminTouchBoundedHoldingsPreviewUnifiedSheetFormat\(\)/);
 assert.match(applySheetSource, /boundedHoldingsPreviewApplyTouchUnifiedSheetFormat_\(ss\)/);
 assert.doesNotMatch(applySheetSource, /function adminTouchBoundedHoldingsPreviewUnifiedSheetFormat_\(/);
@@ -597,17 +652,96 @@ assert.equal(formatSheet.wrapByCell['1:1'], false, 'header labels must stay sing
 assert.equal(formatSheet.wrapByCell['2:1'], false, 'Source body values must stay single-line');
 assert.equal(formatSheet.rowHeights[1], 32, 'header row must use compact readable height');
 assert.equal(formatSheet.rowHeights[2], 22, 'body rows must use controlled height');
-assert.equal(formatSheet.columnWidths[1], 165, 'Source width must stay bounded');
-assert.equal(formatSheet.columnWidths[17], 118, 'Import status width must fit APPLIED');
-assert.equal(formatSheet.columnWidths[16], 168, 'Document fingerprint width must stay bounded');
-assert.equal(formatSheet.columnWidths[19], 168, 'Import run/reference width must stay bounded');
+assert.equal(
+  formatSheet.columnWidths[1],
+  expectedUnifiedColumnWidth(formatSheet, 1, UNIFIED_MAX_WIDTHS_.Source),
+  'Source must auto-size to header/values then cap'
+);
+assert.equal(
+  formatSheet.columnWidths[17],
+  expectedUnifiedColumnWidth(formatSheet, 17, UNIFIED_MAX_WIDTHS_['Import status']),
+  'Import status width must fit APPLIED without exceeding the cap'
+);
+assert.equal(
+  formatSheet.columnWidths[16],
+  expectedUnifiedColumnWidth(formatSheet, 16, UNIFIED_MAX_WIDTHS_['Document fingerprint']),
+  'Document fingerprint width must stay bounded'
+);
+assert.equal(
+  formatSheet.columnWidths[19],
+  expectedUnifiedColumnWidth(formatSheet, 19, UNIFIED_MAX_WIDTHS_['Import run/reference']),
+  'Import run/reference width must stay bounded'
+);
+READABLE_UNIFIED_HEADERS.forEach((header) => {
+  const col = formatSheet.rows[0].indexOf(header) + 1;
+  assert.ok(col > 0, `${header} must exist on Unified holdings`);
+  const maxWidth = UNIFIED_MAX_WIDTHS_[header];
+  const width = formatSheet.columnWidths[col];
+  assert.equal(width, expectedUnifiedColumnWidth(formatSheet, col, maxWidth),
+    `${header} must auto-size from current values`);
+  assert.ok(width <= maxWidth, `${header} must not exceed its max width`);
+  assert.ok(width >= 50, `${header} must remain readable`);
+});
+
+const blankUnifiedSheet = new FakeSheet(unifiedName, [buildUnifiedHeadersRow()]);
+const blankRowsBefore = cloneSheetRows(blankUnifiedSheet);
+ctx.boundedHoldingsPreviewApplySetUnifiedColumnWidths_(blankUnifiedSheet);
+assert.deepEqual(blankUnifiedSheet.rows, blankRowsBefore,
+  'blank Unified auto-size must not create or rewrite data rows');
+READABLE_UNIFIED_HEADERS.forEach((header) => {
+  const col = blankUnifiedSheet.rows[0].indexOf(header) + 1;
+  const maxWidth = UNIFIED_MAX_WIDTHS_[header];
+  const width = blankUnifiedSheet.columnWidths[col];
+  assert.equal(width, expectedUnifiedColumnWidth(blankUnifiedSheet, col, maxWidth),
+    `blank Unified ${header} must auto-size from the header`);
+  assert.ok(width <= maxWidth, `blank Unified ${header} must stay within max width`);
+});
+
+const populatedSchwabSheet = new FakeSheet(unifiedName, [
+  buildUnifiedHeadersRow(),
+  [
+    'SCHWAB_BROKERAGE_STATEMENT_PDF', 'SCHWAB', 'Charles Schwab - Personal',
+    '', 'INV-SCHWAB-1', 'CSCO', 'CSCO', 'CISCO SYS INC',
+    3.5863, 115.99, 415.97, '', '', 6.92, '2026-07-31', 'FP-SCHWAB', 'APPLIED',
+    '2026-09-09 12:00:00', 'BH-APPLY-SCHWAB'
+  ]
+]);
+const schwabRowsBefore = cloneSheetRows(populatedSchwabSheet);
+const investmentsNeighbor = new FakeSheet('INPUT - Investments', [
+  investmentsHeaders,
+  ['Charles Schwab - Personal', 'Brokerage', '50000']
+]);
+investmentsNeighbor.columnWidths[1] = 999;
+ctx.boundedHoldingsPreviewApplySetUnifiedColumnWidths_(populatedSchwabSheet);
+assert.deepEqual(populatedSchwabSheet.rows, schwabRowsBefore,
+  'populated Unified auto-size must not rewrite values');
+assert.equal(investmentsNeighbor.columnWidths[1], 999,
+  'Unified width helper must not restyle unrelated sheets');
+assert.equal(
+  populatedSchwabSheet.columnWidths[1],
+  expectedUnifiedColumnWidth(populatedSchwabSheet, 1, UNIFIED_MAX_WIDTHS_.Source)
+);
+assert.ok(
+  populatedSchwabSheet.columnWidths[1] > formatSheet.columnWidths[1],
+  'longer Source values must widen Source without a provider-specific formatter'
+);
+assert.ok(populatedSchwabSheet.columnWidths[1] <= UNIFIED_MAX_WIDTHS_.Source);
+assert.equal(
+  populatedSchwabSheet.columnWidths[3],
+  expectedUnifiedColumnWidth(populatedSchwabSheet, 3, UNIFIED_MAX_WIDTHS_['Parent CashCompass account'])
+);
+assert.equal(
+  populatedSchwabSheet.columnWidths[8],
+  expectedUnifiedColumnWidth(populatedSchwabSheet, 8, UNIFIED_MAX_WIDTHS_['Security name'])
+);
 
 const wideFormatSheet = new FakeSheet(unifiedName, [
   buildUnifiedHeadersRow(),
   [
     'M1_STATEMENT_PDF', 'M1_GMAIL', 'M1 Account - Gmail',
     'PREVIEW-GROUP-VERY-LONG-CHILD-PARTITION-IDENTIFIER-1234567890', 'INV-M1-GMAIL-1',
-    'SOURCE-SECURITY-KEY-WITH-LONG-TECHNICAL-IDENTIFIER', 'NVDA', 'NVIDIA CORPORATION',
+    'SOURCE-SECURITY-KEY-WITH-LONG-TECHNICAL-IDENTIFIER', 'NVDA',
+    'NVIDIA CORPORATION CLASS A COMMON STOCK WITH AN EXTREMELY LONG REGISTERED SECURITY DESCRIPTION',
     12.345678, 180.5, 2227.16, 1500, 727.16, '', '2026-08-31',
     'a26a369b'.repeat(8), 'APPLIED', '2026-09-09 12:00:00', 'BH-APPLY-' + 'X'.repeat(120)
   ]
@@ -618,10 +752,16 @@ const wideRowsBeforeFormat = wideFormatSheet.rows.map((row) => [...row]);
 ctx.boundedHoldingsPreviewApplyFormatUnifiedSheet_(wideFormatSheet);
 assert.deepEqual(wideFormatSheet.rows, wideRowsBeforeFormat,
   'bounded formatting must not rewrite long source/fingerprint/import-reference values');
-assert.equal(wideFormatSheet.columnWidths[16], 168,
+assert.equal(wideFormatSheet.columnWidths[16], UNIFIED_MAX_WIDTHS_['Document fingerprint'],
   'long document fingerprints must not keep auto-expanded column width');
-assert.equal(wideFormatSheet.columnWidths[19], 168,
+assert.equal(wideFormatSheet.columnWidths[19], UNIFIED_MAX_WIDTHS_['Import run/reference'],
   'long import references must not keep auto-expanded column width');
+assert.equal(wideFormatSheet.columnWidths[8], UNIFIED_MAX_WIDTHS_['Security name'],
+  'long security names must cap at the shared Unified max width');
+assert.ok(
+  wideFormatSheet.columnWidths[8] < fakeAutoWidthForColumn(wideFormatSheet, 8) + 24,
+  'security-name cap must shrink past the uncapped auto-size'
+);
 assert.equal(wideFormatSheet.wrapByCell['2:16'], false, 'fingerprint body cells must not wrap');
 assert.equal(wideFormatSheet.wrapByCell['2:19'], false, 'import reference body cells must not wrap');
 

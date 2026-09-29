@@ -238,6 +238,9 @@ function buildContext(workbook) {
   vm.runInContext(read('investment_m1_statement_pdf.js'), context, {
     filename: 'investment_m1_statement_pdf.js'
   });
+  vm.runInContext(read('investment_schwab_brokerage_statement_pdf.js'), context, {
+    filename: 'investment_schwab_brokerage_statement_pdf.js'
+  });
   vm.runInContext(read('investment_fidelity_401k_statement_pdf.js'), context, {
     filename: 'investment_fidelity_401k_statement_pdf.js'
   });
