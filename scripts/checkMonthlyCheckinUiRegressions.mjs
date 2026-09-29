@@ -26,6 +26,7 @@ assert.match(styles, /monthly-review-domain-fold/);
 assert.match(styles, /monthly-review-card--current/);
 assert.match(styles, /monthly-review-card-status--current/);
 assert.doesNotMatch(styles, /overview-monthly-review-later/);
+assert.match(styles, /overview-monthly-review-btn--current/);
 
 assert.match(plannerWeb, /Dashboard_Script_MonthlyCheckin/);
 assert.match(render, /requestMonthlyCheckinOverviewAfterPaint_\(\)/);
@@ -42,12 +43,30 @@ assert.match(monthlyUi, /Last Updated:/);
 assert.match(monthlyUi, /Needs current-cycle update/);
 assert.match(monthlyUi, /currentStatusLabel/);
 
+function makeClassList(initial) {
+  const names = new Set(initial || []);
+  return {
+    add(name) { names.add(name); },
+    remove(name) { names.delete(name); },
+    contains(name) { return names.has(name); },
+    toggle(name, force) {
+      if (force === true) { names.add(name); return true; }
+      if (force === false) { names.delete(name); return false; }
+      if (names.has(name)) { names.delete(name); return false; }
+      names.add(name);
+      return true;
+    }
+  };
+}
+
 function makeHost(id) {
   return {
     id,
     hidden: true,
     _html: '',
-    classList: { _active: false, contains(name) { return name === 'active' ? this._active : false; } },
+    classList: id === 'ov_monthly_review_btn'
+      ? makeClassList(['overview-monthly-review-btn'])
+      : { _active: false, contains(name) { return name === 'active' ? this._active : false; } },
     set hidden(value) { this._hidden = value; },
     get hidden() { return !!this._hidden; },
     set innerHTML(value) { this._html = value; },
@@ -58,7 +77,7 @@ function makeHost(id) {
 }
 
 const hosts = Object.create(null);
-['ov_monthly_review_entry', 'page_overview', 'page_onboarding', 'page_monthly_review',
+['ov_monthly_review_entry', 'ov_monthly_review_btn', 'page_overview', 'page_onboarding', 'page_monthly_review',
   'monthly_review_subtitle', 'monthly_review_summary', 'monthly_review_domains',
   'monthly_review_identity', 'monthly_review_identity_list'
 ].forEach((id) => { hosts[id] = makeHost(id); });
@@ -139,11 +158,21 @@ hosts.ov_monthly_review_entry.hidden = true;
 context.renderMonthlyCheckinOverviewEntry_(buildModel({
   projection: { ui: { needsReviewCount: 0, attentionCount: 0, identityIssueCount: 0, domainSections: [] } }
 }));
-assert.equal(hosts.ov_monthly_review_entry.hidden, true);
+assert.equal(hosts.ov_monthly_review_entry.hidden, false,
+  'Overview must keep Monthly Review visible after all areas are current');
+assert.equal(hosts.ov_monthly_review_btn.classList.contains('overview-monthly-review-btn--current'), true,
+  'Overview Monthly Review must turn green when nothing still needs this month');
 
 const attentionModel = buildModel();
 context.renderMonthlyCheckinUi_(attentionModel);
 assert.equal(hosts.ov_monthly_review_entry.hidden, false);
+assert.equal(hosts.ov_monthly_review_btn.classList.contains('overview-monthly-review-btn--current'), false,
+  'Overview Monthly Review must stay orange while any item still needs this month');
+
+context.renderMonthlyCheckinOverviewEntry_({ available: false });
+assert.equal(hosts.ov_monthly_review_entry.hidden, true,
+  'Overview must hide Monthly Review until the review model is available');
+assert.equal(hosts.ov_monthly_review_btn.classList.contains('overview-monthly-review-btn--current'), false);
 
 context.renderMonthlyReviewScreen_(attentionModel);
 const domainsHtml = hosts.monthly_review_domains.innerHTML;
@@ -386,11 +415,36 @@ assert.equal(lastFocus.debtType, 'Credit Card');
 assert.equal(lastFocus.reviewRoute, 'editor');
 
 assert.match(render,
-  /function focusDebtTarget_\(obj\)[\s\S]*?setDebtPanelMode\('update'\)[\s\S]*?loadDebtSectionThenSelect_\(name, debtType\)/,
-  'Monthly Review debt open must load Debts Update and keep the selected account');
+  /function focusDebtTarget_\(obj\)[\s\S]*?setDebtPanelMode\('update'\)[\s\S]*?loadState === 'loading'\) return;[\s\S]*?loadDebtSectionThenSelect_\(name, debtType\)/,
+  'Monthly Review debt open must wait for an in-flight Debts load, then keep the selected account');
 assert.doesNotMatch(render,
-  /function focusDebtTarget_\(obj\)[\s\S]*?setTimeout\(function\(\) \{[\s\S]*?filterDebtAccounts\(\)[\s\S]*?setTimeout/,
-  'Debt focus must not apply a type filter on a stale dropdown before the section load finishes');
+  /function focusDebtTarget_\(obj\)[\s\S]*?loadState === 'loading' \|\|[\s\S]*?loadDebtSectionThenSelect_\(name, debtType\)/,
+  'Debt focus must not start a second getDebtsUiData while the tab load is already in flight');
+
+const focusStart = render.indexOf('function focusDebtTarget_(');
+const focusEnd = render.indexOf('\nfunction escapeHtml(', focusStart);
+assert.ok(focusStart >= 0 && focusEnd > focusStart, 'focusDebtTarget_ must be testable');
+let thenSelectCalls = 0;
+let appliedTargets = [];
+const loadingSelect = { dataset: { loadState: 'loading' }, options: [{ value: '' }] };
+const focusCtx = vm.createContext({
+  document: { getElementById: () => loadingSelect },
+  setDebtPanelMode() {},
+  loadDebtSectionThenSelect_() { thenSelectCalls += 1; },
+  selectDebtUpdateTarget_(name, debtType) { appliedTargets.push([name, debtType]); },
+  pendingFocus: { tab: 'debts', accountName: 'Credit Card - Corporate AMEX' }
+});
+vm.runInContext(render.slice(focusStart, focusEnd), focusCtx);
+focusCtx.focusDebtTarget_({
+  accountName: 'Credit Card - Corporate AMEX',
+  debtType: 'Credit Card'
+});
+assert.equal(thenSelectCalls, 0,
+  'an in-flight Debts tab load must not start a competing load-and-select');
+assert.deepEqual(appliedTargets, [],
+  'Debt focus must wait for the in-flight load instead of selecting against a loading picker');
+assert.equal(focusCtx.pendingFocus.accountName, 'Credit Card - Corporate AMEX',
+  'pending debt focus must remain so the completed tab load can select the card');
 assert.match(read('Dashboard_Script_PlanningDebts.html'),
   /function selectDebtUpdateTarget_\(accountName, optionalDebtType\)[\s\S]*?typeSel\.value = 'All'[\s\S]*?filterDebtAccounts\(\)/,
   'If a type filter would hide the focused debt, Update must fall back to All and keep the account selected');
@@ -445,6 +499,8 @@ assert.equal(lastTab, 'bank');
 assert.match(body, /id="monthly_review_scope"/);
 assert.match(body, /Monthly Review checks whether this month/);
 assert.match(body, /Cash\/card provider readiness is reviewed separately under Planning → Data/);
+assert.match(read('Dashboard_Help.html'),
+  /Monthly Review<\/strong> stays in the top bar[\s\S]*turns green when all four areas are current/);
 assert.doesNotMatch(monthlyUi, /Ready for review|compare or apply/);
 
 console.log('Monthly check-in UI regressions passed.');

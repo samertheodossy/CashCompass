@@ -1954,7 +1954,12 @@ function focusDebtTarget_(obj) {
   const loadState = accountSelect && accountSelect.dataset
     ? String(accountSelect.dataset.loadState || '')
     : '';
-  const notReady = !accountSelect || !name || loadState === 'loading' ||
+  // showTab() already started loadDebtSection(). A second overlapping
+  // getDebtsUiData can leave the picker on "Loading debt accounts…" forever
+  // while the info panel still shows a previous card. Wait for that in-flight
+  // load; loadDebtSection applies pendingFocus when it finishes.
+  if (loadState === 'loading') return;
+  const notReady = !accountSelect || !name ||
     !accountSelect.options || accountSelect.options.length <= 1;
   if (notReady && typeof loadDebtSectionThenSelect_ === 'function' && name) {
     loadDebtSectionThenSelect_(name, debtType);

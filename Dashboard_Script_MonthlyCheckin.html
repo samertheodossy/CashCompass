@@ -85,12 +85,21 @@ function monthlyCheckinNeedsAttention_(model) {
 
 function renderMonthlyCheckinOverviewEntry_(model) {
   var entry = document.getElementById('ov_monthly_review_entry');
+  var btn = document.getElementById('ov_monthly_review_btn');
   if (!entry) return;
   if (!model || model.available !== true || !model.projection) {
     entry.hidden = true;
+    if (btn && btn.classList) btn.classList.remove('overview-monthly-review-btn--current');
     return;
   }
-  entry.hidden = !monthlyCheckinNeedsAttention_(model);
+  entry.hidden = false;
+  if (btn && btn.classList) {
+    if (monthlyCheckinNeedsAttention_(model)) {
+      btn.classList.remove('overview-monthly-review-btn--current');
+    } else {
+      btn.classList.add('overview-monthly-review-btn--current');
+    }
+  }
 }
 
 function monthlyCheckinDomainStatusLine_(section) {
