@@ -79,7 +79,7 @@ function loadDebtSection() {
   });
 }
 
-function loadDebtSectionThenSelect_(accountName) {
+function loadDebtSectionThenSelect_(accountName, optionalDebtType) {
   const sectionRequestId = ++debtSectionRequestId_;
   debtUpdateDetailsReady_ = false;
   setSelectLoading('debt_account', 'Loading debt accounts…');
@@ -116,12 +116,8 @@ function loadDebtSectionThenSelect_(accountName) {
       });
       populateDebtAddDatalists_(data);
       populateDebtPropertyOptions_(data && data.propertyOptions);
-      filterDebtAccounts();
-      const sel = document.getElementById('debt_account');
-      if (sel && accountName) {
-        sel.value = accountName;
-        loadDebtFieldValue();
-      }
+      selectDebtUpdateTarget_(accountName, optionalDebtType);
+      if (pendingFocus && pendingFocus.tab === 'debts') pendingFocus = null;
     },
     onRetry: function(info) {
       setStatusLoading('debt_status', info.message);
@@ -136,10 +132,51 @@ function loadDebtSectionThenSelect_(accountName) {
         message: customerSafeErrorMessage_(err && err.message ? err.message : String(err),
           'CashCompass could not load your debt accounts. Try again in a moment.'),
         actionLabel: 'Try again',
-        onAction: function() { loadDebtSectionThenSelect_(accountName); }
+        onAction: function() { loadDebtSectionThenSelect_(accountName, optionalDebtType); }
       });
     }
   });
+}
+
+function selectDebtUpdateTarget_(accountName, optionalDebtType) {
+  const wantedName = String(accountName || '').trim();
+  const wantedType = String(optionalDebtType || '').trim();
+  const typeSel = document.getElementById('debt_typeFilter');
+  const accountSel = document.getElementById('debt_account');
+  if (typeSel) {
+    var matchedType = 'All';
+    if (wantedType) {
+      for (var i = 0; i < (typeSel.options || []).length; i++) {
+        var typeVal = String(typeSel.options[i].value || '').trim();
+        if (typeVal && typeVal.toLowerCase() === wantedType.toLowerCase()) {
+          matchedType = typeVal;
+          break;
+        }
+      }
+    }
+    typeSel.value = matchedType;
+  }
+  if (typeof filterDebtAccounts === 'function') filterDebtAccounts();
+  if (!accountSel || !wantedName) return false;
+
+  function findAccountOption_(name) {
+    for (var j = 0; j < (accountSel.options || []).length; j++) {
+      var accVal = String(accountSel.options[j].value || '').trim();
+      if (accVal && accVal.toLowerCase() === name.toLowerCase()) return accVal;
+    }
+    return '';
+  }
+
+  var matchedName = findAccountOption_(wantedName);
+  if (!matchedName && typeSel && String(typeSel.value || '') !== 'All') {
+    typeSel.value = 'All';
+    filterDebtAccounts();
+    matchedName = findAccountOption_(wantedName);
+  }
+  if (!matchedName) return false;
+  accountSel.value = matchedName;
+  if (typeof loadDebtFieldValue === 'function') loadDebtFieldValue();
+  return true;
 }
 
 // First-run fallback for the Debt Type dropdown. Used only when the

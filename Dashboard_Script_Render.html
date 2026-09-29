@@ -1947,29 +1947,23 @@ function focusInvestmentTarget_(obj) {
 }
 
 function focusDebtTarget_(obj) {
-  const typeSelect = document.getElementById('debt_typeFilter');
+  if (typeof setDebtPanelMode === 'function') setDebtPanelMode('update');
   const accountSelect = document.getElementById('debt_account');
-  if (!typeSelect || !accountSelect) return;
-
-  setTimeout(function() {
-    if (obj.debtType) {
-      const typeOpt = Array.from(typeSelect.options).find(function(x) {
-        return x.value === obj.debtType;
-      });
-      typeSelect.value = typeOpt ? obj.debtType : 'All';
-      filterDebtAccounts();
-    }
-
-    setTimeout(function() {
-      const opt = Array.from(accountSelect.options).find(function(x) {
-        return x.value === obj.accountName;
-      });
-      if (!opt) return;
-      accountSelect.value = obj.accountName;
-      loadDebtFieldValue();
-      pendingFocus = null;
-    }, 50);
-  }, 50);
+  const name = obj && obj.accountName;
+  const debtType = obj && obj.debtType;
+  const loadState = accountSelect && accountSelect.dataset
+    ? String(accountSelect.dataset.loadState || '')
+    : '';
+  const notReady = !accountSelect || !name || loadState === 'loading' ||
+    !accountSelect.options || accountSelect.options.length <= 1;
+  if (notReady && typeof loadDebtSectionThenSelect_ === 'function' && name) {
+    loadDebtSectionThenSelect_(name, debtType);
+    return;
+  }
+  if (typeof selectDebtUpdateTarget_ === 'function') {
+    selectDebtUpdateTarget_(name, debtType);
+  }
+  pendingFocus = null;
 }
 
 function escapeHtml(value) {

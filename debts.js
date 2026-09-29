@@ -1298,6 +1298,13 @@ function updateDebtField(payload) {
     }
   } catch (_e) { /* best-effort */ }
 
+  let existingLastUpdatedRaw = '';
+  try {
+    if (headerMap.lastUpdatedCol !== -1) {
+      existingLastUpdatedRaw = sheet.getRange(targetRow, headerMap.lastUpdatedCol).getValue();
+    }
+  } catch (_e) { /* best-effort */ }
+
   let valueChanged = false;
   let fieldKind = 'text';
   let newRawForLog = rawValue;
@@ -1392,7 +1399,11 @@ function updateDebtField(payload) {
 
   touchDashboardSourceUpdated_('debts');
 
-  if (valueChanged) {
+  // Monthly Review is acknowledgement-based: Last Updated must advance for
+  // this cycle when the user explicitly saves an Update, including confirming
+  // the same $0.00. Activity still records the save either way. A repeat save
+  // that is already current for this month does not rewrite the date.
+  if (valueChanged || !debtLastUpdatedIsCurrentCycle_(existingLastUpdatedRaw)) {
     const values = reuseApplySession && Array.isArray(applySession.values)
       ? applySession.values
       : sheet.getDataRange().getValues();
@@ -2574,6 +2585,13 @@ function debtNormalizeLastUpdatedIso_(rawValue) {
 
 function debtTodayLastUpdatedDate_() {
   return stripTime_(new Date());
+}
+
+function debtLastUpdatedIsCurrentCycle_(rawValue) {
+  const iso = debtNormalizeLastUpdatedIso_(rawValue);
+  if (!iso) return false;
+  const todayIso = debtNormalizeLastUpdatedIso_(debtTodayLastUpdatedDate_());
+  return iso.slice(0, 7) === todayIso.slice(0, 7);
 }
 
 function debtChangedFieldsIncludeFinancial_(changedFields) {

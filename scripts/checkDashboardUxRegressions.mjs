@@ -4546,6 +4546,10 @@ const debtFocusContext = vm.createContext({
   populateDebtAddDatalists_() {},
   populateDebtPropertyOptions_() {},
   filterDebtAccounts() {},
+  selectDebtUpdateTarget_(accountName) {
+    if (debtFocusElements.debt_account) debtFocusElements.debt_account.value = accountName;
+  },
+  pendingFocus: null,
   clearSurfaceState_: (...args) => debtFocusEvents.push(['clear', ...args]),
   loadDebtFieldValue() {},
   setStatusLoading() {},

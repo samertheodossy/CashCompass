@@ -13,7 +13,9 @@ const configSource = read('config.js');
 
 assert.match(debtsSource, /DEBTS_LAST_UPDATED_HEADER_/);
 assert.match(debtsSource, /function ensureDebtsLastUpdatedColumn_/);
-assert.match(debtsSource, /function touchDebtLastUpdatedForActiveRow_/);
+assert.match(debtsSource, /function debtLastUpdatedIsCurrentCycle_/);
+assert.match(debtsSource, /valueChanged \|\| !debtLastUpdatedIsCurrentCycle_\(existingLastUpdatedRaw\)/);
+assert.match(read('Dashboard_Help.html'), /Monthly Review follows Last Updated/);
 assert.doesNotMatch(debtsSource, /confirmDebtBalanceReviewFromDashboard/);
 assert.doesNotMatch(debtsSource, /confirmAllDebtBalanceReviewsFromDashboard/);
 assert.doesNotMatch(debtsSource, /DEBTS_LAST_REVIEWED_HEADER_/);
@@ -369,5 +371,81 @@ const applySessionWrites = applySessionCtx.debtsSheet.writeLog.filter((entry) =>
   entry.type === 'setValue' && entry.row === 2 && entry.col === lastUpdatedCol);
 assert.equal(applySessionWrites.length, 1,
   'Plaid apply batch must touch Last Updated when applySession.values is absent');
+
+const zeroRows = [
+  DEBTS_HEADERS.slice(),
+  ['TJ Maxx CC - Luma', 'Credit Card', 0, 6, 10000, 0, 10000, '39.99', '100.00%', 'Yes', '']
+];
+const zeroCtx = buildDebtContext(zeroRows.map((row) => row.slice()));
+zeroCtx.ctx.ensureDebtsLastUpdatedColumn_(zeroCtx.debtsSheet);
+assert.equal(zeroCtx.debtsSheet.rows[1][2], 0);
+assert.equal(zeroCtx.debtsSheet.rows[1][DEBTS_HEADERS.length] || '', '');
+zeroCtx.debtsSheet.writeLog.length = 0;
+zeroCtx.ctx.updateDebtField({
+  accountName: 'TJ Maxx CC - Luma',
+  fieldName: 'Account Balance',
+  value: 0
+});
+assert.equal(zeroCtx.debtsSheet.rows[1][2], 0, 'explicit $0 must remain $0');
+const zeroStampWrites = zeroCtx.debtsSheet.writeLog.filter((entry) =>
+  entry.type === 'setValue' && entry.row === 2 && entry.col === lastUpdatedCol);
+assert.equal(zeroStampWrites.length, 1,
+  'confirming an already-$0 balance must stamp Last Updated when the cycle is not current');
+const zeroIso = zeroCtx.ctx.debtNormalizeLastUpdatedIso_(
+  zeroCtx.debtsSheet.rows[1][DEBTS_HEADERS.length]);
+assert.equal(zeroIso, expectedIso);
+const zeroReview = zeroCtx.ctx.monthlyCheckinBuildDomainProjection_(
+  'debts',
+  zeroCtx.ctx.monthlyCheckinDefaultState_(expectedIso.slice(0, 7)),
+  [{
+    accountKey: 'debt:v1:DEBT-TJMAXX-1',
+    displayName: 'TJ Maxx CC - Luma',
+    accountBalance: 0,
+    lastUpdated: zeroIso
+  }], []);
+assert.equal(zeroReview.currentCount, 1);
+assert.equal(zeroReview.needsUpdateCount, 0);
+assert.equal(zeroReview.status, 'COMPLETE');
+const zeroUi = zeroCtx.ctx.monthlyCheckinBuildRecordUi_('debts', {
+  accountKey: 'debt:v1:DEBT-TJMAXX-1',
+  displayName: 'TJ Maxx CC - Luma',
+  accountBalance: 0,
+  lastUpdated: zeroIso,
+  currentForCycle: true
+}, expectedIso.slice(0, 7));
+assert.equal(zeroUi.needsAttention, false);
+assert.equal(zeroUi.currentValue, 0);
+assert.match(zeroUi.currentStatusLabel, /Current for /);
+
+zeroCtx.debtsSheet.writeLog.length = 0;
+zeroCtx.ctx.updateDebtField({
+  accountName: 'TJ Maxx CC - Luma',
+  fieldName: 'Account Balance',
+  value: 0
+});
+assert.equal(
+  zeroCtx.debtsSheet.writeLog.filter((entry) =>
+    entry.type === 'setValue' && entry.row === 2 && entry.col === lastUpdatedCol).length,
+  0,
+  'repeat $0 save already current for this cycle must not rewrite Last Updated'
+);
+
+const staleZeroCtx = buildDebtContext(zeroRows.map((row) => row.slice()));
+staleZeroCtx.ctx.ensureDebtsLastUpdatedColumn_(staleZeroCtx.debtsSheet);
+staleZeroCtx.debtsSheet.setCell(2, lastUpdatedCol, '2026-08-15');
+staleZeroCtx.debtsSheet.writeLog.length = 0;
+staleZeroCtx.ctx.updateDebtField({
+  accountName: 'TJ Maxx CC - Luma',
+  fieldName: 'Account Balance',
+  value: 0
+});
+const staleStampWrites = staleZeroCtx.debtsSheet.writeLog.filter((entry) =>
+  entry.type === 'setValue' && entry.row === 2 && entry.col === lastUpdatedCol);
+assert.equal(staleStampWrites.length, 1,
+  'confirming the same $0 must stamp Last Updated when the previous date is from another month');
+assert.equal(
+  staleZeroCtx.ctx.debtNormalizeLastUpdatedIso_(staleZeroCtx.debtsSheet.rows[1][DEBTS_HEADERS.length]),
+  expectedIso
+);
 
 console.log('Monthly check-in debt regressions passed.');

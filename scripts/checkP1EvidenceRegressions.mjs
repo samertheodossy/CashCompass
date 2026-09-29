@@ -618,10 +618,10 @@ assert.doesNotMatch(validationUi, /if \(done\) vtRRFinalize\(\)/,
   'Run remaining must not finalize before browser evidence is complete');
 assert.match(validationUi, /All server checks are complete and saved\. Run any missing browser suites, then finalize\./,
   'Run remaining must stop safely after server checks and direct the operator to browser evidence');
-assert.match(debtUi, /function loadDebtSectionThenSelect_\(accountName\)[\s\S]*?data\.editableFields[\s\S]*?loadDebtFieldValue\(\)/,
+assert.match(debtUi, /function loadDebtSectionThenSelect_\(accountName(?:, optionalDebtType)?\)[\s\S]*?data\.editableFields[\s\S]*?selectDebtUpdateTarget_\(/,
   'Debt selection helper must populate editable fields before loading the selected value');
 assert.match(debtUi,
-  /var debtSectionRequestId_ = 0[\s\S]*?function loadDebtSection\(\)[\s\S]*?sectionRequestId = \+\+debtSectionRequestId_[\s\S]*?sectionRequestId !== debtSectionRequestId_[\s\S]*?function loadDebtSectionThenSelect_\(accountName\)[\s\S]*?sectionRequestId = \+\+debtSectionRequestId_[\s\S]*?sectionRequestId !== debtSectionRequestId_/,
+  /var debtSectionRequestId_ = 0[\s\S]*?function loadDebtSection\(\)[\s\S]*?sectionRequestId = \+\+debtSectionRequestId_[\s\S]*?sectionRequestId !== debtSectionRequestId_[\s\S]*?function loadDebtSectionThenSelect_\(accountName(?:, optionalDebtType)?\)[\s\S]*?sectionRequestId = \+\+debtSectionRequestId_[\s\S]*?sectionRequestId !== debtSectionRequestId_/,
   'Debt section loaders must ignore stale overlapping responses before they can reset the selected account');
 const debtLoaderMatch = debtUi.match(
   /^\/\* Planning — Debts tab \*\/[\s\S]*?\n}\n\n\/\/ First-run fallback/

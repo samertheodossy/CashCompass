@@ -359,6 +359,83 @@ assert.equal(lastFocus.domain, 'investments');
 assert.equal(lastFocus.reason, 'Missing September 2026 value');
 assert.equal(lastFocus.reviewRoute, 'editor');
 
+lastFocus = null;
+lastWorkspacePage = null;
+const debtButton = {
+  getAttribute(name) {
+    const attrs = {
+      'data-tab': 'debts',
+      'data-page': 'assets',
+      'data-domain': 'debts',
+      'data-account-key': 'debt:v1:DEBT-CAPITAL-ONE-1',
+      'data-account-name': 'Credit Card - Capital One',
+      'data-cycle-key': '2026-09',
+      'data-reason': 'Needs current-cycle update',
+      'data-debt-type': 'Credit Card',
+      'data-review-route': 'editor',
+      'data-action-kind': 'UPDATE'
+    };
+    return attrs[name] || '';
+  }
+};
+context.monthlyCheckinOpenItemFromButton_(debtButton);
+assert.equal(lastWorkspacePage, 'assets');
+assert.equal(lastFocus.tab, 'debts');
+assert.equal(lastFocus.accountName, 'Credit Card - Capital One');
+assert.equal(lastFocus.debtType, 'Credit Card');
+assert.equal(lastFocus.reviewRoute, 'editor');
+
+assert.match(render,
+  /function focusDebtTarget_\(obj\)[\s\S]*?setDebtPanelMode\('update'\)[\s\S]*?loadDebtSectionThenSelect_\(name, debtType\)/,
+  'Monthly Review debt open must load Debts Update and keep the selected account');
+assert.doesNotMatch(render,
+  /function focusDebtTarget_\(obj\)[\s\S]*?setTimeout\(function\(\) \{[\s\S]*?filterDebtAccounts\(\)[\s\S]*?setTimeout/,
+  'Debt focus must not apply a type filter on a stale dropdown before the section load finishes');
+assert.match(read('Dashboard_Script_PlanningDebts.html'),
+  /function selectDebtUpdateTarget_\(accountName, optionalDebtType\)[\s\S]*?typeSel\.value = 'All'[\s\S]*?filterDebtAccounts\(\)/,
+  'If a type filter would hide the focused debt, Update must fall back to All and keep the account selected');
+
+const debtSelectSource = read('Dashboard_Script_PlanningDebts.html');
+const selectStart = debtSelectSource.indexOf('function selectDebtUpdateTarget_(');
+const selectEnd = debtSelectSource.indexOf('\n// First-run fallback', selectStart);
+assert.ok(selectStart >= 0 && selectEnd > selectStart, 'selectDebtUpdateTarget_ must be testable');
+const typeOptions = [
+  { value: 'All' },
+  { value: 'Credit Card' },
+  { value: 'Loan' }
+];
+const accountOptions = [];
+const typeSel = { value: 'All', options: typeOptions };
+const accountSel = { value: '', options: accountOptions };
+const selectCtx = vm.createContext({
+  document: {
+    getElementById(id) {
+      if (id === 'debt_typeFilter') return typeSel;
+      if (id === 'debt_account') return accountSel;
+      return null;
+    }
+  },
+  filterDebtAccounts() {
+    accountOptions.length = 0;
+    accountOptions.push({ value: '' });
+    if (typeSel.value === 'All' || typeSel.value === 'Credit Card') {
+      accountOptions.push({ value: 'Credit Card - Capital One' });
+    }
+    if (typeSel.value === 'All' || typeSel.value === 'Loan') {
+      accountOptions.push({ value: 'Bank of America Loan' });
+    }
+    accountSel.value = '';
+  },
+  loadDebtFieldValue() {}
+});
+vm.runInContext(debtSelectSource.slice(selectStart, selectEnd), selectCtx);
+assert.equal(selectCtx.selectDebtUpdateTarget_('Credit Card - Capital One', 'Credit Card'), true);
+assert.equal(typeSel.value, 'Credit Card');
+assert.equal(accountSel.value, 'Credit Card - Capital One');
+assert.equal(selectCtx.selectDebtUpdateTarget_('Bank of America Loan', 'Missing Type'), true);
+assert.equal(typeSel.value, 'All');
+assert.equal(accountSel.value, 'Bank of America Loan');
+
 lastWorkspacePage = null;
 lastTab = null;
 context.monthlyCheckinNavigateToDomain_('assets', 'bank');
