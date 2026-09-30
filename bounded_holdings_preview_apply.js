@@ -1,8 +1,9 @@
 /**
  * bounded_holdings_preview_apply.js — Bounded unified holdings Apply workflow.
  *
- * Preview remains read-only until explicit Apply confirmation. Writes only to
- * SYS - Investment Holdings Unified under document lock with rollback.
+ * Preview remains read-only until explicit Apply confirmation. Holdings write
+ * SYS - Investment Holdings Unified. Trusted single-account Schwab/M1 Apply may
+ * also write the statement month through the canonical investment value writer.
  */
 
 function boundedHoldingsPreviewApplyAssertExplicitConfirm_(payload) {
@@ -226,6 +227,9 @@ function boundedHoldingsPreviewApplyBuildDiffBundle_(ss, payload, mode) {
     diff.duplicateNoop = true;
   }
 
+  var monthlyProposal = boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+    payload, mode, accountValidation, preview);
+
   var diffDigest = boundedHoldingsPreviewApplyBuildDiffDigest_({
     mode: mode,
     investmentId: scopes[0] && scopes[0].investmentId,
@@ -234,27 +238,35 @@ function boundedHoldingsPreviewApplyBuildDiffBundle_(ss, payload, mode) {
     groupedDigestPart: mode === 'GROUPED_PROVIDER'
       ? boundedHoldingsPreviewApplyBuildGroupedDigestPart_(scopes) : '',
     proposedRows: proposedRows,
-    existingRows: existingRows
+    existingRows: existingRows,
+    monthlyDigestPart: boundedHoldingsPreviewApplyMonthlyDigestPart_(monthlyProposal)
   });
 
   var diffPreview = boundedHoldingsPreviewApplyBuildDiffPreview_(diff, scopes, replayOutcomes);
+  var monthlyWillWrite = !!monthlyProposal.willWrite;
+  var holdingsDuplicateNoop = !!diff.duplicateNoop || !!diffPreview.duplicateNoop;
   diffPreview.applyEligible = !diff.blocked &&
     replayOutcomes.every(function(item) {
       return item && item.outcome !== 'IDENTITY_REVIEW_REQUIRED';
     });
   diffPreview.targetSheet = boundedHoldingsPreviewApplyUnifiedSheetName_();
   diffPreview.sheetExists = !!ss.getSheetByName(boundedHoldingsPreviewApplyUnifiedSheetName_());
-  diffPreview.inputInvestmentsUnchanged = true;
+  diffPreview.monthlyInvestmentValue =
+    boundedHoldingsPreviewApplySanitizeMonthlyValueForClient_(monthlyProposal);
+  diffPreview.inputInvestmentsUnchanged = !monthlyWillWrite;
   diffPreview.monthlyHistoryUnchanged = true;
+  diffPreview.holdingsDuplicateNoop = holdingsDuplicateNoop;
+  diffPreview.duplicateNoop = holdingsDuplicateNoop && !monthlyWillWrite;
 
   return {
     ok: true,
     mode: mode,
     diffDigest: diffDigest,
-    duplicateNoop: !!diff.duplicateNoop,
+    duplicateNoop: holdingsDuplicateNoop && !monthlyWillWrite,
     applyEligible: diffPreview.applyEligible,
     replayOutcomes: replayOutcomes,
     diff: diffPreview,
+    monthlyProposal: monthlyProposal,
     accountValidation: accountValidation,
     parentValidation: parentValidation,
     preview: preview,
@@ -325,17 +337,14 @@ function boundedHoldingsPreviewApplyExecute_(ss, payload, mode) {
       partitionConflicts, bundle.replayOutcomes);
   }
 
-  if (bundle.duplicateNoop || boundedHoldingsPreviewApplyIsDuplicateNoopDiff_(
+  var monthlyProposal = bundle.monthlyProposal ||
+    boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+      payload, mode, bundle.accountValidation, bundle.preview);
+  var monthlyWillWrite = !!monthlyProposal.willWrite;
+  var holdingsDuplicateNoop = !!(bundle.diff && bundle.diff.holdingsDuplicateNoop) ||
+    boundedHoldingsPreviewApplyIsDuplicateNoopDiff_(
       boundedHoldingsPreviewApplyBuildDiff_(bundle.existingRows, bundle.proposedRows),
-      bundle.replayOutcomes)) {
-    return {
-      ok: true,
-      duplicateNoop: true,
-      importRunRef: '',
-      message: 'Exact same document already applied — no change.',
-      diff: bundle.diff
-    };
-  }
+      bundle.replayOutcomes);
 
   var diff = boundedHoldingsPreviewApplyBuildDiff_(bundle.existingRows, bundle.proposedRows);
   if (diff.blocked) {
@@ -345,34 +354,105 @@ function boundedHoldingsPreviewApplyExecute_(ss, payload, mode) {
       blocked: true
     };
   }
-  if (!(diff.create || []).length && !(diff.update || []).length) {
+
+  var holdingsWillWrite = !holdingsDuplicateNoop &&
+    ((diff.create || []).length > 0 || (diff.update || []).length > 0);
+  if (!holdingsWillWrite && !monthlyWillWrite) {
     return {
       ok: true,
       duplicateNoop: true,
       importRunRef: '',
-      message: 'No holdings changes to apply.',
+      message: holdingsDuplicateNoop
+        ? 'Exact same document already applied — no change.'
+        : 'No holdings or monthly investment-value changes to apply.',
+      inputInvestmentsUnchanged: true,
+      monthlyHistoryUnchanged: true,
       diff: bundle.diff
     };
   }
 
-  var importRunRef = boundedHoldingsPreviewApplyBuildImportRunRef_();
-  var importedAt = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-  var writeResult = boundedHoldingsPreviewApplyWriteDiff_(ss, diff, importRunRef, importedAt);
+  var importRunRef = '';
+  var importedAt = '';
+  var writeResult = {
+    ok: true,
+    created: 0,
+    updated: 0,
+    sheetCreated: false,
+    importRunRef: '',
+    rowResults: [],
+    rollback: null
+  };
+  if (holdingsWillWrite) {
+    importRunRef = boundedHoldingsPreviewApplyBuildImportRunRef_();
+    importedAt = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+    writeResult = boundedHoldingsPreviewApplyWriteDiff_(ss, diff, importRunRef, importedAt);
+  }
+
+  var monthlyWritten = false;
+  if (monthlyWillWrite) {
+    try {
+      boundedHoldingsPreviewApplyWriteMonthlyInvestmentValue_(monthlyProposal);
+      monthlyWritten = true;
+    } catch (monthlyErr) {
+      if (holdingsWillWrite && writeResult && writeResult.rollback) {
+        var unifiedSheet = ss.getSheetByName(boundedHoldingsPreviewApplyUnifiedSheetName_());
+        if (unifiedSheet) {
+          boundedHoldingsPreviewApplyRollbackWrites_(unifiedSheet, writeResult.rollback);
+          try { boundedHoldingsPreviewApplyFormatUnifiedSheet_(unifiedSheet); } catch (_fmtErr) { /* cosmetic */ }
+        }
+      }
+      return {
+        ok: false,
+        error: 'Monthly investment value could not be saved. Holdings changes were not kept. ' +
+          String(monthlyErr && monthlyErr.message ? monthlyErr.message : monthlyErr),
+        rolledBack: !!holdingsWillWrite,
+        inputInvestmentsUnchanged: true,
+        monthlyHistoryUnchanged: true
+      };
+    }
+  }
+
+  var holdingsMessage = holdingsWillWrite
+    ? ('Applied ' + writeResult.created + ' new and ' + writeResult.updated +
+      ' updated holdings rows to ' + boundedHoldingsPreviewApplyUnifiedSheetName_() + '.')
+    : (holdingsDuplicateNoop ? 'Holdings were already applied.' : 'No holdings rows changed.');
+  var monthlyMessage = monthlyWritten
+    ? (' Saved ' + String(monthlyProposal.monthLabel || 'the statement month') +
+      ' investment value for ' + String(monthlyProposal.accountName || 'the selected account') + '.')
+    : '';
+
   return {
     ok: true,
     duplicateNoop: false,
-    importRunRef: writeResult.importRunRef,
-    created: writeResult.created,
-    updated: writeResult.updated,
+    importRunRef: writeResult.importRunRef || importRunRef,
+    created: writeResult.created || 0,
+    updated: writeResult.updated || 0,
     sheetCreated: !!writeResult.sheetCreated,
     targetSheet: boundedHoldingsPreviewApplyUnifiedSheetName_(),
-    inputInvestmentsUnchanged: true,
+    inputInvestmentsUnchanged: !monthlyWritten,
     monthlyHistoryUnchanged: true,
+    monthlyInvestmentValueWritten: monthlyWritten,
     rowResults: writeResult.rowResults || [],
     diff: bundle.diff,
-    message: 'Applied ' + writeResult.created + ' new and ' + writeResult.updated +
-      ' updated holdings rows to ' + boundedHoldingsPreviewApplyUnifiedSheetName_() + '.'
+    message: String(holdingsMessage + monthlyMessage).trim()
   };
+}
+
+function boundedHoldingsPreviewApplyWriteMonthlyInvestmentValue_(proposal) {
+  proposal = proposal || {};
+  if (!proposal.willWrite) return { ok: true, written: false };
+  if (typeof updateInvestmentValueByDate !== 'function') {
+    throw new Error('Investment value writer is unavailable.');
+  }
+  var result = updateInvestmentValueByDate({
+    accountName: proposal.accountName,
+    balanceDate: proposal.asOfDate,
+    currentValue: proposal.proposedValue
+  });
+  if (result && result.ok === false) {
+    throw new Error(result.error || result.message || 'Monthly investment value could not be saved.');
+  }
+  return { ok: true, written: true };
 }
 
 function boundedHoldingsPreviewApplyFromDashboard(payload) {

@@ -25,8 +25,28 @@ const utilities = {
   getUuid() {
     return '00000000-0000-4000-8000-000000000001';
   },
-  formatDate(_date, _tz, pattern) {
-    return pattern === 'yyyy-MM-dd HH:mm:ss' ? '2026-09-09 12:00:00' : '2026-09-09';
+  formatDate(date, _tz, pattern) {
+    if (pattern === 'yyyy-MM-dd HH:mm:ss') return '2026-09-09 12:00:00';
+    const resolved = date instanceof Date ? date : new Date(date);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const yy = String(resolved.getFullYear()).slice(2);
+    if (pattern === 'MMM-yy') return `${months[resolved.getMonth()]}-${yy}`;
+    if (pattern === 'MMM-yyyy') return `${months[resolved.getMonth()]}-${resolved.getFullYear()}`;
+    if (pattern === 'yy-MMM') return `${yy}-${months[resolved.getMonth()]}`;
+    if (pattern === 'MMM yy') return `${months[resolved.getMonth()]} ${yy}`;
+    if (pattern === 'yy MMM') return `${yy} ${months[resolved.getMonth()]}`;
+    if (pattern === 'MMMM yyyy') {
+      const longMonths = ['January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'];
+      return `${longMonths[resolved.getMonth()]} ${resolved.getFullYear()}`;
+    }
+    if (pattern === 'yyyy-MM-dd') {
+      const month = String(resolved.getMonth() + 1).padStart(2, '0');
+      const day = String(resolved.getDate()).padStart(2, '0');
+      return `${resolved.getFullYear()}-${month}-${day}`;
+    }
+    return '2026-09-09';
   },
   computeDigest(_algorithm, value) {
     return [...crypto.createHash('sha256').update(String(value), 'utf8').digest()]
@@ -50,6 +70,32 @@ const investmentsHeaders = [
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Active', 'Investment Id'
 ];
 
+function monthHeadersForYear(year) {
+  const yy = String(year).slice(2);
+  return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month) => `${month}-${yy}`);
+}
+
+function buildInvestmentsYearBlockRows(year, accounts) {
+  const months = monthHeadersForYear(year);
+  const rows = [
+    ['Year', String(year)],
+    ['Account Name', 'Type', ...months, 'Active', 'Investment Id']
+  ];
+  (accounts || []).forEach((account) => {
+    const values = Array.isArray(account.months) ? account.months.slice() : Array(12).fill('');
+    while (values.length < 12) values.push('');
+    rows.push([
+      account.name,
+      account.type || 'Brokerage',
+      ...values.slice(0, 12),
+      'Yes',
+      account.investmentId
+    ]);
+  });
+  return rows;
+}
+
 const monthlyHistoryHeaders = ['Account Name', 'Month', 'Value'];
 
 class FakeRange {
@@ -65,6 +111,14 @@ class FakeRange {
   }
   getValues() { return this.read(); }
   getDisplayValues() { return this.read().map((row) => row.map((value) => String(value ?? ''))); }
+  getValue() { return this.read()[0]?.[0] ?? ''; }
+  getDisplayValue() { return String(this.getValue() ?? ''); }
+  getNumberFormat() { return this.sheet.columnFormats[this.col] || ''; }
+  setValue(value) {
+    if (this.failOnWrite) throw new Error('Synthetic write failure');
+    return this.setValues([[value]]);
+  }
+  copyTo() { return this; }
   setValues(values) {
     if (this.failOnWrite) throw new Error('Synthetic write failure');
     values.forEach((row, r) => row.forEach((value, c) => {
@@ -309,6 +363,8 @@ function buildSyntheticUnifiedHistoryRows(count, fingerprintPrefix) {
 
 function loadInvestmentsHelpers(context) {
   const investmentsSource = read('investments.js');
+  const plannerSource = read('planner_helpers.js');
+  const quickAddSource = read('quick_add_payment.js');
   vm.runInContext(`
     var INVESTMENT_ID_HEADER_ = 'Investment Id';
     var INVESTMENT_PLANNING_PURPOSE_HEADER_ = 'Planning Purpose';
@@ -319,6 +375,24 @@ function loadInvestmentsHelpers(context) {
       return isFinite(n) ? n : 0;
     }
     ${extractFunction(investmentsSource, 'getAssetsHeaderMap_')}
+    ${extractFunction(investmentsSource, 'investmentNumericEvidencePresent_')}
+    ${extractFunction(investmentsSource, 'isInvestmentDataRowName_')}
+    ${extractFunction(investmentsSource, 'getInvestmentsYearBlock_')}
+    ${extractFunction(investmentsSource, 'findInvestmentRowInBlock_')}
+    ${extractFunction(investmentsSource, 'getInvestmentHistoryValueForMonth_')}
+    ${extractFunction(investmentsSource, 'updateInvestmentHistory_')}
+    ${extractFunction(investmentsSource, 'updateInvestmentValueByDate')}
+    ${extractFunction(plannerSource, 'validateRequired_')}
+    ${extractFunction(plannerSource, 'normalizeHeaderText_')}
+    ${extractFunction(plannerSource, 'getMonthHeaderCandidates_')}
+    ${extractFunction(plannerSource, 'findMonthColumnIndexZeroBased_')}
+    ${extractFunction(plannerSource, 'findMonthColumnIndex_')}
+    ${extractFunction(plannerSource, 'getMonthColumnByDate_')}
+    ${extractFunction(plannerSource, 'applyCurrencyFormat_')}
+    ${extractFunction(plannerSource, 'copyNeighborFormatInRow_')}
+    ${extractFunction(plannerSource, 'setCurrencyPreserveFormat_')}
+    ${extractFunction(plannerSource, 'setCurrencyCellPreserveRowFormat_')}
+    ${extractFunction(quickAddSource, 'parseIsoDateLocal_')}
   `, context, { filename: 'investments-helpers.js' });
 }
 
@@ -380,6 +454,44 @@ function makeWorkbook(options = {}) {
   ]);
 }
 
+function makeSchwabWorkbook(options = {}) {
+  const julyValue = Object.prototype.hasOwnProperty.call(options, 'julyValue')
+    ? options.julyValue
+    : '';
+  const months = Array(12).fill('');
+  months[6] = julyValue;
+  return makeWorkbook({
+    assetsRows: [
+      ['Charles Schwab - Personal', 'Brokerage', '40000', 'Yes', 'INV-SCHWAB-1', '']
+    ],
+    investmentsRows: buildInvestmentsYearBlockRows(2026, [{
+      name: 'Charles Schwab - Personal',
+      investmentId: 'INV-SCHWAB-1',
+      months
+    }]),
+    monthlyRows: [monthlyHistoryHeaders],
+    registryRows: [
+      FINANCIAL_ACCOUNT_HEADERS,
+      registryRow({
+        stableAccountId: 'STABLE-SCHWAB-1',
+        domain: 'INVESTMENT',
+        displayName: 'Charles Schwab - Personal',
+        institution: 'Charles Schwab',
+        accountType: 'Brokerage',
+        accountSubtype: '',
+        ownerId: 'OWNER-1',
+        registrationType: 'TAXABLE',
+        currency: 'USD',
+        last4: '',
+        active: 'Yes',
+        identityStatus: 'VERIFIED',
+        legacyDomain: 'SYS_ASSETS',
+        legacyKey: 'INV-SCHWAB-1'
+      })
+    ]
+  });
+}
+
 function buildContext(options = {}) {
   const workbook = options.workbook || makeWorkbook(options);
   const context = {
@@ -388,6 +500,7 @@ function buildContext(options = {}) {
     Session: { getScriptTimeZone: () => 'America/Los_Angeles' },
     SpreadsheetApp: {
       flush() {},
+      CopyPasteType: { PASTE_FORMAT: 'PASTE_FORMAT' },
       newConditionalFormatRule() {
         const state = { text: '', background: '', fontColor: '', ranges: [] };
         return {
@@ -416,7 +529,13 @@ function buildContext(options = {}) {
     isAdminUser_: () => false,
     isCentralModeEnabled_: () => false,
     isAllowlistedUser_: () => true,
-    assertAdmin_: () => {}
+    assertAdmin_: () => {},
+    Logger: { log() {} },
+    getCurrentYear_: () => 2026,
+    syncAllAssetsFromLatestCurrentYear_() {},
+    appendActivityLog_() {},
+    touchDashboardSourceUpdated_() {},
+    fitContentColumnsToContents_() {}
   };
   vm.createContext(context);
   vm.runInContext(read('config.js'), context, { filename: 'config.js' });
@@ -504,13 +623,25 @@ const BOUNDED_HOLDINGS_UNIFIED_COL_ = {
 };
 const applySource = read('bounded_holdings_preview_apply.js');
 const applySheetSource = read('bounded_holdings_preview_apply_sheet.js');
+const applyDiffSource = read('bounded_holdings_preview_apply_diff.js');
 const boundedHtml = read('BoundedHoldingsPreviewUI.html');
 const boundedSource = read('bounded_holdings_preview.js');
 const etradeText = fixture('etrade', 'synthetic_etrade_positions_minimal.txt');
+const schwabText = fixture('schwab', 'synthetic_schwab_brokerage_statement_pdfjs_space_joined.txt');
 
 assert.match(applySource, /boundedHoldingsPreviewApplyFromDashboard/);
 assert.match(applySource, /boundedHoldingsPreviewBuildApplyDiffFromDashboard/);
 assert.match(applySource, /boundedHoldingsPreviewApplySanitizeDiffBundleForClient_/);
+assert.match(applySource, /updateInvestmentValueByDate/);
+assert.match(applySource, /boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_/);
+assert.match(applyDiffSource, /monthlyDigestPart/);
+assert.match(applyDiffSource, /endingTotalValue/);
+assert.match(applyDiffSource, /existingPresent/);
+assert.doesNotMatch(applyDiffSource, /holdingsMarketValueSum \+|preview\.analysis/);
+assert.doesNotMatch(
+  extractFunction(applyDiffSource, 'boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_'),
+  /action:\s*'UPDATE'|explicitMonthlyValueReplace|ALREADY_MATCHES/
+);
 assert.match(boundedHtml, /boundedHoldingsPreviewBuildGroupedApplyDiffFromDashboard/);
 assert.match(applySheetSource, /boundedHoldingsPreviewApplyFormatUnifiedSheet_/);
 assert.match(applySheetSource, /boundedHoldingsPreviewApplySetUnifiedColumnWidths_/);
@@ -540,6 +671,9 @@ assert.match(
 assert.doesNotMatch(applySheetSource, /ensureInvestmentSystemSheet_/);
 assert.match(boundedHtml, /Review holdings changes/);
 assert.match(boundedHtml, /SYS - Investment Holdings Unified/);
+assert.match(boundedHtml, /Monthly investment value/);
+assert.match(boundedHtml, /already has a value; no update will be made/);
+assert.doesNotMatch(boundedHtml, /explicitMonthlyValueReplace|Replace the existing monthly value/);
 assert.doesNotMatch(boundedSource, /\bsetValues\b|\bappendRow\b/);
 assert.doesNotMatch(applySource, /INPUT - Investments|OUT - History|INPUT - Cash Flow/);
 assert.doesNotMatch(applySource, /rawDocumentText.*PropertiesService|DriveApp|CacheService/s);
@@ -566,6 +700,8 @@ assert.equal(diffOnly.ok, true);
 assert.equal(workbook.getSheetByName(unifiedName), null, 'diff build must not create unified sheet');
 assert.ok(diffOnly.diffDigest);
 assert.ok(diffOnly.diff.summary.createCount > 0);
+assert.equal(diffOnly.diff.monthlyInvestmentValue.action, 'SKIP');
+assert.equal(diffOnly.diff.monthlyInvestmentValue.reason, 'UNSUPPORTED_SOURCE');
 
 const applyResult = ctx.boundedHoldingsPreviewApplyFromDashboard({
   ...etPayload,
@@ -879,6 +1015,9 @@ assert.equal(groupedDiff.ok, true);
 assert.ok(groupedDiff.diff.summary.createCount >= 4, 'grouped diff must include separate child rows');
 const childPartitions = new Set(groupedDiff.diff.create.map((row) => row.childPartition));
 assert.equal(childPartitions.size, 2, 'multiple M1 children must remain separate');
+assert.equal(groupedDiff.diff.monthlyInvestmentValue.action, 'SKIP');
+assert.equal(groupedDiff.diff.monthlyInvestmentValue.reason, 'GROUPED_PROVIDER');
+assert.equal(groupedDiff.diff.monthlyInvestmentValue.skipKind, 'UNAVAILABLE');
 
 const groupedApply = ctx.boundedHoldingsPreviewApplyGroupedFromDashboard({
   ...groupPayload,
@@ -1187,6 +1326,7 @@ const ambiguousCtx = buildContext({
 const ambiguousDiff = ambiguousCtx.boundedHoldingsPreviewBuildApplyDiffFromDashboard({
   ...etPayload,
   pickerValue: '__row__:2',
+  accountName: 'Wrong Account Name',
   investmentId: ''
 });
 assert.equal(ambiguousDiff.ok, false);
@@ -1232,5 +1372,246 @@ assert.equal(rollbackWorkbook.getSheetByName(unifiedName).rows.length, 1,
   'failed write must roll back appended rows');
 assert.deepEqual(cloneSheetRows(workbook.getSheetByName('INPUT - Investments')), investmentsSnapshot,
   'formatting work must not modify INPUT - Investments');
+
+function julyValueFromSchwabSheet(ss) {
+  return ss.getSheetByName('INPUT - Investments').getRange(3, 9).getValue();
+}
+
+function otherMonthValuesFromSchwabSheet(ss) {
+  const sheet = ss.getSheetByName('INPUT - Investments');
+  return [3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14].map((col) => sheet.getRange(3, col).getValue());
+}
+
+const schwabPayload = {
+  pickerValue: 'INV-SCHWAB-1',
+  accountName: 'Charles Schwab - Personal',
+  sysAssetsRow: 2,
+  source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+  rawDocumentText: schwabText,
+  registrationType: 'TAXABLE',
+  explicitAccountMatch: true,
+  statementProvider: 'SCHWAB'
+};
+
+const skipIdentity = ctx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+  {
+    source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+    explicitAccountMatch: true,
+    accountName: 'Wrong Account'
+  },
+  'SINGLE_ACCOUNT',
+  { accountName: 'Charles Schwab - Personal', investmentId: 'INV-SCHWAB-1' },
+  { asOf: '2026-07-31', reconciliation: { endingTotalValue: 47778.84 } }
+);
+assert.equal(skipIdentity.action, 'SKIP');
+assert.equal(skipIdentity.reason, 'IDENTITY_MISMATCH');
+assert.equal(skipIdentity.willWrite, false);
+
+const skipMatch = ctx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+  {
+    source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+    accountName: 'Charles Schwab - Personal'
+  },
+  'SINGLE_ACCOUNT',
+  { accountName: 'Charles Schwab - Personal', investmentId: 'INV-SCHWAB-1' },
+  { asOf: '2026-07-31', reconciliation: { endingTotalValue: 47778.84 } }
+);
+assert.equal(skipMatch.action, 'SKIP');
+assert.equal(skipMatch.reason, 'EXPLICIT_MATCH_REQUIRED');
+assert.equal(skipMatch.willWrite, false);
+
+const skipMissingEnding = ctx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+  {
+    source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+    accountName: 'Charles Schwab - Personal',
+    explicitAccountMatch: true
+  },
+  'SINGLE_ACCOUNT',
+  { accountName: 'Charles Schwab - Personal', investmentId: 'INV-SCHWAB-1' },
+  {
+    asOf: '2026-07-31',
+    totalAccountValue: 12345.67,
+    capabilities: { accountSnapshot: true },
+    holdingsRows: [{ marketValue: 12345.67 }],
+    reconciliation: { endingTotalValue: null, holdingsMarketValueSum: 12345.67 }
+  }
+);
+assert.equal(skipMissingEnding.action, 'SKIP');
+assert.equal(skipMissingEnding.reason, 'MISSING_ENDING_TOTAL');
+assert.equal(skipMissingEnding.willWrite, false);
+assert.notEqual(skipMissingEnding.proposedValue, 12345.67);
+
+const skipOutOfYear = ctx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+  {
+    source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+    accountName: 'Charles Schwab - Personal',
+    explicitAccountMatch: true
+  },
+  'SINGLE_ACCOUNT',
+  { accountName: 'Charles Schwab - Personal', investmentId: 'INV-SCHWAB-1' },
+  { asOf: '2025-07-31', reconciliation: { endingTotalValue: 47778.84 } }
+);
+assert.equal(skipOutOfYear.action, 'SKIP');
+assert.equal(skipOutOfYear.reason, 'OUT_OF_YEAR');
+assert.equal(skipOutOfYear.skipKind, 'UNAVAILABLE');
+assert.equal(skipOutOfYear.willWrite, false);
+
+const skipInvalidDate = ctx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+  {
+    source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+    accountName: 'Charles Schwab - Personal',
+    explicitAccountMatch: true
+  },
+  'SINGLE_ACCOUNT',
+  { accountName: 'Charles Schwab - Personal', investmentId: 'INV-SCHWAB-1' },
+  { asOf: '', reconciliation: { endingTotalValue: 47778.84 } }
+);
+assert.equal(skipInvalidDate.action, 'SKIP');
+assert.equal(skipInvalidDate.reason, 'INVALID_STATEMENT_DATE');
+assert.equal(skipInvalidDate.willWrite, false);
+
+const emptySchwab = makeSchwabWorkbook();
+const emptySchwabBuilt = buildContext({ workbook: emptySchwab });
+const emptySchwabCtx = emptySchwabBuilt.context;
+const emptySchwabBook = emptySchwabBuilt.workbook;
+const emptyInvestmentsBeforePreview = cloneSheetRows(emptySchwabBook.getSheetByName('INPUT - Investments'));
+const emptyPreview = emptySchwabCtx.boundedHoldingsPreviewRunFromDashboard(schwabPayload);
+assert.equal(emptyPreview.ok, true);
+assert.equal(emptyPreview.reconciliation.endingTotalValue, 47778.84);
+assert.ok(emptyPreview.unsupportedRows.some((row) => row.reason === 'UNPRICED_SECURITY'));
+assert.equal(emptySchwabBook.getSheetByName(unifiedName), null, 'preview must not create unified sheet');
+assert.deepEqual(cloneSheetRows(emptySchwabBook.getSheetByName('INPUT - Investments')),
+  emptyInvestmentsBeforePreview, 'preview must not write monthly investment values');
+
+const emptyDiff = emptySchwabCtx.boundedHoldingsPreviewBuildApplyDiffFromDashboard(schwabPayload);
+assert.equal(emptyDiff.ok, true);
+assert.equal(emptyDiff.diff.monthlyInvestmentValue.action, 'ADD');
+assert.equal(emptyDiff.diff.monthlyInvestmentValue.proposedValue, 47778.84);
+assert.equal(emptyDiff.diff.monthlyInvestmentValue.willWrite, true);
+assert.equal(emptyDiff.diff.monthlyInvestmentValue.existingPresent, false);
+assert.match(emptyDiff.diff.monthlyInvestmentValue.message, /Add July 2026 value: \$47,778\.84/);
+assert.match(emptyDiff.diffDigest, /./);
+assert.deepEqual(cloneSheetRows(emptySchwabBook.getSheetByName('INPUT - Investments')),
+  emptyInvestmentsBeforePreview, 'review must not write monthly investment values');
+
+const otherMonthsBeforeEmptyApply = otherMonthValuesFromSchwabSheet(emptySchwabBook);
+const emptyApply = emptySchwabCtx.boundedHoldingsPreviewApplyFromDashboard({
+  ...schwabPayload,
+  diffDigest: emptyDiff.diffDigest,
+  explicitApplyConfirm: true
+});
+assert.equal(emptyApply.ok, true);
+assert.equal(emptyApply.monthlyInvestmentValueWritten, true);
+assert.equal(julyValueFromSchwabSheet(emptySchwabBook), 47778.84);
+assert.deepEqual(otherMonthValuesFromSchwabSheet(emptySchwabBook), otherMonthsBeforeEmptyApply);
+const emptyUnified = emptySchwabBook.getSheetByName(unifiedName);
+assert.ok(emptyUnified, 'Schwab Apply must create unified holdings');
+assert.equal(emptyUnified.rows.some((row) => /TIANREN|CHINA TIANREN/i.test(String(row.join(' ')))), false,
+  'unpriced holdings must remain excluded');
+assert.equal(emptyUnified.rows.filter((row, index) => index > 0 && String(row[6] || '').trim()).length >= 5, true);
+
+const alreadyWorkbook = makeSchwabWorkbook({ julyValue: 47778.84 });
+const alreadyBuilt = buildContext({ workbook: alreadyWorkbook });
+const alreadyDiff = alreadyBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(schwabPayload);
+assert.equal(alreadyDiff.ok, true);
+assert.equal(alreadyDiff.diff.monthlyInvestmentValue.action, 'SKIP');
+assert.equal(alreadyDiff.diff.monthlyInvestmentValue.reason, 'OCCUPIED');
+assert.equal(alreadyDiff.diff.monthlyInvestmentValue.willWrite, false);
+assert.equal(alreadyDiff.diff.monthlyInvestmentValue.existingPresent, true);
+assert.match(alreadyDiff.diff.monthlyInvestmentValue.message,
+  /July 2026 already has a value; no update will be made\./);
+const alreadyBefore = cloneSheetRows(alreadyWorkbook.getSheetByName('INPUT - Investments'));
+const alreadyApply = alreadyBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...schwabPayload,
+  diffDigest: alreadyDiff.diffDigest,
+  explicitApplyConfirm: true
+});
+assert.equal(alreadyApply.ok, true);
+assert.notEqual(alreadyApply.monthlyInvestmentValueWritten, true);
+assert.deepEqual(cloneSheetRows(alreadyWorkbook.getSheetByName('INPUT - Investments')), alreadyBefore,
+  'occupied month must not be rewritten');
+
+const zeroWorkbook = makeSchwabWorkbook({ julyValue: 0 });
+const zeroBuilt = buildContext({ workbook: zeroWorkbook });
+const zeroDiff = zeroBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(schwabPayload);
+assert.equal(zeroDiff.diff.monthlyInvestmentValue.action, 'SKIP');
+assert.equal(zeroDiff.diff.monthlyInvestmentValue.reason, 'OCCUPIED');
+assert.equal(zeroDiff.diff.monthlyInvestmentValue.existingValue, 0);
+const zeroBefore = cloneSheetRows(zeroWorkbook.getSheetByName('INPUT - Investments'));
+const zeroApply = zeroBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...schwabPayload,
+  diffDigest: zeroDiff.diffDigest,
+  explicitApplyConfirm: true
+});
+assert.equal(zeroApply.ok, true);
+assert.notEqual(zeroApply.monthlyInvestmentValueWritten, true);
+assert.equal(julyValueFromSchwabSheet(zeroWorkbook), 0);
+assert.deepEqual(cloneSheetRows(zeroWorkbook.getSheetByName('INPUT - Investments')), zeroBefore,
+  'explicit $0 is an occupied value and must not be overwritten');
+
+const occupiedWorkbook = makeSchwabWorkbook({ julyValue: 50000 });
+const occupiedBuilt = buildContext({ workbook: occupiedWorkbook });
+const occupiedDiff = occupiedBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(schwabPayload);
+assert.equal(occupiedDiff.ok, true);
+assert.equal(occupiedDiff.diff.monthlyInvestmentValue.action, 'SKIP');
+assert.equal(occupiedDiff.diff.monthlyInvestmentValue.reason, 'OCCUPIED');
+assert.equal(occupiedDiff.diff.monthlyInvestmentValue.willWrite, false);
+assert.equal(occupiedDiff.diff.monthlyInvestmentValue.existingValue, 50000);
+assert.equal(occupiedDiff.diff.monthlyInvestmentValue.proposedValue, 47778.84);
+const occupiedOtherMonths = otherMonthValuesFromSchwabSheet(occupiedWorkbook);
+const occupiedApply = occupiedBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...schwabPayload,
+  diffDigest: occupiedDiff.diffDigest,
+  explicitApplyConfirm: true
+});
+assert.equal(occupiedApply.ok, true);
+assert.notEqual(occupiedApply.monthlyInvestmentValueWritten, true);
+assert.equal(julyValueFromSchwabSheet(occupiedWorkbook), 50000,
+  'a different existing monthly value must never be overwritten');
+assert.deepEqual(otherMonthValuesFromSchwabSheet(occupiedWorkbook), occupiedOtherMonths,
+  'other months remain unchanged when the statement month is occupied');
+
+const monthlyStaleWorkbook = makeSchwabWorkbook();
+const monthlyStaleBuilt = buildContext({ workbook: monthlyStaleWorkbook });
+const monthlyStaleDiff = monthlyStaleBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(schwabPayload);
+assert.equal(monthlyStaleDiff.diff.monthlyInvestmentValue.action, 'ADD');
+assert.equal(monthlyStaleDiff.diff.monthlyInvestmentValue.existingPresent, false);
+monthlyStaleWorkbook.getSheetByName('INPUT - Investments').getRange(3, 9).setValue(1);
+const monthlyStaleApply = monthlyStaleBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...schwabPayload,
+  diffDigest: monthlyStaleDiff.diffDigest,
+  explicitApplyConfirm: true
+});
+assert.equal(monthlyStaleApply.ok, false);
+assert.equal(monthlyStaleApply.staleDiff, true);
+assert.equal(julyValueFromSchwabSheet(monthlyStaleWorkbook), 1);
+assert.equal(monthlyStaleWorkbook.getSheetByName(unifiedName), null,
+  'stale monthly digest must fail closed before holdings write');
+
+const failWorkbook = makeSchwabWorkbook();
+const failBuilt = buildContext({ workbook: failWorkbook });
+const failDiff = failBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(schwabPayload);
+failBuilt.context.updateInvestmentValueByDate = function failMonthly() {
+  throw new Error('Synthetic monthly write failure');
+};
+const failApply = failBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...schwabPayload,
+  diffDigest: failDiff.diffDigest,
+  explicitApplyConfirm: true
+});
+assert.equal(failApply.ok, false);
+assert.match(String(failApply.error || ''), /Monthly investment value could not be saved/);
+assert.equal(julyValueFromSchwabSheet(failWorkbook), '');
+const failUnified = failWorkbook.getSheetByName(unifiedName);
+assert.ok(!failUnified || failUnified.rows.length <= 1,
+  'monthly-write failure must not leave applied holdings rows');
+
+const mismatchApply = emptySchwabCtx.boundedHoldingsPreviewApplyFromDashboard({
+  ...schwabPayload,
+  explicitAccountMatch: false,
+  diffDigest: emptyDiff.diffDigest,
+  explicitApplyConfirm: true
+});
+assert.equal(mismatchApply.ok, false);
 
 console.log('Bounded holdings preview Apply regressions passed.');

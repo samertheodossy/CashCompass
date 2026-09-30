@@ -132,6 +132,8 @@ assert.doesNotMatch(drawerSchwabSource, /boundedHoldingsPreviewRunGroupedChildFr
 assert.doesNotMatch(drawerSchwabSource, /res\.preview\s*\|\|/);
 assert.doesNotMatch(drawerSchwabSource, /bundle\.diffPreview/);
 assert.match(drawerSchwabSource, /lastSinglePreview = res;/);
+assert.match(drawerSchwabSource, /Monthly investment value/);
+assert.doesNotMatch(drawerSchwabSource, /Replace the existing monthly value|explicitMonthlyValueReplace/);
 assert.match(plannerWeb, /Dashboard_Script_InvestmentPortfolioDrawerSchwab/);
 assert.match(dashboardBody, /inv_portfolio_schwab_import_view/);
 assert.match(dashboardBody, /Import Schwab statement PDF/);

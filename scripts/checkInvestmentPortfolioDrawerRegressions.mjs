@@ -438,8 +438,14 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(drawerSchwabSource, /bundle\.diffPreview/);
 assert.match(drawerSchwabSource, /invDrawerSchwabResolveApplyDiffBundle_/);
+assert.match(drawerSchwabSource, /Monthly investment value/);
+assert.match(drawerSchwabSource, /already has a value; no update will be made/);
+assert.doesNotMatch(drawerSchwabSource, /Replace the existing monthly value|explicitMonthlyValueReplace/);
 assert.doesNotMatch(drawerM1Source, /bundle\.diffPreview/);
 assert.match(drawerM1Source, /invDrawerM1ResolveApplyDiffBundle_/);
+assert.match(drawerM1Source, /Monthly investment value/);
+assert.match(drawerM1Source, /already has a value; no update will be made/);
+assert.doesNotMatch(drawerM1Source, /Replace the existing monthly value|explicitMonthlyValueReplace/);
 assert.match(drawerM1Source, /boundedHoldingsPreviewBuildApplyDiffFromDashboard/);
 assert.match(drawerM1Source, /boundedHoldingsPreviewBuildGroupedApplyDiffFromDashboard/);
 

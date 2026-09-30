@@ -566,7 +566,8 @@ function boundedHoldingsPreviewApplyWriteDiff_(ss, diff, importRunRef, importedA
       updated: updateRows.length,
       sheetCreated: !!ensure.created,
       importRunRef: importRunRef,
-      rowResults: rowResults
+      rowResults: rowResults,
+      rollback: rollback
     };
   } catch (writeErr) {
     boundedHoldingsPreviewApplyRollbackWrites_(sheet, rollback);

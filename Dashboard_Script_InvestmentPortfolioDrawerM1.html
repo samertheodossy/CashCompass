@@ -302,6 +302,38 @@ function clearInvestmentPortfolioDrawerM1Apply_(keepPreview) {
   if (applyArea) applyArea.innerHTML = '';
 }
 
+function invDrawerM1FormatMoney_(value) {
+  if (value === null || typeof value === 'undefined' || value === '') return '—';
+  var n = Number(value);
+  if (!isFinite(n)) return '—';
+  return (n < 0 ? '-$' : '$') + Math.abs(n).toFixed(2);
+}
+
+function invDrawerM1RenderMonthlyInvestmentValueHtml_(monthly) {
+  monthly = monthly || {};
+  var action = String(monthly.action || 'SKIP');
+  var reason = String(monthly.reason || '');
+  var html = '<div class="card" id="inv_m1_monthly_value_card">' +
+    '<h4>Monthly investment value</h4>';
+  if (action === 'ADD') {
+    html += '<p>' + invDrawerM1Escape_(monthly.message ||
+      ('Add ' + (monthly.monthLabel || 'this month') + ' value: ' +
+        invDrawerM1FormatMoney_(monthly.proposedValue))) + '</p>';
+  } else if (reason === 'OCCUPIED') {
+    html += '<p>' + invDrawerM1Escape_(monthly.message ||
+      ((monthly.monthLabel || 'This month') + ' already has a value; no update will be made.')) +
+      '</p>';
+  } else {
+    html += '<p><strong>Skip</strong> — ' +
+      invDrawerM1Escape_(monthly.message || 'Monthly investment value will not be written.') +
+      '</p>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function invDrawerM1BindMonthlyInvestmentValueControls_() {}
+
 function renderInvDrawerM1SingleResults_(res) {
   var host = document.getElementById('inv_m1_results');
   if (!host) return;
@@ -433,11 +465,16 @@ function renderInvestmentPortfolioDrawerM1ApplySection_() {
     return;
   }
   applyArea.innerHTML = '<div class="card"><h3>Apply approved holdings</h3>' +
-    '<p class="muted">Review the diff, then apply to SYS - Investment Holdings Unified only.</p>' +
+    '<p class="muted">' + (invDrawerM1IsGrouped_()
+      ? 'Review the diff, then apply to SYS - Investment Holdings Unified only.'
+      : 'Review the diff, then apply holdings to SYS - Investment Holdings Unified. Review also shows the statement month value for the selected account.') +
+    '</p>' +
     '<div class="investment-import-actions">' +
     '<button type="button" class="small-btn" id="inv_m1_review_apply_btn">Review holdings changes</button>' +
     '<button type="button" class="small-btn primary" id="inv_m1_confirm_apply_btn" disabled>Apply approved holdings</button>' +
-    '</div><div id="inv_m1_apply_message" class="muted"></div></div>';
+    '</div><div id="inv_m1_apply_message" class="muted"></div>' +
+    (invDrawerM1IsGrouped_() ? '' : '<div id="inv_m1_monthly_area"></div>') +
+    '</div>';
   var reviewBtn = document.getElementById('inv_m1_review_apply_btn');
   var confirmBtn = document.getElementById('inv_m1_confirm_apply_btn');
   if (reviewBtn) reviewBtn.onclick = reviewInvestmentPortfolioDrawerM1ApplyDiff_;
@@ -491,6 +528,13 @@ function reviewInvestmentPortfolioDrawerM1ApplyDiff_() {
     var msgEl = document.getElementById('inv_m1_apply_message');
     var confirmBtn = document.getElementById('inv_m1_confirm_apply_btn');
     if (msgEl) msgEl.textContent = resolved.message;
+    var monthlyEl = document.getElementById('inv_m1_monthly_area');
+    if (monthlyEl) {
+      monthlyEl.innerHTML = !invDrawerM1IsGrouped_() && resolved.applyDiff
+        ? invDrawerM1RenderMonthlyInvestmentValueHtml_(resolved.applyDiff.monthlyInvestmentValue)
+        : '';
+      invDrawerM1BindMonthlyInvestmentValueControls_();
+    }
     if (confirmBtn) {
       confirmBtn.disabled = !(resolved.applyReviewed && resolved.applyDiff &&
         !resolved.applyDiff.blocked && !resolved.applyDiff.duplicateNoop);

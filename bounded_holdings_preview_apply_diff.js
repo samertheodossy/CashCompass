@@ -332,6 +332,7 @@ function boundedHoldingsPreviewApplyBuildDiffDigest_(payload) {
     String(payload.parentStableAccountId || ''),
     String(payload.documentFingerprint || ''),
     String(payload.groupedDigestPart || ''),
+    JSON.stringify(payload.monthlyDigestPart || null),
     JSON.stringify((payload.proposedRows || []).map(function(row) {
       return [
         row.rowKey,
@@ -503,4 +504,284 @@ function boundedHoldingsPreviewApplyBuildGroupedDigestPart_(scopes) {
       scope.contentFingerprint
     ].join(':');
   }).sort().join('|');
+}
+
+function boundedHoldingsPreviewApplyIsMonthlyValueSource_(source) {
+  var normalized = typeof investmentPortfolioNormalizeSource_ === 'function'
+    ? investmentPortfolioNormalizeSource_(source || '')
+    : String(source || '').trim().toUpperCase();
+  return normalized === 'SCHWAB_BROKERAGE_STATEMENT_PDF' ||
+    normalized === 'M1_STATEMENT_PDF';
+}
+
+function boundedHoldingsPreviewApplyParseStatementDate_(asOf) {
+  var text = boundedHoldingsPreviewApplyNormalizeAsOfDate_(asOf);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+  var year = Number(text.slice(0, 4));
+  var month = Number(text.slice(5, 7));
+  var day = Number(text.slice(8, 10));
+  if (!year || month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return {
+    iso: text,
+    year: year,
+    month: month,
+    day: day,
+    date: new Date(year, month - 1, day)
+  };
+}
+
+function boundedHoldingsPreviewApplyMonthLabel_(parsed) {
+  parsed = parsed || {};
+  if (parsed.date && typeof Utilities !== 'undefined' && Utilities.formatDate) {
+    try {
+      var tz = (typeof Session !== 'undefined' && Session.getScriptTimeZone)
+        ? Session.getScriptTimeZone()
+        : 'America/Los_Angeles';
+      return Utilities.formatDate(parsed.date, tz, 'MMM-yy');
+    } catch (_fmtErr) { /* fall through */ }
+  }
+  if (parsed.iso) {
+    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return months[parsed.month - 1] + '-' + String(parsed.year).slice(2);
+  }
+  return '';
+}
+
+function boundedHoldingsPreviewApplyMonthDisplayLabel_(parsed) {
+  parsed = parsed || {};
+  var months = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+  if (parsed.date && typeof Utilities !== 'undefined' && Utilities.formatDate) {
+    try {
+      var tz = (typeof Session !== 'undefined' && Session.getScriptTimeZone)
+        ? Session.getScriptTimeZone()
+        : 'America/Los_Angeles';
+      return Utilities.formatDate(parsed.date, tz, 'MMMM yyyy');
+    } catch (_fmtErr) { /* fall through */ }
+  }
+  if (parsed.month && parsed.year) {
+    return months[parsed.month - 1] + ' ' + parsed.year;
+  }
+  return boundedHoldingsPreviewApplyMonthLabel_(parsed);
+}
+
+function boundedHoldingsPreviewApplyResolveProviderEndingTotal_(preview, source) {
+  preview = preview || {};
+  var recon = preview.reconciliation || null;
+  var reconEnding = boundedHoldingsPreviewApplyNullableNumber_(recon && recon.endingTotalValue);
+  if (reconEnding !== null) {
+    return { value: reconEnding, origin: 'RECONCILIATION' };
+  }
+  var normalized = typeof investmentPortfolioNormalizeSource_ === 'function'
+    ? investmentPortfolioNormalizeSource_(source || '')
+    : String(source || '').trim().toUpperCase();
+  if (normalized === 'SCHWAB_BROKERAGE_STATEMENT_PDF') {
+    // Schwab provider snapshot is reconciliation.endingTotalValue (or the
+    // parser account snapshot that feeds it). Never use holdings-sum fallback.
+    return { value: null, origin: '' };
+  }
+  if (normalized === 'M1_STATEMENT_PDF') {
+    if (!(preview.capabilities && preview.capabilities.accountSnapshot)) {
+      return { value: null, origin: '' };
+    }
+    var snapshotTotal = boundedHoldingsPreviewApplyNullableNumber_(preview.totalAccountValue);
+    if (snapshotTotal === null) return { value: null, origin: '' };
+    return { value: snapshotTotal, origin: 'PROVIDER_SNAPSHOT' };
+  }
+  return { value: null, origin: '' };
+}
+
+function boundedHoldingsPreviewApplyReadExistingMonthlyValue_(accountName, parsed) {
+  if (typeof getInvestmentHistoryValueForMonth_ !== 'function') {
+    return { ok: false, reason: 'MONTH_CELL_UNAVAILABLE' };
+  }
+  try {
+    var value = getInvestmentHistoryValueForMonth_(accountName, parsed.year, parsed.date);
+    var present = value !== '' && value !== null && typeof value !== 'undefined';
+    return {
+      ok: true,
+      present: present,
+      value: present ? round2_(Number(value)) : null
+    };
+  } catch (_readErr) {
+    return { ok: false, reason: 'MONTH_CELL_UNAVAILABLE' };
+  }
+}
+
+function boundedHoldingsPreviewApplyMonthlyDigestPart_(monthly) {
+  monthly = monthly || {};
+  return {
+    action: String(monthly.action || ''),
+    reason: String(monthly.reason || ''),
+    accountName: String(monthly.accountName || ''),
+    investmentId: String(monthly.investmentId || ''),
+    asOfDate: String(monthly.asOfDate || ''),
+    existingPresent: !!monthly.existingPresent,
+    existingValue: monthly.existingValue,
+    proposedValue: monthly.proposedValue,
+    willWrite: !!monthly.willWrite
+  };
+}
+
+function boundedHoldingsPreviewApplySanitizeMonthlyValueForClient_(monthly) {
+  monthly = monthly || {};
+  return {
+    action: String(monthly.action || 'SKIP'),
+    willWrite: !!monthly.willWrite,
+    reason: String(monthly.reason || ''),
+    skipKind: String(monthly.skipKind || ''),
+    message: String(monthly.message || ''),
+    accountName: String(monthly.accountName || ''),
+    investmentId: String(monthly.investmentId || ''),
+    asOfDate: String(monthly.asOfDate || ''),
+    monthLabel: String(monthly.monthLabel || ''),
+    existingPresent: !!monthly.existingPresent,
+    existingValue: monthly.existingValue,
+    proposedValue: monthly.proposedValue
+  };
+}
+
+function boundedHoldingsPreviewApplyBuildMonthlySkip_(reason, message, extras) {
+  extras = extras || {};
+  return {
+    action: 'SKIP',
+    willWrite: false,
+    reason: reason,
+    skipKind: extras.skipKind || 'UNAVAILABLE',
+    message: message,
+    accountName: extras.accountName || '',
+    investmentId: extras.investmentId || '',
+    asOfDate: extras.asOfDate || '',
+    monthLabel: extras.monthLabel || '',
+    existingPresent: !!extras.existingPresent,
+    existingValue: extras.existingValue != null ? extras.existingValue : null,
+    proposedValue: extras.proposedValue != null ? extras.proposedValue : null
+  };
+}
+
+function boundedHoldingsPreviewApplyFormatMoney_(value) {
+  if (value === null || typeof value === 'undefined' || value === '') return '—';
+  var n = Number(value);
+  if (!isFinite(n)) return '—';
+  var abs = Math.abs(n).toFixed(2);
+  var parts = abs.split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return (n < 0 ? '-$' : '$') + parts.join('.');
+}
+
+function boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(payload, mode, accountValidation, preview) {
+  payload = payload || {};
+  accountValidation = accountValidation || {};
+  preview = preview || {};
+  var accountName = String(accountValidation.accountName || '').trim();
+  var investmentId = String(accountValidation.investmentId || '').trim();
+  var payloadAccountName = String(payload.accountName || '').trim();
+  var payloadInvestmentId = String(payload.investmentId || '').trim();
+  var source = typeof investmentPortfolioNormalizeSource_ === 'function'
+    ? investmentPortfolioNormalizeSource_(payload.source || preview.source || '')
+    : String(payload.source || preview.source || '').trim().toUpperCase();
+
+  if (mode === 'GROUPED_PROVIDER') {
+    return boundedHoldingsPreviewApplyBuildMonthlySkip_('GROUPED_PROVIDER',
+      'Grouped M1 Apply does not update the parent monthly investment value.');
+  }
+  if (!boundedHoldingsPreviewApplyIsMonthlyValueSource_(source)) {
+    return boundedHoldingsPreviewApplyBuildMonthlySkip_('UNSUPPORTED_SOURCE',
+      'This statement type does not propose a monthly investment value.');
+  }
+  if (!accountName || !investmentId) {
+    return boundedHoldingsPreviewApplyBuildMonthlySkip_('IDENTITY_MISMATCH',
+      'Monthly investment value requires a verified CashCompass account identity.');
+  }
+  if (payloadAccountName && payloadAccountName !== accountName) {
+    return boundedHoldingsPreviewApplyBuildMonthlySkip_('IDENTITY_MISMATCH',
+      'Monthly investment value requires the selected CashCompass account identity.',
+      { accountName: accountName, investmentId: investmentId });
+  }
+  if (payloadInvestmentId && payloadInvestmentId !== investmentId &&
+      payloadInvestmentId !== String(accountValidation.stableAccountId || '').trim()) {
+    return boundedHoldingsPreviewApplyBuildMonthlySkip_('IDENTITY_MISMATCH',
+      'Monthly investment value requires the selected CashCompass account identity.',
+      { accountName: accountName, investmentId: investmentId });
+  }
+  if (payload.explicitAccountMatch !== true) {
+    return boundedHoldingsPreviewApplyBuildMonthlySkip_('EXPLICIT_MATCH_REQUIRED',
+      'Monthly investment value requires explicit account-match confirmation.');
+  }
+
+  var parsed = boundedHoldingsPreviewApplyParseStatementDate_(preview.asOf);
+  if (!parsed) {
+    return boundedHoldingsPreviewApplyBuildMonthlySkip_('INVALID_STATEMENT_DATE',
+      'Statement date is missing or invalid, so the monthly investment value was skipped.',
+      { accountName: accountName, investmentId: investmentId });
+  }
+  var monthLabel = boundedHoldingsPreviewApplyMonthDisplayLabel_(parsed);
+  var currentYear = typeof getCurrentYear_ === 'function' ? getCurrentYear_() : new Date().getFullYear();
+  if (parsed.year !== Number(currentYear)) {
+    return boundedHoldingsPreviewApplyBuildMonthlySkip_('OUT_OF_YEAR',
+      monthLabel + ' is outside ' + currentYear + ' tracking, so the monthly investment value was skipped.',
+      {
+        accountName: accountName,
+        investmentId: investmentId,
+        asOfDate: parsed.iso,
+        monthLabel: monthLabel
+      });
+  }
+
+  var ending = boundedHoldingsPreviewApplyResolveProviderEndingTotal_(preview, source);
+  if (ending.value === null) {
+    return boundedHoldingsPreviewApplyBuildMonthlySkip_('MISSING_ENDING_TOTAL',
+      'Statement ending account value is missing, so the monthly investment value was skipped.',
+      {
+        accountName: accountName,
+        investmentId: investmentId,
+        asOfDate: parsed.iso,
+        monthLabel: monthLabel
+      });
+  }
+
+  var existing = boundedHoldingsPreviewApplyReadExistingMonthlyValue_(accountName, parsed);
+  if (!existing.ok) {
+    return boundedHoldingsPreviewApplyBuildMonthlySkip_(existing.reason || 'MONTH_CELL_UNAVAILABLE',
+      'The ' + monthLabel + ' investment cell could not be read, so the monthly value was skipped.',
+      {
+        accountName: accountName,
+        investmentId: investmentId,
+        asOfDate: parsed.iso,
+        monthLabel: monthLabel,
+        proposedValue: ending.value
+      });
+  }
+
+  if (existing.present) {
+    return boundedHoldingsPreviewApplyBuildMonthlySkip_('OCCUPIED',
+      monthLabel + ' already has a value; no update will be made.',
+      {
+        skipKind: 'OCCUPIED',
+        accountName: accountName,
+        investmentId: investmentId,
+        asOfDate: parsed.iso,
+        monthLabel: monthLabel,
+        existingPresent: true,
+        existingValue: existing.value,
+        proposedValue: ending.value
+      });
+  }
+
+  return {
+    action: 'ADD',
+    willWrite: true,
+    reason: '',
+    skipKind: '',
+    message: 'Add ' + monthLabel + ' value: ' +
+      boundedHoldingsPreviewApplyFormatMoney_(ending.value),
+    accountName: accountName,
+    investmentId: investmentId,
+    asOfDate: parsed.iso,
+    monthLabel: monthLabel,
+    existingPresent: false,
+    existingValue: null,
+    proposedValue: ending.value
+  };
 }

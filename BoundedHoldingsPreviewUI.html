@@ -726,6 +726,35 @@
         return '$' + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       }
 
+      function isMonthlyValueApplySource_() {
+        if (isGroupedMode()) return false;
+        var source = String(currentPreviewSource_() || '').trim().toUpperCase();
+        return source === 'SCHWAB_BROKERAGE_STATEMENT_PDF' || source === 'M1_STATEMENT_PDF';
+      }
+
+      function renderMonthlyInvestmentValueHtml_(monthly) {
+        monthly = monthly || {};
+        var action = String(monthly.action || 'SKIP');
+        var reason = String(monthly.reason || '');
+        var html = '<div class="card" id="monthlyInvestmentValueCard"><h3>Monthly investment value</h3>';
+        if (action === 'ADD') {
+          html += '<p>' + escapeHtml(monthly.message ||
+            ('Add ' + (monthly.monthLabel || 'this month') + ' value: ' +
+              formatMoney(monthly.proposedValue))) + '</p>';
+        } else if (reason === 'OCCUPIED') {
+          html += '<p>' + escapeHtml(monthly.message ||
+            ((monthly.monthLabel || 'This month') + ' already has a value; no update will be made.')) +
+            '</p>';
+        } else {
+          html += '<p><strong>Skip</strong> — ' +
+            escapeHtml(monthly.message || 'Monthly investment value will not be written.') + '</p>';
+        }
+        html += '</div>';
+        return html;
+      }
+
+      function bindMonthlyInvestmentValueControls_() {}
+
       function setLoading(on, label) {
         statusArea.innerHTML = on
           ? ('<div class="card"><div class="dash-loading"><div class="dash-loading-spinner"></div>' +
@@ -816,9 +845,15 @@
           applyArea.innerHTML = '';
           return;
         }
-        var html = '<div class="card"><h2>Apply approved holdings</h2>' +
-          '<p class="muted"><strong>Writes only to SYS - Investment Holdings Unified.</strong> ' +
-          'INPUT - Investments monthly values, Net Worth, Cash Flow, and Planning are not changed.</p>';
+        var html = '<div class="card"><h2>Apply approved holdings</h2>';
+        if (isMonthlyValueApplySource_()) {
+          html += '<p class="muted"><strong>Holdings write SYS - Investment Holdings Unified.</strong> ' +
+            'Review may also propose the statement month for the selected account. ' +
+            'Net Worth, Cash Flow, and Planning are not rewritten here.</p>';
+        } else {
+          html += '<p class="muted"><strong>Writes only to SYS - Investment Holdings Unified.</strong> ' +
+            'INPUT - Investments monthly values, Net Worth, Cash Flow, and Planning are not changed.</p>';
+        }
         if (applyDocumentChanged_()) {
           html += '<div class="error-box">Document text changed since preview. Run preview again before Apply.</div>';
         } else if (state.applyStatusMessage) {
@@ -846,6 +881,9 @@
           html += renderApplyDiffTable_('Rows to update', diff.update);
           html += renderApplyDiffTable_('Unchanged rows', diff.unchanged);
           html += renderApplyDiffTable_('Conflicts or ambiguous rows', diff.conflicts);
+          if (isMonthlyValueApplySource_()) {
+            html += renderMonthlyInvestmentValueHtml_(diff.monthlyInvestmentValue);
+          }
         } else {
           html += '<p class="muted">Review the full holdings diff before confirming Apply.</p>';
         }
@@ -866,6 +904,7 @@
         if (reviewBtn) reviewBtn.addEventListener('click', reviewApplyDiff);
         if (confirmBtn) confirmBtn.addEventListener('click', confirmApply);
         if (cancelBtn) cancelBtn.addEventListener('click', function() { clearApplyState_(true); });
+        bindMonthlyInvestmentValueControls_();
       }
 
       function reviewApplyDiff() {
