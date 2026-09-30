@@ -551,6 +551,13 @@ function investmentSchwabParseBrokerageStatementPdfText_(rawText) {
     return { ok: false, error: 'Schwab brokerage statement PDF text is empty.' };
   }
   var compact = investmentSchwabCompactStatementText_(prepared);
+  if (typeof investmentStashLooksLikeBrokerageStatementPdf_ === 'function' &&
+      investmentStashLooksLikeBrokerageStatementPdf_(prepared)) {
+    return {
+      ok: false,
+      error: 'Document matches a Stash brokerage statement, not a Schwab brokerage statement.'
+    };
+  }
   if (investmentSchwabLooksLikeM1Statement_(compact)) {
     return { ok: false, error: 'Document matches an M1 brokerage statement, not a Schwab brokerage statement.' };
   }
@@ -603,6 +610,13 @@ function investmentSchwabDetectBrokerageStatementPdf_(input) {
     return { ok: false, reason: 'No Schwab brokerage statement PDF text supplied.' };
   }
   var compact = investmentSchwabCompactStatementText_(rawText);
+  if (typeof investmentStashLooksLikeBrokerageStatementPdf_ === 'function' &&
+      investmentStashLooksLikeBrokerageStatementPdf_(rawText)) {
+    return {
+      ok: false,
+      reason: 'Document matches a Stash brokerage statement, not a Schwab brokerage statement.'
+    };
+  }
   if (investmentSchwabLooksLikeM1Statement_(compact)) {
     return {
       ok: false,

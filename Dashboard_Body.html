@@ -837,6 +837,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                 <button type="button" id="inv_portfolio_view_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setInvestmentPortfolioDrawerView_('portfolio')">Portfolio</button>
                 <button type="button" id="inv_portfolio_m1_import_btn" class="segment-btn" role="tab" aria-selected="false" hidden onclick="setInvestmentPortfolioDrawerView_('m1')">Import M1 statement PDF</button>
                 <button type="button" id="inv_portfolio_schwab_import_btn" class="segment-btn" role="tab" aria-selected="false" hidden onclick="setInvestmentPortfolioDrawerView_('schwab')">Import Schwab statement PDF</button>
+                <button type="button" id="inv_portfolio_stash_import_btn" class="segment-btn" role="tab" aria-selected="false" hidden onclick="setInvestmentPortfolioDrawerView_('stash')">Import Stash statement PDF</button>
                 <button type="button" id="inv_portfolio_401k_import_btn" class="segment-btn" role="tab" aria-selected="false" hidden onclick="setInvestmentPortfolioDrawerView_('401k')">Retirement savings statement PDF</button>
                 <button type="button" id="inv_portfolio_import_btn" class="segment-btn" role="tab" aria-selected="false" hidden onclick="setInvestmentPortfolioDrawerView_('import')">Import CSV</button>
               </div>
@@ -935,6 +936,35 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                 <div id="inv_schwab_results"></div>
                 <div id="inv_schwab_apply_area"></div>
                 <div id="inv_schwab_status" class="status" aria-live="polite"></div>
+              </section>
+
+              <section id="inv_portfolio_stash_import_view" class="investment-portfolio-view" hidden>
+                <div id="inv_stash_account_hint" class="muted" style="margin:0 0 12px 0;"></div>
+                <label for="inv_stash_registration_type">Registration type (required)</label>
+                <select id="inv_stash_registration_type" onchange="onInvestmentPortfolioDrawerStashRegistrationChanged_()">
+                  <option value="">Select registration type…</option>
+                  <option value="TAXABLE">TAXABLE</option>
+                  <option value="TRADITIONAL_IRA">TRADITIONAL_IRA</option>
+                  <option value="ROTH_IRA">ROTH_IRA</option>
+                  <option value="401K">401K</option>
+                  <option value="HSA">HSA</option>
+                </select>
+                <label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:12px 0;">
+                  <input type="checkbox" id="inv_stash_explicit_match" style="width:auto;margin-top:3px;" onchange="updateInvestmentPortfolioDrawerStashControls_()">
+                  <span id="inv_stash_explicit_match_text">I confirm this document belongs to the selected CashCompass investment account.</span>
+                </label>
+                <label for="inv_stash_document_file">Stash brokerage statement PDF</label>
+                <input type="file" id="inv_stash_document_file" accept=".pdf,application/pdf" onchange="onInvestmentPortfolioDrawerStashFileChanged_()">
+                <div id="inv_stash_file_meta" class="muted" style="margin:-6px 0 12px 0;">No file selected.</div>
+                <label for="inv_stash_document_text">Extracted PDF text (read-only after upload)</label>
+                <textarea id="inv_stash_document_text" rows="4" readonly placeholder="Upload a Stash brokerage statement PDF…"></textarea>
+                <div class="investment-import-actions">
+                  <button type="button" id="inv_stash_preview_btn" class="small-btn primary" disabled onclick="previewInvestmentPortfolioDrawerStash_()">Preview Stash statement</button>
+                  <button type="button" class="small-btn" onclick="resetInvestmentPortfolioDrawerStashImport_(true)">Clear import</button>
+                </div>
+                <div id="inv_stash_results"></div>
+                <div id="inv_stash_apply_area"></div>
+                <div id="inv_stash_status" class="status" aria-live="polite"></div>
               </section>
 
               <section id="inv_portfolio_401k_import_view" class="investment-portfolio-view" hidden>

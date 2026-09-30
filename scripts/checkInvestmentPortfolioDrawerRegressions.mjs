@@ -22,6 +22,7 @@ const dashboardInvestments = read('Dashboard_Script_AssetsBankInvestments.html')
 const dashboardStyles = read('Dashboard_Styles.html');
 const drawerM1Source = read('Dashboard_Script_InvestmentPortfolioDrawerM1.html');
 const drawerSchwabSource = read('Dashboard_Script_InvestmentPortfolioDrawerSchwab.html');
+const drawerStashSource = read('Dashboard_Script_InvestmentPortfolioDrawerStash.html');
 const drawer401kSource = read('Dashboard_Script_InvestmentPortfolioDrawer401k.html');
 const webappSource = read('webapp.js');
 const drawerSource = read('investment_portfolio_drawer.js');
@@ -229,11 +230,20 @@ assert.equal(schwabFormats.length, 1);
 assert.equal(schwabFormats[0].source, 'SCHWAB_BROKERAGE_STATEMENT_PDF');
 assert.equal(schwabFormats[0].label, 'Schwab brokerage statement PDF');
 assert.equal(schwabFormats[0].productionReady, true);
+const stashFormats = context.investmentPortfolioDrawerSupportedImportFormats_('STASH', 'SINGLE_ACCOUNT');
+assert.equal(stashFormats.length, 1);
+assert.equal(stashFormats[0].source, 'STASH_BROKERAGE_STATEMENT_PDF');
+assert.equal(stashFormats[0].label, 'Stash brokerage statement PDF');
+assert.equal(stashFormats[0].productionReady, true);
 
 // --- Provider metadata: explicit broker names only; ambiguous names stay unknown ---
 assert.equal(
   context.investmentPortfolioDrawerInferProvider_('Charles Schwab - Personal', null),
   'SCHWAB'
+);
+assert.equal(
+  context.investmentPortfolioDrawerInferProvider_('Stash Brokerage', null),
+  'STASH'
 );
 assert.equal(
   context.investmentPortfolioDrawerInferProvider_('Etrade Cisco - Future', null),
@@ -264,6 +274,8 @@ assert.match(dashboardBody, /Import M1 statement PDF/);
 assert.match(dashboardBody, /inv_portfolio_m1_import_view/);
 assert.match(dashboardBody, /Import Schwab statement PDF/);
 assert.match(dashboardBody, /inv_portfolio_schwab_import_view/);
+assert.match(dashboardBody, /Import Stash statement PDF/);
+assert.match(dashboardBody, /inv_portfolio_stash_import_view/);
 assert.match(dashboardBody, /CashCompass investment account/);
 assert.match(dashboardBody, /view portfolio holdings and import statements when available/);
 assert.doesNotMatch(dashboardBody, /update recurring plans/);
@@ -275,6 +287,7 @@ assert.match(drawerM1Source, /boundedHoldingsPreviewApplyFromDashboard/);
 assert.match(drawerM1Source, /boundedHoldingsPreviewApplyGroupedFromDashboard/);
 assert.match(drawerSource, /m1ImportAvailable/);
 assert.match(drawerSource, /schwabImportAvailable/);
+assert.match(drawerSource, /stashImportAvailable/);
 assert.match(drawerSource, /parentAggregateExcluded/);
 assert.match(drawerSource, /fidelity401kImportAvailable/);
 assert.match(drawerSource, /FIDELITY_401K_BALANCE/);
@@ -304,6 +317,15 @@ assert.match(drawerSchwabSource, /preview\.unsupportedRows/);
 assert.match(drawerSchwabSource, /preview\.readiness/);
 assert.match(drawerSchwabSource, /preview\.warnings/);
 assert.match(drawerSchwabSource, /preview\.reconciliation/);
+assert.match(drawerStashSource, /boundedHoldingsPreviewRunFromDashboard/);
+assert.match(drawerStashSource, /boundedHoldingsPreviewBuildApplyDiffFromDashboard/);
+assert.match(drawerStashSource, /boundedHoldingsPreviewApplyFromDashboard/);
+assert.match(drawerStashSource, /payload\.explicitApplyConfirm = true/);
+assert.doesNotMatch(drawerStashSource, /boundedHoldingsPreviewRunGroupedChildFromDashboard/);
+assert.doesNotMatch(drawerStashSource, /Monthly investment value/);
+assert.doesNotMatch(drawerStashSource, /\bsetValues\b|\bappendRow\b/);
+assert.match(drawerStashSource, /lastSinglePreview = res;/);
+assert.match(dashboardInvestments, /stashImportAvailable/);
 
 const schwabDrawerDom = (function() {
   const nodes = {};

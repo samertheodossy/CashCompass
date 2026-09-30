@@ -142,7 +142,11 @@ function investmentPortfolioDrawerSupportedImportFormats_(provider, previewMode)
     }];
   }
   if (provider === 'STASH') {
-    return [{ source: 'MANUAL_STRUCTURED', label: 'Stash import (future)', productionReady: false }];
+    return [{
+      source: 'STASH_BROKERAGE_STATEMENT_PDF',
+      label: 'Stash brokerage statement PDF',
+      productionReady: true
+    }];
   }
   if (previewMode === 'GROUPED_PROVIDER') {
     return [{ source: 'M1_STATEMENT_PDF', label: 'M1 monthly statement PDF', productionReady: true }];
@@ -530,6 +534,7 @@ function investmentPortfolioDrawerBuildPayload_(ss, account) {
     robinhoodCsvImportAvailable: investmentPortfolioDrawerRobinhoodImportEligible_(account),
     m1ImportAvailable: provider === 'M1' || account.previewMode === 'GROUPED_PROVIDER',
     schwabImportAvailable: provider === 'SCHWAB',
+    stashImportAvailable: provider === 'STASH',
     supportedImportFormats: investmentPortfolioDrawerSupportedImportFormats_(
       provider, account.previewMode),
     viewKind: 'EMPTY',
@@ -599,6 +604,7 @@ function investmentPortfolioDrawerBuildPayload_(ss, account) {
     payload.fidelity401kImportAvailable = true;
     payload.m1ImportAvailable = false;
     payload.schwabImportAvailable = false;
+    payload.stashImportAvailable = false;
     payload.robinhoodCsvImportAvailable = false;
     payload.portfolioStatus = {
       holdingsImported: false,

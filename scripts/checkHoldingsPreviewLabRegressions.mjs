@@ -66,6 +66,9 @@ function buildContext(overrides = {}) {
   vm.runInContext(read('investment_schwab_brokerage_statement_pdf.js'), context, {
     filename: 'investment_schwab_brokerage_statement_pdf.js'
   });
+  vm.runInContext(read('investment_stash_brokerage_statement_pdf.js'), context, {
+    filename: 'investment_stash_brokerage_statement_pdf.js'
+  });
   vm.runInContext(read('investment_fidelity_401k_statement_pdf.js'), context, {
     filename: 'investment_fidelity_401k_statement_pdf.js'
   });
@@ -277,7 +280,7 @@ assert.match(webappSource, /HoldingsPreviewLabUI/);
 assert.match(adminDiagSource, /holdings-preview-lab/);
 assert.match(htmlSource, /adminUiHoldingsPreviewLabPreview/);
 assert.match(htmlSource, /adminUiHoldingsPreviewLabAggregateSession/);
-assert.match(htmlSource, /ETRADE_CLIENT_STATEMENT_PDF/);
+assert.match(htmlSource, /STASH_BROKERAGE_STATEMENT_PDF/);
 assert.match(htmlSource, /explicitAccountMatch/);
 assert.match(htmlSource, /Add to session preview/);
 assert.match(htmlSource, /scopeLabel/);

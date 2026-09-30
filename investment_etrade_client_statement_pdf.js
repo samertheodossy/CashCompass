@@ -162,6 +162,14 @@ function investmentEtradeClientStatementClassifyDocumentType_(text) {
     };
   }
   var compact = investmentEtradeClientStatementCompactText_(text);
+  if (typeof investmentStashLooksLikeBrokerageStatementPdf_ === 'function' &&
+      investmentStashLooksLikeBrokerageStatementPdf_(text)) {
+    return {
+      documentType: 'UNKNOWN',
+      confidence: 'LOW',
+      reason: 'Document appears to be a Stash brokerage statement.'
+    };
+  }
   if (/Charles\s+Schwab|Schwab\s+One|Schwab\s+Brokerage/i.test(compact) &&
       /Positions\s*[-–]\s*Equities/i.test(compact)) {
     return {
@@ -199,7 +207,9 @@ function investmentEtradeClientStatementClassifyDocumentType_(text) {
     };
   }
   if (text.length > 5000 &&
-      !/M1:|Finance Super App|Total account value \/ 1-month change/i.test(compact)) {
+      !/M1:|Finance Super App|Total account value \/ 1-month change/i.test(compact) &&
+      !(typeof investmentStashLooksLikeBrokerageStatementPdf_ === 'function' &&
+        investmentStashLooksLikeBrokerageStatementPdf_(text))) {
     var quality = investmentEtradeClientStatementAssessTextQuality_(text);
     if (!quality.usable && quality.quality !== 'WRONG_DOCUMENT_TYPE') {
       return {

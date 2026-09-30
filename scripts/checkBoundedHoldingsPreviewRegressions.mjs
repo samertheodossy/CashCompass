@@ -246,6 +246,9 @@ function buildContext(overrides = {}) {
   vm.runInContext(read('investment_schwab_brokerage_statement_pdf.js'), context, {
     filename: 'investment_schwab_brokerage_statement_pdf.js'
   });
+  vm.runInContext(read('investment_stash_brokerage_statement_pdf.js'), context, {
+    filename: 'investment_stash_brokerage_statement_pdf.js'
+  });
   vm.runInContext(read('investment_fidelity_401k_statement_pdf.js'), context, {
     filename: 'investment_fidelity_401k_statement_pdf.js'
   });
@@ -606,6 +609,23 @@ assert.equal(
 assert.equal(
   ctx.boundedHoldingsPreviewAllowedSourcesForAccount_(schwabAccountMeta).join(','),
   'SCHWAB_BROKERAGE_STATEMENT_PDF'
+);
+const stashAccountMeta = {
+  accountName: 'Stash Brokerage',
+  statementProvider: 'STASH',
+  previewMode: 'SINGLE_ACCOUNT'
+};
+assert.equal(
+  ctx.boundedHoldingsPreviewInferIdentityProvider_('Stash Brokerage', null),
+  'STASH'
+);
+assert.equal(
+  ctx.boundedHoldingsPreviewDefaultSourceForAccount_(stashAccountMeta),
+  'STASH_BROKERAGE_STATEMENT_PDF'
+);
+assert.equal(
+  ctx.boundedHoldingsPreviewAllowedSourcesForAccount_(stashAccountMeta).join(','),
+  'STASH_BROKERAGE_STATEMENT_PDF'
 );
 assert.equal(
   ctx.boundedHoldingsPreviewCoerceSourceForAccount_(schwabAccountMeta, 'M1_STATEMENT_PDF'),

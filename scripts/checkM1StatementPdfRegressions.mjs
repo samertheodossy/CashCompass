@@ -55,6 +55,9 @@ vm.runInContext(read('investment_m1_statement_pdf.js'), context, {
 vm.runInContext(read('investment_schwab_brokerage_statement_pdf.js'), context, {
   filename: 'investment_schwab_brokerage_statement_pdf.js'
 });
+vm.runInContext(read('investment_stash_brokerage_statement_pdf.js'), context, {
+  filename: 'investment_stash_brokerage_statement_pdf.js'
+});
 vm.runInContext(read('investment_fidelity_401k_statement_pdf.js'), context, {
   filename: 'investment_fidelity_401k_statement_pdf.js'
 });
@@ -80,7 +83,7 @@ const accountMeta = {
 assert.deepEqual(context.listInvestmentAdapterSources_().sort(), [
   'ETRADE_CLIENT_STATEMENT_PDF', 'ETRADE_CSV', 'ETRADE_PACKAGE', 'ETRADE_POSITIONS_PDF',
   'FIDELITY_401K_STATEMENT_PDF', 'M1_STATEMENT_PDF', 'ROBINHOOD_CSV',
-  'SCHWAB_BROKERAGE_STATEMENT_PDF'
+  'SCHWAB_BROKERAGE_STATEMENT_PDF', 'STASH_BROKERAGE_STATEMENT_PDF'
 ]);
 assert.throws(() => context.getInvestmentAdapter_('M1_CSV'), /not implemented/);
 assert.equal(context.getInvestmentAdapter_('M1_STATEMENT_PDF').source, 'M1_STATEMENT_PDF');

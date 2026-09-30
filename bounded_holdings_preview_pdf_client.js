@@ -121,6 +121,21 @@ function investmentEtradeClientStatementClassifyDocumentType_(text) {
     };
   }
   var compact = investmentEtradeClientStatementCompactText_(text);
+  if (typeof boundedHoldingsPreviewLooksLikeStashBrokerageStatementPdf_ === 'function' &&
+      boundedHoldingsPreviewLooksLikeStashBrokerageStatementPdf_(text)) {
+    return {
+      documentType: 'UNKNOWN',
+      confidence: 'LOW',
+      reason: 'Document appears to be a Stash brokerage statement.'
+    };
+  }
+  if (/STASH\s+CAPITAL|\bStash\b/i.test(compact) && /TOTAL\s+PRICED\s+PORTFOLIO/i.test(compact)) {
+    return {
+      documentType: 'UNKNOWN',
+      confidence: 'LOW',
+      reason: 'Document appears to be a Stash brokerage statement.'
+    };
+  }
   if (/M1:|Finance Super App|Total account value \/ 1-month change/i.test(compact) ||
       (/Statement period:/i.test(compact) &&
         (/Account breakdown/i.test(compact) ||
@@ -150,7 +165,8 @@ function investmentEtradeClientStatementClassifyDocumentType_(text) {
     };
   }
   if (text.length > 5000 &&
-      !/M1:|Finance Super App|Total account value \/ 1-month change/i.test(compact)) {
+      !/M1:|Finance Super App|Total account value \/ 1-month change/i.test(compact) &&
+      !(/STASH\s+CAPITAL|\bStash\b/i.test(compact) && /TOTAL\s+PRICED\s+PORTFOLIO/i.test(compact))) {
     var quality = investmentEtradeClientStatementAssessTextQuality_(text);
     if (!quality.usable && quality.quality !== 'WRONG_DOCUMENT_TYPE') {
       return {
@@ -182,8 +198,21 @@ function boundedHoldingsPreviewLooksLikeSchwabBrokerageStatementPdf_(text) {
     /Positions\s*[-–]\s*Equities/i.test(compact);
 }
 
+function boundedHoldingsPreviewLooksLikeStashBrokerageStatementPdf_(text) {
+  var compact = boundedHoldingsPreviewCompactExtractText_(text);
+  var branding = /STASH\s+CAPITAL|\bStash\b/i.test(compact);
+  var pricedPortfolio = /TOTAL\s+PRICED\s+PORTFOLIO/i.test(compact);
+  var equities = /Total\s+Equities/i.test(compact) ||
+    (/SYMBOL\s*\/?\s*CUSIP/i.test(compact) &&
+      /QUANTITY/i.test(compact) &&
+      /PRICE/i.test(compact) &&
+      /MARKET\s+VALUE/i.test(compact));
+  return branding && pricedPortfolio && equities;
+}
+
 function boundedHoldingsPreviewLooksLikeM1StatementPdf_(text) {
   if (boundedHoldingsPreviewLooksLikeSchwabBrokerageStatementPdf_(text)) return false;
+  if (boundedHoldingsPreviewLooksLikeStashBrokerageStatementPdf_(text)) return false;
   var compact = boundedHoldingsPreviewCompactExtractText_(text);
   return /M1:|Finance Super App|Total account value \/ 1-month change/i.test(compact) ||
     (/Statement period:/i.test(compact) &&
@@ -194,10 +223,11 @@ function boundedHoldingsPreviewLooksLikeM1StatementPdf_(text) {
 function boundedHoldingsPreviewShouldUseM1PdfLoadPath_(options, text) {
   if (options && options.groupedMode === true) return true;
   var provider = String((options || {}).accountProvider || '').trim().toUpperCase();
-  if (provider === 'ETRADE' || provider === 'SCHWAB') return false;
+  if (provider === 'ETRADE' || provider === 'SCHWAB' || provider === 'STASH') return false;
   if (provider === 'M1') return true;
   var source = String((options || {}).source || '').trim().toUpperCase();
   if (source === 'SCHWAB_BROKERAGE_STATEMENT_PDF') return false;
+  if (source === 'STASH_BROKERAGE_STATEMENT_PDF') return false;
   if (source !== 'M1_STATEMENT_PDF') return false;
   return boundedHoldingsPreviewLooksLikeM1StatementPdf_(text);
 }
@@ -207,7 +237,9 @@ function boundedHoldingsPreviewShouldUseStandardHoldingsPdfLoadPath_(options) {
   var source = String((options || {}).source || '').trim().toUpperCase();
   if (source === 'FIDELITY_401K_STATEMENT_PDF') return true;
   if (source === 'SCHWAB_BROKERAGE_STATEMENT_PDF') return true;
+  if (source === 'STASH_BROKERAGE_STATEMENT_PDF') return true;
   if (provider === 'SCHWAB') return true;
+  if (provider === 'STASH') return true;
   return false;
 }
 
@@ -704,6 +736,12 @@ function boundedHoldingsPreviewLoadDocumentTextFromFile_(file, pdfjsLib, options
                 source: 'SCHWAB_BROKERAGE_STATEMENT_PDF'
               });
             }
+            if (accountProvider === 'STASH' ||
+                normalizedSource === 'STASH_BROKERAGE_STATEMENT_PDF') {
+              standardOptions = Object.assign({}, options, {
+                source: 'STASH_BROKERAGE_STATEMENT_PDF'
+              });
+            }
             return boundedHoldingsPreviewBuildStandardPdfLoadResult_(
               finalized, standardOptions, documentFingerprint);
           }
@@ -717,12 +755,19 @@ function boundedHoldingsPreviewLoadDocumentTextFromFile_(file, pdfjsLib, options
             return boundedHoldingsPreviewBuildStandardPdfLoadResult_(
               finalized, options, documentFingerprint);
           }
+          if (boundedHoldingsPreviewLooksLikeStashBrokerageStatementPdf_(text)) {
+            return boundedHoldingsPreviewBuildStandardPdfLoadResult_(
+              finalized,
+              Object.assign({}, options, { source: 'STASH_BROKERAGE_STATEMENT_PDF' }),
+              documentFingerprint);
+          }
           var classification = boundedHoldingsPreviewClassifyEtradePdfText_(text);
           if (classification.documentType !== 'ETRADE_POSITIONS_PDF' &&
               typeof investmentEtradeClientStatementLooksLikePositionsPdf_ === 'function' &&
               !investmentEtradeClientStatementLooksLikePositionsPdf_(text) &&
               String(text || '').length > 3000 &&
-              !/M1:|Finance Super App|Total account value \/ 1-month change/i.test(text)) {
+              !/M1:|Finance Super App|Total account value \/ 1-month change/i.test(text) &&
+              !boundedHoldingsPreviewLooksLikeStashBrokerageStatementPdf_(text)) {
             classification = {
               documentType: 'ETRADE_CLIENT_STATEMENT_PDF',
               confidence: 'MEDIUM',

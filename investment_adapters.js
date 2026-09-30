@@ -138,6 +138,21 @@ var INVESTMENT_ADAPTER_REGISTRY_ = {
     detect: investmentSchwabDetectBrokerageStatementPdf_,
     preview: investmentAdapterPreviewSchwabBrokerageStatementPdf_,
     normalize: investmentAdapterNormalizeSchwabBrokerageStatementPdf_
+  },
+  STASH_BROKERAGE_STATEMENT_PDF: {
+    source: 'STASH_BROKERAGE_STATEMENT_PDF',
+    parserVersion: STASH_BROKERAGE_STATEMENT_PDF_PARSER_VERSION_,
+    capabilities: {
+      activities: false,
+      holdings: true,
+      taxLots: false,
+      accountSnapshot: true,
+      dividendHistory: false,
+      realizedGainLoss: false
+    },
+    detect: investmentStashDetectBrokerageStatementPdf_,
+    preview: investmentAdapterPreviewStashBrokerageStatementPdf_,
+    normalize: investmentAdapterNormalizeStashBrokerageStatementPdf_
   }
 };
 
@@ -297,6 +312,19 @@ function investmentAdapterPreviewSchwabBrokerageStatementPdf_(input, optionalSs)
 
 function investmentAdapterNormalizeSchwabBrokerageStatementPdf_(input, optionalSs) {
   var preview = investmentAdapterPreviewSchwabBrokerageStatementPdf_(input, optionalSs);
+  if (!preview.ok) return preview;
+  return preview.normalized;
+}
+
+function investmentAdapterPreviewStashBrokerageStatementPdf_(input, optionalSs) {
+  var payload = input || {};
+  payload.source = investmentPortfolioNormalizeSource_(payload.source) ||
+    'STASH_BROKERAGE_STATEMENT_PDF';
+  return investmentStashPreviewBrokerageStatementPdfUnified_(payload);
+}
+
+function investmentAdapterNormalizeStashBrokerageStatementPdf_(input, optionalSs) {
+  var preview = investmentAdapterPreviewStashBrokerageStatementPdf_(input, optionalSs);
   if (!preview.ok) return preview;
   return preview.normalized;
 }

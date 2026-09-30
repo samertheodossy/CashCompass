@@ -564,6 +564,9 @@ function buildContext(options = {}) {
   vm.runInContext(read('investment_schwab_brokerage_statement_pdf.js'), context, {
     filename: 'investment_schwab_brokerage_statement_pdf.js'
   });
+  vm.runInContext(read('investment_stash_brokerage_statement_pdf.js'), context, {
+    filename: 'investment_stash_brokerage_statement_pdf.js'
+  });
   vm.runInContext(read('investment_fidelity_401k_statement_pdf.js'), context, {
     filename: 'investment_fidelity_401k_statement_pdf.js'
   });
@@ -1613,5 +1616,27 @@ const mismatchApply = emptySchwabCtx.boundedHoldingsPreviewApplyFromDashboard({
   explicitApplyConfirm: true
 });
 assert.equal(mismatchApply.ok, false);
+
+assert.equal(
+  emptySchwabCtx.boundedHoldingsPreviewApplyIsMonthlyValueSource_('STASH_BROKERAGE_STATEMENT_PDF'),
+  false
+);
+assert.equal(
+  emptySchwabCtx.boundedHoldingsPreviewApplyIsMonthlyValueSource_('SCHWAB_BROKERAGE_STATEMENT_PDF'),
+  true
+);
+const stashMonthlySkip = emptySchwabCtx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+  {
+    source: 'STASH_BROKERAGE_STATEMENT_PDF',
+    explicitAccountMatch: true,
+    accountName: 'Stash Brokerage'
+  },
+  'SINGLE_ACCOUNT',
+  { accountName: 'Stash Brokerage', investmentId: 'INV-STASH-1' },
+  { asOf: '2026-08-31', reconciliation: { endingTotalValue: 7782.13 } }
+);
+assert.equal(stashMonthlySkip.action, 'SKIP');
+assert.equal(stashMonthlySkip.reason, 'UNSUPPORTED_SOURCE');
+assert.equal(stashMonthlySkip.willWrite, false);
 
 console.log('Bounded holdings preview Apply regressions passed.');

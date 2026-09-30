@@ -2,7 +2,7 @@
  * central_holdings_preview_lab.js — Admin-only Portfolio Intelligence Holdings Preview Lab (Central).
  *
  * Preview-only unified holdings for ETRADE_POSITIONS_PDF, ETRADE_CLIENT_STATEMENT_PDF,
- * M1_STATEMENT_PDF, and SCHWAB_BROKERAGE_STATEMENT_PDF.
+ * M1_STATEMENT_PDF, SCHWAB_BROKERAGE_STATEMENT_PDF, and STASH_BROKERAGE_STATEMENT_PDF.
  * No workbook writes, persistence, or production import paths.
  */
 
@@ -12,7 +12,8 @@ var HOLDINGS_PREVIEW_LAB_SUPPORTED_SOURCES_ = {
   ETRADE_POSITIONS_PDF: true,
   ETRADE_CLIENT_STATEMENT_PDF: true,
   M1_STATEMENT_PDF: true,
-  SCHWAB_BROKERAGE_STATEMENT_PDF: true
+  SCHWAB_BROKERAGE_STATEMENT_PDF: true,
+  STASH_BROKERAGE_STATEMENT_PDF: true
 };
 
 function holdingsPreviewLabSafe_(fn) {
@@ -200,6 +201,8 @@ function holdingsPreviewLabBuildPreview_(payload) {
     preview = investmentAdapterPreviewEtradeClientStatementPdf_(input);
   } else if (sourceResult.source === 'SCHWAB_BROKERAGE_STATEMENT_PDF') {
     preview = investmentAdapterPreviewSchwabBrokerageStatementPdf_(input);
+  } else if (sourceResult.source === 'STASH_BROKERAGE_STATEMENT_PDF') {
+    preview = investmentAdapterPreviewStashBrokerageStatementPdf_(input);
   } else {
     if (typeof investmentEtradeClientStatementClassifyDocumentType_ === 'function') {
       var m1DocClass = investmentEtradeClientStatementClassifyDocumentType_(rawText);
@@ -273,7 +276,8 @@ function holdingsPreviewLabSanitizePreviewResponse_(preview, identity, source) {
       !readiness.trustedForHoldingsVisibility,
     source: source,
     provider: source === 'ETRADE_CLIENT_STATEMENT_PDF' ? 'ETRADE'
-      : (source === 'SCHWAB_BROKERAGE_STATEMENT_PDF' ? 'SCHWAB' : ''),
+      : (source === 'SCHWAB_BROKERAGE_STATEMENT_PDF' ? 'SCHWAB'
+        : (source === 'STASH_BROKERAGE_STATEMENT_PDF' ? 'STASH' : '')),
     parserVersion: preview.parserVersion || normalized.parserVersion || '',
     contractVersion: normalized.contractVersion || '',
     schemaVersion: normalized.schemaVersion || '',

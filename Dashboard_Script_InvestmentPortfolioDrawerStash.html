@@ -1,0 +1,447 @@
+/* Portfolio activity drawer — Stash brokerage statement PDF import (reuses bounded preview RPCs). */
+var __invDrawerStashSetupAccounts = null;
+var __invDrawerStashSetupPromise = null;
+var __invDrawerStashState = {
+  selectedAccount: null,
+  fileName: '',
+  extractionStatus: '',
+  extractedTextLength: 0,
+  extractionError: '',
+  trustedDocumentText: '',
+  documentFingerprint: '',
+  registrationTouched: false,
+  lastSinglePreview: null,
+  lastPreviewDocumentText: '',
+  applyReviewed: false,
+  applyDiff: null,
+  applyDiffDigest: '',
+  applyStatusMessage: ''
+};
+
+function invDrawerStashEscape_(value) {
+  return typeof escapeHtml === 'function' ? escapeHtml(value) : String(value || '');
+}
+
+function invDrawerStashCurrentText_() {
+  var el = document.getElementById('inv_stash_document_text');
+  return String(__invDrawerStashState.trustedDocumentText || (el && el.value) || '').trim();
+}
+
+function invDrawerStashHasDocumentReady_() {
+  return !!invDrawerStashCurrentText_();
+}
+
+function invDrawerStashRestoreTrustedDocumentText_() {
+  var textEl = document.getElementById('inv_stash_document_text');
+  var trusted = String(__invDrawerStashState.trustedDocumentText || '').trim();
+  if (textEl && trusted && !String(textEl.value || '').trim()) {
+    textEl.value = trusted;
+  }
+}
+
+function syncInvestmentPortfolioDrawerStashReadyState_() {
+  invDrawerStashRestoreTrustedDocumentText_();
+  updateInvestmentPortfolioDrawerStashControls_();
+}
+
+function ensureInvDrawerStashSetupAccounts_(onReady, onError) {
+  if (__invDrawerStashSetupAccounts) {
+    onReady(__invDrawerStashSetupAccounts);
+    return;
+  }
+  if (__invDrawerStashSetupPromise) {
+    __invDrawerStashSetupPromise.then(onReady).catch(onError);
+    return;
+  }
+  __invDrawerStashSetupPromise = new Promise(function(resolve, reject) {
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (!res || !res.ok) {
+          reject(new Error(res && res.error ? res.error : 'Could not load Stash import setup.'));
+          return;
+        }
+        __invDrawerStashSetupAccounts = res.accounts || [];
+        resolve(__invDrawerStashSetupAccounts);
+      })
+      .withFailureHandler(function(err) {
+        reject(new Error(err && err.message ? err.message : String(err)));
+      })
+      .getBoundedHoldingsPreviewSetupFromDashboard();
+  });
+  __invDrawerStashSetupPromise.then(onReady).catch(onError);
+}
+
+function resetInvestmentPortfolioDrawerStashImport_(keepAccount) {
+  __invDrawerStashState.fileName = '';
+  __invDrawerStashState.extractionStatus = '';
+  __invDrawerStashState.extractedTextLength = 0;
+  __invDrawerStashState.extractionError = '';
+  __invDrawerStashState.trustedDocumentText = '';
+  __invDrawerStashState.documentFingerprint = '';
+  __invDrawerStashState.lastSinglePreview = null;
+  __invDrawerStashState.lastPreviewDocumentText = '';
+  __invDrawerStashState.applyReviewed = false;
+  __invDrawerStashState.applyDiff = null;
+  __invDrawerStashState.applyDiffDigest = '';
+  __invDrawerStashState.applyStatusMessage = '';
+  if (!keepAccount) {
+    __invDrawerStashState.selectedAccount = null;
+    __invDrawerStashState.registrationTouched = false;
+  }
+  var fileEl = document.getElementById('inv_stash_document_file');
+  if (fileEl) fileEl.value = '';
+  var textEl = document.getElementById('inv_stash_document_text');
+  if (textEl) textEl.value = '';
+  var metaEl = document.getElementById('inv_stash_file_meta');
+  if (metaEl) metaEl.textContent = 'No file selected.';
+  var regEl = document.getElementById('inv_stash_registration_type');
+  if (regEl && !keepAccount) regEl.value = '';
+  var matchEl = document.getElementById('inv_stash_explicit_match');
+  if (matchEl) matchEl.checked = false;
+  ['inv_stash_results', 'inv_stash_apply_area'].forEach(function(id) {
+    var node = document.getElementById(id);
+    if (node) node.innerHTML = '';
+  });
+  updateInvestmentPortfolioDrawerStashControls_();
+}
+
+function initInvestmentPortfolioDrawerStashImport_(pickerValue, portfolioData) {
+  pickerValue = String(pickerValue || '').trim();
+  portfolioData = portfolioData || {};
+  resetInvestmentPortfolioDrawerStashImport_(false);
+  if (!pickerValue || !portfolioData.stashImportAvailable) return;
+  ensureInvDrawerStashSetupAccounts_(function(accounts) {
+    var match = (accounts || []).filter(function(row) {
+      return String(row.pickerValue || row.investmentId || '') === pickerValue;
+    })[0];
+    if (!match) {
+      setStatus('inv_stash_status', 'Stash import setup could not resolve this account.', true);
+      return;
+    }
+    __invDrawerStashState.selectedAccount = match;
+    var hintEl = document.getElementById('inv_stash_account_hint');
+    if (hintEl) {
+      hintEl.textContent = match.identityMessage ||
+        ('Import one Stash brokerage statement PDF for ' + match.accountName + '.');
+    }
+    var matchText = document.getElementById('inv_stash_explicit_match_text');
+    if (matchText) {
+      matchText.textContent = 'I confirm this document belongs to ' +
+        (match.accountName || 'the selected account') + '.';
+    }
+    if (match.suggestedRegistrationType && !__invDrawerStashState.registrationTouched) {
+      var regEl = document.getElementById('inv_stash_registration_type');
+      if (regEl) regEl.value = match.suggestedRegistrationType;
+    }
+    updateInvestmentPortfolioDrawerStashControls_();
+  }, function(err) {
+    setStatus('inv_stash_status', err.message || String(err), true);
+  });
+}
+
+function updateInvestmentPortfolioDrawerStashControls_() {
+  var previewBtn = document.getElementById('inv_stash_preview_btn');
+  var hasText = invDrawerStashHasDocumentReady_();
+  var reg = String(document.getElementById('inv_stash_registration_type') &&
+    document.getElementById('inv_stash_registration_type').value || '').trim();
+  var confirmed = !!(document.getElementById('inv_stash_explicit_match') &&
+    document.getElementById('inv_stash_explicit_match').checked);
+  var ready = !!__invDrawerStashState.selectedAccount && hasText && !!reg && confirmed;
+  if (previewBtn) previewBtn.disabled = !ready;
+}
+
+function onInvestmentPortfolioDrawerStashRegistrationChanged_() {
+  __invDrawerStashState.registrationTouched = true;
+  if (__invDrawerStashState.lastSinglePreview ||
+      __invDrawerStashState.applyDiff ||
+      __invDrawerStashState.applyReviewed ||
+      __invDrawerStashState.applyDiffDigest) {
+    var results = document.getElementById('inv_stash_results');
+    if (results) results.innerHTML = '';
+    clearInvestmentPortfolioDrawerStashApply_(false);
+  }
+  syncInvestmentPortfolioDrawerStashReadyState_();
+}
+
+function onInvestmentPortfolioDrawerStashFileChanged_() {
+  var fileEl = document.getElementById('inv_stash_document_file');
+  var file = fileEl && fileEl.files && fileEl.files[0];
+  var metaEl = document.getElementById('inv_stash_file_meta');
+  var textEl = document.getElementById('inv_stash_document_text');
+  __invDrawerStashState.extractionError = '';
+  if (!file) {
+    if (metaEl) metaEl.textContent = 'No file selected.';
+    if (textEl) textEl.value = '';
+    updateInvestmentPortfolioDrawerStashControls_();
+    return;
+  }
+  if (metaEl) metaEl.textContent = 'Reading ' + file.name + '…';
+  ensureInvDrawerPdfClientReady_(function() {
+    boundedHoldingsPreviewLoadDocumentTextFromFile_(file, pdfjsLib, {
+      source: 'STASH_BROKERAGE_STATEMENT_PDF',
+      groupedMode: false,
+      accountProvider: 'STASH'
+    }).then(function(result) {
+      result = result || {};
+      __invDrawerStashState.fileName = file.name;
+      __invDrawerStashState.extractionStatus = result.extractionStatus || '';
+      __invDrawerStashState.extractedTextLength = Number(result.extractedTextLength || 0);
+      __invDrawerStashState.trustedDocumentText = String(result.text || '');
+      __invDrawerStashState.documentFingerprint = String(result.documentFingerprint || '');
+      if (textEl) textEl.value = result.displayTextInEditor === false ? '' : String(result.text || '');
+      if (metaEl) {
+        metaEl.textContent = file.name + ' · ' +
+          (__invDrawerStashState.extractedTextLength || invDrawerStashCurrentText_().length) + ' chars';
+      }
+      clearInvestmentPortfolioDrawerStashApply_(true);
+      syncInvestmentPortfolioDrawerStashReadyState_();
+    }).catch(function(err) {
+      __invDrawerStashState.extractionError = err && err.message ? err.message : String(err);
+      if (metaEl) metaEl.textContent = __invDrawerStashState.extractionError;
+      if (textEl) textEl.value = '';
+      updateInvestmentPortfolioDrawerStashControls_();
+    });
+  }, function(err) {
+    if (metaEl) metaEl.textContent = err.message || String(err);
+  });
+}
+
+function buildInvDrawerStashPayload_(extra) {
+  var account = __invDrawerStashState.selectedAccount || {};
+  var payload = {
+    pickerValue: String(account.pickerValue || __investmentPortfolioSelectedId || '').trim(),
+    sysAssetsRow: account.sysAssetsRow,
+    accountName: account.accountName || '',
+    source: 'STASH_BROKERAGE_STATEMENT_PDF',
+    rawDocumentText: invDrawerStashCurrentText_(),
+    extractionMeta: null,
+    documentFingerprint: String(__invDrawerStashState.documentFingerprint || '').trim(),
+    registrationType: document.getElementById('inv_stash_registration_type').value,
+    explicitAccountMatch: document.getElementById('inv_stash_explicit_match').checked,
+    statementProvider: 'STASH',
+    previewMode: account.previewMode || 'SINGLE_ACCOUNT'
+  };
+  if (extra) Object.keys(extra).forEach(function(key) { payload[key] = extra[key]; });
+  return payload;
+}
+
+function clearInvestmentPortfolioDrawerStashApply_(keepPreview) {
+  __invDrawerStashState.applyReviewed = false;
+  __invDrawerStashState.applyDiff = null;
+  __invDrawerStashState.applyDiffDigest = '';
+  __invDrawerStashState.applyStatusMessage = '';
+  if (!keepPreview) {
+    __invDrawerStashState.lastSinglePreview = null;
+    __invDrawerStashState.lastPreviewDocumentText = '';
+  }
+  var applyArea = document.getElementById('inv_stash_apply_area');
+  if (applyArea) applyArea.innerHTML = '';
+}
+
+function invDrawerStashFormatMoney_(value) {
+  if (value === null || typeof value === 'undefined' || value === '') return '—';
+  var n = Number(value);
+  if (!isFinite(n)) return '—';
+  return (n < 0 ? '-$' : '$') + Math.abs(n).toFixed(2);
+}
+
+function invDrawerStashFormatAsOf_(value) {
+  var text = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+  return text;
+}
+
+function invDrawerStashEndingValue_(preview) {
+  preview = preview || {};
+  if (preview.reconciliation && preview.reconciliation.endingTotalValue != null &&
+      preview.reconciliation.endingTotalValue !== '') {
+    return preview.reconciliation.endingTotalValue;
+  }
+  return preview.totalAccountValue;
+}
+
+function renderInvDrawerStashSingleResults_(res) {
+  var host = document.getElementById('inv_stash_results');
+  if (!host) return;
+  if (!res || !res.ok) {
+    host.innerHTML = '<div class="error-box">' +
+      invDrawerStashEscape_(res && res.error ? res.error : 'Preview failed.') + '</div>';
+    return;
+  }
+  var preview = res;
+  __invDrawerStashState.lastSinglePreview = res;
+  __invDrawerStashState.lastPreviewDocumentText = invDrawerStashCurrentText_();
+  clearInvestmentPortfolioDrawerStashApply_(true);
+  var trusted = !!(preview.readiness && preview.readiness.trustedForHoldingsVisibility);
+  var asOf = invDrawerStashFormatAsOf_(preview.asOf);
+  var endingValue = invDrawerStashEndingValue_(preview);
+  var html = '<div class="card"><div class="pill ' + (trusted ? 'pill-ok' : 'pill-warn') + '">' +
+    (trusted ? 'Stash preview ready' : 'Stash preview needs review') + '</div> ' +
+    invDrawerStashEscape_(asOf ? ('As-of ' + asOf) : '') +
+    (endingValue != null && endingValue !== ''
+      ? invDrawerStashEscape_(' · Ending ' + invDrawerStashFormatMoney_(endingValue))
+      : '') +
+    '</div>';
+  if (preview.cashBalance != null && preview.cashBalance !== '') {
+    html += '<div class="card muted">FDIC insured deposits: ' +
+      invDrawerStashEscape_(invDrawerStashFormatMoney_(preview.cashBalance)) + '</div>';
+  }
+  var holdings = preview.holdingsRows || [];
+  if (holdings.length) {
+    html += '<div class="card"><div class="card-title">Priced holdings</div><ul>';
+    holdings.forEach(function(row) {
+      html += '<li>' + invDrawerStashEscape_(row.symbol || '') + ' · ' +
+        invDrawerStashEscape_(row.description || '') + ' · ' +
+        invDrawerStashEscape_(String(row.quantity != null ? row.quantity : '—')) +
+        ' @ ' + invDrawerStashEscape_(invDrawerStashFormatMoney_(row.price)) +
+        ' = ' + invDrawerStashEscape_(invDrawerStashFormatMoney_(row.marketValue)) + '</li>';
+    });
+    html += '</ul></div>';
+  }
+  var unsupported = preview.unsupportedRows || [];
+  if (unsupported.length) {
+    html += '<div class="card"><div class="card-title">Unsupported rows</div><ul>';
+    unsupported.forEach(function(row) {
+      html += '<li>' + invDrawerStashEscape_(row.symbol || row.ticker || 'Row') +
+        (row.description ? (' · ' + invDrawerStashEscape_(row.description)) : '') +
+        ' · ' + invDrawerStashEscape_(row.reason || 'UNSUPPORTED') + '</li>';
+    });
+    html += '</ul></div>';
+  }
+  (preview.warnings || []).forEach(function(warning) {
+    html += '<div class="card muted">' + invDrawerStashEscape_(warning) + '</div>';
+  });
+  if (!trusted) {
+    html += '<div class="error-box">Holdings preview is not trusted for Apply.</div>';
+  }
+  host.innerHTML = html;
+  renderInvestmentPortfolioDrawerStashApplySection_();
+}
+
+function previewInvestmentPortfolioDrawerStash_() {
+  var btn = document.getElementById('inv_stash_preview_btn');
+  if (btn) btn.disabled = true;
+  setStatusLoading('inv_stash_status', 'Parsing Stash statement in memory…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (btn) btn.disabled = false;
+      setStatus('inv_stash_status', '', false);
+      renderInvDrawerStashSingleResults_(res);
+      updateInvestmentPortfolioDrawerStashControls_();
+    })
+    .withFailureHandler(function(err) {
+      if (btn) btn.disabled = false;
+      setStatus('inv_stash_status', err.message || String(err), true);
+    })
+    .boundedHoldingsPreviewRunFromDashboard(buildInvDrawerStashPayload_());
+}
+
+function renderInvestmentPortfolioDrawerStashApplySection_() {
+  var applyArea = document.getElementById('inv_stash_apply_area');
+  if (!applyArea) return;
+  var preview = __invDrawerStashState.lastSinglePreview;
+  if (!preview) {
+    applyArea.innerHTML = '';
+    return;
+  }
+  var trusted = !!(preview.readiness && preview.readiness.trustedForHoldingsVisibility);
+  applyArea.innerHTML = '<div class="card"><h3>Apply approved holdings</h3>' +
+    '<p class="muted">Review the diff, then apply holdings to SYS - Investment Holdings Unified. ' +
+    'FDIC insured deposits are saved as cash. This import does not update the monthly investment value. ' +
+    'Transactions are never included.</p>' +
+    '<div class="investment-import-actions">' +
+    '<button type="button" class="small-btn" id="inv_stash_review_apply_btn">Review holdings changes</button>' +
+    '<button type="button" class="small-btn primary" id="inv_stash_confirm_apply_btn" disabled>Apply approved holdings</button>' +
+    '</div><div id="inv_stash_apply_message" class="muted">' +
+    (trusted ? '' : 'Apply is blocked until the statement reconciles.') +
+    '</div></div>';
+  var reviewBtn = document.getElementById('inv_stash_review_apply_btn');
+  var confirmBtn = document.getElementById('inv_stash_confirm_apply_btn');
+  if (reviewBtn) {
+    reviewBtn.disabled = !trusted;
+    reviewBtn.onclick = reviewInvestmentPortfolioDrawerStashApplyDiff_;
+  }
+  if (confirmBtn) {
+    confirmBtn.disabled = true;
+    confirmBtn.onclick = confirmInvestmentPortfolioDrawerStashApply_;
+  }
+}
+
+function invDrawerStashResolveApplyDiffBundle_(bundle) {
+  if (!bundle || bundle.ok === false) {
+    return {
+      ok: false,
+      error: String((bundle && bundle.error) || '').trim() || 'Could not build diff.',
+      applyDiff: null,
+      applyDiffDigest: '',
+      applyReviewed: false,
+      message: String((bundle && bundle.error) || '').trim() || 'Could not build diff.'
+    };
+  }
+  if (!bundle.diff) {
+    return {
+      ok: false,
+      error: 'Could not build diff.',
+      applyDiff: null,
+      applyDiffDigest: '',
+      applyReviewed: false,
+      message: 'Could not build diff.'
+    };
+  }
+  var digest = String(bundle.diffDigest || '').trim();
+  var diff = bundle.diff;
+  var message = 'Creates: ' + String((diff.summary && diff.summary.createCount) || 0) +
+    ' · Updates: ' + String((diff.summary && diff.summary.updateCount) || 0) +
+    (diff.blocked ? (' · Blocked: ' + (diff.blockReason || 'review required')) : '');
+  return {
+    ok: true,
+    error: '',
+    applyDiff: diff,
+    applyDiffDigest: digest,
+    applyReviewed: !!digest,
+    message: message
+  };
+}
+
+function reviewInvestmentPortfolioDrawerStashApplyDiff_() {
+  setStatusLoading('inv_stash_status', 'Building holdings diff…');
+  google.script.run
+    .withSuccessHandler(function(bundle) {
+      setStatus('inv_stash_status', '', false);
+      var resolved = invDrawerStashResolveApplyDiffBundle_(bundle);
+      __invDrawerStashState.applyDiff = resolved.applyDiff;
+      __invDrawerStashState.applyDiffDigest = resolved.applyDiffDigest;
+      __invDrawerStashState.applyReviewed = resolved.applyReviewed;
+      var msgEl = document.getElementById('inv_stash_apply_message');
+      var confirmBtn = document.getElementById('inv_stash_confirm_apply_btn');
+      if (msgEl) msgEl.textContent = resolved.message;
+      if (confirmBtn) {
+        confirmBtn.disabled = !(resolved.applyReviewed && resolved.applyDiff &&
+          !resolved.applyDiff.blocked && !resolved.applyDiff.duplicateNoop);
+      }
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_stash_status', err.message || String(err), true);
+    })
+    .boundedHoldingsPreviewBuildApplyDiffFromDashboard(buildInvDrawerStashPayload_());
+}
+
+function confirmInvestmentPortfolioDrawerStashApply_() {
+  if (!__invDrawerStashState.applyReviewed || !__invDrawerStashState.applyDiffDigest) return;
+  setStatusLoading('inv_stash_status', 'Applying approved holdings…');
+  var payload = buildInvDrawerStashPayload_();
+  payload.diffDigest = __invDrawerStashState.applyDiffDigest;
+  payload.explicitApplyConfirm = true;
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('inv_stash_status', res && res.message ? res.message : 'Apply completed.', false);
+      clearInvestmentPortfolioDrawerStashApply_(true);
+      var picker = __investmentPortfolioSelectedId;
+      if (picker) applyInvestmentPortfolioAccountChange_(
+        document.getElementById('inv_activity_account'), picker);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_stash_status', err.message || String(err), true);
+    })
+    .boundedHoldingsPreviewApplyFromDashboard(payload);
+}

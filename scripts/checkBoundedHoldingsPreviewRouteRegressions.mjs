@@ -95,6 +95,7 @@ assert.match(investmentsSource, /boundedHoldingsPreviewAvailable/);
 assert.match(dashboardInvestments, /populateInvestmentPortfolioDrawerAccounts_/);
 assert.match(dashboardInvestments, /populateInvestmentActivityImportAccounts_/);
 assert.match(dashboardInvestments, /m1ImportAvailable/);
+assert.match(dashboardInvestments, /stashImportAvailable/);
 assert.match(dashboardInvestments, /openInvestmentPortfolioDrawer_/);
 
 console.log('Bounded holdings preview route/navigation regressions passed.');

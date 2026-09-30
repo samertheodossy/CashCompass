@@ -321,6 +321,7 @@ assert.equal(
 );
 assert.equal(context.boundedHoldingsPreviewLooksLikeM1StatementPdf_(schwabFixture), false);
 assert.equal(context.boundedHoldingsPreviewLooksLikeSchwabBrokerageStatementPdf_(schwabFixture), true);
+assert.equal(context.boundedHoldingsPreviewLooksLikeStashBrokerageStatementPdf_(schwabFixture), false);
 assert.equal(
   context.boundedHoldingsPreviewShouldUseM1PdfLoadPath_(
     { source: 'SCHWAB_BROKERAGE_STATEMENT_PDF', groupedMode: false, accountProvider: 'SCHWAB' },
@@ -340,6 +341,14 @@ assert.equal(
     source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
     groupedMode: false,
     accountProvider: 'SCHWAB'
+  }),
+  true
+);
+assert.equal(
+  context.boundedHoldingsPreviewShouldUseStandardHoldingsPdfLoadPath_({
+    source: 'STASH_BROKERAGE_STATEMENT_PDF',
+    groupedMode: false,
+    accountProvider: 'STASH'
   }),
   true
 );
