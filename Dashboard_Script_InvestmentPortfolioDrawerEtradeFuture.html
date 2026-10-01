@@ -1,0 +1,511 @@
+/* Portfolio activity drawer — E*TRADE Cisco statement profile (RSU/ESPP + Future). */
+var __invDrawerEtradeFutureState = {
+  fileName: '',
+  extractionStatus: '',
+  extractedTextLength: 0,
+  extractionError: '',
+  lastPreview: null,
+  lastBalanceComparison: null,
+  lastPreviewDocumentText: '',
+  applyReviewed: false,
+  applyDiff: null,
+  applyDiffDigest: '',
+  monthlyInvestmentValueDecision: '',
+  monthlyInvestmentValueDecisions: {}
+};
+
+function invDrawerEtradeFutureEscape_(value) {
+  return typeof escapeHtml === 'function' ? escapeHtml(value) : String(value || '');
+}
+
+function invDrawerEtradeFutureCurrentText_() {
+  var el = document.getElementById('inv_etrade_future_document_text');
+  return String(el && el.value || '').trim();
+}
+
+function invDrawerEtradeFutureAccountKey_(accountName) {
+  return String(accountName || '').trim().replace(/[^A-Za-z0-9]+/g, '_');
+}
+
+function resetInvestmentPortfolioDrawerEtradeFutureImport_(keepPreview) {
+  __invDrawerEtradeFutureState.fileName = '';
+  __invDrawerEtradeFutureState.extractionStatus = '';
+  __invDrawerEtradeFutureState.extractedTextLength = 0;
+  __invDrawerEtradeFutureState.extractionError = '';
+  __invDrawerEtradeFutureState.lastPreviewDocumentText = '';
+  __invDrawerEtradeFutureState.applyReviewed = false;
+  __invDrawerEtradeFutureState.applyDiff = null;
+  __invDrawerEtradeFutureState.applyDiffDigest = '';
+  __invDrawerEtradeFutureState.monthlyInvestmentValueDecision = '';
+  __invDrawerEtradeFutureState.monthlyInvestmentValueDecisions = {};
+  if (!keepPreview) {
+    __invDrawerEtradeFutureState.lastPreview = null;
+    __invDrawerEtradeFutureState.lastBalanceComparison = null;
+  }
+  var fileEl = document.getElementById('inv_etrade_future_document_file');
+  if (fileEl) fileEl.value = '';
+  var textEl = document.getElementById('inv_etrade_future_document_text');
+  if (textEl) textEl.value = '';
+  var metaEl = document.getElementById('inv_etrade_future_file_meta');
+  if (metaEl) metaEl.textContent = 'No file selected.';
+  var matchEl = document.getElementById('inv_etrade_future_explicit_match');
+  if (matchEl) matchEl.checked = false;
+  var resultsEl = document.getElementById('inv_etrade_future_results');
+  if (resultsEl) resultsEl.innerHTML = '';
+  var applyArea = document.getElementById('inv_etrade_future_apply_area');
+  if (applyArea) applyArea.innerHTML = '';
+  updateInvestmentPortfolioDrawerEtradeFutureControls_();
+}
+
+function initInvestmentPortfolioDrawerEtradeFutureImport_(pickerValue, portfolioData) {
+  portfolioData = portfolioData || {};
+  if (!portfolioData.etradeCiscoStatementImportAvailable) return;
+  var hintEl = document.getElementById('inv_etrade_future_account_hint');
+  if (hintEl) {
+    hintEl.textContent = 'Import one E*TRADE/Morgan Stanley statement PDF for ' +
+      (portfolioData.profileLabel || 'E*TRADE Cisco Statement — RSU/ESPP + Future') +
+      '. Preview both monthly values, then review and apply each account independently.';
+  }
+  var matchText = document.getElementById('inv_etrade_future_explicit_match_text');
+  if (matchText) {
+    matchText.textContent = 'I confirm this E*TRADE/Morgan Stanley statement belongs to Etrade Cisco - RSU/ESPP and Etrade Cisco - Future.';
+  }
+  updateInvestmentPortfolioDrawerEtradeFutureControls_();
+}
+
+function updateInvestmentPortfolioDrawerEtradeFutureControls_() {
+  var previewBtn = document.getElementById('inv_etrade_future_preview_btn');
+  var hasText = !!invDrawerEtradeFutureCurrentText_();
+  var confirmed = !!(document.getElementById('inv_etrade_future_explicit_match') &&
+    document.getElementById('inv_etrade_future_explicit_match').checked);
+  var ready = !!(__investmentPortfolioData &&
+    __investmentPortfolioData.etradeCiscoStatementImportAvailable) && hasText && confirmed;
+  if (previewBtn) previewBtn.disabled = !ready;
+}
+
+function invDrawerEtradeFutureFailExtraction_(err, metaEl, textEl) {
+  var message = err && err.message ? String(err.message) : String(err || '');
+  if (!String(message || '').trim()) message = 'PDF extraction failed.';
+  __invDrawerEtradeFutureState.extractionError = message;
+  if (metaEl) metaEl.textContent = message;
+  if (textEl) textEl.value = '';
+  updateInvestmentPortfolioDrawerEtradeFutureControls_();
+}
+
+function onInvestmentPortfolioDrawerEtradeFutureFileChanged_() {
+  var fileEl = document.getElementById('inv_etrade_future_document_file');
+  var file = fileEl && fileEl.files && fileEl.files[0];
+  var metaEl = document.getElementById('inv_etrade_future_file_meta');
+  var textEl = document.getElementById('inv_etrade_future_document_text');
+  __invDrawerEtradeFutureState.extractionError = '';
+  if (!file) {
+    if (metaEl) metaEl.textContent = 'No file selected.';
+    updateInvestmentPortfolioDrawerEtradeFutureControls_();
+    return;
+  }
+  if (metaEl) metaEl.textContent = 'Reading ' + file.name + '…';
+  if (typeof ensureInvDrawerPdfClientReady_ !== 'function') {
+    invDrawerEtradeFutureFailExtraction_(
+      new Error('PDF import helpers are unavailable in this dashboard build.'),
+      metaEl,
+      textEl
+    );
+    return;
+  }
+  ensureInvDrawerPdfClientReady_(function() {
+    boundedHoldingsPreviewLoadDocumentTextFromFile_(file, pdfjsLib, {
+      source: 'ETRADE_CLIENT_STATEMENT_PDF',
+      accountProvider: 'ETRADE'
+    }).then(function(result) {
+      result = result || {};
+      var extracted = String(result.previewText || result.text || '').trim();
+      if (!extracted) {
+        invDrawerEtradeFutureFailExtraction_(
+          new Error(
+            result.ocrRequired
+              ? 'This PDF does not contain a usable text layer.'
+              : 'PDF extraction failed. No text was returned from the selected file.'
+          ),
+          metaEl,
+          textEl
+        );
+        return;
+      }
+      __invDrawerEtradeFutureState.fileName = file.name;
+      __invDrawerEtradeFutureState.extractionStatus = result.extractionStatus ||
+        'extracted locally from PDF';
+      __invDrawerEtradeFutureState.extractedTextLength = Number(
+        result.rawExtractedTextLength || result.extractedTextLength || extracted.length || 0);
+      if (textEl) textEl.value = extracted;
+      if (metaEl) {
+        metaEl.textContent = file.name + ' · ' +
+          (__invDrawerEtradeFutureState.extractedTextLength ||
+            invDrawerEtradeFutureCurrentText_().length) + ' chars';
+      }
+      __invDrawerEtradeFutureState.lastPreview = null;
+      __invDrawerEtradeFutureState.lastBalanceComparison = null;
+      clearInvestmentPortfolioDrawerEtradeFutureApply_(true);
+      updateInvestmentPortfolioDrawerEtradeFutureControls_();
+    }).catch(function(err) {
+      invDrawerEtradeFutureFailExtraction_(err, metaEl, textEl);
+    });
+  }, function(err) {
+    invDrawerEtradeFutureFailExtraction_(err, metaEl, textEl);
+  });
+}
+
+function buildInvDrawerEtradeFuturePayload_(extra) {
+  var account = __investmentPortfolioData || {};
+  var payload = {
+    pickerValue: String(__investmentPortfolioSelectedId || account.pickerValue ||
+      '__profile__:ETRADE_CISCO_STATEMENT').trim(),
+    accountName: '',
+    rawDocumentText: invDrawerEtradeFutureCurrentText_(),
+    explicitAccountMatch: !!(document.getElementById('inv_etrade_future_explicit_match') &&
+      document.getElementById('inv_etrade_future_explicit_match').checked),
+    source: 'ETRADE_CLIENT_STATEMENT_PDF',
+    statementProvider: 'ETRADE',
+    registrationType: 'TAXABLE',
+    monthlyInvestmentValueDecisions: Object.assign({},
+      __invDrawerEtradeFutureState.monthlyInvestmentValueDecisions)
+  };
+  if (extra) Object.keys(extra).forEach(function(key) { payload[key] = extra[key]; });
+  return payload;
+}
+
+function clearInvestmentPortfolioDrawerEtradeFutureApply_(keepPreview) {
+  __invDrawerEtradeFutureState.applyReviewed = false;
+  __invDrawerEtradeFutureState.applyDiff = null;
+  __invDrawerEtradeFutureState.applyDiffDigest = '';
+  __invDrawerEtradeFutureState.monthlyInvestmentValueDecision = '';
+  __invDrawerEtradeFutureState.monthlyInvestmentValueDecisions = {};
+  if (!keepPreview) {
+    __invDrawerEtradeFutureState.lastPreview = null;
+    __invDrawerEtradeFutureState.lastBalanceComparison = null;
+    __invDrawerEtradeFutureState.lastPreviewDocumentText = '';
+  }
+  var applyArea = document.getElementById('inv_etrade_future_apply_area');
+  if (applyArea) applyArea.innerHTML = '';
+}
+
+function invDrawerEtradeFutureFormatMoney_(value) {
+  if (value === null || typeof value === 'undefined' || value === '') return '—';
+  var n = Number(value);
+  if (!isFinite(n)) return '—';
+  var abs = Math.abs(n).toFixed(2);
+  var parts = abs.split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return (n < 0 ? '-$' : '$') + parts.join('.');
+}
+
+function invDrawerEtradeFutureMonthlyValues_(diff) {
+  diff = diff || {};
+  if (Array.isArray(diff.monthlyInvestmentValues) && diff.monthlyInvestmentValues.length) {
+    return diff.monthlyInvestmentValues;
+  }
+  if (diff.monthlyInvestmentValue && diff.monthlyInvestmentValue.accountName) {
+    return [diff.monthlyInvestmentValue];
+  }
+  return [];
+}
+
+function invDrawerEtradeFutureRenderMonthlyInvestmentValueHtml_(monthly) {
+  monthly = monthly || {};
+  var comparison = String(monthly.comparison || '');
+  var selected = String(monthly.decision || monthly.defaultDecision || '').trim().toUpperCase();
+  var key = invDrawerEtradeFutureAccountKey_(monthly.accountName);
+  var radioName = 'inv_etrade_cisco_monthly_decision_' + key;
+  var html = '<div class="card" id="inv_etrade_future_monthly_value_card_' +
+    invDrawerEtradeFutureEscape_(key) + '">' +
+    '<h4>' + invDrawerEtradeFutureEscape_(monthly.valueLabel ||
+      (monthly.valueCategory === 'POTENTIAL_UNVESTED_STOCK_PLAN'
+        ? 'Potential/unvested stock-plan value'
+        : 'Monthly investment value')) + '</h4>';
+  html += '<p>Account: <strong>' +
+    invDrawerEtradeFutureEscape_(monthly.accountName || '') +
+    '</strong></p>';
+  html += '<p>Statement as-of: <strong>' +
+    invDrawerEtradeFutureEscape_(monthly.asOfDate || '—') + '</strong></p>';
+  html += '<p>Target month: <strong>' +
+    invDrawerEtradeFutureEscape_(monthly.monthLabel || 'this month') + '</strong></p>';
+  html += '<p>Statement value: <strong>' +
+    invDrawerEtradeFutureEscape_(invDrawerEtradeFutureFormatMoney_(monthly.proposedValue)) +
+    '</strong></p>';
+  if (monthly.warning || monthly.valueCategory === 'POTENTIAL_UNVESTED_STOCK_PLAN') {
+    html += '<p><strong>' + invDrawerEtradeFutureEscape_(monthly.warning ||
+      'This value is not vested and is not current brokerage holdings.') + '</strong></p>';
+  }
+  if (comparison === 'BLANK') {
+    html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+      '<input type="radio" name="' + radioName + '" id="inv_etrade_cisco_monthly_add_' + key +
+      '" value="ADD" data-account-name="' + invDrawerEtradeFutureEscape_(monthly.accountName) + '"' +
+      (selected === 'ADD' ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
+      '<span>Add value</span></label>';
+    html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+      '<input type="radio" name="' + radioName + '" id="inv_etrade_cisco_monthly_ignore_' + key +
+      '" value="IGNORE" data-account-name="' + invDrawerEtradeFutureEscape_(monthly.accountName) + '"' +
+      (selected === 'IGNORE' || !selected ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
+      '<span>Ignore monthly value</span></label>';
+  } else if (comparison === 'MATCH') {
+    html += '<p>Existing value: <strong>' +
+      invDrawerEtradeFutureEscape_(invDrawerEtradeFutureFormatMoney_(monthly.existingValue)) +
+      '</strong></p>';
+    html += '<p><strong>Already matches.</strong> Keep existing is the only decision. No write is proposed.</p>';
+  } else if (comparison === 'DIFFER') {
+    html += '<p>Existing value: <strong>' +
+      invDrawerEtradeFutureEscape_(invDrawerEtradeFutureFormatMoney_(monthly.existingValue)) +
+      '</strong></p>';
+    html += '<p>They differ by ' +
+      invDrawerEtradeFutureEscape_(invDrawerEtradeFutureFormatMoney_(monthly.difference)) +
+      '.</p>';
+    html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+      '<input type="radio" name="' + radioName + '" id="inv_etrade_cisco_monthly_keep_' + key +
+      '" value="KEEP" data-account-name="' + invDrawerEtradeFutureEscape_(monthly.accountName) + '"' +
+      (selected !== 'REPLACE' ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
+      '<span>Keep existing</span></label>';
+    html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+      '<input type="radio" name="' + radioName + '" id="inv_etrade_cisco_monthly_replace_' + key +
+      '" value="REPLACE" data-account-name="' + invDrawerEtradeFutureEscape_(monthly.accountName) + '"' +
+      (selected === 'REPLACE' ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
+      '<span>Replace with statement value</span></label>';
+    html += '<p><strong>The existing monthly value will be replaced</strong> if you choose Replace.</p>';
+  } else {
+    html += '<p><strong>Skip</strong> — ' +
+      invDrawerEtradeFutureEscape_(monthly.message ||
+        'Monthly investment value will not be written.') +
+      '</p>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function invDrawerEtradeFutureBindMonthlyInvestmentValueControls_() {
+  var radios = document.querySelectorAll('input[data-account-name][name^="inv_etrade_cisco_monthly_decision_"]');
+  var onChange = function(event) {
+    var radio = event && event.target;
+    var accountName = String(radio && radio.getAttribute('data-account-name') || '').trim();
+    var next = radio ? String(radio.value || '').trim().toUpperCase() : '';
+    if (!accountName) return;
+    if (next === String(__invDrawerEtradeFutureState.monthlyInvestmentValueDecisions[accountName] || '')
+      .trim().toUpperCase()) {
+      var confirmBtn = document.getElementById('inv_etrade_future_confirm_apply_btn');
+      if (confirmBtn) confirmBtn.disabled = !invDrawerEtradeFutureApplyReady_();
+      return;
+    }
+    __invDrawerEtradeFutureState.monthlyInvestmentValueDecisions[accountName] = next;
+    if (accountName === 'Etrade Cisco - Future') {
+      __invDrawerEtradeFutureState.monthlyInvestmentValueDecision = next;
+    }
+    reviewInvestmentPortfolioDrawerEtradeFutureApplyDiff_();
+  };
+  for (var i = 0; i < radios.length; i++) radios[i].onchange = onChange;
+}
+
+function invDrawerEtradeFutureDecisionReady_(monthly) {
+  monthly = monthly || {};
+  var comparison = String(monthly.comparison || '');
+  var decision = String(
+    __invDrawerEtradeFutureState.monthlyInvestmentValueDecisions[monthly.accountName] ||
+    monthly.decision || '').trim().toUpperCase();
+  if (comparison === 'BLANK') return decision === 'ADD' || decision === 'IGNORE';
+  if (comparison === 'DIFFER') return decision === 'KEEP' || decision === 'REPLACE';
+  if (comparison === 'MATCH') return true;
+  return false;
+}
+
+function invDrawerEtradeFutureApplyReady_() {
+  var diff = __invDrawerEtradeFutureState.applyDiff;
+  if (!__invDrawerEtradeFutureState.applyReviewed ||
+      !__invDrawerEtradeFutureState.applyDiffDigest || !diff) {
+    return false;
+  }
+  if (diff.blocked) return false;
+  var monthlies = invDrawerEtradeFutureMonthlyValues_(diff);
+  if (!monthlies.length) return !diff.duplicateNoop;
+  var i;
+  for (i = 0; i < monthlies.length; i++) {
+    if (!invDrawerEtradeFutureDecisionReady_(monthlies[i])) return false;
+  }
+  return true;
+}
+
+function renderInvDrawerEtradeFutureResults_(res) {
+  var host = document.getElementById('inv_etrade_future_results');
+  if (!host) return;
+  if (!res || !res.ok) {
+    host.innerHTML = '<div class="error-box">' +
+      invDrawerEtradeFutureEscape_(res && res.error ? res.error : 'Preview failed.') +
+      '</div>';
+    return;
+  }
+  __invDrawerEtradeFutureState.lastPreview = res.preview || null;
+  __invDrawerEtradeFutureState.lastBalanceComparison = res.balanceComparison || null;
+  __invDrawerEtradeFutureState.lastPreviewDocumentText = invDrawerEtradeFutureCurrentText_();
+  clearInvestmentPortfolioDrawerEtradeFutureApply_(true);
+  var preview = res.preview || {};
+  var legs = Array.isArray(preview.monthlyLegs) ? preview.monthlyLegs : [];
+  var cards = legs.map(function(leg) {
+    var warningHtml = leg.warning
+      ? ('<p><strong>' + invDrawerEtradeFutureEscape_(leg.warning) + '</strong></p>')
+      : '';
+    return '<div class="card"><div class="pill pill-ok">' +
+      invDrawerEtradeFutureEscape_(leg.valueLabel ||
+        (leg.valueCategory === 'POTENTIAL_UNVESTED_STOCK_PLAN'
+          ? 'Potential/unvested stock-plan value'
+          : 'Monthly value ready')) +
+      '</div> ' +
+      invDrawerEtradeFutureEscape_(leg.accountName || '') +
+      ' · ' +
+      invDrawerEtradeFutureEscape_(preview.asOfDate ? ('As-of ' + preview.asOfDate) : '') +
+      ' · ' +
+      invDrawerEtradeFutureEscape_(invDrawerEtradeFutureFormatMoney_(leg.proposedValue)) +
+      warningHtml + '</div>';
+  }).join('');
+  host.innerHTML = cards +
+    '<p class="muted">One statement, two independent monthly-value proposals. Preview only until you review and apply. This does not import holdings, tax lots, transactions, or dividends.</p>';
+  if (__investmentPortfolioData) {
+    renderInvestmentPortfolioDrawerView_(__investmentPortfolioData);
+  }
+  renderInvestmentPortfolioDrawerEtradeFutureApplySection_();
+}
+
+function previewInvestmentPortfolioDrawerEtradeFuture_() {
+  var btn = document.getElementById('inv_etrade_future_preview_btn');
+  if (btn) btn.disabled = true;
+  setStatusLoading('inv_etrade_future_status', 'Parsing E*TRADE statement in memory…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (btn) btn.disabled = false;
+      setStatus('inv_etrade_future_status', '', false);
+      renderInvDrawerEtradeFutureResults_(res);
+      updateInvestmentPortfolioDrawerEtradeFutureControls_();
+    })
+    .withFailureHandler(function(err) {
+      if (btn) btn.disabled = false;
+      setStatus('inv_etrade_future_status', err.message || String(err), true);
+    })
+    .previewEtradeCiscoStatementProfileFromDashboard(buildInvDrawerEtradeFuturePayload_());
+}
+
+function renderInvestmentPortfolioDrawerEtradeFutureApplySection_() {
+  var applyArea = document.getElementById('inv_etrade_future_apply_area');
+  if (!applyArea) return;
+  if (!__invDrawerEtradeFutureState.lastPreview) {
+    applyArea.innerHTML = '';
+    return;
+  }
+  applyArea.innerHTML = '<div class="card"><h3>Apply monthly investment values</h3>' +
+    '<p class="muted">Review each CashCompass account independently. One confirmation writes both decisions together. ' +
+    'Apply writes only through INPUT - Investments. Holdings, tax lots, transactions, dividends, ' +
+    'and CSCO shares are never imported from this statement path.</p>' +
+    '<div class="investment-import-actions">' +
+    '<button type="button" class="small-btn" id="inv_etrade_future_review_apply_btn">Review monthly values</button>' +
+    '<button type="button" class="small-btn primary" id="inv_etrade_future_confirm_apply_btn" disabled>Apply monthly values</button>' +
+    '</div><div id="inv_etrade_future_apply_message" class="muted"></div>' +
+    '<div id="inv_etrade_future_monthly_area"></div></div>';
+  var reviewBtn = document.getElementById('inv_etrade_future_review_apply_btn');
+  var confirmBtn = document.getElementById('inv_etrade_future_confirm_apply_btn');
+  if (reviewBtn) reviewBtn.onclick = reviewInvestmentPortfolioDrawerEtradeFutureApplyDiff_;
+  if (confirmBtn) confirmBtn.onclick = confirmInvestmentPortfolioDrawerEtradeFutureApply_;
+}
+
+function invDrawerEtradeFutureResolveApplyDiffBundle_(bundle) {
+  if (!bundle || bundle.ok === false) {
+    return {
+      ok: false,
+      error: String((bundle && bundle.error) || '').trim() || 'Could not build diff.',
+      applyDiff: null,
+      applyDiffDigest: '',
+      applyReviewed: false,
+      message: String((bundle && bundle.error) || '').trim() || 'Could not build diff.'
+    };
+  }
+  if (!bundle.diff) {
+    return {
+      ok: false,
+      error: 'Could not build diff.',
+      applyDiff: null,
+      applyDiffDigest: '',
+      applyReviewed: false,
+      message: 'Could not build diff.'
+    };
+  }
+  var digest = String(bundle.diffDigest || '').trim();
+  var monthlies = invDrawerEtradeFutureMonthlyValues_(bundle.diff);
+  var message = monthlies.map(function(item) {
+    return item.message || item.accountName;
+  }).filter(Boolean).join(' ') ||
+    ('Creates: ' + String((bundle.diff.summary && bundle.diff.summary.createCount) || 0));
+  return {
+    ok: true,
+    error: '',
+    applyDiff: bundle.diff,
+    applyDiffDigest: digest,
+    applyReviewed: !!digest,
+    message: message
+  };
+}
+
+function reviewInvestmentPortfolioDrawerEtradeFutureApplyDiff_() {
+  setStatusLoading('inv_etrade_future_status', 'Building monthly value review…');
+  google.script.run
+    .withSuccessHandler(function(bundle) {
+      setStatus('inv_etrade_future_status', '', false);
+      var resolved = invDrawerEtradeFutureResolveApplyDiffBundle_(bundle);
+      __invDrawerEtradeFutureState.applyDiff = resolved.applyDiff;
+      __invDrawerEtradeFutureState.applyDiffDigest = resolved.applyDiffDigest;
+      __invDrawerEtradeFutureState.applyReviewed = resolved.applyReviewed;
+      var monthlies = invDrawerEtradeFutureMonthlyValues_(resolved.applyDiff);
+      monthlies.forEach(function(monthly) {
+        var decision = String(
+          monthly.decision ||
+          __invDrawerEtradeFutureState.monthlyInvestmentValueDecisions[monthly.accountName] ||
+          '').trim().toUpperCase();
+        if (decision) {
+          __invDrawerEtradeFutureState.monthlyInvestmentValueDecisions[monthly.accountName] = decision;
+        }
+        if (monthly.accountName === 'Etrade Cisco - Future') {
+          __invDrawerEtradeFutureState.monthlyInvestmentValueDecision = decision;
+        }
+      });
+      var monthlyHost = document.getElementById('inv_etrade_future_monthly_area');
+      if (monthlyHost) {
+        monthlyHost.innerHTML = monthlies.map(
+          invDrawerEtradeFutureRenderMonthlyInvestmentValueHtml_).join('');
+        invDrawerEtradeFutureBindMonthlyInvestmentValueControls_();
+      }
+      var messageEl = document.getElementById('inv_etrade_future_apply_message');
+      if (messageEl) messageEl.textContent = resolved.message || '';
+      var confirmBtn = document.getElementById('inv_etrade_future_confirm_apply_btn');
+      if (confirmBtn) confirmBtn.disabled = !invDrawerEtradeFutureApplyReady_();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_etrade_future_status', err.message || String(err), true);
+    })
+    .boundedHoldingsPreviewBuildApplyDiffFromDashboard(buildInvDrawerEtradeFuturePayload_({
+      monthlyInvestmentValueDecisions: Object.assign({},
+        __invDrawerEtradeFutureState.monthlyInvestmentValueDecisions)
+    }));
+}
+
+function confirmInvestmentPortfolioDrawerEtradeFutureApply_() {
+  if (!invDrawerEtradeFutureApplyReady_()) return;
+  setStatusLoading('inv_etrade_future_status', 'Applying monthly investment values…');
+  var payload = buildInvDrawerEtradeFuturePayload_();
+  payload.diffDigest = __invDrawerEtradeFutureState.applyDiffDigest;
+  payload.explicitApplyConfirm = true;
+  payload.monthlyInvestmentValueDecisions = Object.assign({},
+    __invDrawerEtradeFutureState.monthlyInvestmentValueDecisions);
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('inv_etrade_future_status', res && res.message ? res.message : 'Apply completed.', false);
+      clearInvestmentPortfolioDrawerEtradeFutureApply_(true);
+      var picker = __investmentPortfolioSelectedId;
+      if (picker) applyInvestmentPortfolioAccountChange_(
+        document.getElementById('inv_activity_account'), picker);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_etrade_future_status', err.message || String(err), true);
+    })
+    .boundedHoldingsPreviewApplyFromDashboard(payload);
+}

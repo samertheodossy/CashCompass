@@ -79,6 +79,14 @@ function boundedHoldingsPreviewApplyBuildProposedRowsFromPreview_(scope, preview
     ? investmentPortfolioNormalizeSource_(scope.source || preview.source || '')
     : String(scope.source || preview.source || '').trim().toUpperCase();
   if (source === 'FIDELITY_401K_STATEMENT_PDF') return [];
+  if (String(preview.importProfile || '').trim() === 'ETRADE_CISCO_STATEMENT') return [];
+  if (source === 'ETRADE_CLIENT_STATEMENT_PDF' &&
+      (String(preview.valueCategory || '').trim() === 'POTENTIAL_UNVESTED_STOCK_PLAN' ||
+       (typeof investmentEtradeMatchesPotentialUnvestedStockPlanMapping_ === 'function' &&
+        investmentEtradeMatchesPotentialUnvestedStockPlanMapping_(
+          scope.parentAccountName || scope.accountName, source)))) {
+    return [];
+  }
   var rows = [];
   var asOfDate = boundedHoldingsPreviewApplyNormalizeAsOfDate_(preview.asOf);
   var cashBalance = boundedHoldingsPreviewApplyNullableNumber_(preview.cashBalance);
@@ -514,14 +522,21 @@ function boundedHoldingsPreviewApplyBuildGroupedDigestPart_(scopes) {
   }).sort().join('|');
 }
 
-function boundedHoldingsPreviewApplyIsMonthlyValueSource_(source) {
+function boundedHoldingsPreviewApplyIsMonthlyValueSource_(source, accountName) {
   var normalized = typeof investmentPortfolioNormalizeSource_ === 'function'
     ? investmentPortfolioNormalizeSource_(source || '')
     : String(source || '').trim().toUpperCase();
-  return normalized === 'SCHWAB_BROKERAGE_STATEMENT_PDF' ||
-    normalized === 'M1_STATEMENT_PDF' ||
-    normalized === 'FIDELITY_401K_STATEMENT_PDF' ||
-    normalized === 'STASH_BROKERAGE_STATEMENT_PDF';
+  if (normalized === 'SCHWAB_BROKERAGE_STATEMENT_PDF' ||
+      normalized === 'M1_STATEMENT_PDF' ||
+      normalized === 'FIDELITY_401K_STATEMENT_PDF' ||
+      normalized === 'STASH_BROKERAGE_STATEMENT_PDF') {
+    return true;
+  }
+  if (normalized === 'ETRADE_CLIENT_STATEMENT_PDF' &&
+      typeof investmentEtradeMatchesPotentialUnvestedStockPlanMapping_ === 'function') {
+    return investmentEtradeMatchesPotentialUnvestedStockPlanMapping_(accountName, normalized);
+  }
+  return false;
 }
 
 function boundedHoldingsPreviewApplyParseStatementDate_(asOf) {
@@ -583,6 +598,12 @@ function boundedHoldingsPreviewApplyResolveProviderEndingTotal_(preview, source)
   var normalized = typeof investmentPortfolioNormalizeSource_ === 'function'
     ? investmentPortfolioNormalizeSource_(source || '')
     : String(source || '').trim().toUpperCase();
+  if (normalized === 'ETRADE_CLIENT_STATEMENT_PDF') {
+    var potential = boundedHoldingsPreviewApplyNullableNumber_(
+      preview.potentialUnvestedStockPlanValue);
+    if (potential === null) return { value: null, origin: '' };
+    return { value: potential, origin: 'POTENTIAL_UNVESTED_STOCK_PLAN' };
+  }
   if (normalized === 'STASH_BROKERAGE_STATEMENT_PDF') {
     if (!(recon && recon.ok === true) || reconEnding === null) {
       return { value: null, origin: '' };
@@ -666,7 +687,8 @@ function boundedHoldingsPreviewApplyMonthlyDigestPart_(monthly) {
     willWrite: !!monthly.willWrite,
     comparison: String(monthly.comparison || ''),
     decision: String(monthly.decision || ''),
-    source: String(monthly.source || '')
+    source: String(monthly.source || ''),
+    valueCategory: String(monthly.valueCategory || '')
   };
 }
 
@@ -692,7 +714,9 @@ function boundedHoldingsPreviewApplySanitizeMonthlyValueForClient_(monthly) {
     difference: monthly.difference != null ? monthly.difference : null,
     valuesMatch: !!monthly.valuesMatch,
     warning: String(monthly.warning || ''),
-    source: String(monthly.source || '')
+    source: String(monthly.source || ''),
+    valueCategory: String(monthly.valueCategory || ''),
+    valueLabel: String(monthly.valueLabel || '')
   };
 }
 
@@ -718,7 +742,9 @@ function boundedHoldingsPreviewApplyBuildMonthlySkip_(reason, message, extras) {
     difference: extras.difference != null ? extras.difference : null,
     valuesMatch: !!extras.valuesMatch,
     warning: String(extras.warning || ''),
-    source: String(extras.source || '')
+    source: String(extras.source || ''),
+    valueCategory: String(extras.valueCategory || ''),
+    valueLabel: String(extras.valueLabel || '')
   };
 }
 
@@ -730,6 +756,184 @@ function boundedHoldingsPreviewApplyFormatMoney_(value) {
   var parts = abs.split('.');
   parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   return (n < 0 ? '-$' : '$') + parts.join('.');
+}
+
+function boundedHoldingsPreviewApplyIsEtradeCiscoStatementProfile_(payload, preview) {
+  payload = payload || {};
+  preview = preview || {};
+  if (typeof investmentEtradeMatchesCiscoStatementImportProfile_ === 'function' &&
+      investmentEtradeMatchesCiscoStatementImportProfile_(payload.pickerValue)) {
+    return true;
+  }
+  return String(preview.importProfile || '').trim() === 'ETRADE_CISCO_STATEMENT';
+}
+
+function boundedHoldingsPreviewApplyMonthlyDecisionForAccount_(payload, accountName) {
+  payload = payload || {};
+  var wanted = String(accountName || '').trim();
+  var map = payload.monthlyInvestmentValueDecisions;
+  if (map && typeof map === 'object' && !Array.isArray(map) && wanted) {
+    if (map[wanted] != null && String(map[wanted]).trim() !== '') {
+      return String(map[wanted]).trim().toUpperCase();
+    }
+  }
+  if (Array.isArray(map) && wanted) {
+    var i;
+    for (i = 0; i < map.length; i++) {
+      if (map[i] && String(map[i].accountName || '').trim() === wanted &&
+          map[i].decision != null) {
+        return String(map[i].decision).trim().toUpperCase();
+      }
+    }
+  }
+  return String(payload.monthlyInvestmentValueDecision || '').trim().toUpperCase();
+}
+
+function boundedHoldingsPreviewApplyResolveMonthlyValueForLeg_(preview, source, leg) {
+  preview = preview || {};
+  leg = leg || {};
+  var origin = String(leg.valueOrigin || leg.valueCategory || '').trim().toUpperCase();
+  if (origin === 'POTENTIAL_UNVESTED_STOCK_PLAN') {
+    var potential = boundedHoldingsPreviewApplyNullableNumber_(
+      preview.potentialUnvestedStockPlanValue);
+    if (potential === null) return { value: null, origin: '' };
+    return { value: potential, origin: 'POTENTIAL_UNVESTED_STOCK_PLAN' };
+  }
+  if (origin === 'ENDING_TOTAL_VALUE' || origin === 'BROKERAGE_ACCOUNT_VALUE') {
+    var recon = preview.reconciliation || null;
+    var ending = boundedHoldingsPreviewApplyNullableNumber_(
+      preview.endingTotalValue != null ? preview.endingTotalValue :
+        (recon && recon.endingTotalValue));
+    if (ending === null) {
+      ending = boundedHoldingsPreviewApplyNullableNumber_(
+        preview.preamble && preview.preamble.endingTotalValue);
+    }
+    if (ending === null) return { value: null, origin: '' };
+    return { value: ending, origin: 'ENDING_TOTAL_VALUE' };
+  }
+  return boundedHoldingsPreviewApplyResolveProviderEndingTotal_(preview, source);
+}
+
+function boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposals_(
+  payload, mode, accountValidation, preview, targetValidations) {
+  payload = payload || {};
+  preview = preview || {};
+  if (!boundedHoldingsPreviewApplyIsEtradeCiscoStatementProfile_(payload, preview)) {
+    return [boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+      payload, mode, accountValidation, preview)];
+  }
+  var profile = typeof investmentEtradeCiscoStatementImportProfile_ === 'function'
+    ? investmentEtradeCiscoStatementImportProfile_()
+    : null;
+  var legs = (preview.monthlyLegs && preview.monthlyLegs.length)
+    ? preview.monthlyLegs
+    : ((profile && profile.legs) || []);
+  var validationsByName = Object.create(null);
+  (targetValidations || []).forEach(function(item) {
+    if (item && item.accountName) validationsByName[item.accountName] = item;
+  });
+  var proposals = [];
+  var i;
+  for (i = 0; i < legs.length; i++) {
+    var leg = legs[i] || {};
+    var validation = validationsByName[leg.accountName] || {
+      accountName: leg.accountName,
+      investmentId: ''
+    };
+    proposals.push(boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposalForLeg_(
+      payload, mode, validation, preview, leg));
+  }
+  if (!proposals.length) {
+    return [boundedHoldingsPreviewApplyBuildMonthlySkip_('UNSUPPORTED_SOURCE',
+      'This statement type does not propose a monthly investment value.')];
+  }
+  return proposals;
+}
+
+function boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposalForLeg_(
+  payload, mode, accountValidation, preview, leg) {
+  payload = payload || {};
+  accountValidation = accountValidation || {};
+  preview = preview || {};
+  leg = leg || {};
+  var accountName = String(accountValidation.accountName || leg.accountName || '').trim();
+  var investmentId = String(accountValidation.investmentId || '').trim();
+  var source = typeof investmentPortfolioNormalizeSource_ === 'function'
+    ? investmentPortfolioNormalizeSource_(payload.source || preview.source || '')
+    : String(payload.source || preview.source || '').trim().toUpperCase();
+  var legPayload = Object.assign({}, payload, {
+    accountName: accountName,
+    investmentId: investmentId,
+    monthlyInvestmentValueDecision:
+      boundedHoldingsPreviewApplyMonthlyDecisionForAccount_(payload, accountName)
+  });
+  if (mode === 'GROUPED_PROVIDER') {
+    return boundedHoldingsPreviewApplyBuildMonthlySkip_('GROUPED_PROVIDER',
+      'Grouped M1 Apply does not update the parent monthly investment value.');
+  }
+  if (!accountName || !investmentId) {
+    return boundedHoldingsPreviewApplyBuildMonthlySkip_('IDENTITY_MISMATCH',
+      'Monthly investment value requires a verified CashCompass account identity.');
+  }
+  if (payload.explicitAccountMatch !== true) {
+    return boundedHoldingsPreviewApplyBuildMonthlySkip_('EXPLICIT_MATCH_REQUIRED',
+      'Monthly investment value requires explicit account-match confirmation.');
+  }
+  var parsed = boundedHoldingsPreviewApplyParseStatementDate_(preview.asOf);
+  if (!parsed) {
+    return boundedHoldingsPreviewApplyBuildMonthlySkip_('INVALID_STATEMENT_DATE',
+      'Statement date is missing or invalid, so the monthly investment value was skipped.',
+      { accountName: accountName, investmentId: investmentId });
+  }
+  var monthLabel = boundedHoldingsPreviewApplyMonthDisplayLabel_(parsed);
+  var currentYear = typeof getCurrentYear_ === 'function' ? getCurrentYear_() : new Date().getFullYear();
+  if (parsed.year !== Number(currentYear)) {
+    return boundedHoldingsPreviewApplyBuildMonthlySkip_('OUT_OF_YEAR',
+      monthLabel + ' is outside ' + currentYear + ' tracking, so the monthly investment value was skipped.',
+      {
+        accountName: accountName,
+        investmentId: investmentId,
+        asOfDate: parsed.iso,
+        monthLabel: monthLabel
+      });
+  }
+  var ending = boundedHoldingsPreviewApplyResolveMonthlyValueForLeg_(preview, source, leg);
+  if (ending.value === null) {
+    return boundedHoldingsPreviewApplyBuildMonthlySkip_('MISSING_ENDING_TOTAL',
+      'Statement value is missing, so the monthly investment value was skipped.',
+      {
+        accountName: accountName,
+        investmentId: investmentId,
+        asOfDate: parsed.iso,
+        monthLabel: monthLabel
+      });
+  }
+  var existing = boundedHoldingsPreviewApplyReadExistingMonthlyValue_(accountName, parsed);
+  if (!existing.ok) {
+    return boundedHoldingsPreviewApplyBuildMonthlySkip_(existing.reason || 'MONTH_CELL_UNAVAILABLE',
+      'The ' + monthLabel + ' investment cell could not be read, so the monthly value was skipped.',
+      {
+        accountName: accountName,
+        investmentId: investmentId,
+        asOfDate: parsed.iso,
+        monthLabel: monthLabel,
+        proposedValue: ending.value
+      });
+  }
+  return boundedHoldingsPreviewApplyBuildTrustedMonthlyValueProposal_({
+    source: source,
+    monthlyInvestmentValueDecision: legPayload.monthlyInvestmentValueDecision,
+    accountName: accountName,
+    investmentId: investmentId,
+    asOfDate: parsed.iso,
+    monthLabel: monthLabel,
+    existingPresent: !!existing.present,
+    existingValue: existing.present ? existing.value : null,
+    proposedValue: ending.value,
+    valueCategory: String(leg.valueCategory || ''),
+    valueLabel: String(leg.valueLabel || ''),
+    warning: String(leg.warning || '')
+  });
 }
 
 function boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(payload, mode, accountValidation, preview) {
@@ -748,7 +952,7 @@ function boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(payload
     return boundedHoldingsPreviewApplyBuildMonthlySkip_('GROUPED_PROVIDER',
       'Grouped M1 Apply does not update the parent monthly investment value.');
   }
-  if (!boundedHoldingsPreviewApplyIsMonthlyValueSource_(source)) {
+  if (!boundedHoldingsPreviewApplyIsMonthlyValueSource_(source, accountName)) {
     return boundedHoldingsPreviewApplyBuildMonthlySkip_('UNSUPPORTED_SOURCE',
       'This statement type does not propose a monthly investment value.');
   }
@@ -816,6 +1020,11 @@ function boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(payload
       });
   }
 
+  var mapping = typeof investmentEtradePotentialUnvestedStockPlanMapping_ === 'function'
+    ? investmentEtradePotentialUnvestedStockPlanMapping_()
+    : null;
+  var isPotentialUnvested = source === 'ETRADE_CLIENT_STATEMENT_PDF' &&
+    mapping && accountName === mapping.accountName;
   return boundedHoldingsPreviewApplyBuildTrustedMonthlyValueProposal_({
     source: source,
     monthlyInvestmentValueDecision: payload.monthlyInvestmentValueDecision,
@@ -825,7 +1034,10 @@ function boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(payload
     monthLabel: monthLabel,
     existingPresent: !!existing.present,
     existingValue: existing.present ? existing.value : null,
-    proposedValue: ending.value
+    proposedValue: ending.value,
+    valueCategory: isPotentialUnvested ? mapping.valueCategory : '',
+    valueLabel: isPotentialUnvested ? mapping.valueLabel : '',
+    warning: isPotentialUnvested ? mapping.warning : ''
   });
 }
 
@@ -850,7 +1062,10 @@ function boundedHoldingsPreviewApplyBuildTrustedMonthlyValueProposal_(fields) {
       existingValue: existingValue,
       proposedValue: proposedValue,
       comparison: comparison,
-      source: fields.source
+      source: fields.source,
+      valueCategory: String(fields.valueCategory || ''),
+      valueLabel: String(fields.valueLabel || ''),
+      warning: String(fields.warning || '')
     });
   }
 
@@ -880,8 +1095,10 @@ function boundedHoldingsPreviewApplyBuildTrustedMonthlyValueProposal_(fields) {
     allowedDecisions: [],
     difference: difference,
     valuesMatch: comparison === 'MATCH',
-    warning: '',
-    source: String(fields.source || '')
+    warning: String(fields.warning || ''),
+    source: String(fields.source || ''),
+    valueCategory: String(fields.valueCategory || ''),
+    valueLabel: String(fields.valueLabel || '')
   };
 
   if (comparison === 'BLANK') {
@@ -912,7 +1129,9 @@ function boundedHoldingsPreviewApplyBuildTrustedMonthlyValueProposal_(fields) {
 
   proposal.allowedDecisions = ['KEEP', 'REPLACE'];
   proposal.defaultDecision = 'KEEP';
-  proposal.warning = 'The existing monthly value will be replaced.';
+  proposal.warning = proposal.warning
+    ? (proposal.warning + ' The existing monthly value will be replaced.')
+    : 'The existing monthly value will be replaced.';
   proposal.message = monthLabel + ' existing value ' + moneyExisting +
     ' differs from statement value ' + moneyProposed +
     ' by ' + boundedHoldingsPreviewApplyFormatMoney_(difference) + '.';

@@ -839,6 +839,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                 <button type="button" id="inv_portfolio_schwab_import_btn" class="segment-btn" role="tab" aria-selected="false" hidden onclick="setInvestmentPortfolioDrawerView_('schwab')">Import Schwab statement PDF</button>
                 <button type="button" id="inv_portfolio_stash_import_btn" class="segment-btn" role="tab" aria-selected="false" hidden onclick="setInvestmentPortfolioDrawerView_('stash')">Import Stash statement PDF</button>
                 <button type="button" id="inv_portfolio_401k_import_btn" class="segment-btn" role="tab" aria-selected="false" hidden onclick="setInvestmentPortfolioDrawerView_('401k')">Retirement savings statement PDF</button>
+                <button type="button" id="inv_portfolio_etrade_future_import_btn" class="segment-btn" role="tab" aria-selected="false" hidden onclick="setInvestmentPortfolioDrawerView_('etrade-future')">E*TRADE Cisco statement</button>
                 <button type="button" id="inv_portfolio_import_btn" class="segment-btn" role="tab" aria-selected="false" hidden onclick="setInvestmentPortfolioDrawerView_('import')">Import CSV</button>
               </div>
 
@@ -985,6 +986,26 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                 <div id="inv_401k_results"></div>
                 <div id="inv_401k_apply_area"></div>
                 <div id="inv_401k_status" class="status" aria-live="polite"></div>
+              </section>
+
+              <section id="inv_portfolio_etrade_future_import_view" class="investment-portfolio-view" hidden>
+                <div id="inv_etrade_future_account_hint" class="muted" style="margin:0 0 12px 0;"></div>
+                <label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:12px 0;">
+                  <input type="checkbox" id="inv_etrade_future_explicit_match" style="width:auto;margin-top:3px;" onchange="updateInvestmentPortfolioDrawerEtradeFutureControls_()">
+                  <span id="inv_etrade_future_explicit_match_text">I confirm this E*TRADE/Morgan Stanley statement belongs to Etrade Cisco - RSU/ESPP and Etrade Cisco - Future.</span>
+                </label>
+                <label for="inv_etrade_future_document_file">E*TRADE/Morgan Stanley statement PDF</label>
+                <input type="file" id="inv_etrade_future_document_file" accept=".pdf,application/pdf" onchange="onInvestmentPortfolioDrawerEtradeFutureFileChanged_()">
+                <div id="inv_etrade_future_file_meta" class="muted" style="margin:-6px 0 12px 0;">No file selected.</div>
+                <label for="inv_etrade_future_document_text">Extracted PDF text (read-only after upload)</label>
+                <textarea id="inv_etrade_future_document_text" rows="4" readonly placeholder="Upload an E*TRADE/Morgan Stanley statement PDF…"></textarea>
+                <div class="investment-import-actions">
+                  <button type="button" id="inv_etrade_future_preview_btn" class="small-btn primary" disabled onclick="previewInvestmentPortfolioDrawerEtradeFuture_()">Preview statement values</button>
+                  <button type="button" class="small-btn" onclick="resetInvestmentPortfolioDrawerEtradeFutureImport_(false)">Clear import</button>
+                </div>
+                <div id="inv_etrade_future_results"></div>
+                <div id="inv_etrade_future_apply_area"></div>
+                <div id="inv_etrade_future_status" class="status" aria-live="polite"></div>
               </section>
 
               <section id="inv_portfolio_import_view" class="investment-portfolio-view" hidden>

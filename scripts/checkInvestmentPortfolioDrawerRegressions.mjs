@@ -24,6 +24,8 @@ const drawerM1Source = read('Dashboard_Script_InvestmentPortfolioDrawerM1.html')
 const drawerSchwabSource = read('Dashboard_Script_InvestmentPortfolioDrawerSchwab.html');
 const drawerStashSource = read('Dashboard_Script_InvestmentPortfolioDrawerStash.html');
 const drawer401kSource = read('Dashboard_Script_InvestmentPortfolioDrawer401k.html');
+const drawerEtradeFutureSource = read('Dashboard_Script_InvestmentPortfolioDrawerEtradeFuture.html');
+const etradeClientSource = read('investment_etrade_client_statement_pdf.js');
 const webappSource = read('webapp.js');
 const drawerSource = read('investment_portfolio_drawer.js');
 const activitySource = read('investment_activity.js');
@@ -50,6 +52,11 @@ vm.runInContext(`
     }
     return null;
   }
+  ${extractFunction(etradeClientSource, 'investmentEtradePotentialUnvestedStockPlanMapping_')}
+  ${extractFunction(etradeClientSource, 'investmentEtradeMatchesPotentialUnvestedStockPlanMapping_')}
+  ${extractFunction(etradeClientSource, 'investmentEtradeCiscoBrokerageAccountValueMapping_')}
+  ${extractFunction(etradeClientSource, 'investmentEtradeCiscoStatementImportProfile_')}
+  ${extractFunction(etradeClientSource, 'investmentEtradeMatchesCiscoStatementImportProfile_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerProviderLabel_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerMatchGroupProvider_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerIs401kRetirementAccount_')}
@@ -64,6 +71,7 @@ vm.runInContext(`
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerCustomerDrawerFormats_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerCustomerImportEligibility_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerDescribePickerAccount_')}
+  ${extractFunction(drawerSource, 'investmentPortfolioDrawerStatementImportProfiles_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerKnownProviderLabel_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerBuildPickerOptionLabel_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerEvaluateCustomerImportRequest_')}
@@ -240,6 +248,8 @@ assert.match(
 );
 assert.match(investmentsSource, /function getInvestmentUiData\(\)/);
 assert.match(investmentsSource, /managementAccounts:/);
+assert.match(investmentsSource, /portfolioActivityProfiles:/);
+assert.match(investmentsSource, /investmentPortfolioDrawerStatementImportProfiles_/);
 assert.match(investmentsSource, /investmentPortfolioDrawerDescribePickerAccount_/);
 assert.match(activitySource, /function resolveEligibleInvestmentImportAccount_/);
 assert.match(activitySource, /investmentPortfolioDrawerGuardCustomerProductionImport_/);
@@ -425,9 +435,24 @@ assert.match(byName('Samer Robinhood').optionLabel, /Samer Robinhood · Robinhoo
 assert.equal(byName('Stash Account').customerImportSource, 'STASH_BROKERAGE_STATEMENT_PDF');
 assert.match(byName('Stash Account').optionLabel, /Stash Account · Stash/);
 
+const ciscoProfile = context.investmentPortfolioDrawerStatementImportProfiles_()[0];
+assert.ok(ciscoProfile);
+assert.equal(ciscoProfile.pickerKind, 'STATEMENT_IMPORT_PROFILE');
+assert.equal(ciscoProfile.pickerValue, '__profile__:ETRADE_CISCO_STATEMENT');
+assert.equal(ciscoProfile.pickerLabel, 'E*TRADE Cisco Statement — RSU/ESPP + Future');
+assert.equal(ciscoProfile.customerImportEnabled, true);
+assert.equal(ciscoProfile.customerImportSource, 'ETRADE_CLIENT_STATEMENT_PDF');
+assert.equal(ciscoProfile.pickerLabel.includes('Etrade Cisco - RSU/ESPP + Future'), false);
+assert.equal(context.investmentEtradeMatchesCiscoStatementImportProfile_(ciscoProfile.pickerValue), true);
+assert.equal(
+  context.investmentEtradeCiscoStatementImportProfile_().legs.map((leg) => leg.accountName).join('|'),
+  'Etrade Cisco - RSU/ESPP|Etrade Cisco - Future'
+);
+
 assert.equal(byName('Etrade Cisco - Future').statementProvider, 'ETRADE');
+assert.equal(byName('Etrade Cisco - Future').customerImportEnabled, false);
 assert.equal(byName('Etrade Cisco - Future').customerImportDisabledReason, 'Import not available yet');
-assert.match(byName('Etrade Cisco - Future').optionLabel, /Etrade Cisco - Future · E\*TRADE — Import not available yet/);
+assert.match(byName('Etrade Cisco - Future').optionLabel, /Etrade Cisco - Future · E\*TRADE/);
 assert.equal(byName('Etrade Cisco - RSU\/ESPP').customerImportDisabledReason, 'Import not available yet');
 assert.equal(byName('Laith 529').customerImportDisabledReason, 'Import not available yet');
 assert.match(byName('Laith 529').optionLabel, /Laith 529 — Import not available yet/);
@@ -467,7 +492,7 @@ enabledNames.forEach((name) => {
   assert.equal(allowed.ok, true, `${name} must invoke its supported import`);
 });
 
-['Etrade Cisco - Future', 'Laith 529', 'Lutfi 529', 'Lutfi Robinhood'].forEach((name) => {
+['Etrade Cisco - Future', 'Etrade Cisco - RSU/ESPP', 'Laith 529', 'Lutfi 529', 'Lutfi Robinhood'].forEach((name) => {
   const open = evaluateNamed(name, '');
   assert.equal(open.ok, false, `${name} must not open the customer drawer`);
   assert.match(String(open.error || ''), /Import not available yet|eligible investment account/);
@@ -486,6 +511,12 @@ enabledNames.forEach((name) => {
 const etradeLab = evaluateNamed('Etrade Cisco - Future', 'ETRADE_POSITIONS_PDF');
 assert.equal(etradeLab.ok, true, 'lab E*TRADE sources must remain available off the customer drawer');
 assert.equal(etradeLab.labSource, true);
+const futureCustomerSource = evaluateNamed('Etrade Cisco - Future', 'ETRADE_CLIENT_STATEMENT_PDF');
+assert.equal(futureCustomerSource.ok, true, 'lab Future-only CLIENT_STATEMENT remains available off the customer picker');
+assert.equal(futureCustomerSource.labSource, true);
+const futureWrongSource = evaluateNamed('Etrade Cisco - Future', 'SCHWAB_BROKERAGE_STATEMENT_PDF');
+assert.equal(futureWrongSource.ok, false);
+assert.match(String(futureWrongSource.error || ''), /Import not available yet/);
 
 const schwabWrongSource = evaluateNamed('Charles Schwab - Personal', 'M1_STATEMENT_PDF');
 assert.equal(schwabWrongSource.ok, false);
@@ -531,6 +562,7 @@ const incomeProducingEtrade = context.investmentPortfolioDrawerDescribePickerAcc
   inactive: false
 });
 assert.equal(incomeProducingEtrade.customerImportEnabled, false);
+assert.equal(incomeProducingEtrade.customerImportDisabledReason, 'Import not available yet');
 assert.equal(
   context.investmentPortfolioDrawerEvaluateCustomerImportRequest_(
     context.investmentPortfolioDrawerMapAccountRow_({
@@ -546,10 +578,24 @@ assert.equal(
   'income-producing E*TRADE must not invoke Robinhood CSV'
 );
 
+['Lutfi Etrade Account', 'Samer Etrade Account', 'Laith Etrade Account'].forEach((name) => {
+  const row = context.investmentPortfolioDrawerDescribePickerAccount_({
+    sysAssetsRow: 30,
+    accountName: name,
+    type: 'Brokerage',
+    investmentId: 'inv-' + name.toLowerCase().replace(/\s+/g, '-'),
+    planningPurpose: '',
+    inactive: false
+  });
+  assert.equal(row.customerImportEnabled, false, `${name} must stay import-disabled`);
+  assert.equal(row.customerImportDisabledReason, 'Import not available yet');
+});
+
 assert.match(dashboardInvestments, /!data\.m1ImportAvailable/);
 assert.match(dashboardInvestments, /!data\.schwabImportAvailable/);
 assert.match(dashboardInvestments, /!data\.stashImportAvailable/);
 assert.match(dashboardInvestments, /!data\.fidelity401kImportAvailable/);
+assert.match(dashboardInvestments, /!data\.etradeCiscoStatementImportAvailable/);
 
 // --- No workbook writes in drawer module ---
 assert.doesNotMatch(drawerSource, /\bsetValues\b|\bappendRow\b|\bsetValue\b/);
@@ -579,10 +625,22 @@ assert.match(drawerSource, /parentAggregateExcluded/);
 assert.match(drawerSource, /fidelity401kImportAvailable/);
 assert.match(drawerSource, /FIDELITY_401K_BALANCE/);
 assert.match(drawerSource, /previewFidelity401kStatementFromDashboard/);
+assert.match(drawerSource, /previewEtradeCiscoFutureStatementFromDashboard/);
+assert.match(drawerSource, /previewEtradeCiscoStatementProfileFromDashboard/);
+assert.match(drawerSource, /etradeCiscoStatementImportAvailable/);
+assert.match(drawerSource, /ETRADE_CISCO_STATEMENT/);
+assert.match(drawerSource, /investmentPortfolioDrawerStatementImportProfiles_/);
+assert.doesNotMatch(drawerSource, /Etrade Cisco - RSU\/ESPP \+ Future/);
 assert.match(drawerSource, /Retirement savings statement PDF/);
 assert.match(dashboardBody, /inv_portfolio_401k_import_view/);
 assert.match(dashboardBody, /Retirement savings statement PDF/);
+assert.match(dashboardBody, /inv_portfolio_etrade_future_import_view/);
+assert.match(dashboardBody, /E\*TRADE Cisco statement/);
+assert.match(dashboardBody, /Etrade Cisco - RSU\/ESPP and Etrade Cisco - Future/);
+assert.doesNotMatch(dashboardBody, /Etrade Cisco - RSU\/ESPP \+ Future/);
 assert.match(dashboardInvestments, /renderInvestmentPortfolio401kBalanceView_/);
+assert.match(dashboardInvestments, /renderInvestmentPortfolioEtradeFutureView_/);
+assert.match(dashboardInvestments, /portfolioActivityProfiles/);
 assert.match(dashboardInvestments, /investmentPortfolioRender401kBalanceComparison_/);
 assert.match(dashboardInvestments, /Change in reported balance/);
 assert.match(drawer401kSource, /previewFidelity401kStatementFromDashboard/);
@@ -597,6 +655,34 @@ assert.match(drawer401kSource, /inv_401k_monthly_add/);
 assert.doesNotMatch(drawer401kSource, /fundHoldings/);
 assert.doesNotMatch(drawer401kSource, /\bsetValues\b|\bappendRow\b/);
 assert.match(dashboardBody, /inv_401k_apply_area/);
+assert.match(drawerEtradeFutureSource, /previewEtradeCiscoStatementProfileFromDashboard/);
+assert.match(drawerEtradeFutureSource, /boundedHoldingsPreviewBuildApplyDiffFromDashboard/);
+assert.match(drawerEtradeFutureSource, /boundedHoldingsPreviewApplyFromDashboard/);
+assert.match(drawerEtradeFutureSource, /payload\.explicitApplyConfirm = true/);
+assert.match(drawerEtradeFutureSource, /monthlyInvestmentValueDecisions/);
+assert.match(drawerEtradeFutureSource, /Potential\/unvested stock-plan value/);
+assert.match(drawerEtradeFutureSource, /Etrade Cisco - Future/);
+assert.match(drawerEtradeFutureSource, /Etrade Cisco - RSU\/ESPP/);
+assert.match(drawerEtradeFutureSource, /This value is not vested and is not current brokerage holdings\./);
+assert.match(drawerEtradeFutureSource, /inv_etrade_cisco_monthly_add_/);
+assert.match(drawerEtradeFutureSource, /ensureInvDrawerPdfClientReady_/);
+assert.match(drawerEtradeFutureSource, /boundedHoldingsPreviewLoadDocumentTextFromFile_/);
+assert.match(drawerEtradeFutureSource, /previewText \|\| result\.text/);
+assert.match(drawerEtradeFutureSource, /accountProvider: 'ETRADE'/);
+assert.match(drawerEtradeFutureSource, /This PDF does not contain a usable text layer\./);
+assert.match(drawerEtradeFutureSource, /PDF extraction failed\. No text was returned from the selected file\./);
+assert.doesNotMatch(drawerEtradeFutureSource, /extractBoundedHoldingsPreviewPdfText_/);
+assert.doesNotMatch(drawerEtradeFutureSource, /PDF text extraction is unavailable/);
+assert.doesNotMatch(drawerEtradeFutureSource, /tesseract|ocr\.space|google\.cloud\.vision/i);
+assert.doesNotMatch(drawerEtradeFutureSource, /Etrade Cisco - RSU\/ESPP \+ Future/);
+assert.doesNotMatch(drawerEtradeFutureSource, /\bsetValues\b|\bappendRow\b/);
+assert.ok(
+  read('PlannerDashboardWeb.html').indexOf('Dashboard_Script_InvestmentPortfolioDrawerM1') <
+    read('PlannerDashboardWeb.html').indexOf('Dashboard_Script_InvestmentPortfolioDrawerEtradeFuture'),
+  'M1 PDF helper include must load before the combined E*TRADE drawer'
+);
+assert.match(dashboardBody, /inv_etrade_future_apply_area/);
+assert.match(read('PlannerDashboardWeb.html'), /Dashboard_Script_InvestmentPortfolioDrawerEtradeFuture/);
 assert.match(webappSource, /view === 'portfolio-holdings-preview' && !isCentralModeEnabled_\(\)/);
 assert.doesNotMatch(drawerM1Source, /\bsetValues\b|\bappendRow\b/);
 assert.match(drawerSchwabSource, /boundedHoldingsPreviewRunFromDashboard/);

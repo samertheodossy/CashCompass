@@ -13,11 +13,12 @@ Security Description Quantity Share Price Total Cost Market Value Unrealized Gai
 CSCO SYSTEMS INC (CSCO) Purchases 100.000 $70.00 $5,000.00 $7,000.00 $2,000.00
 Total 100.000 $70.00 $5,000.00 $7,000.00 $2,000.00
 
-Potential Restricted Stock
-Symbol Grant Date Unvested Shares Hypothetical Value
-CSCO 1/1/2020 50.000 $3,500.00
+Exercisable Value   Potential Value   Total Value   Percentage
+Restricted Stock    —                 $3,500.00    $3,500.00
+TOTAL VALUE         —                 $3,500.00    $3,500.00
 
-Restricted Stock
+Potential Restricted Stock
+Grant Date 1/1/2020 Unvested Shares 50.000 Potential Value $0.00
 Grant Detail Hypothetical Plan Value $12,000.00
 
 Unvested Stock Summary

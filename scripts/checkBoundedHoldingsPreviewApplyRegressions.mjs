@@ -703,6 +703,8 @@ assert.match(boundedHtml, /Keep existing/);
 assert.match(boundedHtml, /Replace with statement value/);
 assert.match(boundedHtml, /Already matches/);
 assert.doesNotMatch(boundedHtml, /explicitMonthlyValueReplace/);
+assert.match(boundedHtml, /ETRADE_CLIENT_STATEMENT_PDF/);
+assert.match(boundedHtml, /Etrade Cisco - Future/);
 assert.doesNotMatch(boundedSource, /\bsetValues\b|\bappendRow\b/);
 assert.doesNotMatch(applySource, /INPUT - Investments|OUT - History|INPUT - Cash Flow/);
 assert.doesNotMatch(applySource, /rawDocumentText.*PropertiesService|DriveApp|CacheService/s);
@@ -1791,6 +1793,30 @@ assert.equal(
   emptySchwabCtx.boundedHoldingsPreviewApplyIsMonthlyValueSource_('FIDELITY_401K_STATEMENT_PDF'),
   true
 );
+assert.equal(
+  emptySchwabCtx.boundedHoldingsPreviewApplyIsMonthlyValueSource_('ETRADE_CLIENT_STATEMENT_PDF'),
+  false
+);
+assert.equal(
+  emptySchwabCtx.boundedHoldingsPreviewApplyIsMonthlyValueSource_(
+    'ETRADE_CLIENT_STATEMENT_PDF', 'Etrade Cisco - Future'),
+  true
+);
+assert.equal(
+  emptySchwabCtx.boundedHoldingsPreviewApplyIsMonthlyValueSource_(
+    'ETRADE_CLIENT_STATEMENT_PDF', 'Etrade Cisco - RSU/ESPP'),
+  false
+);
+assert.equal(
+  emptySchwabCtx.boundedHoldingsPreviewApplyIsMonthlyValueSource_(
+    'ETRADE_CLIENT_STATEMENT_PDF', 'Lutfi Etrade Account'),
+  false
+);
+assert.equal(
+  emptySchwabCtx.boundedHoldingsPreviewApplyIsMonthlyValueSource_(
+    'ETRADE_CLIENT_STATEMENT_PDF', 'Samer Etrade Account'),
+  false
+);
 const stashTrustedEnding = emptySchwabCtx.boundedHoldingsPreviewApplyResolveProviderEndingTotal_(
   { reconciliation: { ok: true, endingTotalValue: 7782.13 } },
   'STASH_BROKERAGE_STATEMENT_PDF'
@@ -2382,6 +2408,610 @@ const stashStaleLog = lastStatementMonthlyActivity_(stashStaleBuilt.context);
 assert.equal(stashStaleLog.details.result, 'STALE_REJECTED');
 assert.notEqual(stashStaleLog.details.result, 'APPLIED');
 assertNoSysInvestmentActivity_(stashStaleWorkbook, 'Stash stale');
+
+function makeEtradeFutureWorkbook(options = {}) {
+  const augustValue = Object.prototype.hasOwnProperty.call(options, 'augustValue')
+    ? options.augustValue
+    : '';
+  const months = Array(12).fill('');
+  months[7] = augustValue;
+  return makeWorkbook({
+    assetsRows: [
+      ['Etrade Cisco - Future', 'Brokerage', '', 'Yes', 'INV-ET-FUTURE-1', ''],
+      ['Etrade Cisco - RSU/ESPP', 'Brokerage', '', 'Yes', 'INV-ET-RSU-1', '']
+    ],
+    investmentsRows: buildInvestmentsYearBlockRows(2026, [{
+      name: 'Etrade Cisco - Future',
+      investmentId: 'INV-ET-FUTURE-1',
+      months
+    }, {
+      name: 'Etrade Cisco - RSU/ESPP',
+      investmentId: 'INV-ET-RSU-1',
+      months: Array(12).fill('')
+    }]),
+    monthlyRows: [monthlyHistoryHeaders],
+    registryRows: [
+      FINANCIAL_ACCOUNT_HEADERS,
+      registryRow({
+        stableAccountId: 'STABLE-ET-FUTURE-1',
+        domain: 'INVESTMENT',
+        displayName: 'Etrade Cisco - Future',
+        institution: 'E*TRADE',
+        accountType: 'Brokerage',
+        accountSubtype: '',
+        ownerId: 'OWNER-1',
+        registrationType: 'TAXABLE',
+        currency: 'USD',
+        last4: '',
+        active: 'Yes',
+        identityStatus: 'VERIFIED',
+        legacyDomain: 'SYS_ASSETS',
+        legacyKey: 'INV-ET-FUTURE-1'
+      }),
+      registryRow({
+        stableAccountId: 'STABLE-ET-RSU-1',
+        domain: 'INVESTMENT',
+        displayName: 'Etrade Cisco - RSU/ESPP',
+        institution: 'E*TRADE',
+        accountType: 'Brokerage',
+        accountSubtype: '',
+        ownerId: 'OWNER-1',
+        registrationType: 'TAXABLE',
+        currency: 'USD',
+        last4: '',
+        active: 'Yes',
+        identityStatus: 'VERIFIED',
+        legacyDomain: 'SYS_ASSETS',
+        legacyKey: 'INV-ET-RSU-1'
+      })
+    ]
+  });
+}
+
+function augustValueFromFutureSheet(ss) {
+  return ss.getSheetByName('INPUT - Investments').getRange(3, 10).getValue();
+}
+
+function rsuAugustValueFromFutureSheet(ss) {
+  return ss.getSheetByName('INPUT - Investments').getRange(4, 10).getValue();
+}
+
+function otherMonthValuesFromFutureSheet(ss) {
+  const sheet = ss.getSheetByName('INPUT - Investments');
+  return [3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14].map((col) => sheet.getRange(3, col).getValue());
+}
+
+const futureText = fixture('etrade', 'synthetic_etrade_client_statement_cisco_future_potential.txt');
+const futurePayload = {
+  pickerValue: 'INV-ET-FUTURE-1',
+  accountName: 'Etrade Cisco - Future',
+  sysAssetsRow: 2,
+  source: 'ETRADE_CLIENT_STATEMENT_PDF',
+  rawDocumentText: futureText,
+  registrationType: 'TAXABLE',
+  explicitAccountMatch: true,
+  statementProvider: 'ETRADE'
+};
+
+const futureParsed = emptySchwabCtx.investmentEtradeClientStatementParseText_(futureText);
+assert.equal(futureParsed.potentialUnvestedStockPlan.value, 846353.40);
+assert.equal(futureParsed.preamble.endingTotalValue, 113042.10);
+assert.equal(
+  emptySchwabCtx.boundedHoldingsPreviewApplyBuildProposedRowsFromPreview_(
+    {
+      source: 'ETRADE_CLIENT_STATEMENT_PDF',
+      parentAccountName: 'Etrade Cisco - Future'
+    },
+    {
+      source: 'ETRADE_CLIENT_STATEMENT_PDF',
+      valueCategory: 'POTENTIAL_UNVESTED_STOCK_PLAN',
+      asOf: '2026-08-31',
+      potentialUnvestedStockPlanValue: 846353.40,
+      holdingsRows: [{ symbol: 'CSCO', quantity: 1023.098, marketValue: 51154.90 }],
+      cashBalance: 61887.20
+    }
+  ).length,
+  0,
+  'Future potential Apply must never propose holdings or cash rows'
+);
+
+const futureEnding = emptySchwabCtx.boundedHoldingsPreviewApplyResolveProviderEndingTotal_(
+  {
+    potentialUnvestedStockPlanValue: 846353.40,
+    reconciliation: { ok: true, endingTotalValue: 113042.10 },
+    totalAccountValue: 113042.10,
+    holdingsRows: [{ marketValue: 51154.90 }]
+  },
+  'ETRADE_CLIENT_STATEMENT_PDF'
+);
+assert.equal(futureEnding.value, 846353.40);
+assert.equal(futureEnding.origin, 'POTENTIAL_UNVESTED_STOCK_PLAN');
+assert.notEqual(futureEnding.value, 113042.10);
+
+const skipFutureConfirm = emptySchwabCtx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+  {
+    source: 'ETRADE_CLIENT_STATEMENT_PDF',
+    accountName: 'Etrade Cisco - Future',
+    explicitAccountMatch: false
+  },
+  'SINGLE_ACCOUNT',
+  { accountName: 'Etrade Cisco - Future', investmentId: 'INV-ET-FUTURE-1' },
+  { asOf: '2026-08-31', potentialUnvestedStockPlanValue: 846353.40 }
+);
+assert.equal(skipFutureConfirm.action, 'SKIP');
+assert.equal(skipFutureConfirm.reason, 'EXPLICIT_MATCH_REQUIRED');
+
+const rsuSkipMonthly = emptySchwabCtx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+  {
+    source: 'ETRADE_CLIENT_STATEMENT_PDF',
+    accountName: 'Etrade Cisco - RSU/ESPP',
+    explicitAccountMatch: true
+  },
+  'SINGLE_ACCOUNT',
+  { accountName: 'Etrade Cisco - RSU/ESPP', investmentId: 'INV-ET-RSU-1' },
+  {
+    asOf: '2026-08-31',
+    potentialUnvestedStockPlanValue: 846353.40,
+    reconciliation: { ok: true, endingTotalValue: 113042.10 }
+  }
+);
+assert.equal(rsuSkipMonthly.action, 'SKIP');
+assert.equal(rsuSkipMonthly.reason, 'UNSUPPORTED_SOURCE');
+
+const emptyFuture = makeEtradeFutureWorkbook();
+const emptyFutureBuilt = buildContext({ workbook: emptyFuture });
+const emptyFutureDiff = emptyFutureBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(
+  futurePayload);
+assert.equal(emptyFutureDiff.ok, true, emptyFutureDiff.error || 'Future diff failed');
+assert.equal(emptyFutureDiff.diff.monthlyInvestmentValue.comparison, 'BLANK');
+assert.equal(emptyFutureDiff.diff.monthlyInvestmentValue.decision, 'IGNORE');
+assert.equal(emptyFutureDiff.diff.monthlyInvestmentValue.action, 'SKIP');
+assert.equal(emptyFutureDiff.diff.monthlyInvestmentValue.proposedValue, 846353.40);
+assert.equal(emptyFutureDiff.diff.monthlyInvestmentValue.willWrite, false);
+assert.equal(emptyFutureDiff.diff.monthlyInvestmentValue.existingPresent, false);
+assert.equal(emptyFutureDiff.diff.monthlyInvestmentValue.valueCategory, 'POTENTIAL_UNVESTED_STOCK_PLAN');
+assert.equal(emptyFutureDiff.diff.monthlyInvestmentValue.valueLabel,
+  'Potential/unvested stock-plan value');
+assert.equal(emptyFutureDiff.diff.monthlyInvestmentValue.accountName, 'Etrade Cisco - Future');
+assert.match(String(emptyFutureDiff.diff.monthlyInvestmentValue.asOfDate || ''), /^2026-08-31/);
+assert.match(String(emptyFutureDiff.diff.monthlyInvestmentValue.warning || ''),
+  /This value is not vested and is not current brokerage holdings\./);
+assert.notEqual(emptyFutureDiff.diff.monthlyInvestmentValue.proposedValue, 113042.10);
+assert.equal(emptyFutureDiff.diff.summary.createCount, 0);
+assert.equal((emptyFutureDiff.diff.create || []).length, 0);
+
+const futureIgnoreApply = emptyFutureBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...futurePayload,
+  diffDigest: emptyFutureDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'IGNORE'
+});
+assert.equal(futureIgnoreApply.ok, true, futureIgnoreApply.error || 'Future Ignore Apply failed');
+assert.notEqual(futureIgnoreApply.monthlyInvestmentValueWritten, true);
+assert.equal(augustValueFromFutureSheet(emptyFuture), '');
+assert.equal(rsuAugustValueFromFutureSheet(emptyFuture), '');
+assert.equal(emptyFuture.getSheetByName(unifiedName), null,
+  'Future Ignore must not write SYS - Investment Holdings Unified');
+const futureIgnoreLog = lastStatementMonthlyActivity_(emptyFutureBuilt.context);
+assert.ok(futureIgnoreLog, 'Future Ignore must write LOG - Activity');
+assert.equal(futureIgnoreLog.eventType, 'investment_statement_monthly_value');
+assert.equal(futureIgnoreLog.payee, 'Etrade Cisco - Future');
+assert.equal(futureIgnoreLog.accountSource, 'E*TRADE');
+assert.equal(futureIgnoreLog.details.source, 'ETRADE_CLIENT_STATEMENT_PDF');
+assert.equal(futureIgnoreLog.details.decision, 'IGNORE');
+assert.equal(futureIgnoreLog.details.result, 'SKIPPED');
+assert.equal(futureIgnoreLog.details.oldValue, '');
+assert.equal(futureIgnoreLog.details.proposedValue, 846353.40);
+assert.equal(futureIgnoreLog.details.valueCategory, 'POTENTIAL_UNVESTED_STOCK_PLAN');
+assert.equal(futureIgnoreLog.details.targetMonth, 'August 2026');
+assert.match(String(futureIgnoreLog.details.statementAsOf || ''), /^2026-08-31/);
+assert.match(String(futureIgnoreLog.details.documentFingerprint || futureIgnoreLog.details.diffDigest || ''), /./);
+assertNoSysInvestmentActivity_(emptyFuture, 'Future Ignore');
+
+const addFuture = makeEtradeFutureWorkbook();
+const addFutureBuilt = buildContext({ workbook: addFuture });
+const futureAddDiff = addFutureBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+  ...futurePayload,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+assert.equal(futureAddDiff.diff.monthlyInvestmentValue.action, 'ADD');
+assert.equal(futureAddDiff.diff.monthlyInvestmentValue.willWrite, true);
+assert.equal(futureAddDiff.diff.monthlyInvestmentValue.decision, 'ADD');
+assert.equal(futureAddDiff.diff.monthlyInvestmentValue.proposedValue, 846353.40);
+assert.match(futureAddDiff.diff.monthlyInvestmentValue.message,
+  /Add August 2026 value: \$846,353\.40/);
+const futureMissingConfirm = addFutureBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...futurePayload,
+  diffDigest: futureAddDiff.diffDigest,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+assert.equal(futureMissingConfirm.ok, false);
+assert.equal(statementMonthlyActivity_(addFutureBuilt.context).length, 0);
+assert.equal(augustValueFromFutureSheet(addFuture), '');
+assert.equal(addFuture.getSheetByName(unifiedName), null);
+
+const futureMonthsBeforeAdd = otherMonthValuesFromFutureSheet(addFuture);
+const futureAddApply = addFutureBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...futurePayload,
+  diffDigest: futureAddDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+assert.equal(futureAddApply.ok, true, futureAddApply.error || 'Future Add Apply failed');
+assert.equal(futureAddApply.monthlyInvestmentValueWritten, true);
+assert.equal(augustValueFromFutureSheet(addFuture), 846353.40);
+assert.equal(rsuAugustValueFromFutureSheet(addFuture), '',
+  'Actual brokerage $113,042.10 must not be assigned to Etrade Cisco - RSU/ESPP');
+assert.deepEqual(otherMonthValuesFromFutureSheet(addFuture), futureMonthsBeforeAdd,
+  'Future Add must write only the statement month');
+assert.equal(addFuture.getSheetByName(unifiedName), null,
+  'Future Add must not write SYS - Investment Holdings Unified');
+const futureAddLog = lastStatementMonthlyActivity_(addFutureBuilt.context);
+assert.equal(futureAddLog.details.decision, 'ADD');
+assert.equal(futureAddLog.details.result, 'APPLIED');
+assert.equal(futureAddLog.details.oldValue, '');
+assert.equal(futureAddLog.details.proposedValue, 846353.40);
+assert.equal(futureAddLog.details.newValue, 846353.40);
+assert.equal(futureAddLog.details.valueCategory, 'POTENTIAL_UNVESTED_STOCK_PLAN');
+assert.equal(futureAddLog.payee, 'Etrade Cisco - Future');
+assert.equal(futureAddLog.accountSource, 'E*TRADE');
+assert.equal(
+  (addFutureBuilt.context.__activityLogEntries || []).filter((row) =>
+    row.eventType === 'investment_update').length,
+  0,
+  'Future statement Apply must not add a duplicate investment_update event'
+);
+assertNoSysInvestmentActivity_(addFuture, 'Future Add');
+
+const futureMatchWorkbook = makeEtradeFutureWorkbook({ augustValue: 846353.40 });
+const futureMatchBuilt = buildContext({ workbook: futureMatchWorkbook });
+const futureMatchDiff = futureMatchBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(
+  futurePayload);
+assert.equal(futureMatchDiff.diff.monthlyInvestmentValue.comparison, 'MATCH');
+assert.equal(futureMatchDiff.diff.monthlyInvestmentValue.decision, 'KEEP');
+assert.equal(futureMatchDiff.diff.monthlyInvestmentValue.action, 'SKIP');
+assert.equal(futureMatchDiff.diff.monthlyInvestmentValue.willWrite, false);
+assert.match(futureMatchDiff.diff.monthlyInvestmentValue.message, /Already matches/);
+const futureMatchBefore = cloneSheetRows(futureMatchWorkbook.getSheetByName('INPUT - Investments'));
+const futureMatchApply = futureMatchBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...futurePayload,
+  diffDigest: futureMatchDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'KEEP'
+});
+assert.equal(futureMatchApply.ok, true);
+assert.notEqual(futureMatchApply.monthlyInvestmentValueWritten, true);
+assert.deepEqual(cloneSheetRows(futureMatchWorkbook.getSheetByName('INPUT - Investments')),
+  futureMatchBefore);
+assert.equal(futureMatchWorkbook.getSheetByName(unifiedName), null);
+const futureMatchLog = lastStatementMonthlyActivity_(futureMatchBuilt.context);
+assert.equal(futureMatchLog.details.decision, 'KEEP_EXISTING');
+assert.equal(futureMatchLog.details.result, 'SKIPPED');
+assert.equal(futureMatchLog.details.oldValue, 846353.40);
+assert.equal(futureMatchLog.details.valueCategory, 'POTENTIAL_UNVESTED_STOCK_PLAN');
+assertNoSysInvestmentActivity_(futureMatchWorkbook, 'Future match');
+
+const occupiedFuture = makeEtradeFutureWorkbook({ augustValue: 50000 });
+const occupiedFutureBuilt = buildContext({ workbook: occupiedFuture });
+const occupiedFutureDiff = occupiedFutureBuilt.context
+  .boundedHoldingsPreviewBuildApplyDiffFromDashboard(futurePayload);
+assert.equal(occupiedFutureDiff.diff.monthlyInvestmentValue.comparison, 'DIFFER');
+assert.equal(occupiedFutureDiff.diff.monthlyInvestmentValue.decision, 'KEEP');
+assert.equal(occupiedFutureDiff.diff.monthlyInvestmentValue.action, 'SKIP');
+assert.equal(occupiedFutureDiff.diff.monthlyInvestmentValue.willWrite, false);
+assert.equal(occupiedFutureDiff.diff.monthlyInvestmentValue.existingValue, 50000);
+assert.equal(occupiedFutureDiff.diff.monthlyInvestmentValue.proposedValue, 846353.40);
+const occupiedFutureBefore = cloneSheetRows(occupiedFuture.getSheetByName('INPUT - Investments'));
+const occupiedFutureApply = occupiedFutureBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...futurePayload,
+  diffDigest: occupiedFutureDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'KEEP'
+});
+assert.equal(occupiedFutureApply.ok, true);
+assert.notEqual(occupiedFutureApply.monthlyInvestmentValueWritten, true);
+assert.equal(augustValueFromFutureSheet(occupiedFuture), 50000);
+assert.deepEqual(cloneSheetRows(occupiedFuture.getSheetByName('INPUT - Investments')),
+  occupiedFutureBefore, 'occupied month Keep existing must not overwrite');
+assert.equal(occupiedFuture.getSheetByName(unifiedName), null);
+const futureKeepLog = lastStatementMonthlyActivity_(occupiedFutureBuilt.context);
+assert.equal(futureKeepLog.details.decision, 'KEEP_EXISTING');
+assert.equal(futureKeepLog.details.result, 'SKIPPED');
+assert.equal(futureKeepLog.details.oldValue, 50000);
+
+const futureReplaceBook = makeEtradeFutureWorkbook({ augustValue: 50000 });
+const futureReplaceBuilt = buildContext({ workbook: futureReplaceBook });
+const futureReplaceDiff = futureReplaceBuilt.context
+  .boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+    ...futurePayload,
+    monthlyInvestmentValueDecision: 'REPLACE'
+  });
+assert.equal(futureReplaceDiff.diff.monthlyInvestmentValue.action, 'REPLACE');
+assert.equal(futureReplaceDiff.diff.monthlyInvestmentValue.willWrite, true);
+assert.match(String(futureReplaceDiff.diff.monthlyInvestmentValue.warning || ''),
+  /This value is not vested and is not current brokerage holdings\./);
+const futureReplaceApply = futureReplaceBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...futurePayload,
+  diffDigest: futureReplaceDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'REPLACE'
+});
+assert.equal(futureReplaceApply.ok, true);
+assert.equal(futureReplaceApply.monthlyInvestmentValueWritten, true);
+assert.equal(augustValueFromFutureSheet(futureReplaceBook), 846353.40);
+assert.equal(rsuAugustValueFromFutureSheet(futureReplaceBook), '');
+assert.equal(futureReplaceBook.getSheetByName(unifiedName), null);
+const futureReplaceLog = lastStatementMonthlyActivity_(futureReplaceBuilt.context);
+assert.equal(futureReplaceLog.details.decision, 'REPLACE');
+assert.equal(futureReplaceLog.details.result, 'APPLIED');
+assert.equal(futureReplaceLog.details.oldValue, 50000);
+assert.equal(futureReplaceLog.details.newValue, 846353.40);
+assert.equal(futureReplaceLog.details.valueCategory, 'POTENTIAL_UNVESTED_STOCK_PLAN');
+assertNoSysInvestmentActivity_(futureReplaceBook, 'Future Replace');
+
+const zeroFuture = makeEtradeFutureWorkbook({ augustValue: 0 });
+const zeroFutureBuilt = buildContext({ workbook: zeroFuture });
+const zeroFutureDiff = zeroFutureBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(
+  futurePayload);
+assert.equal(zeroFutureDiff.diff.monthlyInvestmentValue.comparison, 'DIFFER');
+assert.equal(zeroFutureDiff.diff.monthlyInvestmentValue.existingPresent, true);
+assert.equal(zeroFutureDiff.diff.monthlyInvestmentValue.existingValue, 0);
+assert.equal(zeroFutureDiff.diff.monthlyInvestmentValue.willWrite, false);
+const zeroFutureBefore = cloneSheetRows(zeroFuture.getSheetByName('INPUT - Investments'));
+const zeroFutureApply = zeroFutureBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...futurePayload,
+  diffDigest: zeroFutureDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'KEEP'
+});
+assert.equal(zeroFutureApply.ok, true);
+assert.notEqual(zeroFutureApply.monthlyInvestmentValueWritten, true);
+assert.equal(augustValueFromFutureSheet(zeroFuture), 0);
+assert.deepEqual(cloneSheetRows(zeroFuture.getSheetByName('INPUT - Investments')),
+  zeroFutureBefore, 'explicit $0 is occupied and must not be overwritten');
+const futureZeroLog = lastStatementMonthlyActivity_(zeroFutureBuilt.context);
+assert.equal(futureZeroLog.details.oldValue, 0);
+assert.equal(futureZeroLog.details.result, 'SKIPPED');
+assert.equal(zeroFuture.getSheetByName(unifiedName), null);
+
+const staleFuture = makeEtradeFutureWorkbook();
+const staleFutureBuilt = buildContext({ workbook: staleFuture });
+const staleFutureDiff = staleFutureBuilt.context
+  .boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+    ...futurePayload,
+    monthlyInvestmentValueDecision: 'ADD'
+  });
+assert.equal(staleFutureDiff.diff.monthlyInvestmentValue.action, 'ADD');
+staleFuture.getSheetByName('INPUT - Investments').getRange(3, 10).setValue(1);
+const staleFutureApply = staleFutureBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...futurePayload,
+  diffDigest: staleFutureDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+assert.equal(staleFutureApply.ok, false);
+assert.equal(staleFutureApply.staleDiff, true);
+assert.equal(augustValueFromFutureSheet(staleFuture), 1);
+assert.equal(staleFuture.getSheetByName(unifiedName), null);
+const futureStaleLog = lastStatementMonthlyActivity_(staleFutureBuilt.context);
+assert.equal(futureStaleLog.details.result, 'STALE_REJECTED');
+assert.notEqual(futureStaleLog.details.result, 'APPLIED');
+assertNoSysInvestmentActivity_(staleFuture, 'Future stale');
+
+const ciscoProfilePayload = {
+  pickerValue: '__profile__:ETRADE_CISCO_STATEMENT',
+  accountName: '',
+  source: 'ETRADE_CLIENT_STATEMENT_PDF',
+  rawDocumentText: futureText,
+  registrationType: 'TAXABLE',
+  explicitAccountMatch: true,
+  statementProvider: 'ETRADE'
+};
+
+function monthlyByAccount_(diff, accountName) {
+  const values = (diff && diff.diff && diff.diff.monthlyInvestmentValues) || [];
+  return values.find((item) => item && item.accountName === accountName) || null;
+}
+
+const emptyCisco = makeEtradeFutureWorkbook();
+const emptyCiscoBuilt = buildContext({ workbook: emptyCisco });
+const emptyCiscoDiff = emptyCiscoBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(
+  ciscoProfilePayload);
+assert.equal(emptyCiscoDiff.ok, true, emptyCiscoDiff.error || 'Cisco profile diff failed');
+assert.equal((emptyCiscoDiff.diff.monthlyInvestmentValues || []).length, 2);
+const emptyRsuMonthly = monthlyByAccount_(emptyCiscoDiff, 'Etrade Cisco - RSU/ESPP');
+const emptyFutureMonthly = monthlyByAccount_(emptyCiscoDiff, 'Etrade Cisco - Future');
+assert.ok(emptyRsuMonthly);
+assert.ok(emptyFutureMonthly);
+assert.equal(emptyRsuMonthly.proposedValue, 113042.10);
+assert.equal(emptyRsuMonthly.valueCategory, 'BROKERAGE_ACCOUNT_VALUE');
+assert.equal(emptyRsuMonthly.comparison, 'BLANK');
+assert.equal(emptyRsuMonthly.decision, 'IGNORE');
+assert.equal(emptyFutureMonthly.proposedValue, 846353.40);
+assert.equal(emptyFutureMonthly.valueCategory, 'POTENTIAL_UNVESTED_STOCK_PLAN');
+assert.equal(emptyFutureMonthly.comparison, 'BLANK');
+assert.equal(emptyCiscoDiff.diff.summary.createCount, 0);
+assert.equal(
+  JSON.stringify(emptyCiscoDiff).includes('Etrade Cisco - RSU/ESPP + Future'),
+  false,
+  'combined backend account name must not appear in the Cisco profile diff'
+);
+
+const ciscoIgnoreApply = emptyCiscoBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...ciscoProfilePayload,
+  diffDigest: emptyCiscoDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecisions: {
+    'Etrade Cisco - RSU/ESPP': 'IGNORE',
+    'Etrade Cisco - Future': 'IGNORE'
+  }
+});
+assert.equal(ciscoIgnoreApply.ok, true, ciscoIgnoreApply.error || 'Cisco Ignore Apply failed');
+assert.notEqual(ciscoIgnoreApply.monthlyInvestmentValueWritten, true);
+assert.equal(augustValueFromFutureSheet(emptyCisco), '');
+assert.equal(rsuAugustValueFromFutureSheet(emptyCisco), '');
+assert.equal(emptyCisco.getSheetByName(unifiedName), null);
+const ciscoIgnoreLogs = statementMonthlyActivity_(emptyCiscoBuilt.context);
+assert.equal(ciscoIgnoreLogs.length, 2);
+assert.deepEqual(ciscoIgnoreLogs.map((row) => row.payee).sort(),
+  ['Etrade Cisco - Future', 'Etrade Cisco - RSU/ESPP']);
+ciscoIgnoreLogs.forEach((row) => {
+  assert.equal(row.eventType, 'investment_statement_monthly_value');
+  assert.equal(row.details.decision, 'IGNORE');
+  assert.equal(row.details.result, 'SKIPPED');
+  assert.notEqual(row.payee, 'Etrade Cisco - RSU/ESPP + Future');
+});
+assertNoSysInvestmentActivity_(emptyCisco, 'Cisco Ignore');
+
+const addCisco = makeEtradeFutureWorkbook();
+const addCiscoBuilt = buildContext({ workbook: addCisco });
+const ciscoAddDiff = addCiscoBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+  ...ciscoProfilePayload,
+  monthlyInvestmentValueDecisions: {
+    'Etrade Cisco - RSU/ESPP': 'ADD',
+    'Etrade Cisco - Future': 'ADD'
+  }
+});
+assert.equal(monthlyByAccount_(ciscoAddDiff, 'Etrade Cisco - RSU/ESPP').action, 'ADD');
+assert.equal(monthlyByAccount_(ciscoAddDiff, 'Etrade Cisco - Future').action, 'ADD');
+const ciscoMissingConfirm = addCiscoBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...ciscoProfilePayload,
+  diffDigest: ciscoAddDiff.diffDigest,
+  monthlyInvestmentValueDecisions: {
+    'Etrade Cisco - RSU/ESPP': 'ADD',
+    'Etrade Cisco - Future': 'ADD'
+  }
+});
+assert.equal(ciscoMissingConfirm.ok, false);
+assert.equal(statementMonthlyActivity_(addCiscoBuilt.context).length, 0);
+const ciscoAddApply = addCiscoBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...ciscoProfilePayload,
+  diffDigest: ciscoAddDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecisions: {
+    'Etrade Cisco - RSU/ESPP': 'ADD',
+    'Etrade Cisco - Future': 'ADD'
+  }
+});
+assert.equal(ciscoAddApply.ok, true, ciscoAddApply.error || 'Cisco dual Add Apply failed');
+assert.equal(ciscoAddApply.monthlyInvestmentValueWritten, true);
+assert.equal(rsuAugustValueFromFutureSheet(addCisco), 113042.10);
+assert.equal(augustValueFromFutureSheet(addCisco), 846353.40);
+assert.equal(addCisco.getSheetByName(unifiedName), null);
+const ciscoAddLogs = statementMonthlyActivity_(addCiscoBuilt.context);
+assert.equal(ciscoAddLogs.length, 2);
+assert.deepEqual(ciscoAddLogs.map((row) => row.payee).sort(),
+  ['Etrade Cisco - Future', 'Etrade Cisco - RSU/ESPP']);
+const rsuAddLog = ciscoAddLogs.find((row) => row.payee === 'Etrade Cisco - RSU/ESPP');
+const futureAddFromProfileLog = ciscoAddLogs.find((row) => row.payee === 'Etrade Cisco - Future');
+assert.equal(rsuAddLog.details.proposedValue, 113042.10);
+assert.equal(rsuAddLog.details.valueCategory, 'BROKERAGE_ACCOUNT_VALUE');
+assert.equal(rsuAddLog.details.result, 'APPLIED');
+assert.equal(futureAddFromProfileLog.details.proposedValue, 846353.40);
+assert.equal(futureAddFromProfileLog.details.valueCategory, 'POTENTIAL_UNVESTED_STOCK_PLAN');
+assert.equal(futureAddFromProfileLog.details.result, 'APPLIED');
+assert.equal(
+  (addCiscoBuilt.context.__activityLogEntries || []).filter((row) =>
+    row.eventType === 'investment_update').length,
+  0
+);
+assertNoSysInvestmentActivity_(addCisco, 'Cisco dual Add');
+
+const splitCisco = makeEtradeFutureWorkbook();
+const splitCiscoBuilt = buildContext({ workbook: splitCisco });
+const splitCiscoDiff = splitCiscoBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+  ...ciscoProfilePayload,
+  monthlyInvestmentValueDecisions: {
+    'Etrade Cisco - RSU/ESPP': 'ADD',
+    'Etrade Cisco - Future': 'IGNORE'
+  }
+});
+assert.equal(monthlyByAccount_(splitCiscoDiff, 'Etrade Cisco - RSU/ESPP').willWrite, true);
+assert.equal(monthlyByAccount_(splitCiscoDiff, 'Etrade Cisco - Future').willWrite, false);
+const splitCiscoApply = splitCiscoBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...ciscoProfilePayload,
+  diffDigest: splitCiscoDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecisions: {
+    'Etrade Cisco - RSU/ESPP': 'ADD',
+    'Etrade Cisco - Future': 'IGNORE'
+  }
+});
+assert.equal(splitCiscoApply.ok, true, splitCiscoApply.error || 'independent Cisco decisions failed');
+assert.equal(rsuAugustValueFromFutureSheet(splitCisco), 113042.10);
+assert.equal(augustValueFromFutureSheet(splitCisco), '');
+const splitLogs = statementMonthlyActivity_(splitCiscoBuilt.context);
+assert.equal(splitLogs.find((row) => row.payee === 'Etrade Cisco - RSU/ESPP').details.result, 'APPLIED');
+assert.equal(splitLogs.find((row) => row.payee === 'Etrade Cisco - Future').details.result, 'SKIPPED');
+
+const staleCisco = makeEtradeFutureWorkbook();
+const staleCiscoBuilt = buildContext({ workbook: staleCisco });
+const staleCiscoDiff = staleCiscoBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+  ...ciscoProfilePayload,
+  monthlyInvestmentValueDecisions: {
+    'Etrade Cisco - RSU/ESPP': 'ADD',
+    'Etrade Cisco - Future': 'ADD'
+  }
+});
+staleCisco.getSheetByName('INPUT - Investments').getRange(4, 10).setValue(1);
+const staleCiscoApply = staleCiscoBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...ciscoProfilePayload,
+  diffDigest: staleCiscoDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecisions: {
+    'Etrade Cisco - RSU/ESPP': 'ADD',
+    'Etrade Cisco - Future': 'ADD'
+  }
+});
+assert.equal(staleCiscoApply.ok, false);
+assert.equal(staleCiscoApply.staleDiff, true);
+assert.equal(augustValueFromFutureSheet(staleCisco), '');
+assert.equal(rsuAugustValueFromFutureSheet(staleCisco), 1);
+assert.equal(staleCisco.getSheetByName(unifiedName), null);
+const staleCiscoLogs = statementMonthlyActivity_(staleCiscoBuilt.context);
+assert.ok(staleCiscoLogs.length >= 1);
+staleCiscoLogs.forEach((row) => {
+  assert.equal(row.details.result, 'STALE_REJECTED');
+  assert.notEqual(row.payee, 'Etrade Cisco - RSU/ESPP + Future');
+});
+
+const rollbackCisco = makeEtradeFutureWorkbook();
+const rollbackCiscoBuilt = buildContext({ workbook: rollbackCisco });
+const rollbackCiscoDiff = rollbackCiscoBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+  ...ciscoProfilePayload,
+  monthlyInvestmentValueDecisions: {
+    'Etrade Cisco - RSU/ESPP': 'ADD',
+    'Etrade Cisco - Future': 'ADD'
+  }
+});
+const originalUpdate = rollbackCiscoBuilt.context.updateInvestmentValueByDate;
+rollbackCiscoBuilt.context.updateInvestmentValueByDate = function(payload) {
+  if (String(payload && payload.accountName || '').trim() === 'Etrade Cisco - Future') {
+    throw new Error('injected Future write failure');
+  }
+  return originalUpdate(payload);
+};
+const rollbackCiscoApply = rollbackCiscoBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...ciscoProfilePayload,
+  diffDigest: rollbackCiscoDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecisions: {
+    'Etrade Cisco - RSU/ESPP': 'ADD',
+    'Etrade Cisco - Future': 'ADD'
+  }
+});
+assert.equal(rollbackCiscoApply.ok, false, 'second-leg failure must fail the whole Apply');
+assert.equal(rsuAugustValueFromFutureSheet(rollbackCisco), '',
+  'first-leg ADD must restore blank after second-leg failure');
+assert.equal(augustValueFromFutureSheet(rollbackCisco), '');
+assert.equal(rollbackCisco.getSheetByName(unifiedName), null);
+const rollbackLogs = statementMonthlyActivity_(rollbackCiscoBuilt.context);
+assert.ok(rollbackLogs.length >= 1);
+rollbackLogs.forEach((row) => {
+  assert.equal(row.details.result, 'FAILED');
+  assert.notEqual(row.payee, 'Etrade Cisco - RSU/ESPP + Future');
+});
+assertNoSysInvestmentActivity_(rollbackCisco, 'Cisco atomic rollback');
 
 const stashReconFailWorkbook = makeStashWorkbook();
 const stashReconFailBuilt = buildContext({ workbook: stashReconFailWorkbook });

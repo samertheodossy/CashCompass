@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
+pdfjsLib.GlobalWorkerOptions.workerSrc = require.resolve('pdfjs-dist/legacy/build/pdf.worker.js');
 
 const root = new URL('../', import.meta.url);
 const read = (name) => fs.readFileSync(new URL(name, root), 'utf8');
@@ -31,6 +36,7 @@ const utilities = {
 function buildContext() {
   const context = {
     Utilities: utilities,
+    Promise, Buffer, Uint8Array, ArrayBuffer, crypto,
     String, Number, Object, Array, Math, isFinite, Error, JSON, console,
     document: { createElement: () => ({ getContext: () => null, width: 0, height: 0 }) }
   };
@@ -75,6 +81,9 @@ function buildContext() {
 const ctx = buildContext();
 const mainFixture = fixture('synthetic_etrade_client_statement_main.txt');
 const esppFixture = fixture('synthetic_etrade_client_statement_espp.txt');
+const futureFixture = fixture('synthetic_etrade_client_statement_cisco_future_potential.txt');
+const extractedPotentialSummaryFixture = fixture(
+  'extracted_etrade_client_statement_cisco_potential_summary.txt');
 const encodingFixture = fixture('synthetic_etrade_client_statement_encoding_failure.txt');
 const reconciliationFailFixture = fixture('synthetic_etrade_client_statement_reconciliation_fail.txt');
 const centRoundingFixture = fixture('synthetic_etrade_client_statement_reconciliation_cent_rounding.txt');
@@ -150,6 +159,306 @@ assert.equal(esppParse.ok, true);
 assert.equal(esppParse.accountKind, 'STOCK_PLAN');
 assert.equal(esppParse.holdings.length, 1);
 assert.equal(esppParse.holdings[0].symbol, 'CSCO');
+assert.equal(esppParse.potentialUnvestedStockPlan.value, 3500);
+assert.equal(esppParse.potentialUnvestedStockPlan.valueCategory, 'POTENTIAL_UNVESTED_STOCK_PLAN');
+assert.equal(mainParse.potentialUnvestedStockPlan.value, null);
+
+const mapping = ctx.investmentEtradePotentialUnvestedStockPlanMapping_();
+assert.equal(mapping.accountName, 'Etrade Cisco - Future');
+assert.equal(mapping.source, 'ETRADE_CLIENT_STATEMENT_PDF');
+assert.equal(mapping.valueCategory, 'POTENTIAL_UNVESTED_STOCK_PLAN');
+assert.equal(mapping.valueLabel, 'Potential/unvested stock-plan value');
+assert.equal(mapping.warning, 'This value is not vested and is not current brokerage holdings.');
+assert.equal(ctx.investmentEtradeMatchesPotentialUnvestedStockPlanMapping_('Etrade Cisco - Future'), true);
+assert.equal(ctx.investmentEtradeMatchesPotentialUnvestedStockPlanMapping_(
+  'Etrade Cisco - Future', 'ETRADE_CLIENT_STATEMENT_PDF'), true);
+assert.equal(ctx.investmentEtradeMatchesPotentialUnvestedStockPlanMapping_(
+  'Etrade Cisco - RSU/ESPP', 'ETRADE_CLIENT_STATEMENT_PDF'), false);
+assert.equal(ctx.investmentEtradeMatchesPotentialUnvestedStockPlanMapping_(
+  'Lutfi Etrade Account', 'ETRADE_CLIENT_STATEMENT_PDF'), false);
+assert.equal(ctx.investmentEtradeMatchesPotentialUnvestedStockPlanMapping_(
+  'Samer Etrade Account', 'ETRADE_CLIENT_STATEMENT_PDF'), false);
+assert.equal(ctx.investmentEtradeMatchesPotentialUnvestedStockPlanMapping_(
+  'Future Etrade Cisco', 'ETRADE_CLIENT_STATEMENT_PDF'), false);
+assert.equal(ctx.investmentEtradeMatchesPotentialUnvestedStockPlanMapping_(
+  'Etrade Cisco - Future', 'ETRADE_POSITIONS_PDF'), false);
+
+const futureParse = ctx.investmentEtradeClientStatementParseText_(futureFixture);
+assert.equal(futureParse.ok, true);
+assert.equal(futureParse.preamble.endingTotalValue, 113042.10);
+assert.match(String(futureParse.preamble.asOfDate || ''), /^2026-08-31/);
+assert.equal(futureParse.potentialUnvestedStockPlan.value, 846353.40);
+assert.equal(futureParse.potentialUnvestedStockPlan.valueCategory, 'POTENTIAL_UNVESTED_STOCK_PLAN');
+assert.equal(futureParse.holdings.length, 1);
+assert.equal(futureParse.holdings[0].symbol, 'CSCO');
+assert.equal(futureParse.holdings[0].quantity, 1023.098);
+assert.equal(futureParse.reconciliation.ok, true);
+assert.notEqual(futureParse.potentialUnvestedStockPlan.value, futureParse.preamble.endingTotalValue);
+
+const futureMonthly = ctx.investmentEtradeNormalizePotentialUnvestedMonthlyPreview_(futureParse);
+assert.equal(futureMonthly.ok, true);
+assert.equal(futureMonthly.potentialUnvestedStockPlanValue, 846353.40);
+assert.equal(futureMonthly.valueCategory, 'POTENTIAL_UNVESTED_STOCK_PLAN');
+assert.equal(futureMonthly.accountName, 'Etrade Cisco - Future');
+assert.match(String(futureMonthly.asOf || futureMonthly.asOfDate || ''), /^2026-08-31/);
+assert.ok(Array.isArray(futureMonthly.holdingsRows));
+assert.equal(futureMonthly.holdingsRows.length, 0);
+assert.equal(futureMonthly.cashBalance, null);
+assert.equal(futureMonthly.capabilities.holdings, false);
+assert.equal(futureMonthly.capabilities.taxLots, false);
+assert.equal(futureMonthly.capabilities.activities, false);
+assert.equal(futureMonthly.capabilities.dividendHistory, false);
+assert.notEqual(futureMonthly.potentialUnvestedStockPlanValue, 113042.10);
+
+const ciscoProfile = ctx.investmentEtradeCiscoStatementImportProfile_();
+assert.equal(ciscoProfile.pickerKind, 'STATEMENT_IMPORT_PROFILE');
+assert.equal(ciscoProfile.pickerValue, '__profile__:ETRADE_CISCO_STATEMENT');
+assert.equal(ciscoProfile.pickerLabel, 'E*TRADE Cisco Statement — RSU/ESPP + Future');
+assert.equal(ctx.investmentEtradeMatchesCiscoStatementImportProfile_(ciscoProfile.pickerValue), true);
+assert.equal(ctx.investmentEtradeMatchesCiscoStatementImportProfile_('INV-ET-FUTURE-1'), false);
+assert.equal(ctx.investmentEtradeCiscoBrokerageAccountValueMapping_().accountName, 'Etrade Cisco - RSU/ESPP');
+assert.equal(ctx.investmentEtradeCiscoBrokerageAccountValueMapping_().valueCategory, 'BROKERAGE_ACCOUNT_VALUE');
+assert.equal(
+  ciscoProfile.legs.map((leg) => `${leg.accountName}:${leg.valueCategory}`).join('|'),
+  'Etrade Cisco - RSU/ESPP:BROKERAGE_ACCOUNT_VALUE|Etrade Cisco - Future:POTENTIAL_UNVESTED_STOCK_PLAN'
+);
+
+const ciscoPreview = ctx.investmentEtradeNormalizeCiscoStatementProfilePreview_(futureParse);
+assert.equal(ciscoPreview.ok, true);
+assert.equal(ciscoPreview.importProfile, 'ETRADE_CISCO_STATEMENT');
+assert.equal(ciscoPreview.endingTotalValue, 113042.10);
+assert.equal(ciscoPreview.potentialUnvestedStockPlanValue, 846353.40);
+assert.equal(ciscoPreview.monthlyLegs.length, 2);
+assert.equal(ciscoPreview.monthlyLegs[0].accountName, 'Etrade Cisco - RSU/ESPP');
+assert.equal(ciscoPreview.monthlyLegs[0].proposedValue, 113042.10);
+assert.equal(ciscoPreview.monthlyLegs[0].valueCategory, 'BROKERAGE_ACCOUNT_VALUE');
+assert.equal(ciscoPreview.monthlyLegs[1].accountName, 'Etrade Cisco - Future');
+assert.equal(ciscoPreview.monthlyLegs[1].proposedValue, 846353.40);
+assert.equal(ciscoPreview.monthlyLegs[1].valueCategory, 'POTENTIAL_UNVESTED_STOCK_PLAN');
+assert.equal(ciscoPreview.holdingsRows.length, 0);
+assert.equal(ciscoPreview.accountName, undefined);
+assert.notEqual(ciscoPreview.pickerLabel, 'Etrade Cisco - RSU/ESPP + Future');
+
+function withEndingAsOf_(source, asOfRaw) {
+  return String(source).replace(
+    /Ending Total Value \(as of [^)]+\)/i,
+    'Ending Total Value (as of ' + asOfRaw + ')'
+  );
+}
+
+function assertCombinedCiscoAsOf_(source, expectedIso, label) {
+  const parsed = ctx.investmentEtradeClientStatementParseText_(source);
+  assert.equal(parsed.ok, true, (parsed.error || label) + ' parse failed');
+  assert.equal(parsed.preamble.asOfDate, expectedIso, label + ' as-of');
+  assert.equal(parsed.preamble.endingTotalValue, 113042.10, label + ' ending total');
+  const preview = ctx.investmentEtradeNormalizeCiscoStatementProfilePreview_(parsed);
+  assert.equal(preview.ok, true, (preview.error || label) + ' combined preview failed');
+  assert.equal(preview.asOf, expectedIso, label + ' preview as-of');
+  assert.equal(preview.asOfDate, expectedIso, label + ' preview asOfDate');
+  assert.equal(preview.monthlyLegs.length, 2, label + ' both proposals');
+  assert.equal(preview.monthlyLegs[0].accountName, 'Etrade Cisco - RSU/ESPP');
+  assert.equal(preview.monthlyLegs[0].proposedValue, 113042.10);
+  assert.equal(preview.monthlyLegs[0].valueCategory, 'BROKERAGE_ACCOUNT_VALUE');
+  assert.equal(preview.monthlyLegs[1].accountName, 'Etrade Cisco - Future');
+  assert.equal(preview.monthlyLegs[1].proposedValue, 846353.40);
+  assert.equal(preview.monthlyLegs[1].valueCategory, 'POTENTIAL_UNVESTED_STOCK_PLAN');
+  assert.equal(preview.holdingsRows.length, 0, label + ' no holdings proposal');
+}
+
+assert.equal(ctx.investmentEtradeClientStatementNormalizeStatementDate_('8/31/26'), '2026-08-31');
+assert.equal(ctx.investmentEtradeClientStatementNormalizeStatementDate_('08/31/26'), '2026-08-31');
+assert.equal(ctx.investmentEtradeClientStatementNormalizeStatementDate_('8/31/2026'), '2026-08-31');
+assert.equal(ctx.investmentEtradeClientStatementNormalizeStatementDate_('08/31/2026'), '2026-08-31');
+assert.equal(ctx.investmentEtradeClientStatementNormalizeStatementDate_('2026-08-31'), '2026-08-31');
+assert.equal(ctx.investmentEtradeClientStatementNormalizeStatementDate_('2/31/26'), '');
+assert.equal(ctx.investmentEtradeClientStatementNormalizeStatementDate_(''), '');
+
+const extractedTwoDigitAsOf = [
+  'E*TRADE Client Statement',
+  'Morgan Stanley',
+  'Stock Plan Account',
+  'Statement period: 8/1/26 to 8/31/26',
+  'Beginning Total Value (as of 8/1/26) $110,000.00',
+  'Ending Total Value (as of 8/31/26) $113,042.10',
+  'Security Description Quantity Share Price Total Cost Market Value Unrealized Gain/Loss',
+  'CSCO SYSTEMS INC (CSCO) Purchases 1023.098 $50.00 $40,000.00 $51,154.90 $11,154.90',
+  'Total 1023.098 $50.00 $40,000.00 $51,154.90 $11,154.90',
+  'Total Cash, Bank Deposit Program, and Money Market Funds $61,887.20',
+  'Exercisable Value   Potential Value   Total Value   Percentage',
+  'Restricted Stock    —                 $846,353.40  $846,353.40',
+  'TOTAL VALUE         —                 $846,353.40  $846,353.40',
+  'Potential Restricted Stock',
+  'Grant Date 3/15/23 Vest Date 9/15/24 Potential Value $0.00',
+  'Activity Summary',
+  'CSCO Dividend $12.50'
+].join('\n');
+assertCombinedCiscoAsOf_(extractedTwoDigitAsOf, '2026-08-31', 'extracted 8/31/26');
+assert.notEqual(
+  ctx.investmentEtradeClientStatementParseText_(extractedTwoDigitAsOf).preamble.asOfDate,
+  '2026-08-01',
+  'must not use Beginning Total Value date'
+);
+assert.notEqual(
+  ctx.investmentEtradeClientStatementParseText_(extractedTwoDigitAsOf).preamble.asOfDate,
+  '2023-03-15',
+  'must not use restricted-stock grant date'
+);
+
+['8/31/26', '08/31/26', '8/31/2026', '08/31/2026'].forEach((asOfRaw) => {
+  assertCombinedCiscoAsOf_(withEndingAsOf_(futureFixture, asOfRaw), '2026-08-31', asOfRaw);
+});
+
+const missingEndingAsOf = futureFixture
+  .replace(/Ending Total Value \(as of [^)]+\)/i, 'Ending Total Value') +
+  '\nGrant Date 3/15/23 Vest Date 9/15/24\n';
+const missingAsOfPreview = ctx.investmentEtradeNormalizeCiscoStatementProfilePreview_(
+  ctx.investmentEtradeClientStatementParseText_(missingEndingAsOf));
+assert.equal(missingAsOfPreview.ok, false);
+assert.match(String(missingAsOfPreview.error || ''), /as-of date is required/i);
+
+const invalidEndingAsOf = ctx.investmentEtradeNormalizeCiscoStatementProfilePreview_(
+  ctx.investmentEtradeClientStatementParseText_(withEndingAsOf_(futureFixture, '2/31/26')));
+assert.equal(invalidEndingAsOf.ok, false);
+assert.match(String(invalidEndingAsOf.error || ''), /as-of date is required/i);
+
+const ambiguousEndingAsOf = ctx.investmentEtradeNormalizeCiscoStatementProfilePreview_(
+  ctx.investmentEtradeClientStatementParseText_(
+    futureFixture + '\nEnding Total Value (as of 7/31/26) $113,042.10\n'));
+assert.equal(ambiguousEndingAsOf.ok, false);
+assert.match(String(ambiguousEndingAsOf.error || ''), /as-of date is required/i);
+
+function assertFutureProposal_(preview, expectedValue, label) {
+  const futureLeg = ((preview && preview.monthlyLegs) || []).find((leg) =>
+    leg && leg.accountName === 'Etrade Cisco - Future');
+  if (expectedValue === null) {
+    assert.equal(futureLeg, undefined, label + ' must not propose Future');
+    assert.equal(
+      ((preview && preview.monthlyLegs) || []).some((leg) =>
+        leg && leg.accountName === 'Etrade Cisco - Future' && Number(leg.proposedValue) === 0),
+      false,
+      label + ' must not propose Future $0.00'
+    );
+    return;
+  }
+  assert.ok(futureLeg, label + ' Future proposal missing');
+  assert.equal(futureLeg.proposedValue, expectedValue, label + ' Future value');
+  assert.equal(futureLeg.valueCategory, 'POTENTIAL_UNVESTED_STOCK_PLAN');
+  assert.notEqual(futureLeg.proposedValue, 113042.10, label + ' must not reuse brokerage total');
+}
+
+const futurePotentialBlock =
+  '\nExercisable Value   Potential Value   Total Value   Percentage\nRestricted Stock    —                 $846,353.40  $846,353.40\nTOTAL VALUE         —                 $846,353.40  $846,353.40\n';
+
+const livePotentialParse = ctx.investmentEtradeClientStatementParseText_(
+  extractedPotentialSummaryFixture);
+assert.doesNotMatch(extractedPotentialSummaryFixture, /Potential Restricted Stock total/i);
+assert.match(extractedPotentialSummaryFixture, /Exercisable\s+Value[\s\S]*Potential\s+Value[\s\S]*Total\s+Value/i);
+assert.match(extractedPotentialSummaryFixture, /Restricted Stock/);
+assert.match(extractedPotentialSummaryFixture, /TOTAL VALUE/);
+assert.ok(
+  extractedPotentialSummaryFixture.search(/Exercisable\s+Value/i) <
+    extractedPotentialSummaryFixture.search(/Potential Restricted Stock/i),
+  'summary table must appear before the Potential Restricted Stock grant heading'
+);
+assert.equal(livePotentialParse.ok, true, livePotentialParse.error || 'live potential parse failed');
+assert.equal(livePotentialParse.potentialUnvestedStockPlan.value, 846353.40);
+assert.notEqual(livePotentialParse.potentialUnvestedStockPlan.value, 0);
+assert.notEqual(livePotentialParse.potentialUnvestedStockPlan.value, 113042.10);
+assert.equal(livePotentialParse.preamble.endingTotalValue, 113042.10);
+const livePotentialPreview = ctx.investmentEtradeNormalizeCiscoStatementProfilePreview_(
+  livePotentialParse);
+assert.equal(livePotentialPreview.ok, true, livePotentialPreview.error || 'live potential preview failed');
+assert.equal(livePotentialPreview.asOfDate, '2026-08-31');
+assert.equal(livePotentialPreview.monthlyLegs.length, 2);
+assert.equal(livePotentialPreview.monthlyLegs[0].accountName, 'Etrade Cisco - RSU/ESPP');
+assert.equal(livePotentialPreview.monthlyLegs[0].proposedValue, 113042.10);
+assert.equal(livePotentialPreview.monthlyLegs[0].valueCategory, 'BROKERAGE_ACCOUNT_VALUE');
+assertFutureProposal_(livePotentialPreview, 846353.40, 'extracted summary table');
+assert.equal(livePotentialPreview.holdingsRows.length, 0);
+
+const nbspLiveExtract = extractedPotentialSummaryFixture
+  .replace(/Exercisable Value/g, 'Exercisable\u00A0Value')
+  .replace(/Potential Value/g, 'Potential\u00A0Value')
+  .replace(/Total Value/g, 'Total\u00A0Value')
+  .replace(/—/g, '\u2014');
+const nbspLivePreview = ctx.investmentEtradeNormalizeCiscoStatementProfilePreview_(
+  ctx.investmentEtradeClientStatementParseText_(nbspLiveExtract));
+assert.equal(nbspLivePreview.ok, true, nbspLivePreview.error || 'nbsp extract preview failed');
+assertFutureProposal_(nbspLivePreview, 846353.40, 'nbsp/dash extract');
+
+const joinedPotentialExtract = extractedPotentialSummaryFixture.replace(/\n+/g, ' ');
+const joinedPotentialPreview = ctx.investmentEtradeNormalizeCiscoStatementProfilePreview_(
+  ctx.investmentEtradeClientStatementParseText_(joinedPotentialExtract));
+assert.equal(joinedPotentialPreview.ok, true, joinedPotentialPreview.error || 'joined extract preview failed');
+assertFutureProposal_(joinedPotentialPreview, 846353.40, 'space-joined extract');
+
+const missingPotentialText = futureFixture.replace(futurePotentialBlock, '\n');
+const missingPotentialParse = ctx.investmentEtradeClientStatementParseText_(missingPotentialText);
+assert.equal(missingPotentialParse.ok, true, missingPotentialParse.error || 'missing potential parse');
+assert.equal(missingPotentialParse.potentialUnvestedStockPlan.value, null);
+const missingPotentialPreview = ctx.investmentEtradeNormalizeCiscoStatementProfilePreview_(
+  missingPotentialParse);
+assert.equal(missingPotentialPreview.ok, false);
+assert.match(String(missingPotentialPreview.error || ''), /Potential\/unvested stock-plan value was not found/i);
+assertFutureProposal_(missingPotentialPreview, null, 'missing potential');
+
+const grantRowsOnlyText = futureFixture.replace(
+  futurePotentialBlock,
+  '\nPotential Restricted Stock\nGrant Date 1/1/2020 Unvested Shares 10 Potential Value $100.00\nGrant Date 2/1/2020 Unvested Shares 20 Potential Value $200.00\n');
+const grantRowsOnlyPreview = ctx.investmentEtradeNormalizeCiscoStatementProfilePreview_(
+  ctx.investmentEtradeClientStatementParseText_(grantRowsOnlyText));
+assert.equal(grantRowsOnlyPreview.ok, false);
+assertFutureProposal_(grantRowsOnlyPreview, null, 'grant-row sum');
+
+const explicitZeroText = futureFixture.replace(/\$846,353\.40/g, '$0.00');
+const explicitZeroParse = ctx.investmentEtradeClientStatementParseText_(explicitZeroText);
+assert.equal(explicitZeroParse.potentialUnvestedStockPlan.value, 0);
+const explicitZeroPreview = ctx.investmentEtradeNormalizeCiscoStatementProfilePreview_(
+  explicitZeroParse);
+assert.equal(explicitZeroPreview.ok, true, explicitZeroPreview.error || 'explicit $0 preview failed');
+assertFutureProposal_(explicitZeroPreview, 0, 'explicit potential $0');
+assert.notEqual(explicitZeroPreview.ok, missingPotentialPreview.ok);
+
+const ambiguousPotentialText = futureFixture.replace(
+  'TOTAL VALUE         —                 $846,353.40  $846,353.40',
+  'TOTAL VALUE         —                 $846,353.40  $846,353.40\nTOTAL VALUE         —                 $100.00  $100.00');
+const ambiguousPotentialPreview = ctx.investmentEtradeNormalizeCiscoStatementProfilePreview_(
+  ctx.investmentEtradeClientStatementParseText_(ambiguousPotentialText));
+assert.equal(ambiguousPotentialPreview.ok, false);
+assertFutureProposal_(ambiguousPotentialPreview, null, 'ambiguous potential');
+
+const esppMonthly = ctx.investmentEtradeNormalizePotentialUnvestedMonthlyPreview_(esppParse);
+assert.equal(esppMonthly.ok, true);
+assert.equal(esppMonthly.potentialUnvestedStockPlanValue, 3500);
+assert.ok(Array.isArray(esppMonthly.holdingsRows));
+assert.equal(esppMonthly.holdingsRows.length, 0);
+
+const mainMonthly = ctx.investmentEtradeNormalizePotentialUnvestedMonthlyPreview_(mainParse);
+assert.equal(mainMonthly.ok, false);
+
+const futureHoldingsPreview = ctx.investmentEtradeClientStatementPreviewUnified_({
+  source: 'ETRADE_CLIENT_STATEMENT_PDF',
+  rawStatementText: futureFixture,
+  accountMeta: {
+    stableAccountId: 'INV-ET-FUTURE-1',
+    accountName: 'Synthetic E*TRADE Main',
+    registrationType: 'TAXABLE',
+    explicitAccountMatch: true
+  },
+  explicitAccountMatch: true
+});
+assert.equal(futureHoldingsPreview.ok, true);
+assert.equal(futureHoldingsPreview.normalized.holdings.some((row) => row.ticker === 'CSCO'), true);
+assert.equal(futureHoldingsPreview.normalized.statementParseMeta.endingTotalValue, 113042.10);
+assert.equal(
+  (futureHoldingsPreview.normalized.holdings || []).some((row) =>
+    Number(row.marketValue) === 846353.40),
+  false,
+  'potential/unvested value must not appear as a holdings row'
+);
+assert.equal((futureHoldingsPreview.normalized.taxLots || []).length, 0);
+assert.equal((futureHoldingsPreview.normalized.activities || []).length, 0);
+assert.equal((futureHoldingsPreview.normalized.distributions || []).length, 0);
 
 // --- Conservative reconciliation regressions ---
 const centRoundingParse = ctx.investmentEtradeClientStatementParseText_(centRoundingFixture);
@@ -317,5 +626,138 @@ const mojibakeStandard = ctx.boundedHoldingsPreviewBuildStandardPdfLoadResult_(
 );
 assert.equal(mojibakeStandard.displayTextInEditor, false);
 assert.equal(mojibakeStandard.text, '');
+
+function buildMultipageTextPdf(pageTexts) {
+  const pages = (pageTexts || []).map((text) => {
+    const words = String(text || '').split(/\s+/).filter(Boolean);
+    const lines = [];
+    let current = '';
+    words.forEach((word) => {
+      const next = current ? `${current} ${word}` : word;
+      if (next.length > 72 && current) {
+        lines.push(current);
+        current = word;
+      } else {
+        current = next;
+      }
+    });
+    if (current) lines.push(current);
+    if (!lines.length) lines.push(' ');
+    const ops = ['BT /F1 12 Tf 72 720 Td'];
+    lines.forEach((line, i) => {
+      const escaped = line.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+      if (i > 0) ops.push('0 -16 Td');
+      ops.push(`(${escaped}) Tj`);
+    });
+    ops.push('ET');
+    return ops.join('\n');
+  });
+  const pageCount = pages.length;
+  const fontId = 3 + pageCount * 2;
+  const objects = [];
+  objects[1] = '1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj';
+  const kids = pages.map((_, i) => `${3 + i} 0 R`).join(' ');
+  objects[2] = `2 0 obj<< /Type /Pages /Kids [${kids}] /Count ${pageCount} >>endobj`;
+  pages.forEach((stream, i) => {
+    const pageId = 3 + i;
+    const contentId = 3 + pageCount + i;
+    objects[pageId] = `${pageId} 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${contentId} 0 R /Resources << /Font << /F1 ${fontId} 0 R >> >> >>endobj`;
+    objects[contentId] = `${contentId} 0 obj<< /Length ${stream.length} >>stream\n${stream}\nendstream\nendobj`;
+  });
+  objects[fontId] = `${fontId} 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj`;
+  let body = '%PDF-1.4\n';
+  const offsets = [0];
+  for (let id = 1; id <= fontId; id += 1) {
+    offsets[id] = Buffer.byteLength(body, 'latin1');
+    body += objects[id].endsWith('\n') ? objects[id] : `${objects[id]}\n`;
+  }
+  const xrefStart = Buffer.byteLength(body, 'latin1');
+  const size = fontId + 1;
+  let xref = `xref\n0 ${size}\n0000000000 65535 f \n`;
+  for (let id = 1; id < size; id += 1) {
+    xref += `${String(offsets[id]).padStart(10, '0')} 00000 n \n`;
+  }
+  body += `${xref}trailer<< /Size ${size} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+  return Buffer.from(body, 'latin1');
+}
+
+function ciscoEightPageTexts() {
+  return [
+    'E*TRADE Client Statement Morgan Stanley Stock Plan Account ETRADE_PAGE_MARKER_1',
+    'Statement period: 8/1/2026 to 8/31/2026 Account number: XXXX-FUTURE-001 Account title: Synthetic Cisco Stock Plan ETRADE_PAGE_MARKER_2',
+    'Beginning Total Value (as of 8/1/2026) $110,000.00 Ending Total Value (as of 8/31/2026) $113,042.10 ETRADE_PAGE_MARKER_3',
+    'Security Description Quantity Share Price Total Cost Market Value Unrealized Gain/Loss Unrealized Gain/Loss % Est Annual Income Current Yield % Est YTD Income ETRADE_PAGE_MARKER_4',
+    'CSCO SYSTEMS INC (CSCO) Purchases 1023.098 $50.00 $40,000.00 $51,154.90 $11,154.90 Total 1023.098 $50.00 $40,000.00 $51,154.90 $11,154.90 ETRADE_PAGE_MARKER_5',
+    'Total Cash, Bank Deposit Program, and Money Market Funds $61,887.20 Total Cash, Bank Deposit Program, and Money Market Funds Debit $0.00 ETRADE_PAGE_MARKER_6',
+    'Exercisable Value Potential Value Total Value Percentage Restricted Stock - $846,353.40 $846,353.40 TOTAL VALUE - $846,353.40 $846,353.40 Potential Restricted Stock Grant Date 3/15/23 Potential Value $0.00 ETRADE_PAGE_MARKER_7',
+    'Activity Summary CSCO Dividend $12.50 Realized Gain/(Loss) Summary Total Realized Gain/(Loss) $0.00 ETRADE_PAGE_MARKER_8'
+  ];
+}
+
+function fakePdfFile(pdfBuffer, fileName) {
+  const copy = Buffer.from(pdfBuffer);
+  return {
+    name: fileName || 'statement.pdf',
+    type: 'application/pdf',
+    arrayBuffer() {
+      return Promise.resolve(copy.buffer.slice(copy.byteOffset, copy.byteOffset + copy.byteLength));
+    }
+  };
+}
+
+const eightPageCiscoPdf = buildMultipageTextPdf(ciscoEightPageTexts());
+const eightPageBuffer = eightPageCiscoPdf.buffer.slice(
+  eightPageCiscoPdf.byteOffset,
+  eightPageCiscoPdf.byteOffset + eightPageCiscoPdf.byteLength
+);
+const eightPageExtracted = await ctx.boundedHoldingsPreviewExtractPdfTextFromArrayBuffer_(
+  eightPageBuffer,
+  pdfjsLib
+);
+assert.ok(String(eightPageExtracted || '').trim(), '8-page E*TRADE fixture must extract non-empty text');
+assert.match(eightPageExtracted, /113,042\.10/);
+assert.match(eightPageExtracted, /846,353\.40/);
+assert.match(eightPageExtracted, /Ending Total Value/i);
+assert.match(eightPageExtracted, /Potential Restricted Stock/i);
+for (let page = 1; page <= 8; page += 1) {
+  assert.match(eightPageExtracted, new RegExp(`ETRADE_PAGE_MARKER_${page}`));
+}
+assert.doesNotMatch(eightPageExtracted, /tesseract|OCR required/i);
+
+const eightPageLoad = await ctx.boundedHoldingsPreviewLoadDocumentTextFromFile_(
+  fakePdfFile(eightPageCiscoPdf, 'Etrade-Cisco-Client-Statement.pdf'),
+  pdfjsLib,
+  {
+    source: 'ETRADE_CLIENT_STATEMENT_PDF',
+    groupedMode: false,
+    accountProvider: 'ETRADE'
+  }
+);
+const eightPageEditorText = String(eightPageLoad.previewText || eightPageLoad.text || '');
+assert.ok(eightPageEditorText.trim(), 'combined E*TRADE load must populate extracted text');
+assert.match(eightPageEditorText, /113,042\.10/);
+assert.match(eightPageEditorText, /846,353\.40/);
+assert.equal(eightPageLoad.ocrRequired, false);
+assert.equal(eightPageLoad.displayTextInEditor, true);
+assert.ok(String(eightPageLoad.text || '').length > 0);
+assert.doesNotMatch(String(eightPageLoad.extractionStatus || ''), /OCR/i);
+
+const eightPageParse = ctx.investmentEtradeClientStatementParseText_(eightPageExtracted);
+assert.equal(eightPageParse.ok, true, eightPageParse.error || '8-page extracted E*TRADE parse failed');
+assert.equal(eightPageParse.preamble.endingTotalValue, 113042.10);
+assert.equal(eightPageParse.potentialUnvestedStockPlan.value, 846353.40);
+
+const eightPagePreview = ctx.investmentEtradeNormalizeCiscoStatementProfilePreview_(eightPageParse);
+assert.equal(eightPagePreview.ok, true, eightPagePreview.error || '8-page combined preview failed');
+assert.equal(eightPagePreview.monthlyLegs.length, 2);
+assert.equal(eightPagePreview.monthlyLegs[0].accountName, 'Etrade Cisco - RSU/ESPP');
+assert.equal(eightPagePreview.monthlyLegs[0].proposedValue, 113042.10);
+assert.equal(eightPagePreview.monthlyLegs[0].valueCategory, 'BROKERAGE_ACCOUNT_VALUE');
+assert.equal(eightPagePreview.monthlyLegs[1].accountName, 'Etrade Cisco - Future');
+assert.equal(eightPagePreview.monthlyLegs[1].proposedValue, 846353.40);
+assert.equal(eightPagePreview.monthlyLegs[1].valueCategory, 'POTENTIAL_UNVESTED_STOCK_PLAN');
+assert.equal(eightPagePreview.holdingsRows.length, 0);
+assert.equal(eightPagePreview.capabilities.holdings, false);
+assert.doesNotMatch(JSON.stringify(eightPagePreview), /tesseract|ocrRequired/i);
 
 console.log('checkEtradeClientStatementPdfRegressions: ok');

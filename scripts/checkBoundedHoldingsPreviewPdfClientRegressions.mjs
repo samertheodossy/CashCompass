@@ -147,6 +147,60 @@ startxref
   return Buffer.from(pdf, 'utf8');
 }
 
+function buildMultipageTextPdf(pageTexts) {
+  const pages = (pageTexts || []).map((text) => {
+    const words = String(text || '').split(/\s+/).filter(Boolean);
+    const lines = [];
+    let current = '';
+    words.forEach((word) => {
+      const next = current ? `${current} ${word}` : word;
+      if (next.length > 72 && current) {
+        lines.push(current);
+        current = word;
+      } else {
+        current = next;
+      }
+    });
+    if (current) lines.push(current);
+    if (!lines.length) lines.push(' ');
+    const ops = ['BT /F1 12 Tf 72 720 Td'];
+    lines.forEach((line, i) => {
+      const escaped = line.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+      if (i > 0) ops.push('0 -16 Td');
+      ops.push(`(${escaped}) Tj`);
+    });
+    ops.push('ET');
+    return ops.join('\n');
+  });
+  const pageCount = pages.length;
+  const fontId = 3 + pageCount * 2;
+  const objects = [];
+  objects[1] = '1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj';
+  const kids = pages.map((_, i) => `${3 + i} 0 R`).join(' ');
+  objects[2] = `2 0 obj<< /Type /Pages /Kids [${kids}] /Count ${pageCount} >>endobj`;
+  pages.forEach((stream, i) => {
+    const pageId = 3 + i;
+    const contentId = 3 + pageCount + i;
+    objects[pageId] = `${pageId} 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${contentId} 0 R /Resources << /Font << /F1 ${fontId} 0 R >> >> >>endobj`;
+    objects[contentId] = `${contentId} 0 obj<< /Length ${stream.length} >>stream\n${stream}\nendstream\nendobj`;
+  });
+  objects[fontId] = `${fontId} 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj`;
+  let body = '%PDF-1.4\n';
+  const offsets = [0];
+  for (let id = 1; id <= fontId; id += 1) {
+    offsets[id] = Buffer.byteLength(body, 'latin1');
+    body += objects[id].endsWith('\n') ? objects[id] : `${objects[id]}\n`;
+  }
+  const xrefStart = Buffer.byteLength(body, 'latin1');
+  const size = fontId + 1;
+  let xref = `xref\n0 ${size}\n0000000000 65535 f \n`;
+  for (let id = 1; id < size; id += 1) {
+    xref += `${String(offsets[id]).padStart(10, '0')} 00000 n \n`;
+  }
+  body += `${xref}trailer<< /Size ${size} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+  return Buffer.from(body, 'latin1');
+}
+
 function buildEmptyPagePdf() {
   const stream = ' ';
   const pdf = `%PDF-1.4
@@ -475,6 +529,51 @@ assert.equal(etradeFallbackLoad.detectedSource, 'ETRADE_CLIENT_STATEMENT_PDF');
 assert.equal(etradeFallbackLoad.ocrRequired, true);
 assert.equal(etradeFallbackLoad.displayTextInEditor, false);
 assert.equal(etradeFallbackLoad.text, '');
+
+function ciscoEightPageTexts() {
+  return [
+    'E*TRADE Client Statement Morgan Stanley Stock Plan Account ETRADE_PAGE_MARKER_1',
+    'Statement period: 8/1/2026 to 8/31/2026 Account number: XXXX-FUTURE-001 Account title: Synthetic Cisco Stock Plan ETRADE_PAGE_MARKER_2',
+    'Beginning Total Value (as of 8/1/2026) $110,000.00 Ending Total Value (as of 8/31/2026) $113,042.10 ETRADE_PAGE_MARKER_3',
+    'Security Description Quantity Share Price Total Cost Market Value Unrealized Gain/Loss Unrealized Gain/Loss % Est Annual Income Current Yield % Est YTD Income ETRADE_PAGE_MARKER_4',
+    'CSCO SYSTEMS INC (CSCO) Purchases 1023.098 $50.00 $40,000.00 $51,154.90 $11,154.90 Total 1023.098 $50.00 $40,000.00 $51,154.90 $11,154.90 ETRADE_PAGE_MARKER_5',
+    'Total Cash, Bank Deposit Program, and Money Market Funds $61,887.20 Total Cash, Bank Deposit Program, and Money Market Funds Debit $0.00 ETRADE_PAGE_MARKER_6',
+    'Exercisable Value Potential Value Total Value Percentage Restricted Stock - $846,353.40 $846,353.40 TOTAL VALUE - $846,353.40 $846,353.40 Potential Restricted Stock Grant Date 3/15/23 Potential Value $0.00 ETRADE_PAGE_MARKER_7',
+    'Activity Summary CSCO Dividend $12.50 Realized Gain/(Loss) Summary Total Realized Gain/(Loss) $0.00 ETRADE_PAGE_MARKER_8'
+  ];
+}
+const eightPageCiscoPdf = buildMultipageTextPdf(ciscoEightPageTexts());
+const eightPageExtracted = await context.boundedHoldingsPreviewExtractPdfTextFromArrayBuffer_(
+  eightPageCiscoPdf.buffer.slice(
+    eightPageCiscoPdf.byteOffset,
+    eightPageCiscoPdf.byteOffset + eightPageCiscoPdf.byteLength
+  ),
+  pdfjsLib
+);
+assert.ok(String(eightPageExtracted || '').trim(), '8-page E*TRADE fixture must extract non-empty text');
+assert.match(eightPageExtracted, /113,042\.10/);
+assert.match(eightPageExtracted, /846,353\.40/);
+assert.match(eightPageExtracted, /Ending Total Value/i);
+assert.match(eightPageExtracted, /Potential Restricted Stock/i);
+for (let page = 1; page <= 8; page += 1) {
+  assert.match(eightPageExtracted, new RegExp(`ETRADE_PAGE_MARKER_${page}`));
+}
+const eightPageLoad = await context.boundedHoldingsPreviewLoadDocumentTextFromFile_(
+  fakePdfFile(eightPageCiscoPdf, 'Etrade-Cisco-Client-Statement.pdf'),
+  pdfjsLib,
+  {
+    source: 'ETRADE_CLIENT_STATEMENT_PDF',
+    groupedMode: false,
+    accountProvider: 'ETRADE'
+  }
+);
+assert.ok(String(eightPageLoad.previewText || eightPageLoad.text || '').trim());
+assert.match(String(eightPageLoad.previewText || eightPageLoad.text || ''), /113,042\.10/);
+assert.match(String(eightPageLoad.previewText || eightPageLoad.text || ''), /846,353\.40/);
+assert.equal(eightPageLoad.ocrRequired, false);
+assert.equal(eightPageLoad.displayTextInEditor, true);
+assert.ok(String(eightPageLoad.text || '').length > 0);
+assert.doesNotMatch(String(eightPageLoad.extractionStatus || ''), /OCR/i);
 
 assert.match(boundedHtml, /applyAccountSourceDefaults_/);
 assert.match(boundedHtml, /accountProvider: currentAccountProvider_\(\)/);

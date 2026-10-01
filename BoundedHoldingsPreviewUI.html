@@ -730,21 +730,38 @@
       function isMonthlyValueApplySource_() {
         if (isGroupedMode()) return false;
         var source = String(currentPreviewSource_() || '').trim().toUpperCase();
-        return source === 'SCHWAB_BROKERAGE_STATEMENT_PDF' ||
-          source === 'M1_STATEMENT_PDF' ||
-          source === 'FIDELITY_401K_STATEMENT_PDF' ||
-          source === 'STASH_BROKERAGE_STATEMENT_PDF';
+        if (source === 'SCHWAB_BROKERAGE_STATEMENT_PDF' ||
+            source === 'M1_STATEMENT_PDF' ||
+            source === 'FIDELITY_401K_STATEMENT_PDF' ||
+            source === 'STASH_BROKERAGE_STATEMENT_PDF') {
+          return true;
+        }
+        var accountName = state.selectedAccount && state.selectedAccount.accountName
+          ? String(state.selectedAccount.accountName).trim()
+          : '';
+        return source === 'ETRADE_CLIENT_STATEMENT_PDF' &&
+          accountName === 'Etrade Cisco - Future';
       }
 
       function renderMonthlyInvestmentValueHtml_(monthly) {
         monthly = monthly || {};
         var comparison = String(monthly.comparison || '');
         var selected = String(monthly.decision || monthly.defaultDecision || '').trim().toUpperCase();
-        var html = '<div class="card" id="monthlyInvestmentValueCard"><h3>Monthly investment value</h3>';
+        var html = '<div class="card" id="monthlyInvestmentValueCard"><h3>' +
+          escapeHtml(monthly.valueLabel || 'Monthly investment value') + '</h3>';
+        if (monthly.accountName) {
+          html += '<p>Account: <strong>' + escapeHtml(monthly.accountName) + '</strong></p>';
+        }
+        if (monthly.asOfDate) {
+          html += '<p>Statement as-of: <strong>' + escapeHtml(monthly.asOfDate) + '</strong></p>';
+        }
         html += '<p>Target month: <strong>' +
           escapeHtml(monthly.monthLabel || 'this month') + '</strong></p>';
         html += '<p>Statement value: <strong>' +
           escapeHtml(formatMoney(monthly.proposedValue)) + '</strong></p>';
+        if (monthly.warning) {
+          html += '<p><strong>' + escapeHtml(monthly.warning) + '</strong></p>';
+        }
         if (comparison === 'BLANK') {
           html += '<label style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
             '<input type="radio" name="monthly_investment_value_decision" value="ADD"' +

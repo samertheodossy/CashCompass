@@ -30,6 +30,89 @@ var ETRADE_CLIENT_STATEMENT_SECTION_STOP_PATTERNS_ = [
   /^--\s*\d+\s+of\s+\d+\s*--/i
 ];
 
+/**
+ * Explicit configured mapping for the potential/unvested stock-plan monthly value.
+ * Exact account name only — do not infer from display-name text such as "Future" or "Etrade".
+ */
+function investmentEtradePotentialUnvestedStockPlanMapping_() {
+  return {
+    accountName: 'Etrade Cisco - Future',
+    source: 'ETRADE_CLIENT_STATEMENT_PDF',
+    valueCategory: 'POTENTIAL_UNVESTED_STOCK_PLAN',
+    valueLabel: 'Potential/unvested stock-plan value',
+    warning: 'This value is not vested and is not current brokerage holdings.',
+    providerLabel: 'E*TRADE'
+  };
+}
+
+function investmentEtradeMatchesPotentialUnvestedStockPlanMapping_(accountName, source) {
+  var mapping = investmentEtradePotentialUnvestedStockPlanMapping_();
+  if (String(accountName || '').trim() !== mapping.accountName) return false;
+  if (source == null || String(source).trim() === '') return true;
+  var normalized = typeof investmentPortfolioNormalizeSource_ === 'function'
+    ? investmentPortfolioNormalizeSource_(source)
+    : String(source || '').trim().toUpperCase();
+  return normalized === mapping.source;
+}
+
+/**
+ * Explicit mapping for the vested/current E*TRADE Cisco brokerage monthly value.
+ * Exact account name only — never infer from display-name text such as "RSU" or "ESPP".
+ * Used only by the combined Cisco statement-import profile, not as a standalone import.
+ */
+function investmentEtradeCiscoBrokerageAccountValueMapping_() {
+  return {
+    accountName: 'Etrade Cisco - RSU/ESPP',
+    source: 'ETRADE_CLIENT_STATEMENT_PDF',
+    valueCategory: 'BROKERAGE_ACCOUNT_VALUE',
+    valueLabel: 'Brokerage account value',
+    providerLabel: 'E*TRADE'
+  };
+}
+
+/**
+ * Combined statement-import profile for one E*TRADE Cisco client statement.
+ * Picker-only — not a CashCompass account and not an INPUT - Investments identity.
+ */
+function investmentEtradeCiscoStatementImportProfile_() {
+  var brokerage = investmentEtradeCiscoBrokerageAccountValueMapping_();
+  var potential = investmentEtradePotentialUnvestedStockPlanMapping_();
+  return {
+    pickerKind: 'STATEMENT_IMPORT_PROFILE',
+    pickerValue: '__profile__:ETRADE_CISCO_STATEMENT',
+    pickerLabel: 'E*TRADE Cisco Statement — RSU/ESPP + Future',
+    source: 'ETRADE_CLIENT_STATEMENT_PDF',
+    provider: 'ETRADE',
+    providerLabel: 'E*TRADE',
+    confirmLabel: brokerage.accountName + ' and ' + potential.accountName,
+    legs: [
+      {
+        accountName: brokerage.accountName,
+        valueCategory: brokerage.valueCategory,
+        valueLabel: brokerage.valueLabel,
+        valueOrigin: 'ENDING_TOTAL_VALUE',
+        warning: ''
+      },
+      {
+        accountName: potential.accountName,
+        valueCategory: potential.valueCategory,
+        valueLabel: potential.valueLabel,
+        valueOrigin: 'POTENTIAL_UNVESTED_STOCK_PLAN',
+        warning: potential.warning
+      }
+    ]
+  };
+}
+
+function investmentEtradeMatchesCiscoStatementImportProfile_(pickerValue) {
+  return String(pickerValue || '').trim() ===
+    investmentEtradeCiscoStatementImportProfile_().pickerValue;
+}
+
+function investmentEtradeCiscoStatementProfileCombinedAccountName_() {
+  return 'Etrade Cisco - RSU/ESPP + Future';
+}
+
 function investmentEtradeClientStatementNormalizeText_(raw) {
   return String(raw || '')
     .replace(/[\uE000-\uF8FF]/g, '/')
@@ -235,6 +318,9 @@ function investmentEtradeClientStatementReflowSections_(text) {
     'Total Cash, Bank Deposit Program, and Money Market Funds',
     'Ending Total Value (as of',
     'Potential Restricted Stock',
+    'Exercisable Value',
+    'Potential Value',
+    'TOTAL VALUE',
     'Restricted Stock',
     'Activity Summary',
     'Activity Detail',
@@ -479,6 +565,42 @@ function investmentEtradeClientStatementExtractNumericFieldsAfterTotal_(cells) {
   };
 }
 
+function investmentEtradeClientStatementValidatedIsoDate_(year, month, day) {
+  year = Number(year);
+  month = Number(month);
+  day = Number(day);
+  if (!isFinite(year) || !isFinite(month) || !isFinite(day)) return '';
+  var date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    return '';
+  }
+  return String(year) + '-' + ('0' + month).slice(-2) + '-' + ('0' + day).slice(-2);
+}
+
+/**
+ * Normalize E*TRADE client-statement dates. Accepts 8/31/26, 08/31/26, 8/31/2026,
+ * 08/31/2026, and ISO. Two-digit years map to 20xx. Invalid calendar dates return ''.
+ */
+function investmentEtradeClientStatementNormalizeStatementDate_(value) {
+  var text = String(value || '').trim();
+  if (!text) return '';
+  var isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
+  if (isoMatch) {
+    return investmentEtradeClientStatementValidatedIsoDate_(isoMatch[1], isoMatch[2], isoMatch[3]);
+  }
+  var us = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})$/);
+  if (!us) return '';
+  var year = us[3].length === 2 ? 2000 + Number(us[3]) : Number(us[3]);
+  return investmentEtradeClientStatementValidatedIsoDate_(year, us[1], us[2]);
+}
+
+function investmentEtradeClientStatementResolvePreambleAsOfDate_(preamble) {
+  preamble = preamble || {};
+  var asOf = investmentEtradeClientStatementNormalizeStatementDate_(preamble.asOfDate);
+  if (asOf) return asOf;
+  return investmentEtradeClientStatementNormalizeStatementDate_(preamble.asOfDateRaw);
+}
+
 function investmentEtradeClientStatementParsePreamble_(lines, fullText) {
   var preamble = {
     statementPeriodStart: '',
@@ -535,16 +657,33 @@ function investmentEtradeClientStatementParsePreamble_(lines, fullText) {
     }
   });
   var compact = investmentEtradeClientStatementCompactText_(fullText);
-  var endingMatch = compact.match(
-    /Ending\s+Total\s+Value\s*\(\s*as\s+of\s+(\d{1,2}\/\d{1,2}\/\d{4})\s*\)[^$]*(\$[\d,().\-]+)/i);
-  if (endingMatch) {
-    preamble.asOfDateRaw = endingMatch[1];
-    try {
-      preamble.asOfDate = normalizeInvestmentImportDate_(endingMatch[1], 'Statement as-of');
-    } catch (e) {
-      preamble.asOfDate = endingMatch[1];
+  var endingDateRe =
+    /Ending\s+Total\s+Value\s*\(\s*as\s+of\s+(\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2}))(?!\d)\s*\)/gi;
+  var endingDateMatch;
+  var rawEndingDates = [];
+  var normalizedEndingDates = [];
+  while ((endingDateMatch = endingDateRe.exec(compact)) !== null) {
+    rawEndingDates.push(endingDateMatch[1]);
+    normalizedEndingDates.push(
+      investmentEtradeClientStatementNormalizeStatementDate_(endingDateMatch[1]));
+  }
+  var uniqueValidEndingDates = [];
+  var hasInvalidEndingDate = false;
+  normalizedEndingDates.forEach(function(iso) {
+    if (!iso) {
+      hasInvalidEndingDate = true;
+      return;
     }
-    preamble.endingTotalValue = investmentEtradeClientStatementSafeParseMoney_(endingMatch[2]);
+    if (uniqueValidEndingDates.indexOf(iso) === -1) uniqueValidEndingDates.push(iso);
+  });
+  if (!hasInvalidEndingDate && uniqueValidEndingDates.length === 1) {
+    preamble.asOfDateRaw = rawEndingDates[0];
+    preamble.asOfDate = uniqueValidEndingDates[0];
+  }
+  var endingMatch = compact.match(
+    /Ending\s+Total\s+Value(?:\s*\(\s*as\s+of\s+\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2})(?!\d)\s*\))?[^$]*(\$[\d,().\-]+)/i);
+  if (endingMatch) {
+    preamble.endingTotalValue = investmentEtradeClientStatementSafeParseMoney_(endingMatch[1]);
   }
   var cashMatch = compact.match(
     /Total Cash, Bank Deposit Program, and Money Market Funds(?!\s+Debit)[^$]*(\$[\d,().\-]+)/i);
@@ -729,6 +868,103 @@ function investmentEtradeClientStatementBuildReconciliation_(preamble, holdings)
   };
 }
 
+function investmentEtradeClientStatementNormalizePdfExtractText_(text) {
+  return String(text || '')
+    .replace(/[\u00A0\u202F\u2007\u2009\u200A\u2008\u2002\u2003\uFEFF]/g, ' ')
+    .replace(/[\u2013\u2014\u2212\u2010\u2011]/g, '-');
+}
+
+function investmentEtradeClientStatementSlicePotentialSummarySection_(text) {
+  text = investmentEtradeClientStatementNormalizePdfExtractText_(text);
+  var headerMatch = text.match(
+    /Exercisable\s+Value[\s\S]*?Potential\s+Value[\s\S]*?Total\s+Value/i);
+  if (!headerMatch) return '';
+  var rest = text.slice(headerMatch.index);
+  var afterHeader = rest.slice(headerMatch[0].length);
+  var grantHeading = afterHeader.search(/Potential\s+Restricted\s+Stock\b/i);
+  var stop = afterHeader.search(
+    /(?:^|\n)\s*(?:Grant\s+Detail|Grant\s+Date|Hypothetical\s+Plan\s+Value|Unvested\s+Stock(?:\s+Summary)?|Activity\s+Summary|Activity\s+Detail|Realized\s+Gains?\b|Terms\s+and\s+Conditions)\b/i
+  );
+  var cut = -1;
+  if (grantHeading >= 0) cut = headerMatch[0].length + grantHeading;
+  if (stop >= 0) {
+    var stopAt = headerMatch[0].length + stop;
+    if (cut < 0 || stopAt < cut) cut = stopAt;
+  }
+  if (cut > 0) rest = rest.slice(0, cut);
+  return rest;
+}
+
+function investmentEtradeClientStatementHasPotentialSummaryHeaders_(text) {
+  var compact = investmentEtradeClientStatementCompactText_(
+    investmentEtradeClientStatementNormalizePdfExtractText_(text));
+  var exercisable = compact.search(/Exercisable\s+Value/i);
+  var potential = compact.search(/Potential\s+Value/i);
+  var total = compact.search(/Total\s+Value/i);
+  return exercisable >= 0 && potential > exercisable && total > potential;
+}
+
+function investmentEtradeClientStatementPotentialValueFromSummaryRow_(rowText) {
+  var rest = investmentEtradeClientStatementNormalizePdfExtractText_(rowText)
+    .replace(/^\s*TOTAL\s+VALUE\b/i, '');
+  var money = rest.match(/\$\s*[\d,().\-]+/g) || [];
+  if (money.length < 2) return null;
+  var potentialRaw = money.length >= 3 ? money[1] : money[0];
+  var value = investmentEtradeClientStatementSafeParseMoney_(potentialRaw);
+  if (!investmentEtradeClientStatementHasMoney_(value)) return null;
+  return round2_(Number(value));
+}
+
+function investmentEtradeClientStatementParsePotentialSummaryTableValue_(sectionText) {
+  var section = investmentEtradeClientStatementNormalizePdfExtractText_(sectionText);
+  if (!investmentEtradeClientStatementHasPotentialSummaryHeaders_(section)) return null;
+  var headerMatch = section.match(
+    /Exercisable\s+Value[\s\S]*?Potential\s+Value[\s\S]*?Total\s+Value/i);
+  if (!headerMatch) return null;
+  var afterHeaders = section.slice(headerMatch.index + headerMatch[0].length);
+  var restrictedAt = afterHeaders.search(/(?:^|[\s])Restricted\s+Stock\b/i);
+  if (restrictedAt < 0) return null;
+  var afterRestricted = afterHeaders.slice(restrictedAt);
+  var rowRe = /(?:^|[\s])TOTAL\s+VALUE\b/gi;
+  var values = [];
+  var rowMatch;
+  while ((rowMatch = rowRe.exec(afterRestricted)) !== null) {
+    var rowSlice = afterRestricted.slice(rowMatch.index, rowMatch.index + 220);
+    var cut = rowSlice.search(
+      /\n|Potential\s+Restricted\s+Stock|Grant\s+Date|Grant\s+Detail|Hypothetical\s+Plan\s+Value|Unvested\s+Stock|Activity\s+/i);
+    if (cut > 12) rowSlice = rowSlice.slice(0, cut);
+    var potential = investmentEtradeClientStatementPotentialValueFromSummaryRow_(rowSlice);
+    if (!investmentEtradeClientStatementHasMoney_(potential)) continue;
+    values.push(potential);
+  }
+  var unique = [];
+  values.forEach(function(value) {
+    if (unique.indexOf(value) === -1) unique.push(value);
+  });
+  if (unique.length !== 1) return null;
+  return unique[0];
+}
+
+function investmentEtradeClientStatementParsePotentialUnvestedStockPlan_(lines) {
+  var mapping = investmentEtradePotentialUnvestedStockPlanMapping_();
+  var empty = {
+    value: null,
+    valueCategory: mapping.valueCategory,
+    valueLabel: mapping.valueLabel,
+    warning: mapping.warning
+  };
+  var text = (lines || []).join('\n');
+  var section = investmentEtradeClientStatementSlicePotentialSummarySection_(text);
+  var value = investmentEtradeClientStatementParsePotentialSummaryTableValue_(section);
+  if (!investmentEtradeClientStatementHasMoney_(value)) return empty;
+  return {
+    value: round2_(Number(value)),
+    valueCategory: mapping.valueCategory,
+    valueLabel: mapping.valueLabel,
+    warning: mapping.warning
+  };
+}
+
 function investmentEtradeClientStatementParseText_(rawText) {
   var prepared = investmentEtradeClientStatementPrepareTextForParsing_(rawText);
   if (!prepared.trim()) {
@@ -749,13 +985,15 @@ function investmentEtradeClientStatementParseText_(rawText) {
     lines, headerIndex, accountKind);
   var reconciliation = investmentEtradeClientStatementBuildReconciliation_(
     preamble, holdingsResult.holdings);
+  var potentialUnvestedStockPlan = investmentEtradeClientStatementParsePotentialUnvestedStockPlan_(lines);
   return {
     ok: true,
     preamble: preamble,
     holdings: holdingsResult.holdings,
     excluded: holdingsResult.excluded,
     accountKind: accountKind,
-    reconciliation: reconciliation
+    reconciliation: reconciliation,
+    potentialUnvestedStockPlan: potentialUnvestedStockPlan
   };
 }
 
@@ -1151,5 +1389,157 @@ function investmentEtradeClientStatementPreviewUnified_(input) {
     contractVersion: PORTFOLIO_INTELLIGENCE_HOLDINGS_CONTRACT_VERSION_,
     capabilities: unified.capabilities,
     normalized: unified
+  };
+}
+
+function investmentEtradeNormalizePotentialUnvestedMonthlyPreview_(parseResult) {
+  parseResult = parseResult || {};
+  var mapping = investmentEtradePotentialUnvestedStockPlanMapping_();
+  var preamble = parseResult.preamble || {};
+  var potential = parseResult.potentialUnvestedStockPlan || {};
+  var value = potential.value == null || potential.value === ''
+    ? null
+    : round2_(Number(potential.value));
+  if (value != null && !isFinite(value)) value = null;
+  var asOf = investmentEtradeClientStatementResolvePreambleAsOfDate_(preamble);
+  if (!parseResult.ok) return parseResult;
+  if (value == null) {
+    return {
+      ok: false,
+      reviewRequired: true,
+      source: mapping.source,
+      error: 'Potential/unvested stock-plan value was not found on this E*TRADE statement.'
+    };
+  }
+  if (!asOf) {
+    return {
+      ok: false,
+      reviewRequired: true,
+      source: mapping.source,
+      error: 'Statement as-of date is required for the potential/unvested stock-plan value.'
+    };
+  }
+  return {
+    ok: true,
+    reviewRequired: false,
+    source: mapping.source,
+    provider: 'ETRADE',
+    importPurpose: mapping.valueCategory,
+    valueCategory: mapping.valueCategory,
+    valueLabel: mapping.valueLabel,
+    warning: mapping.warning,
+    accountName: mapping.accountName,
+    parserVersion: parseResult.parserVersion || ETRADE_CLIENT_STATEMENT_PDF_PARSER_VERSION_,
+    asOf: asOf,
+    asOfDate: asOf,
+    potentialUnvestedStockPlanValue: value,
+    endingBalance: value,
+    proposedValue: value,
+    holdingsRows: [],
+    cashBalance: null,
+    totalAccountValue: null,
+    capabilities: {
+      activities: false,
+      holdings: false,
+      taxLots: false,
+      accountSnapshot: false,
+      dividendHistory: false,
+      realizedGainLoss: false
+    }
+  };
+}
+
+function investmentEtradeCiscoStatementProfileResolveEndingTotal_(parseResult) {
+  parseResult = parseResult || {};
+  var recon = parseResult.reconciliation || {};
+  var preamble = parseResult.preamble || {};
+  var ending = recon.endingTotalValue;
+  if (ending == null || ending === '') ending = preamble.endingTotalValue;
+  if (ending == null || ending === '') return null;
+  var value = round2_(Number(ending));
+  return isFinite(value) ? value : null;
+}
+
+function investmentEtradeNormalizeCiscoStatementProfilePreview_(parseResult) {
+  parseResult = parseResult || {};
+  var profile = investmentEtradeCiscoStatementImportProfile_();
+  var brokerage = investmentEtradeCiscoBrokerageAccountValueMapping_();
+  var potentialMapping = investmentEtradePotentialUnvestedStockPlanMapping_();
+  if (!parseResult.ok) return parseResult;
+  var asOf = investmentEtradeClientStatementResolvePreambleAsOfDate_(parseResult.preamble);
+  if (!asOf) {
+    return {
+      ok: false,
+      reviewRequired: true,
+      source: profile.source,
+      importProfile: 'ETRADE_CISCO_STATEMENT',
+      error: 'Statement as-of date is required for the E*TRADE Cisco statement.'
+    };
+  }
+  var brokerageValue = investmentEtradeCiscoStatementProfileResolveEndingTotal_(parseResult);
+  if (brokerageValue == null) {
+    return {
+      ok: false,
+      reviewRequired: true,
+      source: profile.source,
+      importProfile: 'ETRADE_CISCO_STATEMENT',
+      error: 'Brokerage ending account value was not found on this E*TRADE statement.'
+    };
+  }
+  var potentialPreview = investmentEtradeNormalizePotentialUnvestedMonthlyPreview_(parseResult);
+  if (!potentialPreview || !potentialPreview.ok) {
+    return {
+      ok: false,
+      reviewRequired: true,
+      source: profile.source,
+      importProfile: 'ETRADE_CISCO_STATEMENT',
+      error: (potentialPreview && potentialPreview.error) ||
+        'Potential/unvested stock-plan value was not found on this E*TRADE statement.'
+    };
+  }
+  var potentialValue = potentialPreview.potentialUnvestedStockPlanValue;
+  return {
+    ok: true,
+    reviewRequired: false,
+    source: profile.source,
+    provider: 'ETRADE',
+    importProfile: 'ETRADE_CISCO_STATEMENT',
+    pickerKind: profile.pickerKind,
+    pickerValue: profile.pickerValue,
+    pickerLabel: profile.pickerLabel,
+    parserVersion: parseResult.parserVersion || ETRADE_CLIENT_STATEMENT_PDF_PARSER_VERSION_,
+    asOf: asOf,
+    asOfDate: asOf,
+    endingTotalValue: brokerageValue,
+    potentialUnvestedStockPlanValue: potentialValue,
+    holdingsRows: [],
+    cashBalance: null,
+    totalAccountValue: null,
+    capabilities: {
+      activities: false,
+      holdings: false,
+      taxLots: false,
+      accountSnapshot: false,
+      dividendHistory: false,
+      realizedGainLoss: false
+    },
+    monthlyLegs: [
+      {
+        accountName: brokerage.accountName,
+        valueCategory: brokerage.valueCategory,
+        valueLabel: brokerage.valueLabel,
+        valueOrigin: 'ENDING_TOTAL_VALUE',
+        warning: '',
+        proposedValue: brokerageValue
+      },
+      {
+        accountName: potentialMapping.accountName,
+        valueCategory: potentialMapping.valueCategory,
+        valueLabel: potentialMapping.valueLabel,
+        valueOrigin: 'POTENTIAL_UNVESTED_STOCK_PLAN',
+        warning: potentialMapping.warning,
+        proposedValue: potentialValue
+      }
+    ]
   };
 }

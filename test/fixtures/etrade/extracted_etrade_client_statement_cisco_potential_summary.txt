@@ -1,0 +1,34 @@
+E*TRADE Client Statement
+Morgan Stanley
+Stock Plan Account
+Statement period: 8/1/26 to 8/31/26
+Account number: XXXX-FUTURE-001
+Account title: Synthetic Cisco Stock Plan
+
+Beginning Total Value (as of 8/1/26) $110,000.00
+Ending Total Value (as of 8/31/26) $113,042.10
+
+Security Description Quantity Share Price Total Cost Market Value Unrealized Gain/Loss Unrealized Gain/Loss % Est Annual Income Current Yield % Est YTD Income
+CSCO SYSTEMS INC (CSCO) Purchases 1023.098 $50.00 $40,000.00 $51,154.90 $11,154.90
+Total 1023.098 $50.00 $40,000.00 $51,154.90 $11,154.90
+
+Total Cash, Bank Deposit Program, and Money Market Funds $61,887.20
+Total Cash, Bank Deposit Program, and Money Market Funds Debit $0.00
+
+Exercisable Value   Potential Value   Total Value   Percentage
+Restricted Stock    —                 $846,353.40  $846,353.40
+TOTAL VALUE         —                 $846,353.40  $846,353.40
+
+Potential Restricted Stock
+Grant Detail
+Grant Date 3/15/23 Vest Date 9/15/24 Unvested Shares 1000 Potential Value $0.00
+Hypothetical Plan Value $0.00
+
+Unvested Stock Summary
+Hypothetical value for illustration only $0.00
+
+Activity Summary
+CSCO Dividend $12.50
+
+Realized Gain/(Loss) Summary
+Total Realized Gain/(Loss) $0.00

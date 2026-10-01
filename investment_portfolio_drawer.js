@@ -250,6 +250,9 @@ function investmentPortfolioDrawerCustomerImportEligibility_(account) {
     }
     return enabled('FIDELITY_401K_STATEMENT_PDF', '401(k) supports balance-only import');
   }
+  if (provider === 'ETRADE') {
+    return disabled('Import not available yet');
+  }
   var formats = investmentPortfolioDrawerCustomerDrawerFormats_(provider, previewMode);
   if (!formats.length) return disabled('Import not available yet');
   return enabled(formats[0].source, '');
@@ -299,6 +302,23 @@ function investmentPortfolioDrawerBuildPickerOptionLabel_(account) {
     : String(described.customerImportDisabledReason || '').trim();
   if (note) label += ' — ' + note;
   return label;
+}
+
+function investmentPortfolioDrawerStatementImportProfiles_() {
+  if (typeof investmentEtradeCiscoStatementImportProfile_ !== 'function') return [];
+  var profile = investmentEtradeCiscoStatementImportProfile_();
+  return [{
+    pickerKind: profile.pickerKind,
+    pickerValue: profile.pickerValue,
+    pickerLabel: profile.pickerLabel,
+    statementProvider: profile.provider,
+    providerLabel: profile.providerLabel,
+    customerImportEnabled: true,
+    customerImportDisabledReason: '',
+    customerImportPickerNote: '',
+    customerImportSource: profile.source,
+    inactive: false
+  }];
 }
 
 function investmentPortfolioDrawerEvaluateCustomerImportRequest_(account, source) {
@@ -387,6 +407,16 @@ function investmentPortfolioDrawerAssertCustomerImportAllowed_(ss, pickerValueOr
 function investmentPortfolioDrawerGuardCustomerProductionImport_(ss, payload) {
   payload = payload || {};
   var source = investmentPortfolioDrawerNormalizeImportSource_(payload.source);
+  if (typeof investmentEtradeMatchesCiscoStatementImportProfile_ === 'function' &&
+      investmentEtradeMatchesCiscoStatementImportProfile_(payload.pickerValue)) {
+    if (source && source !== 'ETRADE_CLIENT_STATEMENT_PDF') {
+      return {
+        ok: false,
+        error: 'That import source is not available for this statement profile.'
+      };
+    }
+    return { ok: true, statementImportProfile: true };
+  }
   if (!investmentPortfolioDrawerIsCustomerProductionSource_(source)) {
     return { ok: true };
   }
@@ -785,6 +815,8 @@ function investmentPortfolioDrawerBuildPayload_(ss, account) {
     stashImportAvailable: eligibility.enabled && eligibility.source === 'STASH_BROKERAGE_STATEMENT_PDF',
     fidelity401kImportAvailable: eligibility.enabled &&
       eligibility.source === 'FIDELITY_401K_STATEMENT_PDF',
+    etradeFutureImportAvailable: false,
+    etradeCiscoStatementImportAvailable: false,
     supportedImportFormats: customerFormats,
     viewKind: 'EMPTY',
     portfolioStatus: {
@@ -855,6 +887,8 @@ function investmentPortfolioDrawerBuildPayload_(ss, account) {
     payload.schwabImportAvailable = false;
     payload.stashImportAvailable = false;
     payload.robinhoodCsvImportAvailable = false;
+    payload.etradeFutureImportAvailable = false;
+    payload.etradeCiscoStatementImportAvailable = false;
     payload.portfolioStatus = {
       holdingsImported: false,
       latestAsOf: '',
@@ -978,13 +1012,235 @@ function previewFidelity401kStatementFromDashboard(payload) {
 }
 
 /**
- * Dashboard RPC: read-only portfolio drawer payload for one active investment account.
+ * Dashboard RPC: preview-only E*TRADE potential/unvested stock-plan value for
+ * Etrade Cisco - Future. Read-only — no workbook writes.
  *
- * @param {string} pickerValue investmentId or __row__:sysAssetsRow
+ * @param {Object} payload
+ * @returns {Object}
+ */
+function previewEtradeCiscoFutureStatementFromDashboard(payload) {
+  payload = payload || {};
+  var ss = getUserSpreadsheet_();
+  var mapping = typeof investmentEtradePotentialUnvestedStockPlanMapping_ === 'function'
+    ? investmentEtradePotentialUnvestedStockPlanMapping_()
+    : {
+      accountName: 'Etrade Cisco - Future',
+      source: 'ETRADE_CLIENT_STATEMENT_PDF',
+      valueCategory: 'POTENTIAL_UNVESTED_STOCK_PLAN',
+      valueLabel: 'Potential/unvested stock-plan value',
+      warning: 'This value is not vested and is not current brokerage holdings.'
+    };
+  payload = Object.assign({}, payload, { source: mapping.source });
+  var customerGate = investmentPortfolioDrawerGuardCustomerProductionImport_(ss, payload);
+  if (!customerGate.ok) return customerGate;
+  var account = investmentPortfolioDrawerResolveAccountFromPayload_(ss, payload);
+  if (!account ||
+      typeof investmentEtradeMatchesPotentialUnvestedStockPlanMapping_ !== 'function' ||
+      !investmentEtradeMatchesPotentialUnvestedStockPlanMapping_(account.accountName, mapping.source)) {
+    return {
+      ok: false,
+      error: 'Select ' + mapping.accountName +
+        ' before previewing the potential/unvested stock-plan value.'
+    };
+  }
+  if (!payload.explicitAccountMatch) {
+    return {
+      ok: false,
+      error: 'Confirm this document belongs to ' + mapping.accountName + '.'
+    };
+  }
+  var text = String(payload.rawDocumentText || '').trim();
+  if (!text) {
+    return { ok: false, error: 'No E*TRADE/Morgan Stanley statement text supplied.' };
+  }
+  var parsed = investmentEtradeClientStatementParseText_(text);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      error: parsed.error || 'Could not parse E*TRADE statement.'
+    };
+  }
+  var preview = investmentEtradeNormalizePotentialUnvestedMonthlyPreview_(parsed);
+  if (!preview.ok) {
+    return {
+      ok: false,
+      error: preview.error || 'Could not normalize the potential/unvested stock-plan value.'
+    };
+  }
+  return {
+    ok: true,
+    source: mapping.source,
+    provider: 'ETRADE',
+    importPurpose: mapping.valueCategory,
+    valueCategory: mapping.valueCategory,
+    valueLabel: mapping.valueLabel,
+    warning: mapping.warning,
+    accountName: mapping.accountName,
+    preview: preview,
+    brokerageEndingTotalValue: parsed.reconciliation &&
+      parsed.reconciliation.endingTotalValue != null
+      ? parsed.reconciliation.endingTotalValue
+      : (parsed.preamble && parsed.preamble.endingTotalValue),
+    balanceComparison: investmentPortfolioDrawerBuild401kBalanceComparison_(
+      account.currentBalance, preview.potentialUnvestedStockPlanValue)
+  };
+}
+
+function investmentPortfolioDrawerResolveCiscoStatementProfileTargets_(ss, profile) {
+  profile = profile || (typeof investmentEtradeCiscoStatementImportProfile_ === 'function'
+    ? investmentEtradeCiscoStatementImportProfile_() : null);
+  if (!profile) {
+    return { ok: false, error: 'E*TRADE Cisco statement profile is unavailable.' };
+  }
+  var rows = investmentPortfolioDrawerReadActiveAccounts_(ss) || [];
+  var targets = [];
+  var i;
+  for (i = 0; i < (profile.legs || []).length; i++) {
+    var wanted = String(profile.legs[i].accountName || '').trim();
+    var matches = rows.filter(function(row) {
+      return String(row.accountName || '').trim() === wanted;
+    });
+    if (matches.length !== 1) {
+      return {
+        ok: false,
+        error: 'Could not find active CashCompass account "' + wanted + '".'
+      };
+    }
+    var mapped = investmentPortfolioDrawerMapAccountRow_(matches[0]);
+    targets.push({
+      accountName: mapped.accountName,
+      investmentId: mapped.investmentId,
+      sysAssetsRow: mapped.sysAssetsRow,
+      currentBalance: mapped.currentBalance,
+      valueCategory: profile.legs[i].valueCategory,
+      valueLabel: profile.legs[i].valueLabel,
+      warning: profile.legs[i].warning || ''
+    });
+  }
+  return { ok: true, profile: profile, targets: targets };
+}
+
+function investmentPortfolioDrawerBuildCiscoStatementProfilePayload_(ss) {
+  var resolved = investmentPortfolioDrawerResolveCiscoStatementProfileTargets_(ss);
+  if (!resolved.ok) return resolved;
+  var profile = resolved.profile;
+  return {
+    ok: true,
+    pickerKind: profile.pickerKind,
+    pickerValue: profile.pickerValue,
+    profileLabel: profile.pickerLabel,
+    accountName: '',
+    investmentId: '',
+    statementProvider: profile.provider,
+    providerLabel: profile.providerLabel,
+    viewKind: 'ETRADE_CISCO_STATEMENT',
+    customerImportEnabled: true,
+    customerImportSource: profile.source,
+    etradeCiscoStatementImportAvailable: true,
+    etradeFutureImportAvailable: false,
+    m1ImportAvailable: false,
+    schwabImportAvailable: false,
+    stashImportAvailable: false,
+    robinhoodCsvImportAvailable: false,
+    fidelity401kImportAvailable: false,
+    targetAccounts: resolved.targets,
+    supportedImportFormats: [{
+      source: profile.source,
+      label: 'E*TRADE/Morgan Stanley statement PDF',
+      productionReady: true,
+      customerDrawerImport: true,
+      importPurpose: 'STATEMENT_IMPORT_PROFILE'
+    }],
+    unifiedHoldings: [],
+    holdings: [],
+    excludedTickers: [],
+    portfolioStatus: {
+      holdingsImported: false,
+      latestAsOf: '',
+      holdingsCount: 0,
+      marketValueTotal: null,
+      cashBalance: null,
+      holdingsSource: 'NONE',
+      statusLabel: 'One E*TRADE statement updates ' + profile.confirmLabel
+    }
+  };
+}
+
+/**
+ * Dashboard RPC: preview-only combined E*TRADE Cisco statement for
+ * Etrade Cisco - RSU/ESPP and Etrade Cisco - Future. Read-only — no workbook writes.
+ *
+ * @param {Object} payload
+ * @returns {Object}
+ */
+function previewEtradeCiscoStatementProfileFromDashboard(payload) {
+  payload = payload || {};
+  var ss = getUserSpreadsheet_();
+  var profile = typeof investmentEtradeCiscoStatementImportProfile_ === 'function'
+    ? investmentEtradeCiscoStatementImportProfile_()
+    : null;
+  if (!profile) {
+    return { ok: false, error: 'E*TRADE Cisco statement profile is unavailable.' };
+  }
+  payload = Object.assign({}, payload, {
+    pickerValue: profile.pickerValue,
+    source: profile.source,
+    accountName: ''
+  });
+  var customerGate = investmentPortfolioDrawerGuardCustomerProductionImport_(ss, payload);
+  if (!customerGate.ok) return customerGate;
+  var resolved = investmentPortfolioDrawerResolveCiscoStatementProfileTargets_(ss, profile);
+  if (!resolved.ok) return resolved;
+  if (!payload.explicitAccountMatch) {
+    return {
+      ok: false,
+      error: 'Confirm this document belongs to ' + profile.confirmLabel + '.'
+    };
+  }
+  var text = String(payload.rawDocumentText || '').trim();
+  if (!text) {
+    return { ok: false, error: 'No E*TRADE/Morgan Stanley statement text supplied.' };
+  }
+  var parsed = investmentEtradeClientStatementParseText_(text);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      error: parsed.error || 'Could not parse E*TRADE statement.'
+    };
+  }
+  var preview = investmentEtradeNormalizeCiscoStatementProfilePreview_(parsed);
+  if (!preview.ok) {
+    return {
+      ok: false,
+      error: preview.error || 'Could not normalize the E*TRADE Cisco statement.'
+    };
+  }
+  return {
+    ok: true,
+    source: profile.source,
+    provider: 'ETRADE',
+    importProfile: 'ETRADE_CISCO_STATEMENT',
+    pickerKind: profile.pickerKind,
+    pickerValue: profile.pickerValue,
+    profileLabel: profile.pickerLabel,
+    preview: preview,
+    targetAccounts: resolved.targets
+  };
+}
+
+/**
+ * Dashboard RPC: read-only portfolio drawer payload for one active investment account
+ * or a statement-import profile picker value.
+ *
+ * @param {string} pickerValue investmentId, __row__:sysAssetsRow, or __profile__:…
  * @returns {Object}
  */
 function getInvestmentPortfolioDrawerFromDashboard(pickerValue) {
   var ss = getUserSpreadsheet_();
+  if (typeof investmentEtradeMatchesCiscoStatementImportProfile_ === 'function' &&
+      investmentEtradeMatchesCiscoStatementImportProfile_(pickerValue)) {
+    return investmentPortfolioDrawerBuildCiscoStatementProfilePayload_(ss);
+  }
   var account = investmentPortfolioDrawerResolveAccount_(ss, pickerValue);
   if (!account) {
     return { ok: false, error: 'Select an active CashCompass investment account.' };

@@ -2130,31 +2130,36 @@ function setInvestmentPortfolioDrawerView_(view) {
     : (view === 'm1' ? 'm1'
       : (view === 'schwab' ? 'schwab'
         : (view === 'stash' ? 'stash'
-          : (view === '401k' ? '401k' : 'portfolio'))));
+          : (view === '401k' ? '401k'
+            : (view === 'etrade-future' ? 'etrade-future' : 'portfolio')))));
   var mode = requested;
   if (mode === 'import' && !data.robinhoodCsvImportAvailable) mode = 'portfolio';
   if (mode === 'm1' && !data.m1ImportAvailable) mode = 'portfolio';
   if (mode === 'schwab' && !data.schwabImportAvailable) mode = 'portfolio';
   if (mode === 'stash' && !data.stashImportAvailable) mode = 'portfolio';
   if (mode === '401k' && !data.fidelity401kImportAvailable) mode = 'portfolio';
+  if (mode === 'etrade-future' && !data.etradeCiscoStatementImportAvailable) mode = 'portfolio';
   var portfolio = document.getElementById('inv_portfolio_view');
   var importView = document.getElementById('inv_portfolio_import_view');
   var m1View = document.getElementById('inv_portfolio_m1_import_view');
   var schwabView = document.getElementById('inv_portfolio_schwab_import_view');
   var stashView = document.getElementById('inv_portfolio_stash_import_view');
   var k401View = document.getElementById('inv_portfolio_401k_import_view');
+  var etradeFutureView = document.getElementById('inv_portfolio_etrade_future_import_view');
   var portfolioBtn = document.getElementById('inv_portfolio_view_btn');
   var importBtn = document.getElementById('inv_portfolio_import_btn');
   var m1Btn = document.getElementById('inv_portfolio_m1_import_btn');
   var schwabBtn = document.getElementById('inv_portfolio_schwab_import_btn');
   var stashBtn = document.getElementById('inv_portfolio_stash_import_btn');
   var k401Btn = document.getElementById('inv_portfolio_401k_import_btn');
+  var etradeFutureBtn = document.getElementById('inv_portfolio_etrade_future_import_btn');
   if (portfolio) portfolio.hidden = mode !== 'portfolio';
   if (importView) importView.hidden = mode !== 'import';
   if (m1View) m1View.hidden = mode !== 'm1';
   if (schwabView) schwabView.hidden = mode !== 'schwab';
   if (stashView) stashView.hidden = mode !== 'stash';
   if (k401View) k401View.hidden = mode !== '401k';
+  if (etradeFutureView) etradeFutureView.hidden = mode !== 'etrade-future';
   if (portfolioBtn) {
     portfolioBtn.classList.toggle('active', mode === 'portfolio');
     portfolioBtn.setAttribute('aria-selected', mode === 'portfolio' ? 'true' : 'false');
@@ -2179,6 +2184,10 @@ function setInvestmentPortfolioDrawerView_(view) {
     k401Btn.classList.toggle('active', mode === '401k');
     k401Btn.setAttribute('aria-selected', mode === '401k' ? 'true' : 'false');
   }
+  if (etradeFutureBtn) {
+    etradeFutureBtn.classList.toggle('active', mode === 'etrade-future');
+    etradeFutureBtn.setAttribute('aria-selected', mode === 'etrade-future' ? 'true' : 'false');
+  }
   if (mode === 'portfolio' && __investmentPortfolioData) {
     renderInvestmentPortfolioDrawerView_(__investmentPortfolioData);
   }
@@ -2198,6 +2207,11 @@ function setInvestmentPortfolioDrawerView_(view) {
       typeof initInvestmentPortfolioDrawer401kImport_ === 'function') {
     initInvestmentPortfolioDrawer401kImport_(__investmentPortfolioSelectedId, __investmentPortfolioData);
   }
+  if (mode === 'etrade-future' && __investmentPortfolioData &&
+      __investmentPortfolioData.etradeCiscoStatementImportAvailable &&
+      typeof initInvestmentPortfolioDrawerEtradeFutureImport_ === 'function') {
+    initInvestmentPortfolioDrawerEtradeFutureImport_(__investmentPortfolioSelectedId, __investmentPortfolioData);
+  }
 }
 
 function syncInvestmentPortfolioDrawerImportTabs_(data) {
@@ -2207,6 +2221,7 @@ function syncInvestmentPortfolioDrawerImportTabs_(data) {
   var schwabBtn = document.getElementById('inv_portfolio_schwab_import_btn');
   var stashBtn = document.getElementById('inv_portfolio_stash_import_btn');
   var k401Btn = document.getElementById('inv_portfolio_401k_import_btn');
+  var etradeFutureBtn = document.getElementById('inv_portfolio_etrade_future_import_btn');
   if (importBtn) {
     importBtn.hidden = !data.robinhoodCsvImportAvailable;
     importBtn.textContent = 'Import CSV';
@@ -2226,6 +2241,10 @@ function syncInvestmentPortfolioDrawerImportTabs_(data) {
   if (k401Btn) {
     k401Btn.hidden = !data.fidelity401kImportAvailable;
     k401Btn.textContent = 'Retirement savings statement PDF';
+  }
+  if (etradeFutureBtn) {
+    etradeFutureBtn.hidden = !data.etradeCiscoStatementImportAvailable;
+    etradeFutureBtn.textContent = 'E*TRADE Cisco statement';
   }
 }
 
@@ -2277,6 +2296,9 @@ function applyInvestmentPortfolioAccountChange_(select, investmentId) {
   if (typeof resetInvestmentPortfolioDrawer401kImport_ === 'function') {
     resetInvestmentPortfolioDrawer401kImport_(false);
   }
+  if (typeof resetInvestmentPortfolioDrawerEtradeFutureImport_ === 'function') {
+    resetInvestmentPortfolioDrawerEtradeFutureImport_(false);
+  }
   closeInvestmentPlanEditor_();
   __investmentPortfolioData = null;
   var content = document.getElementById('inv_portfolio_account_content');
@@ -2292,6 +2314,9 @@ function applyInvestmentPortfolioAccountChange_(select, investmentId) {
       __investmentPortfolioData = result || {};
       syncInvestmentPortfolioDrawerImportTabs_(result || {});
       renderInvestmentPortfolioDrawerView_(result || {});
+      if (result && result.etradeCiscoStatementImportAvailable) {
+        setInvestmentPortfolioDrawerView_('etrade-future');
+      }
       setStatus('inv_portfolio_status', '', false);
     })
     .withFailureHandler(function(err) {
@@ -2375,6 +2400,29 @@ function populateInvestmentPortfolioDrawerAccounts_(data) {
       if (row.customerImportPickerNote) option.title = String(row.customerImportPickerNote);
     }
     option.setAttribute('data-import-enabled', importEnabled ? 'true' : 'false');
+    select.appendChild(option);
+    count += 1;
+  });
+  (data && data.portfolioActivityProfiles || []).forEach(function(row) {
+    if (!row || row.inactive) return;
+    var pickerValue = String(row.pickerValue || '').trim();
+    var label = String(row.pickerLabel || '').trim();
+    if (!pickerValue || !label) return;
+    var option = document.createElement('option');
+    option.value = pickerValue;
+    option.textContent = label;
+    var importEnabled = row.customerImportEnabled !== false;
+    if (!importEnabled) {
+      option.disabled = true;
+      option.className = 'is-import-unavailable';
+      option.style.color = '#9aa3ad';
+      option.title = String(row.customerImportDisabledReason || 'Import not available yet');
+    } else {
+      option.disabled = false;
+      if (row.customerImportPickerNote) option.title = String(row.customerImportPickerNote);
+    }
+    option.setAttribute('data-import-enabled', importEnabled ? 'true' : 'false');
+    option.setAttribute('data-picker-kind', String(row.pickerKind || 'STATEMENT_IMPORT_PROFILE'));
     select.appendChild(option);
     count += 1;
   });
@@ -2720,7 +2768,9 @@ function renderInvestmentPortfolioAccountHeader_(host, data) {
   header.className = 'investment-portfolio-status-card';
   var title = document.createElement('div');
   title.className = 'investment-portfolio-status-title';
-  title.textContent = String(data.accountName || 'Selected account');
+  title.textContent = data.pickerKind === 'STATEMENT_IMPORT_PROFILE'
+    ? String(data.profileLabel || 'Statement import')
+    : String(data.accountName || 'Selected account');
   header.appendChild(title);
   var row = document.createElement('div');
   row.className = 'investment-portfolio-status-row';
@@ -2815,7 +2865,8 @@ function renderInvestmentPortfolioDrawerView_(data) {
     return;
   }
   renderInvestmentPortfolioAccountHeader_(host, data);
-  if (data.viewKind !== 'FIDELITY_401K_BALANCE') {
+  if (data.viewKind !== 'FIDELITY_401K_BALANCE' && data.viewKind !== 'ETRADE_CISCO_STATEMENT' &&
+      data.viewKind !== 'ETRADE_FUTURE_POTENTIAL') {
     renderInvestmentPortfolioSummaryMetrics_(host, data);
   }
   if (data.viewKind === 'UNIFIED_M1_GROUPED') {
@@ -2824,6 +2875,10 @@ function renderInvestmentPortfolioDrawerView_(data) {
   }
   if (data.viewKind === 'FIDELITY_401K_BALANCE') {
     renderInvestmentPortfolio401kBalanceView_(host, data);
+    return;
+  }
+  if (data.viewKind === 'ETRADE_CISCO_STATEMENT' || data.viewKind === 'ETRADE_FUTURE_POTENTIAL') {
+    renderInvestmentPortfolioEtradeFutureView_(host, data);
     return;
   }
   if (data.viewKind === 'UNIFIED_SINGLE') {
@@ -2885,6 +2940,69 @@ function renderInvestmentPortfolio401kBalanceView_(host, data) {
       metrics, 'Status', String((data.portfolioStatus && data.portfolioStatus.statusLabel) || 'Preview a retirement savings statement PDF'));
     investmentPortfolioAppendNeutralComparisonBlock_(
       metrics, 'No previous statement available');
+  }
+  card.appendChild(metrics);
+  host.appendChild(card);
+}
+
+function renderInvestmentPortfolioEtradeFutureView_(host, data) {
+  data = data || {};
+  var preview = typeof __invDrawerEtradeFutureState !== 'undefined'
+    ? (__invDrawerEtradeFutureState.lastPreview || null) : null;
+  var card = document.createElement('div');
+  card.className = 'investment-portfolio-statement-card';
+  var title = document.createElement('div');
+  title.className = 'investment-portfolio-statement-title';
+  title.textContent = preview ? 'E*TRADE Cisco statement (not saved)' :
+    'E*TRADE Cisco statement';
+  card.appendChild(title);
+  var metrics = document.createElement('div');
+  metrics.className = 'investment-portfolio-summary-metrics';
+  var legs = (preview && Array.isArray(preview.monthlyLegs) && preview.monthlyLegs.length)
+    ? preview.monthlyLegs
+    : ((data.targetAccounts || []).map(function(target) {
+      return {
+        accountName: target.accountName,
+        valueLabel: target.valueLabel,
+        proposedValue: null,
+        warning: target.warning || ''
+      };
+    }));
+  if (preview) {
+    appendInvestmentPortfolioMetricAlways_(metrics, 'As-of', preview.asOfDate || preview.asOf || '—');
+  }
+  if (!legs.length) {
+    appendInvestmentPortfolioMetricAlways_(
+      metrics, 'Status', String((data.portfolioStatus && data.portfolioStatus.statusLabel) ||
+        'Preview one E*TRADE statement for both Cisco accounts'));
+  }
+  legs.forEach(function(leg) {
+    appendInvestmentPortfolioMetricAlways_(metrics, 'Account', leg.accountName || '—');
+    if (leg.proposedValue != null && isFinite(Number(leg.proposedValue))) {
+      appendInvestmentPortfolioMetricAlways_(
+        metrics,
+        leg.valueLabel || 'Statement value',
+        fmtCurrency(Number(leg.proposedValue)));
+    } else {
+      var target = (data.targetAccounts || []).filter(function(item) {
+        return item && item.accountName === leg.accountName;
+      })[0];
+      var workbookBalance = target && target.currentBalance;
+      if (workbookBalance != null && isFinite(Number(workbookBalance))) {
+        appendInvestmentPortfolioMetricAlways_(
+          metrics, 'CashCompass balance', fmtCurrency(Number(workbookBalance)));
+      }
+    }
+    if (leg.warning) {
+      var warning = document.createElement('p');
+      warning.className = 'muted';
+      warning.style.margin = '8px 0 0 0';
+      warning.textContent = String(leg.warning);
+      metrics.appendChild(warning);
+    }
+  });
+  if (preview) {
+    appendInvestmentPortfolioMetricAlways_(metrics, 'Status', 'Preview only — not saved');
   }
   card.appendChild(metrics);
   host.appendChild(card);

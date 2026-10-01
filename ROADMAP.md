@@ -31,8 +31,8 @@ This is the complete active investment list. Imports stay in the common **Invest
 |---|---|---|
 | **401K Account** | Fidelity | Preview-only. Next import gap: explicit Apply of the statement ending balance into a **blank** `INPUT - Investments` statement month only |
 | **Charles Schwab - Personal** | Schwab | Runtime-validated detailed holdings Apply to Unified. Blank-only monthly INPUT fill still needs **October** runtime validation. Occupied cells, including explicit $0, must not be overwritten |
-| **Etrade Cisco - Future** | E*TRADE | No production customer import path. Keep as its own partition. Client-statement PDF/OCR remains deferred |
-| **Etrade Cisco - RSU/ESPP** | E*TRADE | No production customer import path. Keep as its own partition. Client-statement PDF/OCR remains deferred |
+| **Etrade Cisco - Future** | E*TRADE | Potential/unvested stock-plan monthly value from the combined **E\*TRADE Cisco Statement — RSU/ESPP + Future** picker profile. Exact account identity stays **Etrade Cisco - Future**. Not vested holdings |
+| **Etrade Cisco - RSU/ESPP** | E*TRADE | Brokerage ending-total monthly value from the same combined Cisco statement-import profile. Exact account identity stays **Etrade Cisco - RSU/ESPP**. No standalone customer import tab |
 | **Laith 529** | None detected | Manual Update/Add only until a reliable source exists. Do not invent a 529 adapter |
 | **Laith Etrade Account** | E*TRADE | No production customer import path. Keep as its own partition. Client-statement PDF/OCR remains deferred |
 | **Lutfi 529** | None detected | Manual Update/Add only until a reliable source exists. Do not invent a 529 adapter |
@@ -68,14 +68,14 @@ These are planned, not complete:
 - **b. Debt provider/file review and explicit apply** — later sources (CSV/OFX/PDF) wait for Balance-preview parity. Connected Import Data already opens Debt activity. `debt_import.js` stays shadow-only. Provider facts must not write `INPUT - Debts` until the user confirms in Debt activity.
 - **c. Property valuations drawer** — returns when an external evidence source is implemented. Until then, Houses → Update remains the only manual house-value entry path. Do not present an empty drawer or a second manual valuation form. No live listing APIs in this slice. No new house valuation source and no Zillow/Redfin scraping.
 - **d. 401K Account** — Fidelity retirement savings statement PDF is **preview-only**. Next gap is explicit confirmation → Apply of the statement **ending balance** into a **blank** `INPUT - Investments` statement month only. Do not overwrite an occupied cell, including explicit $0. Not a holdings/Unified import.
-- **e. All five E\*TRADE accounts** — **Etrade Cisco - Future**, **Etrade Cisco - RSU/ESPP**, **Laith Etrade Account**, **Lutfi Etrade Account**, and **Samer Etrade Account** have no production customer import tab in Portfolio activity. Keep each as its **own** partition. Do not group them. Do **not** enable client-statement PDF/OCR.
+- **e. Remaining E\*TRADE accounts** — **Laith Etrade Account**, **Lutfi Etrade Account**, and **Samer Etrade Account** have no production customer import tab in Portfolio activity. Keep each as its **own** partition. Do not group them. Do **not** enable Lutfi Etrade or change Samer Etrade Account. **Etrade Cisco - RSU/ESPP** and **Etrade Cisco - Future** stay separate INPUT identities and are filled together from one picker profile: **E\*TRADE Cisco Statement — RSU/ESPP + Future**.
 - **e2. Lutfi Robinhood** — needs CSV eligibility and runtime validation in the existing Portfolio activity drawer. Do not copy **Samer Robinhood** proof onto this account.
 - **e3. Laith 529** and **Lutfi 529** — remain manual until a reliable source is available. No detected provider/import.
 
 ### Deferred / future work
 
 - **f. Optional Zillow/Redfin or uploaded valuation evidence** — provider-neutral property evidence only if later approved. No live Zillow/Redfin APIs are in the current product.
-- **g. Remaining investment imports** — **401K Account** ending-balance Apply (blank INPUT month only); **Lutfi Robinhood** eligibility and runtime validation; production customer import path for all five E\*TRADE accounts listed in the inventory (client-statement PDF/OCR **deferred**); **Laith 529** and **Lutfi 529** stay manual until a reliable source exists. **Samer Robinhood**, **M1 Account - Gmail**, **M1 Account - yahoo**, **Charles Schwab - Personal** detailed holdings, and **Stash Account** detailed holdings are no longer in this remaining list. Robinhood → Unified stays deferred. Stash does not gain monthly INPUT writes in this sequence. No auto-mapping and no silent Apply.
+- **g. Remaining investment imports** — **401K Account** ending-balance Apply (blank INPUT month only); **Lutfi Robinhood** eligibility and runtime validation; production customer import path for remaining E\*TRADE accounts (**Laith Etrade Account**, **Lutfi Etrade Account**, **Samer Etrade Account**; client-statement PDF/OCR **deferred** except the combined **E\*TRADE Cisco Statement — RSU/ESPP + Future** monthly-value profile); **Laith 529** and **Lutfi 529** stay manual until a reliable source exists. **Samer Robinhood**, **M1 Account - Gmail**, **M1 Account - yahoo**, **Charles Schwab - Personal** detailed holdings, and **Stash Account** detailed holdings are no longer in this remaining list. Robinhood → Unified stays deferred. Stash does not gain monthly INPUT writes in this sequence. No auto-mapping and no silent Apply.
 - **h. Income, debt payoff, HELOC, mortgage, tax, and portfolio decision features** — including residual Rolling Financial Plan / Multi-Broker Portfolio Intelligence ranking, Whole-Household Debt Freedom Planner, and related north-star work. These do not interrupt the activity-drawer sequence.
 
 ---
@@ -154,7 +154,7 @@ These are planned, not complete:
   `cashcompass-application` remains **PREPARED BUT UNATTACHED / PARKED**.
   Existing Part 2A-1 through 2A-5 remain enabling foundation, not
   production-ready Planning authority for all domains.
-- **E*TRADE customer import (2026-10-01):** All five E\*TRADE accounts — **Etrade Cisco - Future**, **Etrade Cisco - RSU/ESPP**, **Laith Etrade Account**, **Lutfi Etrade Account**, and **Samer Etrade Account** — have **no production customer import tab**. Keep each as its own partition. Client-statement PDF/OCR remains **deferred**. Transactions CSV / Positions / Gains parsers and labs are not a production drawer path. Source mapping: `ETRADE_SOURCE_MAPPING.md`.
+- **E*TRADE customer import (2026-10-01):** One Portfolio activity picker profile, **E\*TRADE Cisco Statement — RSU/ESPP + Future**, imports one `ETRADE_CLIENT_STATEMENT_PDF` into two independent monthly-value proposals: **Etrade Cisco - RSU/ESPP** (`BROKERAGE_ACCOUNT_VALUE`) and **Etrade Cisco - Future** (`POTENTIAL_UNVESTED_STOCK_PLAN`). Do not create a combined backend account named `Etrade Cisco - RSU/ESPP + Future`. The Future value is not vested and is not current brokerage holdings; this path does not write Unified holdings. **Laith Etrade Account**, **Lutfi Etrade Account**, and **Samer Etrade Account** still have **no production customer import tab**. Keep each as its own partition. Remaining client-statement PDF/OCR for those accounts remains **deferred**. Transactions CSV / Positions / Gains parsers and labs are not a production drawer path except this Cisco statement profile. Source mapping: `ETRADE_SOURCE_MAPPING.md`.
   **Unified holdings Apply** is runtime-validated for **M1 Account - Gmail**, **M1 Account - yahoo**, **Charles Schwab - Personal**, and **Stash Account**. **Samer Robinhood** still writes Activity + derived `SYS - Investment Holdings` only; Robinhood → Unified is not started.
   Broader direction: `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` Phase 1.
 - **SYS sheet cleanup (audit-first):** repository audit + runtime snapshot diagnostic are complete locally. **Next:** owner runs `adminGetSysSheetRuntimeSnapshot()` on the bounded workbook after push; then cleanup decisions follow inventory classifications — no sheet deletion based on empty state alone. See `test/fixtures/sys-sheet-audit-inventory.json`.
@@ -1178,8 +1178,11 @@ Sequenced **immediately after Validator Phase 2 and before major new user featur
   remains deferred.
 - `ETRADE_SOURCE_MAPPING.md` — E*TRADE source inspection **complete**
   (Transactions CSV + Expanded Positions PDF + Gains & Losses PDF).
-  All five E\*TRADE accounts have no production customer import tab;
-  client-statement PDF/OCR remains deferred. Canonical names:
+  All five E\*TRADE accounts remain separate partitions.
+  **Etrade Cisco - RSU/ESPP** and **Etrade Cisco - Future** share one customer picker
+  profile and stay separate INPUT identities;
+  client-statement PDF/OCR remains deferred for **Laith Etrade Account**,
+  **Lutfi Etrade Account**, and **Samer Etrade Account**. Canonical names:
   **Etrade Cisco - Future**, **Etrade Cisco - RSU/ESPP**, **Laith Etrade Account**,
   **Lutfi Etrade Account**, **Samer Etrade Account**.
 - `TODO.md → Product Maturity Stages` — the detailed Stage 1–6 roadmap (effort, dependencies, history, Beta Gate).

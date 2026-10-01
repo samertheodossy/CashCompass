@@ -424,7 +424,9 @@ function getInvestmentUiData() {
       typeOptions: [],
       boundedHoldingsPreviewAvailable: !isCentralModeEnabled_(),
       boundedHoldingsPreviewUrl: typeof boundedHoldingsPreviewLaunchUrl_ === 'function'
-        ? boundedHoldingsPreviewLaunchUrl_() : ''
+        ? boundedHoldingsPreviewLaunchUrl_() : '',
+      portfolioActivityProfiles: typeof investmentPortfolioDrawerStatementImportProfiles_ === 'function'
+        ? investmentPortfolioDrawerStatementImportProfiles_() : []
     };
   }
 
@@ -551,7 +553,9 @@ function getInvestmentUiData() {
     typeOptions: typeOpts,
     boundedHoldingsPreviewAvailable: !isCentralModeEnabled_(),
     boundedHoldingsPreviewUrl: typeof boundedHoldingsPreviewLaunchUrl_ === 'function'
-      ? boundedHoldingsPreviewLaunchUrl_() : ''
+      ? boundedHoldingsPreviewLaunchUrl_() : '',
+    portfolioActivityProfiles: typeof investmentPortfolioDrawerStatementImportProfiles_ === 'function'
+      ? investmentPortfolioDrawerStatementImportProfiles_() : []
   };
 }
 
