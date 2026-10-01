@@ -511,13 +511,17 @@ function getInvestmentUiData() {
     return !!currentYearNames[key] && !!managementByName[key] && !inactive[key];
   });
   const managementAccounts = activeAccounts.map(function(name) {
-    return managementByName[String(name || '').toLowerCase()] || {
+    const row = managementByName[String(name || '').toLowerCase()] || {
       sysAssetsRow: 0,
       accountName: name,
       type: '',
       currentBalance: '',
       inactive: false
     };
+    if (typeof investmentPortfolioDrawerDescribePickerAccount_ === 'function') {
+      return investmentPortfolioDrawerDescribePickerAccount_(row);
+    }
+    return row;
   });
   const inactiveAccounts = allAccounts.filter(function(name) {
     return activeAccounts.indexOf(name) === -1;
@@ -767,11 +771,17 @@ function getInvestmentHistoryValueForMonthFromDisplay_(sheet, display, accountNa
 }
 
 function updateInvestmentValueByDate(payload) {
-  validateRequired_(payload, ['accountName', 'balanceDate', 'currentValue']);
+  validateRequired_(payload, ['accountName', 'balanceDate']);
 
   const accountName = String(payload.accountName || '').trim();
   const balanceDate = parseIsoDateLocal_(payload.balanceDate);
-  const currentValue = toNumber_(payload.currentValue);
+  const rawValue = payload ? payload.currentValue : undefined;
+  // Blank is unknown, not $0. Explicit numeric 0 is present evidence and
+  // remains a valid Update save. Mirrors Bank/House monthly Update.
+  if (!investmentNumericEvidencePresent_(rawValue) || String(rawValue).trim() === '') {
+    throw new Error('Enter a value, including 0.00 if the investment is actually at zero.');
+  }
+  const currentValue = toNumber_(rawValue);
 
   if (!accountName) throw new Error('Account name is required.');
 
@@ -812,35 +822,38 @@ function updateInvestmentValueByDate(payload) {
   // movement; the action label carries the month + new balance for
   // context, e.g. "Updated May-26 balance to $25,432.10". Logged BEFORE
   // runDebtPlanner so the row is captured even if the planner trips on
-  // bad data downstream.
-  try {
-    const tz = Session.getScriptTimeZone();
-    const monthLabel = Utilities.formatDate(balanceDate, tz, 'MMM-yy');
-    const newRaw = round2_(toNumber_(currentValue));
-    appendActivityLog_(ss, {
-      eventType: 'investment_update',
-      entryDate: Utilities.formatDate(stripTime_(new Date()), tz, 'yyyy-MM-dd'),
-      amount: 0,
-      direction: '',
-      payee: accountName,
-      category: '',
-      accountSource: '',
-      cashFlowSheet: '',
-      cashFlowMonth: '',
-      dedupeKey: '',
-      details: JSON.stringify({
-        detailsVersion: 1,
-        fieldName: 'Balance',
-        fieldKind: 'currency',
-        monthLabel: monthLabel,
-        balanceDate: Utilities.formatDate(balanceDate, tz, 'yyyy-MM-dd'),
-        previousRaw: previousRaw,
-        previousDisplay: previousDisplay,
-        newRaw: newRaw
-      })
-    });
-  } catch (logErr) {
-    Logger.log('updateInvestmentValueByDate activity log: ' + logErr);
+  // bad data downstream. Statement Apply records its own decision row
+  // and passes skipActivityLog so this Update-form event is not doubled.
+  if (!payload.skipActivityLog) {
+    try {
+      const tz = Session.getScriptTimeZone();
+      const monthLabel = Utilities.formatDate(balanceDate, tz, 'MMM-yy');
+      const newRaw = round2_(toNumber_(currentValue));
+      appendActivityLog_(ss, {
+        eventType: 'investment_update',
+        entryDate: Utilities.formatDate(stripTime_(new Date()), tz, 'yyyy-MM-dd'),
+        amount: 0,
+        direction: '',
+        payee: accountName,
+        category: '',
+        accountSource: '',
+        cashFlowSheet: '',
+        cashFlowMonth: '',
+        dedupeKey: '',
+        details: JSON.stringify({
+          detailsVersion: 1,
+          fieldName: 'Balance',
+          fieldKind: 'currency',
+          monthLabel: monthLabel,
+          balanceDate: Utilities.formatDate(balanceDate, tz, 'yyyy-MM-dd'),
+          previousRaw: previousRaw,
+          previousDisplay: previousDisplay,
+          newRaw: newRaw
+        })
+      });
+    } catch (logErr) {
+      Logger.log('updateInvestmentValueByDate activity log: ' + logErr);
+    }
   }
 
   try {

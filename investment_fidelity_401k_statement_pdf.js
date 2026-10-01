@@ -352,6 +352,39 @@ function investmentFidelity401kStatementPreviewFromText_(text) {
   return investmentFidelity401kStatementBuildPreview_(text);
 }
 
+function investmentFidelity401kStatementNormalizeMonthlyPreview_(parsed) {
+  parsed = parsed || {};
+  if (!parsed.ok) return parsed;
+  var inner = parsed.preview || {};
+  var asOf = String(inner.asOfDate || inner.statementPeriodEnd || '').trim();
+  var ending = inner.endingBalance == null || inner.endingBalance === ''
+    ? null
+    : round2_(Number(inner.endingBalance));
+  if (ending != null && !isFinite(ending)) ending = null;
+  return {
+    ok: true,
+    reviewRequired: false,
+    source: 'FIDELITY_401K_STATEMENT_PDF',
+    provider: 'FIDELITY',
+    importPurpose: 'BALANCE_SNAPSHOT',
+    accountType: 'RETIREMENT',
+    parserVersion: parsed.parserVersion || FIDELITY_401K_STATEMENT_PDF_PARSER_VERSION_,
+    asOf: asOf,
+    asOfDate: asOf,
+    endingBalance: ending,
+    holdingsRows: [],
+    cashBalance: null,
+    capabilities: {
+      activities: false,
+      holdings: false,
+      taxLots: false,
+      accountSnapshot: true,
+      dividendHistory: false,
+      realizedGainLoss: false
+    }
+  };
+}
+
 function investmentFidelity401kStatementPreview_(input) {
   input = input || {};
   var text = String(input.rawDocumentText || input.rawStatementText || input.text || '').trim();

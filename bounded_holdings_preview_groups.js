@@ -367,6 +367,13 @@ function boundedHoldingsPreviewRunGroupedChildFromDashboard(payload) {
     assertBoundedHoldingsPreviewAllowed_();
     var ss = getUserSpreadsheet_();
     payload = payload || {};
+    payload = Object.assign({}, payload, {
+      source: payload.source || 'M1_STATEMENT_PDF'
+    });
+    if (typeof investmentPortfolioDrawerGuardCustomerProductionImport_ === 'function') {
+      var customerGate = investmentPortfolioDrawerGuardCustomerProductionImport_(ss, payload);
+      if (!customerGate.ok) return customerGate;
+    }
     var groupConfig = boundedHoldingsPreviewMatchGroupProvider_(
       payload.accountName, payload.source || 'M1_STATEMENT_PDF');
     if (!groupConfig) {

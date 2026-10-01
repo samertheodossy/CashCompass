@@ -8,16 +8,44 @@
 
 ---
 
-## Activity architecture status (2026-09-19)
+## Activity architecture status (2026-09-19; investment imports reconciled 2026-10-01)
 
 This is the current import and review model. It does not reopen frozen Planning Overview or Debt UX, and it does not create a second import system. CSV/PDF file adapters and Connected Plaid retrieval are separate sources that must converge on preview-first, explicit confirmation, and CashCompass INPUT/SYS authority until the user confirms.
 
 ### Completed foundations
 
 - Manual **Update / Add new / Manage** for Bank Accounts, Investments, Houses, and Debts: Update records a confirmed monthly (or field) value; Add new creates the account or property; Manage edits identity/settings or stops tracking.
-- Explicit **$0.00** is valid confirmed evidence. Unknown or blank is not $0 and does not create evidence (Bank Update/Add new, Investments Add new, Houses Add/Update).
+- Explicit **$0.00** is valid confirmed evidence. Unknown or blank is not $0 and does not create evidence (Bank Update/Add new, Investments **Add new**, Houses Add/Update). **Investment Update** currently converts a blank field to explicit $0; that is a data-integrity defect, not the Add-new contract. Next bounded fix: reject blank Investment Update values while preserving explicit $0 as valid.
 - Bank monthly-balance saves leave **Available Now**, **Minimum Buffer**, **Use Policy**, and **Priority** unchanged unless the user explicitly opts in. Planning continues to use CashCompass INPUT/SYS values.
-- **Investments → Portfolio activity** is the existing investment import/review surface (Robinhood CSV, M1 statement PDF, Fidelity 401(k) statement PDF, and E*TRADE preview adapters as implemented). Preview does not write until an explicit save/apply in that drawer.
+- **Investments → Portfolio activity** is the only investment import/review surface. Do not invent a second import page. Preview does not write until an explicit save/apply in that drawer. Runtime-validated customer paths:
+  - **Samer Robinhood** — activity CSV; writes `SYS - Investment Activity` and derived `SYS - Investment Holdings`. `INPUT - Investments` remains the account-total authority. Robinhood → Unified remains deferred.
+  - **M1 Account - Gmail** and **M1 Account - yahoo** — grouped statement PDF; Preview → Review → explicit confirmation → Apply to `SYS - Investment Holdings Unified`. Child statement partitions stay under their parent group (max five children each). Grouped Apply does not write the parent monthly INPUT value.
+  - **Charles Schwab - Personal** — brokerage statement PDF detailed holdings Apply to `SYS - Investment Holdings Unified`. Trusted Apply may fill a **blank** `INPUT - Investments` statement month only and must not overwrite an occupied cell, including explicit $0. October runtime validation of that blank-only monthly behavior is still required.
+  - **Stash Account** — brokerage statement PDF detailed holdings Apply to `SYS - Investment Holdings Unified`. This import does **not** update monthly `INPUT - Investments` values.
+
+#### Customer-facing investment account inventory (2026-10-01)
+
+This is the complete active investment list. Imports stay in the common **Investments → Portfolio activity** drawer. Provider-specific parsers stay behind adapters. Do **not** create duplicate provider pages. Each named row is its own CashCompass account partition.
+
+| Account name | Provider | Current status |
+|---|---|---|
+| **401K Account** | Fidelity | Preview-only. Next import gap: explicit Apply of the statement ending balance into a **blank** `INPUT - Investments` statement month only |
+| **Charles Schwab - Personal** | Schwab | Runtime-validated detailed holdings Apply to Unified. Blank-only monthly INPUT fill still needs **October** runtime validation. Occupied cells, including explicit $0, must not be overwritten |
+| **Etrade Cisco - Future** | E*TRADE | No production customer import path. Keep as its own partition. Client-statement PDF/OCR remains deferred |
+| **Etrade Cisco - RSU/ESPP** | E*TRADE | No production customer import path. Keep as its own partition. Client-statement PDF/OCR remains deferred |
+| **Laith 529** | None detected | Manual Update/Add only until a reliable source exists. Do not invent a 529 adapter |
+| **Laith Etrade Account** | E*TRADE | No production customer import path. Keep as its own partition. Client-statement PDF/OCR remains deferred |
+| **Lutfi 529** | None detected | Manual Update/Add only until a reliable source exists. Do not invent a 529 adapter |
+| **Lutfi Etrade Account** | E*TRADE | No production customer import path. Keep as its own partition. Client-statement PDF/OCR remains deferred |
+| **Lutfi Robinhood** | Robinhood | Not runtime-validated. Needs eligibility (Income-Producing + Investment Id, same CSV drawer) and a real import proof. Do not treat **Samer Robinhood** evidence as covering this account |
+| **M1 Account - Gmail** | M1 | Runtime-validated grouped statement PDF Apply to Unified. Child partitions stay under this parent (max five). Grouped Apply does not write the parent monthly INPUT value |
+| **M1 Account - yahoo** | M1 | Runtime-validated grouped statement PDF Apply to Unified. Child partitions stay under this parent (max five). Grouped Apply does not write the parent monthly INPUT value |
+| **Samer Etrade Account** | E*TRADE | No production customer import path. Keep as its own partition. Client-statement PDF/OCR remains deferred |
+| **Samer Robinhood** | Robinhood | Runtime-validated activity CSV. Writes `SYS - Investment Activity` and derived `SYS - Investment Holdings`. Robinhood → Unified remains deferred |
+| **Stash Account** | Stash | Runtime-validated detailed holdings Apply to Unified. Does **not** update monthly `INPUT - Investments` values |
+
+The five E*TRADE accounts are **Etrade Cisco - Future**, **Etrade Cisco - RSU/ESPP**, **Laith Etrade Account**, **Lutfi Etrade Account**, and **Samer Etrade Account**. Do not group them.
+
 - **Bank Accounts → Account activity** is the CSV and Connected provider/Plaid review surface. CSV paste remains feature-flagged off. Review pending imports supports explicit Add as new, Match, Ignore, preview, and confirmed apply. Staging and ingest do not auto-match-write a balance.
 - Account activity **Connected provider / Plaid** previews **Current balance** for already-connected, already-mapped bank accounts and can apply a selected, confirmed Current balance through `plaidImportApplyCashUpdatesFromAccountActivity` → `plaidImportApplyCashUpdates_`. Preview still does not write. Available Now, Minimum Buffer, Use Policy, and Priority are not updated.
 - **Debt activity** is a moved/shared version of the Connected debt review for already-connected, already-mapped debts. Connected **Import Data** opens this drawer with Connected provider / Plaid selected and preserves the triggering institution/account. It reuses `plaidMainBuildDomainReview_` / `plaidMainRenderPreviewAccount_` field mappings, labels, Same/New/Changed status, technical details, and apply safeguards. Preview does not write. Matching fields show Same and cannot be selected. Debt activity is the user-facing preview, review, and apply path. Changed fields apply only after explicit account, field, and value confirmation through `plaidImportApplyDebtUpdatesFromAccountActivity` → `plaidImportApplyDebtUpdates_` → `updateDebtField`. Credit Left and Provider Available Credit stay derived or informational. `debt_import.js` stays shadow-only. Compatibility apply functions may remain; Connected does not present **Apply Selected Updates**.
@@ -29,6 +57,8 @@ This is the current import and review model. It does not reopen frozen Planning 
 - Keep CSV and Plaid distinct inside Account activity.
 - Do not enable CSV paste for customers until the Account activity CSV workflow is accepted as complete.
 - Do not start Property valuations or a second provider-apply workflow in this cluster. Houses → Update remains the only manual house-value entry path; do not present an empty Property valuations button or drawer.
+- **Investment Update blank → $0** — reject a blank Update while keeping explicit $0 valid. Do not weaken Add-new unknown handling.
+- **Charles Schwab - Personal** monthly blank-only INPUT fill still needs **October** runtime validation. Holdings Apply is already runtime-validated.
 
 ### Next implementation slices
 
@@ -36,12 +66,16 @@ These are planned, not complete:
 
 - **a. CSV enablement and full Account activity workflow** — turn on Paste CSV only after preview, link, apply, and ignore coverage is accepted in the drawer.
 - **b. Debt provider/file review and explicit apply** — later sources (CSV/OFX/PDF) wait for Balance-preview parity. Connected Import Data already opens Debt activity. `debt_import.js` stays shadow-only. Provider facts must not write `INPUT - Debts` until the user confirms in Debt activity.
-- **c. Property valuations drawer** — returns when an external evidence source is implemented. Until then, Houses → Update remains the only manual house-value entry path. Do not present an empty drawer or a second manual valuation form. No live listing APIs in this slice.
+- **c. Property valuations drawer** — returns when an external evidence source is implemented. Until then, Houses → Update remains the only manual house-value entry path. Do not present an empty drawer or a second manual valuation form. No live listing APIs in this slice. No new house valuation source and no Zillow/Redfin scraping.
+- **d. 401K Account** — Fidelity retirement savings statement PDF is **preview-only**. Next gap is explicit confirmation → Apply of the statement **ending balance** into a **blank** `INPUT - Investments` statement month only. Do not overwrite an occupied cell, including explicit $0. Not a holdings/Unified import.
+- **e. All five E\*TRADE accounts** — **Etrade Cisco - Future**, **Etrade Cisco - RSU/ESPP**, **Laith Etrade Account**, **Lutfi Etrade Account**, and **Samer Etrade Account** have no production customer import tab in Portfolio activity. Keep each as its **own** partition. Do not group them. Do **not** enable client-statement PDF/OCR.
+- **e2. Lutfi Robinhood** — needs CSV eligibility and runtime validation in the existing Portfolio activity drawer. Do not copy **Samer Robinhood** proof onto this account.
+- **e3. Laith 529** and **Lutfi 529** — remain manual until a reliable source is available. No detected provider/import.
 
 ### Deferred / future work
 
 - **f. Optional Zillow/Redfin or uploaded valuation evidence** — provider-neutral property evidence only if later approved. No live Zillow/Redfin APIs are in the current product.
-- **g. Remaining investment imports** — 401(k) follow-ups, Schwab, Stash, E*TRADE, and Robinhood/M1 follow-ups beyond the adapters already in Portfolio activity. Do not invent a second investment import page.
+- **g. Remaining investment imports** — **401K Account** ending-balance Apply (blank INPUT month only); **Lutfi Robinhood** eligibility and runtime validation; production customer import path for all five E\*TRADE accounts listed in the inventory (client-statement PDF/OCR **deferred**); **Laith 529** and **Lutfi 529** stay manual until a reliable source exists. **Samer Robinhood**, **M1 Account - Gmail**, **M1 Account - yahoo**, **Charles Schwab - Personal** detailed holdings, and **Stash Account** detailed holdings are no longer in this remaining list. Robinhood → Unified stays deferred. Stash does not gain monthly INPUT writes in this sequence. No auto-mapping and no silent Apply.
 - **h. Income, debt payoff, HELOC, mortgage, tax, and portfolio decision features** — including residual Rolling Financial Plan / Multi-Broker Portfolio Intelligence ranking, Whole-Household Debt Freedom Planner, and related north-star work. These do not interrupt the activity-drawer sequence.
 
 ---
@@ -75,7 +109,7 @@ These are planned, not complete:
 - ✅ **Income tracking/recovery lifecycle convergence** — commit `cdbef99` is on `origin/main`. Current income, Add income, and Manage income now separate ordinary review, creation, and lifecycle maintenance; Stop preserves all Cash Flow values/history, explicit Reactivate changes only the guarded Active cells, Add refuses an inactive logical identity, and `income_reactivate` remains non-monetary evidence. Permanent local lifecycle and Dashboard UX regressions pass. This exact final source has owner acceptance and full local regression evidence; no post-change isolated Income writer run is claimed. Income Edit/Rename remains separately unclaimed.
 - ✅ **CashCompass confirmation and inactive-recovery consistency** — customer-facing web actions no longer depend on browser-native `alert`, `confirm`, or `prompt`. One CashCompass-owned confirmation surface covers the reviewed Stop/Reactivate/Skip actions. Bank, Debt, Investment, House, Bill, and Income recovery affordances start hidden, appear only for an authoritative positive inactive count, remain hidden for zero or unknown/error, and collapse after the last reactivation. Administrative `SpreadsheetApp.getUi()` utilities are not customer browser dialogs and remain outside this closure.
 - ✅ **Multi-Broker Portfolio Foundation v1** — commit `e52645f` on `origin/main`. Canonical contracts in `investment_portfolio_foundation.js` and `investment_adapters.js`; Robinhood production path unchanged; synthetic regression suite `test:portfolio-foundation`. Authoritative model: `MULTI_BROKER_PORTFOLIO_DATA_MODEL.md`.
-- ✅ **Bounded Unified Holdings Apply (local engineering — not deployed)** — preview remains read-only until explicit Apply. M1 single/grouped and E*TRADE PDF statement snapshots write to **`SYS - Investment Holdings Unified`** only on owner-confirmed Apply (`bounded_holdings_preview_apply*.js`, `BoundedHoldingsPreviewUI.html`). Diff/replay guard, document lock, rollback on failed write; no writes to `INPUT - Investments`, monthly history, or raw PDF storage. Unified sheet formatting: cash balance column 14 as currency (fixes `1900-01-05` display bug), audit columns hidden not deleted. Local regressions: `test:bounded-holdings-preview-apply`. **Not committed/pushed/deployed** until owner approval; bounded runtime Apply proof remains owner-operated.
+- ✅ **Bounded Unified Holdings Apply (superseded 2026-10-01)** — Preview → Review → explicit confirmation → Apply writes detailed holdings to **`SYS - Investment Holdings Unified`** only. Runtime-validated customer paths: **M1 Account - Gmail**, **M1 Account - yahoo**, **Charles Schwab - Personal**, and **Stash Account**. **Samer Robinhood** remains on `SYS - Investment Activity` + derived `SYS - Investment Holdings`; Robinhood → Unified is deferred. **Lutfi Robinhood** is not covered by that proof. **Stash Account** Apply does not update monthly `INPUT - Investments`. **Charles Schwab - Personal** may fill a blank INPUT statement month only; that monthly behavior still needs October runtime validation. All five E\*TRADE accounts have no production customer import tab. E*TRADE client-statement PDF/OCR remains deferred. No silent Apply.
 - ✅ **SYS sheet repository audit (read-only — local engineering)** — complete inventory of all 16 `SYS -` sheets in `test/fixtures/sys-sheet-audit-inventory.json`; Robinhood holdings trace; unified schema verification; cleanup classifications (`KEEP_ACTIVE` / `KEEP_EMPTY_RESERVED`; zero `SAFE_REMOVAL_CANDIDATE`). Regressions: `test:sys-sheet-audit`. No workbook writes/deletes/renames/migrations.
 - ✅ **SYS sheet runtime snapshot diagnostic (read-only — local engineering)** — admin entry points `adminGetSysSheetRuntimeSnapshot()` / `adminUiGetSysSheetRuntimeSnapshot()` and Validator `vtRunSysSheetRuntimeSnapshot(spreadsheetId)` report exists/rows/headers/formula flags/safe focus metadata without exposing body values. Schema fixture + regressions: `test:sys-sheet-runtime-snapshot`. **Pending:** owner push and bounded-workbook runtime run to resolve live M1 row counts and cash display.
 - ✅ **E*TRADE Source Inspection (documentation only)** — **complete** 2026-08-28. Owner-supplied sources inspected outside Git: **Transactions CSV** (activity), **Expanded Positions PDF** (open lots), **Gains & Losses PDF** (realized closed lots for a selected closing-date period only). Authoritative mapping: `ETRADE_SOURCE_MAPPING.md`. Structured Positions/Gains CSV availability **remains unresolved**. No adapter, persistence, or workbook changes.
@@ -120,8 +154,8 @@ These are planned, not complete:
   `cashcompass-application` remains **PREPARED BUT UNATTACHED / PARKED**.
   Existing Part 2A-1 through 2A-5 remain enabling foundation, not
   production-ready Planning authority for all domains.
-- **E*TRADE Phase A (preview-only Transactions CSV):** implemented locally — synthetic fixtures, `investment_etrade_csv.js`, adapter registry entries, regression tests. **Not** committed/deployed until owner approval; **not** persistence, dashboard upload, or production import. **Next:** Phase B Positions PDF + Phase C Gains & Losses PDF preview (`ETRADE_SOURCE_MAPPING.md`). M1 and Schwab source inspection remain future.
-  **Bounded Unified Holdings Apply** (M1 + E*TRADE → `SYS - Investment Holdings Unified`) is implemented locally with preview/Apply separation and local regressions; owner clasp push + bounded runtime proof are the next gates before treating Apply as production-ready. **Robinhood → Unified migration is not started** — Robinhood still writes Activity + legacy `SYS - Investment Holdings` only.
+- **E*TRADE customer import (2026-10-01):** All five E\*TRADE accounts — **Etrade Cisco - Future**, **Etrade Cisco - RSU/ESPP**, **Laith Etrade Account**, **Lutfi Etrade Account**, and **Samer Etrade Account** — have **no production customer import tab**. Keep each as its own partition. Client-statement PDF/OCR remains **deferred**. Transactions CSV / Positions / Gains parsers and labs are not a production drawer path. Source mapping: `ETRADE_SOURCE_MAPPING.md`.
+  **Unified holdings Apply** is runtime-validated for **M1 Account - Gmail**, **M1 Account - yahoo**, **Charles Schwab - Personal**, and **Stash Account**. **Samer Robinhood** still writes Activity + derived `SYS - Investment Holdings` only; Robinhood → Unified is not started.
   Broader direction: `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` Phase 1.
 - **SYS sheet cleanup (audit-first):** repository audit + runtime snapshot diagnostic are complete locally. **Next:** owner runs `adminGetSysSheetRuntimeSnapshot()` on the bounded workbook after push; then cleanup decisions follow inventory classifications — no sheet deletion based on empty state alone. See `test/fixtures/sys-sheet-audit-inventory.json`.
 - **Open lifecycle-adjacent gaps:** House metadata Edit/Rename remains required
@@ -164,7 +198,7 @@ IDs and estimates remain in `FULL_BETA_REMAINING_PLAN.md`.
 | C — known product gap | Central planner-email debounce/trigger noise | Open historical Central design issue; no financial-data impact | Must be dispositioned in known limitations/operations; implementation priority depends on cohort impact | Re-qualify before implementation; do not mix into import work |
 | C — known product gap | AutoPay creation of a missing exact Cash Flow payee row | Open product/financial decision; current behavior fails closed to manual handling | No unless cohort evidence promotes it | Separate higher-risk Bills decision; not part of completed lifecycle |
 | D — deferred strategic | Residual `RFP-4`/`RFP-5`, shared sheet-write utilities, Income Expected/Due, Money Plan Phase 2, debt aliases/merge, refresh awareness | Deferred | No, except exact evidence already represented elsewhere | Re-qualify after current Beta-critical work |
-| E — future/north star | **Complete financial decision engine** (source-neutral evidence → history → explainable payoff/investment recommendations), plus Strategic Capital Allocation, Whole-Household Debt Freedom Planner, **Multi-Broker Portfolio Intelligence** (`MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` Phases 1–8), rewards/spend optimization, recurring schedule/gap modeling, Recurring Bill & Subscription Discovery, Property Value / AVM Refresh, broader transaction/provider ingestion, Chat/Assistant, billing activation | Future | No | Does not interrupt the current Import / Refresh cluster, frozen Planning, or bounded-workbook safety. See **Complete financial decision engine** below. Foundation v1 + E*TRADE source inspection complete; **bounded Unified Apply local** (M1/E*TRADE statement snapshots); preview-only E*TRADE adapter next after doc approval; Robinhood→Unified migration explicitly deferred; M1/Schwab later |
+| E — future/north star | **Complete financial decision engine** (source-neutral evidence → history → explainable payoff/investment recommendations), plus Strategic Capital Allocation, Whole-Household Debt Freedom Planner, **Multi-Broker Portfolio Intelligence** (`MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` Phases 1–8), rewards/spend optimization, recurring schedule/gap modeling, Recurring Bill & Subscription Discovery, Property Value / AVM Refresh, broader transaction/provider ingestion, Chat/Assistant, billing activation | Future | No | Does not interrupt the current Import / Refresh cluster, frozen Planning, or bounded-workbook safety. See **Complete financial decision engine** below. Current account list and statuses: Activity architecture inventory (2026-10-01). All five E\*TRADE accounts lack a production customer import path; client-statement PDF/OCR remains deferred. **401K Account** is preview-only. **Lutfi Robinhood** needs eligibility/runtime validation. **Laith 529** and **Lutfi 529** remain manual |
 | F — obsolete/stale | Bills/House/Income recovery listed as open; native browser confirmation migration listed as open; zero-count recovery listed as missing; old Bank Import Step 2a “not started”; old bounded deployment cleanup item | Closed or superseded | No | Retain only as clearly labeled history |
 
 The Planning Overview and Debt surfaces remain frozen. Import work improves the
@@ -576,13 +610,7 @@ optional funding-purpose metadata → `RFP-6a` broker activity/holdings foundati
 (prioritized after granular data arrived) → `RFP-3` read-only recommendation engine →
 `RFP-4` completed **This Week** decision detail with deterministic **Why not?**
 counterfactuals → `RFP-5` disposable-workbook and isolated runtime proof.
-**Next Investment milestone after Connected/Apply and E*TRADE doc approval:**
-**preview-only `ETRADE_PACKAGE` adapter** (Phases A–C in
-`ETRADE_SOURCE_MAPPING.md`) — Transactions CSV, Expanded Positions PDF, Gains &
-Losses PDF parsers → normalized preview only. Foundation v1 and E*TRADE source
-inspection are complete; M1/Schwab inspection and persistence wiring remain
-future. Broader multi-broker direction: `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md`
-Phase 1. `RFP-6b` allocation analysis and `RFP-7` tax-lot analysis are later
+**Next Investment data-integrity item:** reject blank **Investment Update** values while preserving explicit $0. **Next remaining import slices:** **401K Account** ending-balance Apply into a blank `INPUT - Investments` month only; **Lutfi Robinhood** eligibility and runtime validation; production customer import path for all five E\*TRADE accounts as **separate** partitions (client-statement PDF/OCR deferred); **Laith 529** and **Lutfi 529** stay manual. **Samer Robinhood**, **M1 Account - Gmail**, **M1 Account - yahoo**, **Charles Schwab - Personal** detailed holdings, and **Stash Account** detailed holdings are runtime-validated. Schwab monthly blank-only INPUT fill still needs October runtime validation. Stash does not write monthly INPUT. Robinhood → Unified remains deferred. Broader multi-broker direction: `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` Phase 1. `RFP-6b` allocation analysis and `RFP-7` tax-lot analysis are later
 portfolio layers (Phases 5–6 of that doc); the household plan must work without
 either. Each slice has a separate review and commit boundary. Existing Rolling
 Debt Payoff behavior stays unchanged until a reviewed composition seam is
@@ -597,8 +625,13 @@ audit/rollback, and safe overlapping re-imports—for reuse by Investments, Bank
 Accounts, Debts, Bills, Income, Houses/valuations, and future domains. Each
 domain keeps its own normalized contract, business rules, permissions, and
 adapter registry; brokerage trades, bank transactions, balances, bills, and
-property valuations are not forced into one universal schema. Robinhood remains
-the first adapter; E*TRADE, M1, Schwab, bank exports, valuation sources, and
+property valuations are not forced into one universal schema. **Samer Robinhood** remains
+the first runtime-validated adapter; **M1 Account - Gmail**, **M1 Account - yahoo**,
+**Charles Schwab - Personal**, and **Stash Account** now use Portfolio activity PDF
+Apply for Unified holdings. All five E\*TRADE accounts still lack a production
+customer import path (client-statement PDF/OCR deferred). **Lutfi Robinhood**,
+**Laith 529**, **Lutfi 529**,
+bank exports, valuation sources, and
 other approved formats are added incrementally. Raw source files remain
 non-retained by default. Any future direct provider connection requires its own
 read-only security, consent, token-storage, privacy, and support review. This
@@ -738,13 +771,16 @@ Performance under `8b`. Preserve Beta `@106` plus the user-controlled bounded de
 ### Priority 4 — Future features
 
 - **Complete financial decision engine** *(future north star; recorded 2026-09-17; does not interrupt current Beta work)* — a source-neutral engine that can use manual and imported data, historical values, holdings, debts, income, expenses, and tax-sensitive information to produce **explainable** payoff and investment recommendations. Full areas, provider coverage, milestones, and dependencies are in **Complete financial decision engine** below. Existing M1, Robinhood, common investment drawer, Data readiness, Planning, and bounded-workbook behavior stay as they are. One common drawer; provider-specific adapters behind it; no duplicate provider pages.
-- **Multi-Broker Portfolio Intelligence** *(Foundation v1 and E*TRADE source
-  inspection complete; **preview-only E*TRADE adapter next** after owner doc
-  approval; broader M1/Schwab work deferred)* — normalized multi-broker portfolio
+- **Multi-Broker Portfolio Intelligence** *(Foundation v1 complete; current
+  account statuses are the Activity architecture inventory 2026-10-01;
+  **Samer Robinhood**, **M1 Account - Gmail**, **M1 Account - yahoo**,
+  **Charles Schwab - Personal**, and **Stash Account** are runtime-validated;
+  all five E\*TRADE accounts have no production customer import tab;
+  client-statement PDF/OCR deferred; **Lutfi Robinhood** needs eligibility
+  and runtime validation; **Laith 529** and **Lutfi 529** remain manual)* — normalized multi-broker portfolio
   data and, later, recommendation-only cash-funding and reinvestment optimizers.
   Extends `RFP-6a` Robinhood foundation through source-agnostic adapters (Plaid
-  optional; E*TRADE uses **`ETRADE_PACKAGE`** = txn CSV + Positions PDF + G/L
-  PDF per `ETRADE_SOURCE_MAPPING.md`). Robinhood remains **protected** from
+  optional). Robinhood remains **protected** from
   default sell-for-cash recommendations; tax-lot detail preserved where sources
   provide it; aggregate holdings alone are insufficient for optimization. Phases
   1–4 data; Phases 5–7 intelligence; Phase 8 execution out of scope until
@@ -863,7 +899,8 @@ Performance under `8b`. Preserve Beta `@106` plus the user-controlled bounded de
 **Documentation only.** This section expands the long-term destination. It does
 **not** change the current Import / Refresh cluster, frozen Planning Overview or
 Debt surfaces, Data readiness four-status contract, common investment drawer,
-Robinhood production path, M1/E*TRADE local unified-holdings work, or
+Robinhood production path, runtime-validated M1/Schwab/Stash Unified holdings Apply,
+**401K Account** preview-only import, missing E*TRADE customer tabs, or
 bounded-workbook safety rules. Do not implement these capabilities from this
 roadmap update.
 
@@ -877,7 +914,8 @@ imported-data application.
 
 **Product-surface constraint.** Keep **one common drawer** and put
 provider-specific parsers behind adapters. Do **not** create duplicate
-provider-specific pages. Preserve current M1, Robinhood, drawer, readiness,
+provider-specific pages. Preserve current **Samer Robinhood**, **M1 Account - Gmail** / **yahoo**,
+**Charles Schwab - Personal**, **Stash Account**, drawer, readiness,
 Planning, and bounded-workbook behavior while this engine is sequenced.
 
 Related contracts already in the repository (do not replace them):
@@ -890,16 +928,20 @@ Normalize every present household account into the shared identity and facts
 model. Add a provider only when the household actually holds it. Record
 supported formats and required fields before an adapter ships.
 
+The canonical current household list and statuses are in
+**Activity architecture status → Customer-facing investment account inventory
+(2026-10-01)**. Do not maintain a second account inventory here. Keep **one
+common drawer**; provider-specific parsers stay behind adapters; do **not**
+create duplicate provider pages.
+
+North-star coverage still includes unused wrappers (HSA, additional IRAs) only
+when the household actually holds them. **Laith 529** and **Lutfi 529** are
+present and remain **manual** until a reliable source exists.
+
 | Provider / account | Supported or planned formats | Required fields (minimum) | Notes |
 |---|---|---|---|
-| **M1** | Statement PDF (local preview / explicit Apply to `SYS - Investment Holdings Unified`); CSV only if a stable export is later confirmed | Stable account identity, as-of date, holdings (symbol, quantity, market value), cash balance | Preserve current M1 path; no separate M1 page |
-| **Robinhood** | Production activity CSV; derived holdings | Stable account identity, activity date, instrument, quantity, amount, as-of / observed timestamps | Preserve the current Robinhood production path; Unified migration remains explicit and later |
-| **E\*TRADE brokerage** | Transactions CSV; Expanded Positions PDF; Gains & Losses PDF (`ETRADE_PACKAGE`) | Masked account identity, export/as-of or period window, activity rows, open lots, realized closed lots | Source mapping complete; preview-only adapter next after current gates |
-| **E\*TRADE ESPP / RSU** | Future grant, vest, sale, and withholding evidence (format TBD after inspection) | Grant/plan identity, vest or purchase date, shares, FMV, cost basis, withholding, holding period / disqualifying-disposition flags when supplied | Do not guess ESPP/RSU rules from brokerage cash activity alone |
-| **Schwab** | Future source inspection (CSV/PDF/other as offered) | TBD after inspection: identity, as-of, holdings, cash, lots if supplied | Same normalized model as other brokers |
-| **Stash** | Future source inspection | TBD after inspection: identity, as-of, holdings or contribution balance | Adapter only if the household holds Stash |
-| **401(k)** | Fidelity 401(k) statement PDF parser exists locally; other plan PDFs/CSV as inspected | Plan identity, as-of, balance, contribution, employer match when present, allocation | Retirement wrapper; not a taxable-brokerage clone |
-| **IRA, HSA, 529, other** | Only when present | Account type / tax wrapper, identity, as-of, balance; contributions or lots when supplied | Do not pre-build unused account types |
+| **See inventory (2026-10-01)** | Per that table | Per that table | Runtime-validated: **Samer Robinhood**, **M1 Account - Gmail**, **M1 Account - yahoo**, **Charles Schwab - Personal**, **Stash Account**. Preview-only: **401K Account**. No production E\*TRADE customer path (five separate partitions; OCR deferred). **Lutfi Robinhood** needs eligibility/runtime validation. **Laith 529** / **Lutfi 529** manual |
+| **IRA, HSA, other unused wrappers** | Only when present | Account type / tax wrapper, identity, as-of, balance | Do not pre-build unused account types |
 
 Every adapter writes through the shared identity, Financial Facts, and (where
 investments) unified holdings contracts. Source type remains a label.
@@ -1053,9 +1095,9 @@ Edit/Rename disposition, or frozen-candidate evidence `8a`–`8f`.
 
 | ID | Milestone | Depends on | Delivers |
 |---|---|---|---|
-| **DE-0** | Preservation gate (constraint, not a feature build) | Current M1, Robinhood, common drawer, Data readiness, Planning freeze, bounded-workbook rules | Written non-regression: no duplicate provider UI; adapters behind the common drawer |
+| **DE-0** | Preservation gate (constraint, not a feature build) | Current **Samer Robinhood**, **M1 Account - Gmail** / **yahoo**, **Charles Schwab - Personal**, **Stash Account**, common drawer, Data readiness, Planning freeze, bounded-workbook rules | Written non-regression: no duplicate provider UI; adapters behind the common drawer |
 | **DE-1** | Source-neutral evidence completeness | Part 2A-0–2A-5; current four-status readiness; no Planning authority switch | Identity, source, as-of, freshness, provenance, confidence on cash/card and then later domains; manual/Plaid/CSV/PDF count equally; explicit zero valid |
-| **DE-2** | Account-coverage adapters | DE-0, DE-1; per-provider format inspection | M1, Robinhood, E\*TRADE brokerage, E\*TRADE ESPP/RSU, Schwab, Stash, 401(k), and IRA/HSA/529 only when present — each behind the common drawer |
+| **DE-2** | Account-coverage adapters | DE-0, DE-1; per-provider format inspection | Remaining: **401K Account** ending-balance Apply; **Lutfi Robinhood** eligibility/runtime validation; production path for all five E\*TRADE accounts as separate partitions (OCR deferred); **Laith 529** / **Lutfi 529** only if a reliable source appears. Do not rebuild runtime-validated Robinhood/M1/Schwab/Stash holdings paths |
 | **DE-3** | Historical data foundation | DE-1; duplicate/replay-safe import | Monthly snapshots, holdings/lots, cash/debt/mortgage/income/expense history, lineage |
 | **DE-4** | Debt-payoff optimizer | DE-1; revolving-debt + HELOC + mortgage facts; frozen Planning safety | Cards/HELOC/mortgages, minimums, APRs, dates, avalanche/snowball, interest saved, reserve protection, surplus scenarios |
 | **DE-5** | Idle-cash allocation | DE-3, DE-4; hard reserve + preferred liquidity | Compare reserve vs payoff vs extra mortgage vs investing with remaining cash, benefit, and risk |
@@ -1126,15 +1168,20 @@ Sequenced **immediately after Validator Phase 2 and before major new user featur
   decision engine (account coverage, history, payoff/investment/retirement
   recommendations, explainability, and governance). Documentation only;
   does not change current Beta sequence.
-- `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` — deferred next Investment milestone:
+- `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` — later Investment intelligence:
   multi-broker normalization, tax lots, passive income, and recommendation-only
-  optimizers (Robinhood protected).
+  optimizers (Robinhood protected). Current customer import status is
+  `ROADMAP.md → Activity architecture status`.
 - `MULTI_BROKER_PORTFOLIO_DATA_MODEL.md` — Foundation v1 canonical contracts
-  (CSV-first adapter model, replay/reconciliation, retirement registration);
-  Robinhood wrapper only; no broker persistence adapters yet.
+  (CSV-first adapter model, replay/reconciliation, retirement registration).
+  **Samer Robinhood** still uses Activity + derived holdings; Unified migration
+  remains deferred.
 - `ETRADE_SOURCE_MAPPING.md` — E*TRADE source inspection **complete**
-  (Transactions CSV + Expanded Positions PDF + Gains & Losses PDF); preview-only
-  adapter design input; structured Positions/G-L CSV availability unresolved.
+  (Transactions CSV + Expanded Positions PDF + Gains & Losses PDF).
+  All five E\*TRADE accounts have no production customer import tab;
+  client-statement PDF/OCR remains deferred. Canonical names:
+  **Etrade Cisco - Future**, **Etrade Cisco - RSU/ESPP**, **Laith Etrade Account**,
+  **Lutfi Etrade Account**, **Samer Etrade Account**.
 - `TODO.md → Product Maturity Stages` — the detailed Stage 1–6 roadmap (effort, dependencies, history, Beta Gate).
 - `PROJECT_CONTEXT.md` — current architecture + project status.
 - `ENGINEERING_STANDARDS.md` — engineering rules, canonical styling, and **Milestone Discipline (§11)**.

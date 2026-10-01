@@ -85,4 +85,26 @@ const classification = ctx.investmentFidelity401kStatementClassifyDocumentType_(
 assert.equal(classification.documentType, 'FIDELITY_401K_STATEMENT_PDF');
 assert.equal(classification.usable, true);
 
+const sep2026Fixture = fixture('synthetic_fidelity_401k_statement_sep_2026.txt');
+const sepPreview = ctx.investmentFidelity401kStatementPreviewFromText_(sep2026Fixture);
+assert.equal(sepPreview.ok, true);
+assert.equal(sepPreview.preview.asOfDate, '2026-09-30');
+assert.equal(sepPreview.preview.endingBalance, 1919468.06);
+assert.equal(sepPreview.preview.summary.beginningBalance, 1673531.03);
+assert.notEqual(sepPreview.preview.endingBalance, sepPreview.preview.summary.beginningBalance);
+assert.notEqual(sepPreview.preview.endingBalance, sepPreview.preview.summary.changeInMarketValue);
+
+const monthlyPreview = ctx.investmentFidelity401kStatementNormalizeMonthlyPreview_(sepPreview);
+assert.equal(monthlyPreview.ok, true);
+assert.equal(monthlyPreview.source, 'FIDELITY_401K_STATEMENT_PDF');
+assert.equal(monthlyPreview.asOf, '2026-09-30');
+assert.equal(monthlyPreview.asOfDate, '2026-09-30');
+assert.equal(monthlyPreview.endingBalance, 1919468.06);
+assert.ok(Array.isArray(monthlyPreview.holdingsRows));
+assert.equal(monthlyPreview.holdingsRows.length, 0);
+assert.equal(monthlyPreview.cashBalance, null);
+assert.equal(monthlyPreview.capabilities.holdings, false);
+assert.equal(monthlyPreview.capabilities.accountSnapshot, true);
+assert.equal(Object.prototype.hasOwnProperty.call(monthlyPreview, 'fundHoldings'), false);
+
 console.log('checkFidelity401kStatementPdfRegressions: ok');

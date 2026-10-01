@@ -321,7 +321,8 @@
         applyReviewed: false,
         applyDiff: null,
         applyDiffDigest: '',
-        applyStatusMessage: ''
+        applyStatusMessage: '',
+        monthlyInvestmentValueDecision: ''
       };
 
       function currentText() {
@@ -729,22 +730,46 @@
       function isMonthlyValueApplySource_() {
         if (isGroupedMode()) return false;
         var source = String(currentPreviewSource_() || '').trim().toUpperCase();
-        return source === 'SCHWAB_BROKERAGE_STATEMENT_PDF' || source === 'M1_STATEMENT_PDF';
+        return source === 'SCHWAB_BROKERAGE_STATEMENT_PDF' ||
+          source === 'M1_STATEMENT_PDF' ||
+          source === 'FIDELITY_401K_STATEMENT_PDF';
       }
 
       function renderMonthlyInvestmentValueHtml_(monthly) {
         monthly = monthly || {};
-        var action = String(monthly.action || 'SKIP');
-        var reason = String(monthly.reason || '');
+        var comparison = String(monthly.comparison || '');
+        var selected = String(monthly.decision || monthly.defaultDecision || '').trim().toUpperCase();
         var html = '<div class="card" id="monthlyInvestmentValueCard"><h3>Monthly investment value</h3>';
-        if (action === 'ADD') {
-          html += '<p>' + escapeHtml(monthly.message ||
-            ('Add ' + (monthly.monthLabel || 'this month') + ' value: ' +
-              formatMoney(monthly.proposedValue))) + '</p>';
-        } else if (reason === 'OCCUPIED') {
-          html += '<p>' + escapeHtml(monthly.message ||
-            ((monthly.monthLabel || 'This month') + ' already has a value; no update will be made.')) +
-            '</p>';
+        html += '<p>Target month: <strong>' +
+          escapeHtml(monthly.monthLabel || 'this month') + '</strong></p>';
+        html += '<p>Statement value: <strong>' +
+          escapeHtml(formatMoney(monthly.proposedValue)) + '</strong></p>';
+        if (comparison === 'BLANK') {
+          html += '<label style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+            '<input type="radio" name="monthly_investment_value_decision" value="ADD"' +
+            (selected === 'ADD' ? ' checked' : '') + '>' +
+            '<span>Add value</span></label>';
+          html += '<label style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+            '<input type="radio" name="monthly_investment_value_decision" value="IGNORE"' +
+            (selected === 'IGNORE' || !selected ? ' checked' : '') + '>' +
+            '<span>Ignore monthly value</span></label>';
+        } else if (comparison === 'MATCH') {
+          html += '<p>Existing value: <strong>' +
+            escapeHtml(formatMoney(monthly.existingValue)) + '</strong></p>';
+          html += '<p><strong>Already matches.</strong> Keep existing is the only decision. No write is proposed.</p>';
+        } else if (comparison === 'DIFFER') {
+          html += '<p>Existing value: <strong>' +
+            escapeHtml(formatMoney(monthly.existingValue)) + '</strong></p>';
+          html += '<p>They differ by ' + escapeHtml(formatMoney(monthly.difference)) + '.</p>';
+          html += '<label style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+            '<input type="radio" name="monthly_investment_value_decision" value="KEEP"' +
+            (selected !== 'REPLACE' ? ' checked' : '') + '>' +
+            '<span>Keep existing</span></label>';
+          html += '<label style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+            '<input type="radio" name="monthly_investment_value_decision" value="REPLACE"' +
+            (selected === 'REPLACE' ? ' checked' : '') + '>' +
+            '<span>Replace with statement value</span></label>';
+          html += '<p><strong>The existing monthly value will be replaced</strong> if you choose Replace.</p>';
         } else {
           html += '<p><strong>Skip</strong> — ' +
             escapeHtml(monthly.message || 'Monthly investment value will not be written.') + '</p>';
@@ -753,7 +778,17 @@
         return html;
       }
 
-      function bindMonthlyInvestmentValueControls_() {}
+      function bindMonthlyInvestmentValueControls_() {
+        var radios = document.querySelectorAll('input[name="monthly_investment_value_decision"]');
+        var onChange = function() {
+          var selected = document.querySelector('input[name="monthly_investment_value_decision"]:checked');
+          var next = selected ? String(selected.value || '').trim().toUpperCase() : '';
+          if (next === String(state.monthlyInvestmentValueDecision || '').trim().toUpperCase()) return;
+          state.monthlyInvestmentValueDecision = next;
+          reviewApplyDiff();
+        };
+        for (var i = 0; i < radios.length; i++) radios[i].onchange = onChange;
+      }
 
       function setLoading(on, label) {
         statusArea.innerHTML = on
@@ -778,6 +813,7 @@
         state.applyDiff = null;
         state.applyDiffDigest = '';
         state.applyStatusMessage = '';
+        state.monthlyInvestmentValueDecision = '';
         if (!keepPreview) {
           state.lastSinglePreview = null;
           state.lastPreviewDocumentText = '';
@@ -925,6 +961,11 @@
           state.applyReviewed = true;
           state.applyDiff = res.diff || null;
           state.applyDiffDigest = res.diffDigest || '';
+          if (isMonthlyValueApplySource_() && res.diff && res.diff.monthlyInvestmentValue) {
+            state.monthlyInvestmentValueDecision = String(
+              res.diff.monthlyInvestmentValue.decision ||
+              state.monthlyInvestmentValueDecision || '').trim().toUpperCase();
+          }
           renderApplySection();
         };
         var failureHandler = function(err) {
@@ -1557,7 +1598,8 @@
           registrationType: document.getElementById('registrationType').value,
           explicitAccountMatch: document.getElementById('explicitAccountMatch').checked,
           statementProvider: currentAccountProvider_(),
-          previewMode: selected.previewMode || 'SINGLE_ACCOUNT'
+          previewMode: selected.previewMode || 'SINGLE_ACCOUNT',
+          monthlyInvestmentValueDecision: state.monthlyInvestmentValueDecision
         };
       }
 

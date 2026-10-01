@@ -75,6 +75,10 @@ function boundedHoldingsPreviewApplyFinalizeProposedRow_(row) {
 function boundedHoldingsPreviewApplyBuildProposedRowsFromPreview_(scope, preview) {
   scope = scope || {};
   preview = preview || {};
+  var source = typeof investmentPortfolioNormalizeSource_ === 'function'
+    ? investmentPortfolioNormalizeSource_(scope.source || preview.source || '')
+    : String(scope.source || preview.source || '').trim().toUpperCase();
+  if (source === 'FIDELITY_401K_STATEMENT_PDF') return [];
   var rows = [];
   var asOfDate = boundedHoldingsPreviewApplyNormalizeAsOfDate_(preview.asOf);
   var cashBalance = boundedHoldingsPreviewApplyNullableNumber_(preview.cashBalance);
@@ -515,7 +519,8 @@ function boundedHoldingsPreviewApplyIsMonthlyValueSource_(source) {
     ? investmentPortfolioNormalizeSource_(source || '')
     : String(source || '').trim().toUpperCase();
   return normalized === 'SCHWAB_BROKERAGE_STATEMENT_PDF' ||
-    normalized === 'M1_STATEMENT_PDF';
+    normalized === 'M1_STATEMENT_PDF' ||
+    normalized === 'FIDELITY_401K_STATEMENT_PDF';
 }
 
 function boundedHoldingsPreviewApplyParseStatementDate_(asOf) {
@@ -593,7 +598,34 @@ function boundedHoldingsPreviewApplyResolveProviderEndingTotal_(preview, source)
     if (snapshotTotal === null) return { value: null, origin: '' };
     return { value: snapshotTotal, origin: 'PROVIDER_SNAPSHOT' };
   }
+  if (normalized === 'FIDELITY_401K_STATEMENT_PDF') {
+    var fidelityEnding = boundedHoldingsPreviewApplyNullableNumber_(preview.endingBalance);
+    if (fidelityEnding === null) return { value: null, origin: '' };
+    return { value: fidelityEnding, origin: 'PROVIDER_SNAPSHOT' };
+  }
   return { value: null, origin: '' };
+}
+
+function boundedHoldingsPreviewApplyResolveMonthlyValueDecision_(comparison, rawDecision) {
+  var raw = String(rawDecision || '').trim().toUpperCase();
+  if (comparison === 'BLANK') {
+    if (raw === 'ADD') return { ok: true, decision: 'ADD' };
+    if (!raw || raw === 'IGNORE') return { ok: true, decision: 'IGNORE' };
+    return { ok: false, error: 'Choose Add or Ignore for the monthly investment value.' };
+  }
+  if (comparison === 'MATCH') {
+    if (!raw || raw === 'KEEP') return { ok: true, decision: 'KEEP' };
+    return { ok: false, error: 'This month already matches the statement value.' };
+  }
+  if (comparison === 'DIFFER') {
+    if (raw === 'REPLACE') return { ok: true, decision: 'REPLACE' };
+    if (!raw || raw === 'KEEP') return { ok: true, decision: 'KEEP' };
+    return {
+      ok: false,
+      error: 'Choose Keep existing or Replace with the statement value.'
+    };
+  }
+  return { ok: true, decision: '' };
 }
 
 function boundedHoldingsPreviewApplyReadExistingMonthlyValue_(accountName, parsed) {
@@ -624,7 +656,10 @@ function boundedHoldingsPreviewApplyMonthlyDigestPart_(monthly) {
     existingPresent: !!monthly.existingPresent,
     existingValue: monthly.existingValue,
     proposedValue: monthly.proposedValue,
-    willWrite: !!monthly.willWrite
+    willWrite: !!monthly.willWrite,
+    comparison: String(monthly.comparison || ''),
+    decision: String(monthly.decision || ''),
+    source: String(monthly.source || '')
   };
 }
 
@@ -642,7 +677,15 @@ function boundedHoldingsPreviewApplySanitizeMonthlyValueForClient_(monthly) {
     monthLabel: String(monthly.monthLabel || ''),
     existingPresent: !!monthly.existingPresent,
     existingValue: monthly.existingValue,
-    proposedValue: monthly.proposedValue
+    proposedValue: monthly.proposedValue,
+    comparison: String(monthly.comparison || ''),
+    decision: String(monthly.decision || ''),
+    defaultDecision: String(monthly.defaultDecision || ''),
+    allowedDecisions: Array.isArray(monthly.allowedDecisions) ? monthly.allowedDecisions.slice() : [],
+    difference: monthly.difference != null ? monthly.difference : null,
+    valuesMatch: !!monthly.valuesMatch,
+    warning: String(monthly.warning || ''),
+    source: String(monthly.source || '')
   };
 }
 
@@ -660,7 +703,15 @@ function boundedHoldingsPreviewApplyBuildMonthlySkip_(reason, message, extras) {
     monthLabel: extras.monthLabel || '',
     existingPresent: !!extras.existingPresent,
     existingValue: extras.existingValue != null ? extras.existingValue : null,
-    proposedValue: extras.proposedValue != null ? extras.proposedValue : null
+    proposedValue: extras.proposedValue != null ? extras.proposedValue : null,
+    comparison: String(extras.comparison || ''),
+    decision: String(extras.decision || ''),
+    defaultDecision: String(extras.defaultDecision || ''),
+    allowedDecisions: Array.isArray(extras.allowedDecisions) ? extras.allowedDecisions.slice() : [],
+    difference: extras.difference != null ? extras.difference : null,
+    valuesMatch: !!extras.valuesMatch,
+    warning: String(extras.warning || ''),
+    source: String(extras.source || '')
   };
 }
 
@@ -758,34 +809,112 @@ function boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(payload
       });
   }
 
-  if (existing.present) {
-    return boundedHoldingsPreviewApplyBuildMonthlySkip_('OCCUPIED',
-      monthLabel + ' already has a value; no update will be made.',
-      {
-        skipKind: 'OCCUPIED',
-        accountName: accountName,
-        investmentId: investmentId,
-        asOfDate: parsed.iso,
-        monthLabel: monthLabel,
-        existingPresent: true,
-        existingValue: existing.value,
-        proposedValue: ending.value
-      });
-  }
-
-  return {
-    action: 'ADD',
-    willWrite: true,
-    reason: '',
-    skipKind: '',
-    message: 'Add ' + monthLabel + ' value: ' +
-      boundedHoldingsPreviewApplyFormatMoney_(ending.value),
+  return boundedHoldingsPreviewApplyBuildTrustedMonthlyValueProposal_({
+    source: source,
+    monthlyInvestmentValueDecision: payload.monthlyInvestmentValueDecision,
     accountName: accountName,
     investmentId: investmentId,
     asOfDate: parsed.iso,
     monthLabel: monthLabel,
-    existingPresent: false,
-    existingValue: null,
+    existingPresent: !!existing.present,
+    existingValue: existing.present ? existing.value : null,
     proposedValue: ending.value
+  });
+}
+
+function boundedHoldingsPreviewApplyBuildTrustedMonthlyValueProposal_(fields) {
+  fields = fields || {};
+  var existingPresent = !!fields.existingPresent;
+  var existingValue = existingPresent ? round2_(Number(fields.existingValue)) : null;
+  var proposedValue = round2_(Number(fields.proposedValue));
+  var comparison = 'BLANK';
+  if (existingPresent) {
+    comparison = existingValue === proposedValue ? 'MATCH' : 'DIFFER';
+  }
+  var resolved = boundedHoldingsPreviewApplyResolveMonthlyValueDecision_(
+    comparison, fields.monthlyInvestmentValueDecision);
+  if (!resolved.ok) {
+    return boundedHoldingsPreviewApplyBuildMonthlySkip_('INVALID_DECISION', resolved.error, {
+      accountName: fields.accountName,
+      investmentId: fields.investmentId,
+      asOfDate: fields.asOfDate,
+      monthLabel: fields.monthLabel,
+      existingPresent: existingPresent,
+      existingValue: existingValue,
+      proposedValue: proposedValue,
+      comparison: comparison,
+      source: fields.source
+    });
+  }
+
+  var decision = resolved.decision;
+  var moneyExisting = boundedHoldingsPreviewApplyFormatMoney_(existingValue);
+  var moneyProposed = boundedHoldingsPreviewApplyFormatMoney_(proposedValue);
+  var monthLabel = String(fields.monthLabel || '');
+  var difference = comparison === 'DIFFER'
+    ? round2_(proposedValue - existingValue)
+    : (comparison === 'MATCH' ? 0 : null);
+  var proposal = {
+    action: 'SKIP',
+    willWrite: false,
+    reason: '',
+    skipKind: '',
+    message: '',
+    accountName: fields.accountName || '',
+    investmentId: fields.investmentId || '',
+    asOfDate: fields.asOfDate || '',
+    monthLabel: monthLabel,
+    existingPresent: existingPresent,
+    existingValue: existingPresent ? existingValue : null,
+    proposedValue: proposedValue,
+    comparison: comparison,
+    decision: decision,
+    defaultDecision: '',
+    allowedDecisions: [],
+    difference: difference,
+    valuesMatch: comparison === 'MATCH',
+    warning: '',
+    source: String(fields.source || '')
   };
+
+  if (comparison === 'BLANK') {
+    proposal.allowedDecisions = ['ADD', 'IGNORE'];
+    proposal.defaultDecision = 'IGNORE';
+    if (decision === 'ADD') {
+      proposal.action = 'ADD';
+      proposal.willWrite = true;
+      proposal.message = 'Add ' + monthLabel + ' value: ' + moneyProposed;
+    } else {
+      proposal.reason = 'USER_IGNORE';
+      proposal.skipKind = 'IGNORED';
+      proposal.message = 'Ignore monthly value. Statement value for ' + monthLabel +
+        ': ' + moneyProposed + '.';
+    }
+    return proposal;
+  }
+
+  if (comparison === 'MATCH') {
+    proposal.allowedDecisions = ['KEEP'];
+    proposal.defaultDecision = 'KEEP';
+    proposal.reason = 'MATCH';
+    proposal.skipKind = 'MATCH';
+    proposal.message = 'Already matches. Existing ' + monthLabel + ' value ' +
+      moneyExisting + ' matches the statement value.';
+    return proposal;
+  }
+
+  proposal.allowedDecisions = ['KEEP', 'REPLACE'];
+  proposal.defaultDecision = 'KEEP';
+  proposal.warning = 'The existing monthly value will be replaced.';
+  proposal.message = monthLabel + ' existing value ' + moneyExisting +
+    ' differs from statement value ' + moneyProposed +
+    ' by ' + boundedHoldingsPreviewApplyFormatMoney_(difference) + '.';
+  if (decision === 'REPLACE') {
+    proposal.action = 'REPLACE';
+    proposal.willWrite = true;
+  } else {
+    proposal.reason = 'USER_KEEP';
+    proposal.skipKind = 'KEPT';
+  }
+  return proposal;
 }

@@ -29,6 +29,10 @@ const drawerSource = read('investment_portfolio_drawer.js');
 const activitySource = read('investment_activity.js');
 const configSource = read('config.js');
 const investmentsSource = read('investments.js');
+const identitySource = read('financial_identity.js');
+const previewSource = read('bounded_holdings_preview.js');
+const applySource = read('bounded_holdings_preview_apply.js');
+const groupedSource = read('bounded_holdings_preview_groups.js');
 
 const context = {
   String, Number, Object, Array, Math, isFinite, Error, JSON, console
@@ -52,7 +56,17 @@ vm.runInContext(`
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerInferProvider_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerMapAccountRow_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerRobinhoodImportEligible_')}
+  ${extractFunction(drawerSource, 'investmentPortfolioDrawerNormalizeImportSource_')}
+  ${extractFunction(drawerSource, 'investmentPortfolioDrawerIsCustomerProductionSource_')}
+  ${extractFunction(identitySource, 'financialIdentityInferRegistration_')}
+  ${extractFunction(drawerSource, 'investmentPortfolioDrawerIs529Account_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerSupportedImportFormats_')}
+  ${extractFunction(drawerSource, 'investmentPortfolioDrawerCustomerDrawerFormats_')}
+  ${extractFunction(drawerSource, 'investmentPortfolioDrawerCustomerImportEligibility_')}
+  ${extractFunction(drawerSource, 'investmentPortfolioDrawerDescribePickerAccount_')}
+  ${extractFunction(drawerSource, 'investmentPortfolioDrawerKnownProviderLabel_')}
+  ${extractFunction(drawerSource, 'investmentPortfolioDrawerBuildPickerOptionLabel_')}
+  ${extractFunction(drawerSource, 'investmentPortfolioDrawerEvaluateCustomerImportRequest_')}
   function boundedHoldingsPreviewApplyNormalizeAsOfDate_(value) {
     var raw = String(value || '').trim();
     if (!raw) return '';
@@ -122,6 +136,54 @@ const fixtureAccounts = [
     inactive: false
   },
   {
+    sysAssetsRow: 15,
+    accountName: 'M1 Account - Gmail',
+    type: 'Brokerage',
+    investmentId: 'inv-m1-gmail',
+    planningPurpose: '',
+    inactive: false
+  },
+  {
+    sysAssetsRow: 16,
+    accountName: 'M1 Account - yahoo',
+    type: 'Brokerage',
+    investmentId: 'inv-m1-yahoo',
+    planningPurpose: '',
+    inactive: false
+  },
+  {
+    sysAssetsRow: 17,
+    accountName: 'Stash Account',
+    type: 'Brokerage',
+    investmentId: 'inv-stash',
+    planningPurpose: '',
+    inactive: false
+  },
+  {
+    sysAssetsRow: 18,
+    accountName: 'Lutfi Robinhood',
+    type: 'Brokerage',
+    investmentId: 'inv-lutfi-robinhood',
+    planningPurpose: '',
+    inactive: false
+  },
+  {
+    sysAssetsRow: 19,
+    accountName: 'Laith 529',
+    type: 'Education',
+    investmentId: 'inv-laith-529',
+    planningPurpose: '',
+    inactive: false
+  },
+  {
+    sysAssetsRow: 20,
+    accountName: 'Lutfi 529',
+    type: '529',
+    investmentId: 'inv-lutfi-529',
+    planningPurpose: '',
+    inactive: false
+  },
+  {
     sysAssetsRow: 99,
     accountName: 'Stopped Legacy Brokerage',
     type: 'Brokerage',
@@ -135,13 +197,20 @@ function simulateDrawerAccountList(managementAccounts) {
   return (managementAccounts || []).filter(function(row) {
     return row && !row.inactive && String(row.accountName || '').trim();
   }).map(function(row) {
-    var investmentId = String(row.investmentId || '').trim();
-    var pickerValue = investmentId || ('__row__:' + String(row.sysAssetsRow));
+    var described = context.investmentPortfolioDrawerDescribePickerAccount_(row);
     return {
-      accountName: String(row.accountName || '').trim(),
-      pickerValue: pickerValue,
-      investmentId: investmentId,
-      planningPurpose: String(row.planningPurpose || '').trim()
+      accountName: described.accountName,
+      pickerValue: described.pickerValue,
+      investmentId: described.investmentId,
+      planningPurpose: described.planningPurpose,
+      statementProvider: described.statementProvider,
+      providerLabel: described.providerLabel,
+      customerImportEnabled: described.customerImportEnabled,
+      customerImportDisabledReason: described.customerImportDisabledReason,
+      customerImportPickerNote: described.customerImportPickerNote,
+      customerImportSource: described.customerImportSource,
+      optionLabel: context.investmentPortfolioDrawerBuildPickerOptionLabel_(described),
+      optionDisabled: described.customerImportEnabled !== true
     };
   });
 }
@@ -171,11 +240,37 @@ assert.match(
 );
 assert.match(investmentsSource, /function getInvestmentUiData\(\)/);
 assert.match(investmentsSource, /managementAccounts:/);
+assert.match(investmentsSource, /investmentPortfolioDrawerDescribePickerAccount_/);
 assert.match(activitySource, /function resolveEligibleInvestmentImportAccount_/);
+assert.match(activitySource, /investmentPortfolioDrawerGuardCustomerProductionImport_/);
+assert.match(previewSource, /investmentPortfolioDrawerGuardCustomerProductionImport_/);
+assert.match(applySource, /investmentPortfolioDrawerGuardCustomerProductionImport_/);
+assert.match(groupedSource, /investmentPortfolioDrawerGuardCustomerProductionImport_/);
+assert.match(drawerSource, /function investmentPortfolioDrawerCustomerImportEligibility_/);
+assert.match(drawerSource, /function investmentPortfolioDrawerEvaluateCustomerImportRequest_/);
+assert.match(drawerSource, /function getInvestmentPortfolioDrawerFromDashboard/);
+assert.match(
+  drawerSource,
+  /getInvestmentPortfolioDrawerFromDashboard[\s\S]*investmentPortfolioDrawerEvaluateCustomerImportRequest_/
+);
+assert.match(
+  drawerSource,
+  /previewFidelity401kStatementFromDashboard[\s\S]*investmentPortfolioDrawerGuardCustomerProductionImport_/
+);
+assert.match(dashboardInvestments, /option\.disabled = true/);
+assert.match(dashboardInvestments, /is-import-unavailable/);
+assert.match(dashboardInvestments, /customerImportEnabled === false/);
+assert.match(dashboardInvestments, /option && option\.disabled/);
+assert.match(
+  dashboardInvestments,
+  /mode === 'import' && !data\.robinhoodCsvImportAvailable/
+);
+assert.match(dashboardStyles, /#inv_activity_account option:disabled/);
+assert.match(dashboardStyles, /#9aa3ad/);
 
-// --- Active account list includes all five active accounts, excludes inactive ---
+// --- Active account list includes all active accounts, excludes inactive ---
 const drawerList = simulateDrawerAccountList(fixtureAccounts);
-assert.equal(drawerList.length, 5, 'drawer must list all five active investment accounts');
+assert.equal(drawerList.length, 11, 'drawer must list every active investment account');
 assert.deepEqual(
   drawerList.map((row) => row.accountName).sort(),
   [
@@ -183,7 +278,13 @@ assert.deepEqual(
     'Charles Schwab - Personal',
     'Etrade Cisco - Future',
     'Etrade Cisco - RSU/ESPP',
-    'Samer Robinhood'
+    'Laith 529',
+    'Lutfi 529',
+    'Lutfi Robinhood',
+    'M1 Account - Gmail',
+    'M1 Account - yahoo',
+    'Samer Robinhood',
+    'Stash Account'
   ].sort()
 );
 assert.equal(
@@ -199,7 +300,7 @@ assert.equal(
 );
 assert.equal(
   drawerList.filter((row) => row.planningPurpose !== 'INCOME_PRODUCING').length,
-  4,
+  10,
   'non-income-producing active accounts must still appear'
 );
 
@@ -230,11 +331,22 @@ assert.equal(schwabFormats.length, 1);
 assert.equal(schwabFormats[0].source, 'SCHWAB_BROKERAGE_STATEMENT_PDF');
 assert.equal(schwabFormats[0].label, 'Schwab brokerage statement PDF');
 assert.equal(schwabFormats[0].productionReady, true);
+assert.equal(schwabFormats[0].customerDrawerImport, true);
 const stashFormats = context.investmentPortfolioDrawerSupportedImportFormats_('STASH', 'SINGLE_ACCOUNT');
 assert.equal(stashFormats.length, 1);
 assert.equal(stashFormats[0].source, 'STASH_BROKERAGE_STATEMENT_PDF');
 assert.equal(stashFormats[0].label, 'Stash brokerage statement PDF');
 assert.equal(stashFormats[0].productionReady, true);
+assert.equal(stashFormats[0].customerDrawerImport, true);
+const etradeFormats = context.investmentPortfolioDrawerSupportedImportFormats_('ETRADE', 'SINGLE_ACCOUNT');
+assert.equal(etradeFormats[0].source, 'ETRADE_POSITIONS_PDF');
+assert.equal(etradeFormats[0].productionReady, true);
+assert.equal(etradeFormats[0].customerDrawerImport, false);
+assert.equal(
+  context.investmentPortfolioDrawerCustomerDrawerFormats_('ETRADE', 'SINGLE_ACCOUNT').length,
+  0,
+  'E*TRADE adapter existence must not create a customer drawer import tab'
+);
 
 // --- Provider metadata: explicit broker names only; ambiguous names stay unknown ---
 assert.equal(
@@ -263,6 +375,181 @@ assert.equal(
   'M1'
 );
 assert.doesNotMatch(drawerSource, /boundedHoldingsPreviewInferIdentityProvider_/);
+
+function byName(name) {
+  return drawerList.find((row) => row.accountName === name);
+}
+
+const enabledNames = [
+  '401K Account',
+  'Charles Schwab - Personal',
+  'M1 Account - Gmail',
+  'M1 Account - yahoo',
+  'Samer Robinhood',
+  'Stash Account'
+];
+const disabledNames = [
+  'Etrade Cisco - Future',
+  'Etrade Cisco - RSU/ESPP',
+  'Laith 529',
+  'Lutfi 529',
+  'Lutfi Robinhood'
+];
+enabledNames.forEach((name) => {
+  const row = byName(name);
+  assert.ok(row, `${name} must remain visible`);
+  assert.equal(row.optionDisabled, false, `${name} must be selectable`);
+  assert.equal(row.customerImportEnabled, true, `${name} must have a customer import path`);
+  assert.match(row.optionLabel, new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+});
+disabledNames.forEach((name) => {
+  const row = byName(name);
+  assert.ok(row, `${name} must remain visible`);
+  assert.equal(row.optionDisabled, true, `${name} must stay visible but not selectable`);
+  assert.equal(row.customerImportEnabled, false);
+  assert.match(row.optionLabel, new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+});
+
+assert.equal(byName('401K Account').customerImportSource, 'FIDELITY_401K_STATEMENT_PDF');
+assert.equal(byName('401K Account').customerImportPickerNote, '401(k) supports balance-only import');
+assert.match(byName('401K Account').optionLabel, /401K Account · Fidelity/);
+assert.match(byName('401K Account').optionLabel, /401\(k\) supports balance-only import/);
+assert.equal(byName('Charles Schwab - Personal').customerImportSource, 'SCHWAB_BROKERAGE_STATEMENT_PDF');
+assert.match(byName('Charles Schwab - Personal').optionLabel, /Charles Schwab - Personal · Schwab/);
+assert.equal(byName('M1 Account - Gmail').customerImportSource, 'M1_STATEMENT_PDF');
+assert.match(byName('M1 Account - Gmail').optionLabel, /M1 Account - Gmail · M1/);
+assert.equal(byName('M1 Account - yahoo').customerImportSource, 'M1_STATEMENT_PDF');
+assert.match(byName('M1 Account - yahoo').optionLabel, /M1 Account - yahoo · M1/);
+assert.equal(byName('Samer Robinhood').customerImportSource, 'ROBINHOOD_CSV');
+assert.match(byName('Samer Robinhood').optionLabel, /Samer Robinhood · Robinhood/);
+assert.equal(byName('Stash Account').customerImportSource, 'STASH_BROKERAGE_STATEMENT_PDF');
+assert.match(byName('Stash Account').optionLabel, /Stash Account · Stash/);
+
+assert.equal(byName('Etrade Cisco - Future').statementProvider, 'ETRADE');
+assert.equal(byName('Etrade Cisco - Future').customerImportDisabledReason, 'Import not available yet');
+assert.match(byName('Etrade Cisco - Future').optionLabel, /Etrade Cisco - Future · E\*TRADE — Import not available yet/);
+assert.equal(byName('Etrade Cisco - RSU\/ESPP').customerImportDisabledReason, 'Import not available yet');
+assert.equal(byName('Laith 529').customerImportDisabledReason, 'Import not available yet');
+assert.match(byName('Laith 529').optionLabel, /Laith 529 — Import not available yet/);
+assert.equal(byName('Lutfi 529').customerImportDisabledReason, 'Import not available yet');
+assert.match(byName('Lutfi 529').optionLabel, /Lutfi 529 — Import not available yet/);
+assert.equal(
+  byName('Lutfi Robinhood').customerImportDisabledReason,
+  'Robinhood CSV requires an eligible investment account'
+);
+assert.match(
+  byName('Lutfi Robinhood').optionLabel,
+  /Lutfi Robinhood · Robinhood — Robinhood CSV requires an eligible investment account/
+);
+
+const eligibleLutfiRobinhood = context.investmentPortfolioDrawerDescribePickerAccount_({
+  sysAssetsRow: 21,
+  accountName: 'Lutfi Robinhood',
+  type: 'Brokerage',
+  investmentId: 'inv-lutfi-robinhood-eligible',
+  planningPurpose: 'INCOME_PRODUCING',
+  inactive: false
+});
+assert.equal(eligibleLutfiRobinhood.customerImportEnabled, true);
+assert.equal(eligibleLutfiRobinhood.customerImportSource, 'ROBINHOOD_CSV');
+
+function evaluateNamed(name, source) {
+  const row = fixtureAccounts.find((item) => item.accountName === name);
+  const mapped = context.investmentPortfolioDrawerMapAccountRow_(row);
+  return context.investmentPortfolioDrawerEvaluateCustomerImportRequest_(mapped, source);
+}
+
+enabledNames.forEach((name) => {
+  const open = evaluateNamed(name, '');
+  assert.equal(open.ok, true, `${name} must open the customer drawer`);
+  const source = byName(name).customerImportSource;
+  const allowed = evaluateNamed(name, source);
+  assert.equal(allowed.ok, true, `${name} must invoke its supported import`);
+});
+
+['Etrade Cisco - Future', 'Laith 529', 'Lutfi 529', 'Lutfi Robinhood'].forEach((name) => {
+  const open = evaluateNamed(name, '');
+  assert.equal(open.ok, false, `${name} must not open the customer drawer`);
+  assert.match(String(open.error || ''), /Import not available yet|eligible investment account/);
+  const schwabAttempt = evaluateNamed(name, 'SCHWAB_BROKERAGE_STATEMENT_PDF');
+  assert.equal(schwabAttempt.ok, false, `${name} must not invoke a customer import`);
+  const m1Attempt = evaluateNamed(name, 'M1_STATEMENT_PDF');
+  assert.equal(m1Attempt.ok, false);
+  const stashAttempt = evaluateNamed(name, 'STASH_BROKERAGE_STATEMENT_PDF');
+  assert.equal(stashAttempt.ok, false);
+  const fidelityAttempt = evaluateNamed(name, 'FIDELITY_401K_STATEMENT_PDF');
+  assert.equal(fidelityAttempt.ok, false);
+  const robinhoodAttempt = evaluateNamed(name, 'ROBINHOOD_CSV');
+  assert.equal(robinhoodAttempt.ok, false);
+});
+
+const etradeLab = evaluateNamed('Etrade Cisco - Future', 'ETRADE_POSITIONS_PDF');
+assert.equal(etradeLab.ok, true, 'lab E*TRADE sources must remain available off the customer drawer');
+assert.equal(etradeLab.labSource, true);
+
+const schwabWrongSource = evaluateNamed('Charles Schwab - Personal', 'M1_STATEMENT_PDF');
+assert.equal(schwabWrongSource.ok, false);
+assert.match(String(schwabWrongSource.error || ''), /not available for this account/);
+const stashWrongSource = evaluateNamed('Stash Account', 'SCHWAB_BROKERAGE_STATEMENT_PDF');
+assert.equal(stashWrongSource.ok, false);
+const m1WrongSource = evaluateNamed('M1 Account - Gmail', 'STASH_BROKERAGE_STATEMENT_PDF');
+assert.equal(m1WrongSource.ok, false);
+const fidelityWrongSource = evaluateNamed('401K Account', 'ROBINHOOD_CSV');
+assert.equal(fidelityWrongSource.ok, false);
+const robinhoodWrongSource = evaluateNamed('Samer Robinhood', 'SCHWAB_BROKERAGE_STATEMENT_PDF');
+assert.equal(robinhoodWrongSource.ok, false);
+
+const education529ByType = context.investmentPortfolioDrawerDescribePickerAccount_({
+  sysAssetsRow: 22,
+  accountName: 'College Plan',
+  type: '529',
+  investmentId: 'inv-college-529',
+  planningPurpose: '',
+  inactive: false
+});
+assert.equal(education529ByType.customerImportEnabled, false);
+assert.equal(education529ByType.customerImportDisabledReason, 'Import not available yet');
+
+const education529ByRegistration = context.investmentPortfolioDrawerDescribePickerAccount_({
+  sysAssetsRow: 24,
+  accountName: 'College Savings',
+  type: 'Brokerage',
+  registrationType: '529',
+  investmentId: 'inv-college-reg-529',
+  planningPurpose: '',
+  inactive: false
+});
+assert.equal(education529ByRegistration.customerImportEnabled, false);
+assert.equal(education529ByRegistration.statementProvider, 'UNKNOWN');
+
+const incomeProducingEtrade = context.investmentPortfolioDrawerDescribePickerAccount_({
+  sysAssetsRow: 23,
+  accountName: 'Etrade Cisco - Future',
+  type: 'Brokerage',
+  investmentId: 'inv-etrade-income',
+  planningPurpose: 'INCOME_PRODUCING',
+  inactive: false
+});
+assert.equal(incomeProducingEtrade.customerImportEnabled, false);
+assert.equal(
+  context.investmentPortfolioDrawerEvaluateCustomerImportRequest_(
+    context.investmentPortfolioDrawerMapAccountRow_({
+      sysAssetsRow: 23,
+      accountName: 'Etrade Cisco - Future',
+      type: 'Brokerage',
+      investmentId: 'inv-etrade-income',
+      planningPurpose: 'INCOME_PRODUCING'
+    }),
+    'ROBINHOOD_CSV'
+  ).ok,
+  false,
+  'income-producing E*TRADE must not invoke Robinhood CSV'
+);
+
+assert.match(dashboardInvestments, /!data\.m1ImportAvailable/);
+assert.match(dashboardInvestments, /!data\.schwabImportAvailable/);
+assert.match(dashboardInvestments, /!data\.stashImportAvailable/);
+assert.match(dashboardInvestments, /!data\.fidelity401kImportAvailable/);
 
 // --- No workbook writes in drawer module ---
 assert.doesNotMatch(drawerSource, /\bsetValues\b|\bappendRow\b|\bsetValue\b/);
@@ -299,8 +586,17 @@ assert.match(dashboardInvestments, /renderInvestmentPortfolio401kBalanceView_/);
 assert.match(dashboardInvestments, /investmentPortfolioRender401kBalanceComparison_/);
 assert.match(dashboardInvestments, /Change in reported balance/);
 assert.match(drawer401kSource, /previewFidelity401kStatementFromDashboard/);
-assert.doesNotMatch(drawer401kSource, /boundedHoldingsPreviewApplyFromDashboard/);
+assert.match(drawer401kSource, /boundedHoldingsPreviewBuildApplyDiffFromDashboard/);
+assert.match(drawer401kSource, /boundedHoldingsPreviewApplyFromDashboard/);
+assert.match(drawer401kSource, /payload\.explicitApplyConfirm = true/);
+assert.match(drawer401kSource, /monthlyInvestmentValueDecision/);
+assert.match(drawer401kSource, /Ignore monthly value/);
+assert.match(drawer401kSource, /Keep existing/);
+assert.match(drawer401kSource, /Replace with statement value/);
+assert.match(drawer401kSource, /inv_401k_monthly_add/);
+assert.doesNotMatch(drawer401kSource, /fundHoldings/);
 assert.doesNotMatch(drawer401kSource, /\bsetValues\b|\bappendRow\b/);
+assert.match(dashboardBody, /inv_401k_apply_area/);
 assert.match(webappSource, /view === 'portfolio-holdings-preview' && !isCentralModeEnabled_\(\)/);
 assert.doesNotMatch(drawerM1Source, /\bsetValues\b|\bappendRow\b/);
 assert.match(drawerSchwabSource, /boundedHoldingsPreviewRunFromDashboard/);
@@ -461,13 +757,17 @@ assert.doesNotMatch(
 assert.doesNotMatch(drawerSchwabSource, /bundle\.diffPreview/);
 assert.match(drawerSchwabSource, /invDrawerSchwabResolveApplyDiffBundle_/);
 assert.match(drawerSchwabSource, /Monthly investment value/);
-assert.match(drawerSchwabSource, /already has a value; no update will be made/);
-assert.doesNotMatch(drawerSchwabSource, /Replace the existing monthly value|explicitMonthlyValueReplace/);
+assert.match(drawerSchwabSource, /monthlyInvestmentValueDecision/);
+assert.match(drawerSchwabSource, /Keep existing/);
+assert.match(drawerSchwabSource, /Replace with statement value/);
+assert.doesNotMatch(drawerSchwabSource, /explicitMonthlyValueReplace/);
 assert.doesNotMatch(drawerM1Source, /bundle\.diffPreview/);
 assert.match(drawerM1Source, /invDrawerM1ResolveApplyDiffBundle_/);
 assert.match(drawerM1Source, /Monthly investment value/);
-assert.match(drawerM1Source, /already has a value; no update will be made/);
-assert.doesNotMatch(drawerM1Source, /Replace the existing monthly value|explicitMonthlyValueReplace/);
+assert.match(drawerM1Source, /monthlyInvestmentValueDecision/);
+assert.match(drawerM1Source, /Keep existing/);
+assert.match(drawerM1Source, /Replace with statement value/);
+assert.doesNotMatch(drawerM1Source, /explicitMonthlyValueReplace/);
 assert.match(drawerM1Source, /boundedHoldingsPreviewBuildApplyDiffFromDashboard/);
 assert.match(drawerM1Source, /boundedHoldingsPreviewBuildGroupedApplyDiffFromDashboard/);
 

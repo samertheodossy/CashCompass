@@ -17,7 +17,8 @@ var __invDrawerM1State = {
   applyReviewed: false,
   applyDiff: null,
   applyDiffDigest: '',
-  applyStatusMessage: ''
+  applyStatusMessage: '',
+  monthlyInvestmentValueDecision: ''
 };
 
 function invDrawerM1Escape_(value) {
@@ -104,6 +105,7 @@ function resetInvestmentPortfolioDrawerM1Import_(keepAccount) {
   __invDrawerM1State.applyDiff = null;
   __invDrawerM1State.applyDiffDigest = '';
   __invDrawerM1State.applyStatusMessage = '';
+  __invDrawerM1State.monthlyInvestmentValueDecision = '';
   if (!keepAccount) {
     __invDrawerM1State.selectedAccount = null;
     __invDrawerM1State.registrationTouched = false;
@@ -294,6 +296,7 @@ function clearInvestmentPortfolioDrawerM1Apply_(keepPreview) {
   __invDrawerM1State.applyDiff = null;
   __invDrawerM1State.applyDiffDigest = '';
   __invDrawerM1State.applyStatusMessage = '';
+  __invDrawerM1State.monthlyInvestmentValueDecision = '';
   if (!keepPreview) {
     __invDrawerM1State.lastSinglePreview = null;
     __invDrawerM1State.lastPreviewDocumentText = '';
@@ -311,18 +314,41 @@ function invDrawerM1FormatMoney_(value) {
 
 function invDrawerM1RenderMonthlyInvestmentValueHtml_(monthly) {
   monthly = monthly || {};
-  var action = String(monthly.action || 'SKIP');
-  var reason = String(monthly.reason || '');
+  var comparison = String(monthly.comparison || '');
+  var selected = String(monthly.decision || monthly.defaultDecision || '').trim().toUpperCase();
   var html = '<div class="card" id="inv_m1_monthly_value_card">' +
     '<h4>Monthly investment value</h4>';
-  if (action === 'ADD') {
-    html += '<p>' + invDrawerM1Escape_(monthly.message ||
-      ('Add ' + (monthly.monthLabel || 'this month') + ' value: ' +
-        invDrawerM1FormatMoney_(monthly.proposedValue))) + '</p>';
-  } else if (reason === 'OCCUPIED') {
-    html += '<p>' + invDrawerM1Escape_(monthly.message ||
-      ((monthly.monthLabel || 'This month') + ' already has a value; no update will be made.')) +
-      '</p>';
+  html += '<p>Target month: <strong>' +
+    invDrawerM1Escape_(monthly.monthLabel || 'this month') + '</strong></p>';
+  html += '<p>Statement value: <strong>' +
+    invDrawerM1Escape_(invDrawerM1FormatMoney_(monthly.proposedValue)) + '</strong></p>';
+  if (comparison === 'BLANK') {
+    html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+      '<input type="radio" name="inv_m1_monthly_decision" value="ADD"' +
+      (selected === 'ADD' ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
+      '<span>Add value</span></label>';
+    html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+      '<input type="radio" name="inv_m1_monthly_decision" value="IGNORE"' +
+      (selected === 'IGNORE' || !selected ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
+      '<span>Ignore monthly value</span></label>';
+  } else if (comparison === 'MATCH') {
+    html += '<p>Existing value: <strong>' +
+      invDrawerM1Escape_(invDrawerM1FormatMoney_(monthly.existingValue)) + '</strong></p>';
+    html += '<p><strong>Already matches.</strong> Keep existing is the only decision. No write is proposed.</p>';
+  } else if (comparison === 'DIFFER') {
+    html += '<p>Existing value: <strong>' +
+      invDrawerM1Escape_(invDrawerM1FormatMoney_(monthly.existingValue)) + '</strong></p>';
+    html += '<p>They differ by ' +
+      invDrawerM1Escape_(invDrawerM1FormatMoney_(monthly.difference)) + '.</p>';
+    html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+      '<input type="radio" name="inv_m1_monthly_decision" value="KEEP"' +
+      (selected !== 'REPLACE' ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
+      '<span>Keep existing</span></label>';
+    html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+      '<input type="radio" name="inv_m1_monthly_decision" value="REPLACE"' +
+      (selected === 'REPLACE' ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
+      '<span>Replace with statement value</span></label>';
+    html += '<p><strong>The existing monthly value will be replaced</strong> if you choose Replace.</p>';
   } else {
     html += '<p><strong>Skip</strong> — ' +
       invDrawerM1Escape_(monthly.message || 'Monthly investment value will not be written.') +
@@ -332,7 +358,20 @@ function invDrawerM1RenderMonthlyInvestmentValueHtml_(monthly) {
   return html;
 }
 
-function invDrawerM1BindMonthlyInvestmentValueControls_() {}
+function invDrawerM1BindMonthlyInvestmentValueControls_() {
+  if (invDrawerM1IsGrouped_()) return;
+  var radios = document.querySelectorAll('input[name="inv_m1_monthly_decision"]');
+  var onChange = function() {
+    var selected = document.querySelector('input[name="inv_m1_monthly_decision"]:checked');
+    var next = selected ? String(selected.value || '').trim().toUpperCase() : '';
+    if (next === String(__invDrawerM1State.monthlyInvestmentValueDecision || '').trim().toUpperCase()) {
+      return;
+    }
+    __invDrawerM1State.monthlyInvestmentValueDecision = next;
+    reviewInvestmentPortfolioDrawerM1ApplyDiff_();
+  };
+  for (var i = 0; i < radios.length; i++) radios[i].onchange = onChange;
+}
 
 function renderInvDrawerM1SingleResults_(res) {
   var host = document.getElementById('inv_m1_results');
@@ -525,6 +564,11 @@ function reviewInvestmentPortfolioDrawerM1ApplyDiff_() {
     __invDrawerM1State.applyDiff = resolved.applyDiff;
     __invDrawerM1State.applyDiffDigest = resolved.applyDiffDigest;
     __invDrawerM1State.applyReviewed = resolved.applyReviewed;
+    var monthly = resolved.applyDiff && resolved.applyDiff.monthlyInvestmentValue || {};
+    if (!invDrawerM1IsGrouped_()) {
+      __invDrawerM1State.monthlyInvestmentValueDecision = String(
+        monthly.decision || __invDrawerM1State.monthlyInvestmentValueDecision || '').trim().toUpperCase();
+    }
     var msgEl = document.getElementById('inv_m1_apply_message');
     var confirmBtn = document.getElementById('inv_m1_confirm_apply_btn');
     if (msgEl) msgEl.textContent = resolved.message;
@@ -547,7 +591,9 @@ function reviewInvestmentPortfolioDrawerM1ApplyDiff_() {
   } else {
     google.script.run.withSuccessHandler(successHandler).withFailureHandler(function(err) {
       setStatus('inv_m1_status', err.message || String(err), true);
-    }).boundedHoldingsPreviewBuildApplyDiffFromDashboard(buildInvDrawerM1Payload_());
+    }).boundedHoldingsPreviewBuildApplyDiffFromDashboard(buildInvDrawerM1Payload_({
+      monthlyInvestmentValueDecision: __invDrawerM1State.monthlyInvestmentValueDecision
+    }));
   }
 }
 
@@ -579,6 +625,9 @@ function confirmInvestmentPortfolioDrawerM1Apply_() {
     : buildInvDrawerM1Payload_();
   payload.diffDigest = __invDrawerM1State.applyDiffDigest;
   payload.explicitApplyConfirm = true;
+  if (!invDrawerM1IsGrouped_()) {
+    payload.monthlyInvestmentValueDecision = __invDrawerM1State.monthlyInvestmentValueDecision;
+  }
   var rpc = invDrawerM1IsGrouped_()
     ? 'boundedHoldingsPreviewApplyGroupedFromDashboard'
     : 'boundedHoldingsPreviewApplyFromDashboard';

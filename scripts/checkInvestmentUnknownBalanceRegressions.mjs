@@ -8,6 +8,7 @@ const body = read('Dashboard_Body.html');
 const help = read('Dashboard_Help.html');
 const client = read('Dashboard_Script_AssetsBankInvestments.html');
 const sidebar = read('PlannerDashboard.html');
+const legacySidebar = read('InvestmentsUI.html');
 
 const investmentAdd = body.slice(body.indexOf('id="inv_mode_add_wrap"'), body.indexOf('id="inv_mode_manage_wrap"'));
 assert.doesNotMatch(investmentAdd, /enter\s+(?:<code>)?0(?:<\/code>)?\s+if unknown/i);
@@ -27,6 +28,34 @@ assert.match(investmentsSource,
   /function updateInvestmentValueByDate\(payload\)[\s\S]*?changed-column fit[\s\S]*?function addInvestmentAccountFromDashboard\(payload\)[\s\S]*?fitContentColumnsToContents_\(\[[\s\S]*?balanceCol/);
 assert.match(investmentsSource, /if \(!starting\.unknown\) \{\s*updateInvestmentHistory_\(accountName, currentYear, startDate, starting\.amount\);/);
 assert.match(investmentsSource, /starting\.unknown \? null : starting\.amount/);
+assert.match(client, /function saveInvestment\(\)[\s\S]*Enter a value, including \$0\.00 if the investment is actually at zero/);
+assert.match(sidebar, /function saveInvestment\(\)[\s\S]*Enter a value, including \$0\.00 if the investment is actually at zero/);
+assert.match(legacySidebar, /function save\(\)[\s\S]*Enter a value, including \$0\.00 if the investment is actually at zero/);
+assert.match(investmentsSource, /Enter a value, including 0\.00 if the investment is actually at zero/);
+assert.match(
+  investmentsSource,
+  /function updateInvestmentValueByDate\(payload\)[\s\S]*?investmentNumericEvidencePresent_\(rawValue\)[\s\S]*?String\(rawValue\)\.trim\(\) === ''/
+);
+assert.doesNotMatch(
+  investmentsSource,
+  /function updateInvestmentValueByDate\(payload\)[\s\S]*?validateRequired_\(payload, \['accountName', 'balanceDate', 'currentValue'\]\)/
+);
+
+function assertBlankRejectedBeforeRpc_(source, fnName) {
+  const start = source.indexOf('function ' + fnName + '(');
+  assert.ok(start >= 0, fnName + ' must exist');
+  const next = source.indexOf('\nfunction ', start + 1);
+  const body = source.slice(start, next >= 0 ? next : source.length);
+  const trimIdx = body.search(/!String\(rawValue \|\| ''\)\.trim\(\)/);
+  const rpcIdx = body.indexOf('updateInvestmentValueByDate');
+  assert.ok(trimIdx >= 0, fnName + ' must reject blank or whitespace-only values');
+  assert.ok(rpcIdx > trimIdx, fnName + ' must not RPC a blank investment value');
+  assert.match(body, /return;/);
+}
+
+assertBlankRejectedBeforeRpc_(client, 'saveInvestment');
+assertBlankRejectedBeforeRpc_(sidebar, 'saveInvestment');
+assertBlankRejectedBeforeRpc_(legacySidebar, 'save');
 
 class FakeRange {
   constructor(sheet, row, col, numRows = 1, numCols = 1) {
@@ -365,5 +394,61 @@ assert.equal(unknownDetails.startingBalance, null);
 const zeroLog = activity.find((row) => row.payee === 'Zero Brokerage');
 assert.equal(JSON.parse(zeroLog.details).startingBalance, 0);
 assert.equal(JSON.parse(zeroLog.details).startingBalanceUnknown, false);
+
+const blankUpdateBefore = JSON.stringify(rowByName(investments, 'Unknown IRA'));
+const blankUpdateAssetBefore = assetBalance('Unknown IRA');
+const blankUpdateExistingBefore = JSON.stringify(rowByName(investments, 'Existing Brokerage'));
+const blankUpdateExistingAssetBefore = JSON.stringify(rowByName(assets, 'Existing Brokerage'));
+const activityBeforeBlankUpdate = activity.length;
+assert.throws(() => context.updateInvestmentValueByDate({
+  accountName: 'Unknown IRA',
+  balanceDate: isoDate,
+  currentValue: ''
+}), /actually at zero/);
+assert.throws(() => context.updateInvestmentValueByDate({
+  accountName: 'Unknown IRA',
+  balanceDate: isoDate,
+  currentValue: '   '
+}), /actually at zero/);
+assert.throws(() => context.updateInvestmentValueByDate({
+  accountName: 'Unknown IRA',
+  balanceDate: isoDate
+}), /actually at zero/);
+assert.equal(JSON.stringify(rowByName(investments, 'Unknown IRA')), blankUpdateBefore,
+  'a blank Investment Update must not invent $0 or rewrite history');
+assert.equal(assetBalance('Unknown IRA'), blankUpdateAssetBefore,
+  'a blank Investment Update must not write a fake SYS $0');
+assert.equal(JSON.stringify(rowByName(investments, 'Existing Brokerage')), blankUpdateExistingBefore,
+  'a rejected blank Update must not rewrite another account');
+assert.equal(JSON.stringify(rowByName(assets, 'Existing Brokerage')), blankUpdateExistingAssetBefore,
+  'a rejected blank Update must not rewrite another SYS asset');
+assert.equal(activity.length, activityBeforeBlankUpdate,
+  'a rejected blank Update must not write an activity log row');
+
+context.updateInvestmentValueByDate({
+  accountName: 'Positive IRA',
+  balanceDate: isoDate,
+  currentValue: 0
+});
+assert.equal(rowByName(investments, 'Positive IRA')[monthCol], 0,
+  'explicit numeric $0 remains a valid Investment Update');
+assert.equal(assetBalance('Positive IRA'), 0,
+  'explicit numeric $0 must become verified SYS evidence');
+assert.equal(JSON.stringify(rowByName(investments, 'Unknown IRA')), blankUpdateBefore,
+  'explicit $0 on one account must not invent a value for a blank account');
+
+context.updateInvestmentValueByDate({
+  accountName: 'Positive IRA',
+  balanceDate: isoDate,
+  currentValue: 2750
+});
+assert.equal(rowByName(investments, 'Positive IRA')[monthCol], 2750,
+  'a nonzero Investment Update must still write the selected month');
+assert.equal(assetBalance('Positive IRA'), 2750);
+assert.equal(assetBalance('Unknown IRA'), blankUpdateAssetBefore,
+  'Update of another account must not write a fake SYS $0 for a blank account');
+assert.equal(rowByName(investments, 'Zero Brokerage')[monthCol], 0);
+assert.equal(JSON.stringify(rowByName(investments, 'Existing Brokerage')), blankUpdateExistingBefore,
+  'Investment Update must not rewrite another account\'s history');
 
 console.log('investment unknown-balance regressions passed');

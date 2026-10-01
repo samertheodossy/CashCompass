@@ -272,6 +272,17 @@ function previewInvestmentActivityImportFromDashboard(payload, optionalSs) {
   payload = payload || {};
   var ss = optionalSs || getUserSpreadsheet_();
   var account = resolveEligibleInvestmentImportAccount_(ss, payload.investmentId);
+  if (typeof investmentPortfolioDrawerGuardCustomerProductionImport_ === 'function') {
+    var customerGate = investmentPortfolioDrawerGuardCustomerProductionImport_(ss, {
+      pickerValue: payload.investmentId,
+      investmentId: payload.investmentId,
+      accountName: account && account.accountName,
+      source: 'ROBINHOOD_CSV'
+    });
+    if (!customerGate.ok) {
+      throw new Error(customerGate.error || 'Robinhood CSV requires an eligible investment account');
+    }
+  }
   var requestedCutoff = String(payload.cutoffDate || '').trim();
   var rawCsv = String(payload.rawCsv || '');
   if (!rawCsv.trim()) throw new Error('Choose a Robinhood CSV file first.');

@@ -1,5 +1,5 @@
 /**
- * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_update, bill_deactivate, bill_reactivate, house expense, house_add, house_value_update, house_deactivate, house_reactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_update, bank_account_deactivate, investment_add, investment_update, investment_account_update, investment_deactivate, investment_reactivate, investment_planning_purpose_update, debt_add, debt_deactivate, debt_reactivate, debt_update, income_add, income_deactivate, planner_email_deferred, planner_email_sent, planner_email_invalid_recipient, …). Eligible Donations retain fingerprint-gated removal; newly recorded direct Quick Add operations can be corrected through their exact operation envelope. Other events remain audit evidence.
+ * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_update, bill_deactivate, bill_reactivate, house expense, house_add, house_value_update, house_deactivate, house_reactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_update, bank_account_deactivate, investment_add, investment_update, investment_statement_monthly_value, investment_account_update, investment_deactivate, investment_reactivate, investment_planning_purpose_update, debt_add, debt_deactivate, debt_reactivate, debt_update, income_add, income_deactivate, planner_email_deferred, planner_email_sent, planner_email_invalid_recipient, …). Eligible Donations retain fingerprint-gated removal; newly recorded direct Quick Add operations can be corrected through their exact operation envelope. Other events remain audit evidence.
  * Complements OUT - History (planner-run snapshots). Tab: LOG - Activity.
  */
 
@@ -1828,6 +1828,7 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
   if (etEarly === 'house_reactivate') return 'House Expenses';
   if (etEarly === 'investment_add') return 'Investment';
   if (etEarly === 'investment_update') return 'Investment';
+  if (etEarly === 'investment_statement_monthly_value') return 'Investment';
   if (etEarly === 'investment_account_update') return 'Investment';
   if (etEarly === 'investment_deactivate') return 'Investment';
   if (etEarly === 'investment_reactivate') return 'Investment';
@@ -1957,6 +1958,8 @@ function activityLogActionLabel_(eventType, detailsJson) {
     // Renders e.g. "Updated May-26 balance to $25,432.10".
     case 'investment_update':
       return investmentUpdateActionLabel_(detailsJson);
+    case 'investment_statement_monthly_value':
+      return investmentStatementMonthlyValueActionLabel_(detailsJson);
     case 'investment_account_update': return 'Account details updated';
     case 'investment_deactivate': return 'Tracking stopped';
     case 'investment_reactivate': return 'Account reactivated';
@@ -2546,6 +2549,61 @@ function investmentUpdateActionLabel_(detailsJson) {
   return 'Updated balance to ' + formattedNew;
 }
 
+/**
+ * Statement monthly-value decisions from Portfolio activity Apply.
+ * Amount stays "—" (non-monetary snapshot). The label names the decision.
+ */
+function investmentStatementMonthlyValueActionLabel_(detailsJson) {
+  var fallback = 'Statement monthly value';
+  var raw = String(detailsJson || '').trim();
+  if (!raw) return fallback;
+  var d;
+  try {
+    d = JSON.parse(raw);
+  } catch (e) {
+    return fallback;
+  }
+  if (!d || typeof d !== 'object') return fallback;
+  var monthLabel = String(d.targetMonth || d.monthLabel || '').trim();
+  var decision = String(d.decision || '').trim().toUpperCase();
+  var result = String(d.result || '').trim().toUpperCase();
+  if (result === 'STALE_REJECTED') {
+    return monthLabel
+      ? monthLabel + ' statement value was not applied'
+      : 'Statement monthly value was not applied';
+  }
+  if (result === 'FAILED') {
+    return monthLabel
+      ? monthLabel + ' statement value could not be saved'
+      : 'Statement monthly value could not be saved';
+  }
+  if (decision === 'IGNORE') {
+    return monthLabel ? 'Ignored ' + monthLabel + ' statement value' : 'Ignored statement value';
+  }
+  if (decision === 'KEEP_EXISTING') {
+    return monthLabel ? 'Kept existing ' + monthLabel + ' value' : 'Kept existing monthly value';
+  }
+  if (decision === 'REPLACE') {
+    var replaced = activityLogAsFiniteNumber_(d.newValue != null ? d.newValue : d.proposedValue);
+    if (replaced === null) {
+      return monthLabel ? 'Replaced ' + monthLabel + ' value' : 'Replaced monthly value';
+    }
+    return monthLabel
+      ? 'Replaced ' + monthLabel + ' value with ' + activityLogFmtMoney_(replaced)
+      : 'Replaced monthly value with ' + activityLogFmtMoney_(replaced);
+  }
+  if (decision === 'ADD') {
+    var added = activityLogAsFiniteNumber_(d.newValue != null ? d.newValue : d.proposedValue);
+    if (added === null) {
+      return monthLabel ? 'Added ' + monthLabel + ' value' : 'Added monthly value';
+    }
+    return monthLabel
+      ? 'Added ' + monthLabel + ' value ' + activityLogFmtMoney_(added)
+      : 'Added monthly value ' + activityLogFmtMoney_(added);
+  }
+  return fallback;
+}
+
 function activityLogAsFiniteNumber_(v) {
   if (v === null || v === undefined || v === '') return null;
   var n = Number(v);
@@ -2601,6 +2659,7 @@ function activityLogIsNonMonetaryEvent_(eventType) {
     et === 'bank_account_update' ||
     et === 'house_value_update' ||
     et === 'investment_update' ||
+    et === 'investment_statement_monthly_value' ||
     et === 'investment_account_update' ||
     et === 'house_deactivate' ||
     et === 'house_reactivate' ||

@@ -2125,11 +2125,18 @@ function onInvestmentPortfolioDrawerBackdropClick_(event) {
 }
 
 function setInvestmentPortfolioDrawerView_(view) {
-  var mode = view === 'import' ? 'import'
+  var data = __investmentPortfolioData || {};
+  var requested = view === 'import' ? 'import'
     : (view === 'm1' ? 'm1'
       : (view === 'schwab' ? 'schwab'
         : (view === 'stash' ? 'stash'
           : (view === '401k' ? '401k' : 'portfolio'))));
+  var mode = requested;
+  if (mode === 'import' && !data.robinhoodCsvImportAvailable) mode = 'portfolio';
+  if (mode === 'm1' && !data.m1ImportAvailable) mode = 'portfolio';
+  if (mode === 'schwab' && !data.schwabImportAvailable) mode = 'portfolio';
+  if (mode === 'stash' && !data.stashImportAvailable) mode = 'portfolio';
+  if (mode === '401k' && !data.fidelity401kImportAvailable) mode = 'portfolio';
   var portfolio = document.getElementById('inv_portfolio_view');
   var importView = document.getElementById('inv_portfolio_import_view');
   var m1View = document.getElementById('inv_portfolio_m1_import_view');
@@ -2224,6 +2231,12 @@ function syncInvestmentPortfolioDrawerImportTabs_(data) {
 
 function onInvestmentPortfolioAccountChanged_() {
   var select = document.getElementById('inv_activity_account');
+  var option = select && select.options && select.selectedIndex >= 0
+    ? select.options[select.selectedIndex] : null;
+  if (option && option.disabled) {
+    select.value = __investmentPortfolioSelectedId || '';
+    return;
+  }
   var investmentId = String(select && select.value || '').trim();
   if (__investmentPortfolioSelectedId && investmentId !== __investmentPortfolioSelectedId &&
       investmentActivityImportHasUnsavedPreview_()) {
@@ -2249,6 +2262,12 @@ function onInvestmentPortfolioAccountChanged_() {
 }
 
 function applyInvestmentPortfolioAccountChange_(select, investmentId) {
+  var option = select && select.options && select.selectedIndex >= 0
+    ? select.options[select.selectedIndex] : null;
+  if (option && option.disabled) {
+    if (select) select.value = __investmentPortfolioSelectedId || '';
+    return;
+  }
   if (select) select.value = investmentId;
   __investmentPortfolioSelectedId = investmentId;
   clearInvestmentActivityImport_();
@@ -2308,8 +2327,27 @@ function rebuildInvestmentActivityImportEligibility_(data) {
   __investmentActivityImportEligibleIds = Object.create(null);
   (data && data.managementAccounts || []).forEach(function(row) {
     if (!row || row.planningPurpose !== 'INCOME_PRODUCING' || !row.investmentId) return;
+    if (row.customerImportSource && row.customerImportSource !== 'ROBINHOOD_CSV') return;
+    if (row.customerImportEnabled === false) return;
     __investmentActivityImportEligibleIds[String(row.investmentId).trim()] = true;
   });
+}
+
+function investmentPortfolioDrawerClientOptionLabel_(row) {
+  row = row || {};
+  var accountName = String(row.accountName || '').trim();
+  var providerLabel = String(row.providerLabel || '').trim();
+  var provider = String(row.statementProvider || '').trim().toUpperCase();
+  if (!providerLabel) providerLabel = investmentPortfolioDrawerClientProviderLabel_(accountName);
+  if (provider === 'UNKNOWN' || provider === 'OTHER' || providerLabel === 'Unknown — review') {
+    providerLabel = '';
+  }
+  var label = providerLabel ? accountName + ' · ' + providerLabel : accountName;
+  var note = row.customerImportEnabled === false
+    ? String(row.customerImportDisabledReason || '').trim()
+    : String(row.customerImportPickerNote || '').trim();
+  if (note) label += ' — ' + note;
+  return label;
 }
 
 function populateInvestmentPortfolioDrawerAccounts_(data) {
@@ -2325,8 +2363,18 @@ function populateInvestmentPortfolioDrawerAccounts_(data) {
     if (!accountName || !pickerValue) return;
     var option = document.createElement('option');
     option.value = pickerValue;
-    var providerLabel = investmentPortfolioDrawerClientProviderLabel_(accountName);
-    option.textContent = providerLabel ? accountName + ' · ' + providerLabel : accountName;
+    option.textContent = investmentPortfolioDrawerClientOptionLabel_(row);
+    var importEnabled = row.customerImportEnabled !== false;
+    if (row.customerImportEnabled === false) {
+      option.disabled = true;
+      option.className = 'is-import-unavailable';
+      option.style.color = '#9aa3ad';
+      option.title = String(row.customerImportDisabledReason || 'Import not available yet');
+    } else {
+      option.disabled = false;
+      if (row.customerImportPickerNote) option.title = String(row.customerImportPickerNote);
+    }
+    option.setAttribute('data-import-enabled', importEnabled ? 'true' : 'false');
     select.appendChild(option);
     count += 1;
   });
@@ -2337,6 +2385,8 @@ function populateInvestmentPortfolioDrawerAccounts_(data) {
     select.disabled = false;
   }
   if (previous) select.value = previous;
+  var selected = select.options[select.selectedIndex];
+  if (selected && selected.disabled) select.value = '';
 }
 
 function updateInvestmentPortfolioDrawerAccountHelp_(data) {
@@ -3754,9 +3804,13 @@ function loadInvestmentData(quiet) {
 
 function saveInvestment() {
   const rawValue = document.getElementById('inv_value').value;
+  if (!String(rawValue || '').trim()) {
+    setStatus('inv_status', 'Enter a value, including $0.00 if the investment is actually at zero.', true);
+    return;
+  }
   const numericValue = toNumber(rawValue);
 
-  if (String(rawValue || '').trim() && isNaN(numericValue)) {
+  if (isNaN(numericValue)) {
     setStatus('inv_status', 'Value must be a valid number.', true);
     return;
   }

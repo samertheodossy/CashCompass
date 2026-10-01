@@ -193,9 +193,13 @@ function loadSelectedInvestmentData() {
 
 function save() {
   const rawValue = document.getElementById('value').value;
+  if (!String(rawValue || '').trim()) {
+    setStatus('Enter a value, including $0.00 if the investment is actually at zero.', true);
+    return;
+  }
   const numericValue = toNumber(rawValue);
 
-  if (String(rawValue || '').trim() && isNaN(numericValue)) {
+  if (isNaN(numericValue)) {
     setStatus('Value must be a valid number.', true);
     return;
   }

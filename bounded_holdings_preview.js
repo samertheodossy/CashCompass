@@ -112,7 +112,11 @@ function boundedHoldingsPreviewRunFromDashboard(payload) {
     var previewPayload = Object.assign({}, payload || {}, {
       stableAccountId: accountValidation.stableAccountId,
       registrationType: accountValidation.registrationType,
-      explicitAccountMatch: true
+      explicitAccountMatch: true,
+      investmentId: (payload && payload.investmentId) || accountValidation.investmentId,
+      accountName: (payload && payload.accountName) || accountValidation.accountName,
+      pickerValue: (payload && payload.pickerValue) ||
+        (payload && payload.investmentId) || accountValidation.investmentId
     });
     var sourceValidation = boundedHoldingsPreviewValidatePreviewSourceForAccount_(
       {
@@ -124,6 +128,10 @@ function boundedHoldingsPreviewRunFromDashboard(payload) {
       previewPayload.rawDocumentText);
     if (!sourceValidation.ok) return sourceValidation;
     previewPayload.source = sourceValidation.source;
+    if (typeof investmentPortfolioDrawerGuardCustomerProductionImport_ === 'function') {
+      var customerGate = investmentPortfolioDrawerGuardCustomerProductionImport_(ss, previewPayload);
+      if (!customerGate.ok) return customerGate;
+    }
     return holdingsPreviewLabBuildPreview_(previewPayload);
   });
 }

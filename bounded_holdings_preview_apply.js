@@ -2,8 +2,10 @@
  * bounded_holdings_preview_apply.js — Bounded unified holdings Apply workflow.
  *
  * Preview remains read-only until explicit Apply confirmation. Holdings write
- * SYS - Investment Holdings Unified. Trusted single-account Schwab/M1 Apply may
- * also write the statement month through the canonical investment value writer.
+ * SYS - Investment Holdings Unified. Trusted single-account Schwab/M1/Fidelity
+ * 401(k) Apply may also write the statement month through the canonical
+ * investment value writer. Fidelity 401(k) is balance-only: it never proposes
+ * unified holdings rows.
  */
 
 function boundedHoldingsPreviewApplyAssertExplicitConfirm_(payload) {
@@ -50,8 +52,76 @@ function boundedHoldingsPreviewApplyBuildSingleScope_(accountValidation, preview
   };
 }
 
+function boundedHoldingsPreviewApplyRebuildFidelity401kPreview_(ss, payload) {
+  payload = payload || {};
+  if (payload.explicitAccountMatch !== true) {
+    return {
+      ok: false,
+      error: 'Confirm this document belongs to the selected 401K Account.'
+    };
+  }
+  var previewPayload = Object.assign({}, payload, {
+    source: 'FIDELITY_401K_STATEMENT_PDF',
+    accountName: String(payload.accountName || '').trim() || '401K Account',
+    registrationType: String(payload.registrationType || '').trim() || '401K',
+    explicitAccountMatch: true
+  });
+  var accountValidation = boundedHoldingsPreviewValidateSelectedAccount_(ss, previewPayload);
+  if (!accountValidation.ok) return accountValidation;
+  if (!/^401K Account$/i.test(String(accountValidation.accountName || '').trim())) {
+    return {
+      ok: false,
+      error: 'Select the 401K Account before applying a retirement savings statement.'
+    };
+  }
+  var parsed = typeof investmentFidelity401kStatementPreviewFromText_ === 'function'
+    ? investmentFidelity401kStatementPreviewFromText_(payload.rawDocumentText)
+    : { ok: false, error: 'Fidelity 401(k) parser is unavailable.' };
+  if (!parsed || !parsed.ok) {
+    return {
+      ok: false,
+      error: (parsed && parsed.error) ? parsed.error : 'Could not parse retirement savings statement.'
+    };
+  }
+  var preview = typeof investmentFidelity401kStatementNormalizeMonthlyPreview_ === 'function'
+    ? investmentFidelity401kStatementNormalizeMonthlyPreview_(parsed)
+    : parsed;
+  if (!preview || !preview.ok) {
+    return {
+      ok: false,
+      error: (preview && preview.error) ? preview.error : 'Could not normalize retirement savings statement.'
+    };
+  }
+  var reviewCheck = boundedHoldingsPreviewApplyRejectReviewRequiredPreview_(preview);
+  if (!reviewCheck.ok) return reviewCheck;
+  var documentFingerprint = boundedHoldingsPreviewApplyBuildDocumentFingerprint_(
+    'FIDELITY_401K_STATEMENT_PDF', payload.rawDocumentText);
+  if (!documentFingerprint) {
+    return { ok: false, error: 'Document fingerprint could not be built for Apply.' };
+  }
+  return {
+    ok: true,
+    accountValidation: accountValidation,
+    preview: preview,
+    documentFingerprint: documentFingerprint,
+    scope: boundedHoldingsPreviewApplyBuildSingleScope_(
+      accountValidation, preview, previewPayload, documentFingerprint)
+  };
+}
+
 function boundedHoldingsPreviewApplyRebuildSinglePreview_(ss, payload) {
-  var accountValidation = boundedHoldingsPreviewValidateSelectedAccount_(ss, payload || {});
+  payload = payload || {};
+  if (typeof investmentPortfolioDrawerGuardCustomerProductionImport_ === 'function') {
+    var customerGate = investmentPortfolioDrawerGuardCustomerProductionImport_(ss, payload);
+    if (!customerGate.ok) return customerGate;
+  }
+  var requestedSource = typeof investmentPortfolioNormalizeSource_ === 'function'
+    ? investmentPortfolioNormalizeSource_(payload.source || '')
+    : String(payload.source || '').trim().toUpperCase();
+  if (requestedSource === 'FIDELITY_401K_STATEMENT_PDF') {
+    return boundedHoldingsPreviewApplyRebuildFidelity401kPreview_(ss, payload);
+  }
+  var accountValidation = boundedHoldingsPreviewValidateSelectedAccount_(ss, payload);
   if (!accountValidation.ok) return accountValidation;
   var previewPayload = Object.assign({}, payload || {}, {
     stableAccountId: accountValidation.stableAccountId,
@@ -143,6 +213,13 @@ function boundedHoldingsPreviewApplyValidateGroupedSessionItems_(payload, parent
 
 function boundedHoldingsPreviewApplyRebuildGroupedPreview_(ss, payload) {
   payload = payload || {};
+  payload = Object.assign({}, payload, {
+    source: payload.source || 'M1_STATEMENT_PDF'
+  });
+  if (typeof investmentPortfolioDrawerGuardCustomerProductionImport_ === 'function') {
+    var customerGate = investmentPortfolioDrawerGuardCustomerProductionImport_(ss, payload);
+    if (!customerGate.ok) return customerGate;
+  }
   var groupConfig = boundedHoldingsPreviewMatchGroupProvider_(
     payload.accountName, payload.source || 'M1_STATEMENT_PDF');
   if (!groupConfig) {
@@ -314,6 +391,7 @@ function boundedHoldingsPreviewApplyExecute_(ss, payload, mode) {
   var bundle = boundedHoldingsPreviewApplyBuildDiffBundle_(ss, payload, mode);
   if (!bundle.ok) return bundle;
   if (bundle.diffDigest !== expectedDigest) {
+    boundedHoldingsPreviewApplyLogMonthlyValueActivity_(ss, payload, bundle, 'STALE_REJECTED');
     return {
       ok: false,
       error: 'Apply diff changed since review. Rebuild the diff and confirm again.',
@@ -358,6 +436,7 @@ function boundedHoldingsPreviewApplyExecute_(ss, payload, mode) {
   var holdingsWillWrite = !holdingsDuplicateNoop &&
     ((diff.create || []).length > 0 || (diff.update || []).length > 0);
   if (!holdingsWillWrite && !monthlyWillWrite) {
+    boundedHoldingsPreviewApplyLogMonthlyValueActivity_(ss, payload, bundle, 'SKIPPED');
     return {
       ok: true,
       duplicateNoop: true,
@@ -401,6 +480,7 @@ function boundedHoldingsPreviewApplyExecute_(ss, payload, mode) {
           try { boundedHoldingsPreviewApplyFormatUnifiedSheet_(unifiedSheet); } catch (_fmtErr) { /* cosmetic */ }
         }
       }
+      boundedHoldingsPreviewApplyLogMonthlyValueActivity_(ss, payload, bundle, 'FAILED');
       return {
         ok: false,
         error: 'Monthly investment value could not be saved. Holdings changes were not kept. ' +
@@ -410,6 +490,11 @@ function boundedHoldingsPreviewApplyExecute_(ss, payload, mode) {
         monthlyHistoryUnchanged: true
       };
     }
+  } else {
+    boundedHoldingsPreviewApplyLogMonthlyValueActivity_(ss, payload, bundle, 'SKIPPED');
+  }
+  if (monthlyWritten) {
+    boundedHoldingsPreviewApplyLogMonthlyValueActivity_(ss, payload, bundle, 'APPLIED');
   }
 
   var holdingsMessage = holdingsWillWrite
@@ -447,12 +532,111 @@ function boundedHoldingsPreviewApplyWriteMonthlyInvestmentValue_(proposal) {
   var result = updateInvestmentValueByDate({
     accountName: proposal.accountName,
     balanceDate: proposal.asOfDate,
-    currentValue: proposal.proposedValue
+    currentValue: proposal.proposedValue,
+    skipActivityLog: true
   });
   if (result && result.ok === false) {
     throw new Error(result.error || result.message || 'Monthly investment value could not be saved.');
   }
   return { ok: true, written: true };
+}
+
+function boundedHoldingsPreviewApplyShouldLogMonthlyValueActivity_(proposal) {
+  proposal = proposal || {};
+  var comparison = String(proposal.comparison || '').trim().toUpperCase();
+  return comparison === 'BLANK' || comparison === 'MATCH' || comparison === 'DIFFER';
+}
+
+function boundedHoldingsPreviewApplyMonthlyActivityDecision_(proposal, payload) {
+  proposal = proposal || {};
+  payload = payload || {};
+  var raw = String(payload.monthlyInvestmentValueDecision || proposal.decision || '')
+    .trim().toUpperCase();
+  if (raw === 'KEEP') return 'KEEP_EXISTING';
+  if (raw === 'ADD' || raw === 'REPLACE' || raw === 'IGNORE') return raw;
+  var comparison = String(proposal.comparison || '').trim().toUpperCase();
+  if (comparison === 'BLANK') return 'IGNORE';
+  if (comparison === 'MATCH' || comparison === 'DIFFER') return 'KEEP_EXISTING';
+  return '';
+}
+
+function boundedHoldingsPreviewApplyMonthlyActivityProviderLabel_(source) {
+  var normalized = typeof investmentPortfolioNormalizeSource_ === 'function'
+    ? investmentPortfolioNormalizeSource_(source || '')
+    : String(source || '').trim().toUpperCase();
+  if (normalized === 'SCHWAB_BROKERAGE_STATEMENT_PDF') return 'Schwab';
+  if (normalized === 'M1_STATEMENT_PDF') return 'M1';
+  if (normalized === 'FIDELITY_401K_STATEMENT_PDF') return 'Fidelity 401(k)';
+  if (normalized === 'STASH_BROKERAGE_STATEMENT_PDF') return 'Stash';
+  return '';
+}
+
+function boundedHoldingsPreviewApplyLogMonthlyValueActivity_(ss, payload, bundle, result) {
+  try {
+    if (typeof appendActivityLog_ !== 'function') return false;
+    payload = payload || {};
+    bundle = bundle || {};
+    var proposal = bundle.monthlyProposal || {};
+    if (!boundedHoldingsPreviewApplyShouldLogMonthlyValueActivity_(proposal)) return false;
+    var decision = boundedHoldingsPreviewApplyMonthlyActivityDecision_(proposal, payload);
+    if (!decision) return false;
+    var normalizedResult = String(result || '').trim().toUpperCase();
+    if (normalizedResult !== 'APPLIED' && normalizedResult !== 'SKIPPED' &&
+        normalizedResult !== 'STALE_REJECTED' && normalizedResult !== 'FAILED') {
+      return false;
+    }
+    if (normalizedResult === 'APPLIED' && (decision === 'IGNORE' || decision === 'KEEP_EXISTING')) {
+      normalizedResult = 'SKIPPED';
+    }
+    if (normalizedResult === 'APPLIED' && !proposal.willWrite) {
+      normalizedResult = 'SKIPPED';
+    }
+    var source = String(proposal.source || payload.source ||
+      (bundle.preview && bundle.preview.source) || '').trim();
+    var providerLabel = boundedHoldingsPreviewApplyMonthlyActivityProviderLabel_(source);
+    var fingerprint = '';
+    if (bundle.scopes && bundle.scopes[0] && bundle.scopes[0].documentFingerprint) {
+      fingerprint = String(bundle.scopes[0].documentFingerprint || '').trim();
+    }
+    if (!fingerprint) fingerprint = String(payload.documentFingerprint || '').trim();
+    var oldValue = proposal.existingPresent ? proposal.existingValue : '';
+    var proposedValue = proposal.proposedValue != null ? proposal.proposedValue : null;
+    var details = {
+      detailsVersion: 1,
+      accountName: String(proposal.accountName || payload.accountName || '').trim(),
+      provider: providerLabel,
+      source: source,
+      statementAsOf: String(proposal.asOfDate || '').trim(),
+      targetMonth: String(proposal.monthLabel || '').trim(),
+      oldValue: oldValue,
+      proposedValue: proposedValue,
+      decision: decision,
+      result: normalizedResult,
+      documentFingerprint: fingerprint,
+      diffDigest: String((bundle && bundle.diffDigest) || payload.diffDigest || '').trim()
+    };
+    if (normalizedResult === 'APPLIED') {
+      details.newValue = proposedValue;
+    }
+    var tz = Session.getScriptTimeZone();
+    appendActivityLog_(ss, {
+      eventType: 'investment_statement_monthly_value',
+      entryDate: Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd'),
+      amount: 0,
+      direction: '',
+      payee: details.accountName,
+      category: '',
+      accountSource: providerLabel,
+      cashFlowSheet: '',
+      cashFlowMonth: '',
+      dedupeKey: '',
+      details: JSON.stringify(details)
+    });
+    return true;
+  } catch (logErr) {
+    Logger.log('boundedHoldingsPreviewApplyLogMonthlyValueActivity_: ' + logErr);
+    return false;
+  }
 }
 
 function boundedHoldingsPreviewApplyFromDashboard(payload) {
@@ -472,6 +656,7 @@ function boundedHoldingsPreviewApplyFromDashboard(payload) {
       var refreshed = boundedHoldingsPreviewApplyBuildDiffBundle_(ss, payload || {}, 'SINGLE_ACCOUNT');
       if (!refreshed.ok) return refreshed;
       if (refreshed.diffDigest !== String(payload.diffDigest || '').trim()) {
+        boundedHoldingsPreviewApplyLogMonthlyValueActivity_(ss, payload || {}, refreshed, 'STALE_REJECTED');
         return {
           ok: false,
           error: 'Apply diff changed during lock acquisition. Rebuild the diff and confirm again.',
@@ -502,6 +687,7 @@ function boundedHoldingsPreviewApplyGroupedFromDashboard(payload) {
       var refreshed = boundedHoldingsPreviewApplyBuildDiffBundle_(ss, payload || {}, 'GROUPED_PROVIDER');
       if (!refreshed.ok) return refreshed;
       if (refreshed.diffDigest !== String(payload.diffDigest || '').trim()) {
+        boundedHoldingsPreviewApplyLogMonthlyValueActivity_(ss, payload || {}, refreshed, 'STALE_REJECTED');
         return {
           ok: false,
           error: 'Apply diff changed during lock acquisition. Rebuild the diff and confirm again.',

@@ -1,11 +1,16 @@
-/* Portfolio activity drawer — Fidelity 401(k) retirement savings statement PDF (preview only). */
+/* Portfolio activity drawer — Fidelity 401(k) retirement savings statement PDF. */
 var __invDrawer401kState = {
   fileName: '',
   extractionStatus: '',
   extractedTextLength: 0,
   extractionError: '',
   lastPreview: null,
-  lastBalanceComparison: null
+  lastBalanceComparison: null,
+  lastPreviewDocumentText: '',
+  applyReviewed: false,
+  applyDiff: null,
+  applyDiffDigest: '',
+  monthlyInvestmentValueDecision: ''
 };
 
 function invDrawer401kEscape_(value) {
@@ -22,6 +27,11 @@ function resetInvestmentPortfolioDrawer401kImport_(keepPreview) {
   __invDrawer401kState.extractionStatus = '';
   __invDrawer401kState.extractedTextLength = 0;
   __invDrawer401kState.extractionError = '';
+  __invDrawer401kState.lastPreviewDocumentText = '';
+  __invDrawer401kState.applyReviewed = false;
+  __invDrawer401kState.applyDiff = null;
+  __invDrawer401kState.applyDiffDigest = '';
+  __invDrawer401kState.monthlyInvestmentValueDecision = '';
   if (!keepPreview) {
     __invDrawer401kState.lastPreview = null;
     __invDrawer401kState.lastBalanceComparison = null;
@@ -36,6 +46,8 @@ function resetInvestmentPortfolioDrawer401kImport_(keepPreview) {
   if (matchEl) matchEl.checked = false;
   var resultsEl = document.getElementById('inv_401k_results');
   if (resultsEl) resultsEl.innerHTML = '';
+  var applyArea = document.getElementById('inv_401k_apply_area');
+  if (applyArea) applyArea.innerHTML = '';
   updateInvestmentPortfolioDrawer401kControls_();
 }
 
@@ -46,7 +58,7 @@ function initInvestmentPortfolioDrawer401kImport_(pickerValue, portfolioData) {
   if (hintEl) {
     hintEl.textContent = 'Import one Fidelity NetBenefits retirement savings statement PDF for ' +
       (portfolioData.accountName || 'the selected 401K Account') +
-      '. Preview only — nothing is written to the workbook.';
+      '. Preview the ending balance, then review and apply only a blank statement month.';
   }
   updateInvestmentPortfolioDrawer401kControls_();
 }
@@ -90,6 +102,7 @@ function onInvestmentPortfolioDrawer401kFileChanged_() {
       }
       __invDrawer401kState.lastPreview = null;
       __invDrawer401kState.lastBalanceComparison = null;
+      clearInvestmentPortfolioDrawer401kApply_(true);
       updateInvestmentPortfolioDrawer401kControls_();
     }).catch(function(err) {
       __invDrawer401kState.extractionError = err && err.message ? err.message : String(err);
@@ -102,15 +115,123 @@ function onInvestmentPortfolioDrawer401kFileChanged_() {
   });
 }
 
-function buildInvDrawer401kPayload_() {
-  return {
-    pickerValue: String(__investmentPortfolioSelectedId || '').trim(),
+function buildInvDrawer401kPayload_(extra) {
+  var account = __investmentPortfolioData || {};
+  var payload = {
+    pickerValue: String(__investmentPortfolioSelectedId || account.pickerValue ||
+      account.investmentId || '').trim(),
+    accountName: account.accountName || '401K Account',
     rawDocumentText: invDrawer401kCurrentText_(),
     explicitAccountMatch: !!(document.getElementById('inv_401k_explicit_match') &&
       document.getElementById('inv_401k_explicit_match').checked),
     source: 'FIDELITY_401K_STATEMENT_PDF',
-    statementProvider: 'FIDELITY'
+    statementProvider: 'FIDELITY',
+    registrationType: '401K'
   };
+  if (extra) Object.keys(extra).forEach(function(key) { payload[key] = extra[key]; });
+  return payload;
+}
+
+function clearInvestmentPortfolioDrawer401kApply_(keepPreview) {
+  __invDrawer401kState.applyReviewed = false;
+  __invDrawer401kState.applyDiff = null;
+  __invDrawer401kState.applyDiffDigest = '';
+  __invDrawer401kState.monthlyInvestmentValueDecision = '';
+  if (!keepPreview) {
+    __invDrawer401kState.lastPreview = null;
+    __invDrawer401kState.lastBalanceComparison = null;
+    __invDrawer401kState.lastPreviewDocumentText = '';
+  }
+  var applyArea = document.getElementById('inv_401k_apply_area');
+  if (applyArea) applyArea.innerHTML = '';
+}
+
+function invDrawer401kFormatMoney_(value) {
+  if (value === null || typeof value === 'undefined' || value === '') return '—';
+  var n = Number(value);
+  if (!isFinite(n)) return '—';
+  var abs = Math.abs(n).toFixed(2);
+  var parts = abs.split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return (n < 0 ? '-$' : '$') + parts.join('.');
+}
+
+function invDrawer401kRenderMonthlyInvestmentValueHtml_(monthly) {
+  monthly = monthly || {};
+  var comparison = String(monthly.comparison || '');
+  var selected = String(monthly.decision || monthly.defaultDecision || '').trim().toUpperCase();
+  var html = '<div class="card" id="inv_401k_monthly_value_card">' +
+    '<h4>Monthly investment value</h4>';
+  html += '<p>Target month: <strong>' +
+    invDrawer401kEscape_(monthly.monthLabel || 'this month') + '</strong></p>';
+  html += '<p>Statement value: <strong>' +
+    invDrawer401kEscape_(invDrawer401kFormatMoney_(monthly.proposedValue)) + '</strong></p>';
+  if (comparison === 'BLANK') {
+    html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+      '<input type="radio" name="inv_401k_monthly_decision" id="inv_401k_monthly_add" value="ADD"' +
+      (selected === 'ADD' ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
+      '<span>Add value</span></label>';
+    html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+      '<input type="radio" name="inv_401k_monthly_decision" id="inv_401k_monthly_ignore" value="IGNORE"' +
+      (selected === 'IGNORE' || !selected ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
+      '<span>Ignore monthly value</span></label>';
+  } else if (comparison === 'MATCH') {
+    html += '<p>Existing value: <strong>' +
+      invDrawer401kEscape_(invDrawer401kFormatMoney_(monthly.existingValue)) + '</strong></p>';
+    html += '<p><strong>Already matches.</strong> Keep existing is the only decision. No write is proposed.</p>';
+  } else if (comparison === 'DIFFER') {
+    html += '<p>Existing value: <strong>' +
+      invDrawer401kEscape_(invDrawer401kFormatMoney_(monthly.existingValue)) + '</strong></p>';
+    html += '<p>They differ by ' +
+      invDrawer401kEscape_(invDrawer401kFormatMoney_(monthly.difference)) + '.</p>';
+    html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+      '<input type="radio" name="inv_401k_monthly_decision" id="inv_401k_monthly_keep" value="KEEP"' +
+      (selected !== 'REPLACE' ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
+      '<span>Keep existing</span></label>';
+    html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+      '<input type="radio" name="inv_401k_monthly_decision" id="inv_401k_monthly_replace" value="REPLACE"' +
+      (selected === 'REPLACE' ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
+      '<span>Replace with statement value</span></label>';
+    html += '<p><strong>The existing monthly value will be replaced</strong> if you choose Replace.</p>';
+  } else {
+    html += '<p><strong>Skip</strong> — ' +
+      invDrawer401kEscape_(monthly.message || 'Monthly investment value will not be written.') +
+      '</p>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function invDrawer401kBindMonthlyInvestmentValueControls_() {
+  var radios = document.querySelectorAll('input[name="inv_401k_monthly_decision"]');
+  var onChange = function() {
+    var selected = document.querySelector('input[name="inv_401k_monthly_decision"]:checked');
+    var next = selected ? String(selected.value || '').trim().toUpperCase() : '';
+    if (next === String(__invDrawer401kState.monthlyInvestmentValueDecision || '').trim().toUpperCase()) {
+      var confirmBtn = document.getElementById('inv_401k_confirm_apply_btn');
+      if (confirmBtn) confirmBtn.disabled = !invDrawer401kApplyReady_();
+      return;
+    }
+    __invDrawer401kState.monthlyInvestmentValueDecision = next;
+    reviewInvestmentPortfolioDrawer401kApplyDiff_();
+  };
+  for (var i = 0; i < radios.length; i++) radios[i].onchange = onChange;
+}
+
+function invDrawer401kApplyReady_() {
+  var diff = __invDrawer401kState.applyDiff;
+  if (!__invDrawer401kState.applyReviewed || !__invDrawer401kState.applyDiffDigest || !diff) {
+    return false;
+  }
+  if (diff.blocked) return false;
+  var monthly = diff.monthlyInvestmentValue || {};
+  var comparison = String(monthly.comparison || '');
+  var decision = String(__invDrawer401kState.monthlyInvestmentValueDecision ||
+    monthly.decision || '').trim().toUpperCase();
+  if (comparison === 'BLANK') return decision === 'ADD' || decision === 'IGNORE';
+  if (comparison === 'DIFFER') return decision === 'KEEP' || decision === 'REPLACE';
+  if (comparison === 'MATCH') return true;
+  return !diff.duplicateNoop;
 }
 
 function renderInvDrawer401kResults_(res) {
@@ -123,17 +244,18 @@ function renderInvDrawer401kResults_(res) {
   }
   __invDrawer401kState.lastPreview = res.preview || null;
   __invDrawer401kState.lastBalanceComparison = res.balanceComparison || null;
+  __invDrawer401kState.lastPreviewDocumentText = invDrawer401kCurrentText_();
+  clearInvestmentPortfolioDrawer401kApply_(true);
   var preview = res.preview || {};
   host.innerHTML = '<div class="card"><div class="pill pill-ok">Retirement statement preview ready</div> ' +
     invDrawer401kEscape_(preview.asOfDate ? ('As-of ' + preview.asOfDate) : '') +
     ' · Ending balance ' +
-    invDrawer401kEscape_(typeof fmtCurrency === 'function'
-      ? fmtCurrency(Number(preview.endingBalance || 0))
-      : String(preview.endingBalance || '')) +
-    '</div><p class="muted">Preview only. Open the Portfolio tab to review balances. Nothing has been saved.</p>';
+    invDrawer401kEscape_(invDrawer401kFormatMoney_(preview.endingBalance)) +
+    '</div><p class="muted">Preview only until you review and apply a blank statement month. Nothing has been saved.</p>';
   if (__investmentPortfolioData) {
     renderInvestmentPortfolioDrawerView_(__investmentPortfolioData);
   }
+  renderInvestmentPortfolioDrawer401kApplySection_();
 }
 
 function previewInvestmentPortfolioDrawer401k_() {
@@ -152,4 +274,114 @@ function previewInvestmentPortfolioDrawer401k_() {
       setStatus('inv_401k_status', err.message || String(err), true);
     })
     .previewFidelity401kStatementFromDashboard(buildInvDrawer401kPayload_());
+}
+
+function renderInvestmentPortfolioDrawer401kApplySection_() {
+  var applyArea = document.getElementById('inv_401k_apply_area');
+  if (!applyArea) return;
+  if (!__invDrawer401kState.lastPreview) {
+    applyArea.innerHTML = '';
+    return;
+  }
+  applyArea.innerHTML = '<div class="card"><h3>Apply monthly investment value</h3>' +
+    '<p class="muted">Review the statement month for 401K Account. Apply writes only a blank ' +
+    'INPUT - Investments cell. Holdings, tax lots, and transactions are never imported.</p>' +
+    '<div class="investment-import-actions">' +
+    '<button type="button" class="small-btn" id="inv_401k_review_apply_btn">Review monthly value</button>' +
+    '<button type="button" class="small-btn primary" id="inv_401k_confirm_apply_btn" disabled>Apply monthly value</button>' +
+    '</div><div id="inv_401k_apply_message" class="muted"></div>' +
+    '<div id="inv_401k_monthly_area"></div></div>';
+  var reviewBtn = document.getElementById('inv_401k_review_apply_btn');
+  var confirmBtn = document.getElementById('inv_401k_confirm_apply_btn');
+  if (reviewBtn) reviewBtn.onclick = reviewInvestmentPortfolioDrawer401kApplyDiff_;
+  if (confirmBtn) confirmBtn.onclick = confirmInvestmentPortfolioDrawer401kApply_;
+}
+
+function invDrawer401kResolveApplyDiffBundle_(bundle) {
+  if (!bundle || bundle.ok === false) {
+    return {
+      ok: false,
+      error: String((bundle && bundle.error) || '').trim() || 'Could not build diff.',
+      applyDiff: null,
+      applyDiffDigest: '',
+      applyReviewed: false,
+      message: String((bundle && bundle.error) || '').trim() || 'Could not build diff.'
+    };
+  }
+  if (!bundle.diff) {
+    return {
+      ok: false,
+      error: 'Could not build diff.',
+      applyDiff: null,
+      applyDiffDigest: '',
+      applyReviewed: false,
+      message: 'Could not build diff.'
+    };
+  }
+  var digest = String(bundle.diffDigest || '').trim();
+  var monthly = bundle.diff.monthlyInvestmentValue || {};
+  var message = monthly.message ||
+    ('Creates: ' + String((bundle.diff.summary && bundle.diff.summary.createCount) || 0));
+  return {
+    ok: true,
+    error: '',
+    applyDiff: bundle.diff,
+    applyDiffDigest: digest,
+    applyReviewed: !!digest,
+    message: message
+  };
+}
+
+function reviewInvestmentPortfolioDrawer401kApplyDiff_() {
+  setStatusLoading('inv_401k_status', 'Building monthly value review…');
+  google.script.run
+    .withSuccessHandler(function(bundle) {
+      setStatus('inv_401k_status', '', false);
+      var resolved = invDrawer401kResolveApplyDiffBundle_(bundle);
+      __invDrawer401kState.applyDiff = resolved.applyDiff;
+      __invDrawer401kState.applyDiffDigest = resolved.applyDiffDigest;
+      __invDrawer401kState.applyReviewed = resolved.applyReviewed;
+      var monthly = resolved.applyDiff && resolved.applyDiff.monthlyInvestmentValue || {};
+      __invDrawer401kState.monthlyInvestmentValueDecision = String(
+        monthly.decision || __invDrawer401kState.monthlyInvestmentValueDecision || '').trim().toUpperCase();
+      var msgEl = document.getElementById('inv_401k_apply_message');
+      var confirmBtn = document.getElementById('inv_401k_confirm_apply_btn');
+      if (msgEl) msgEl.textContent = resolved.message;
+      var monthlyEl = document.getElementById('inv_401k_monthly_area');
+      if (monthlyEl) {
+        monthlyEl.innerHTML = resolved.applyDiff
+          ? invDrawer401kRenderMonthlyInvestmentValueHtml_(
+            resolved.applyDiff.monthlyInvestmentValue)
+          : '';
+        invDrawer401kBindMonthlyInvestmentValueControls_();
+      }
+      if (confirmBtn) confirmBtn.disabled = !invDrawer401kApplyReady_();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_401k_status', err.message || String(err), true);
+    })
+    .boundedHoldingsPreviewBuildApplyDiffFromDashboard(buildInvDrawer401kPayload_({
+      monthlyInvestmentValueDecision: __invDrawer401kState.monthlyInvestmentValueDecision
+    }));
+}
+
+function confirmInvestmentPortfolioDrawer401kApply_() {
+  if (!invDrawer401kApplyReady_()) return;
+  setStatusLoading('inv_401k_status', 'Applying monthly investment value…');
+  var payload = buildInvDrawer401kPayload_();
+  payload.diffDigest = __invDrawer401kState.applyDiffDigest;
+  payload.explicitApplyConfirm = true;
+  payload.monthlyInvestmentValueDecision = __invDrawer401kState.monthlyInvestmentValueDecision;
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('inv_401k_status', res && res.message ? res.message : 'Apply completed.', false);
+      clearInvestmentPortfolioDrawer401kApply_(true);
+      var picker = __investmentPortfolioSelectedId;
+      if (picker) applyInvestmentPortfolioAccountChange_(
+        document.getElementById('inv_activity_account'), picker);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_401k_status', err.message || String(err), true);
+    })
+    .boundedHoldingsPreviewApplyFromDashboard(payload);
 }

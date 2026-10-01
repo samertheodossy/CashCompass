@@ -1710,9 +1710,13 @@ function loadInvestmentData() {
 
 function saveInvestment() {
   const rawValue = document.getElementById('inv_value').value;
+  if (!String(rawValue || '').trim()) {
+    setStatus('inv_status', 'Enter a value, including $0.00 if the investment is actually at zero.', true);
+    return;
+  }
   const numericValue = toNumber(rawValue);
 
-  if (String(rawValue || '').trim() && isNaN(numericValue)) {
+  if (isNaN(numericValue)) {
     setStatus('inv_status', 'Value must be a valid number.', true);
     return;
   }

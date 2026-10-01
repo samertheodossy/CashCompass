@@ -533,7 +533,21 @@ function buildContext(options = {}) {
     Logger: { log() {} },
     getCurrentYear_: () => 2026,
     syncAllAssetsFromLatestCurrentYear_() {},
-    appendActivityLog_() {},
+    __activityLogEntries: [],
+    appendActivityLog_(_ss, payload) {
+      const detailsRaw = payload && payload.details;
+      let details = detailsRaw;
+      if (typeof detailsRaw === 'string') {
+        try { details = JSON.parse(detailsRaw); } catch (_err) { details = { legacyDetailsText: detailsRaw }; }
+      }
+      context.__activityLogEntries.push({
+        eventType: String((payload && payload.eventType) || ''),
+        payee: String((payload && payload.payee) || ''),
+        accountSource: String((payload && payload.accountSource) || ''),
+        details: details || {}
+      });
+      return true;
+    },
     touchDashboardSourceUpdated_() {},
     fitContentColumnsToContents_() {}
   };
@@ -637,6 +651,11 @@ assert.match(applySource, /boundedHoldingsPreviewBuildApplyDiffFromDashboard/);
 assert.match(applySource, /boundedHoldingsPreviewApplySanitizeDiffBundleForClient_/);
 assert.match(applySource, /updateInvestmentValueByDate/);
 assert.match(applySource, /boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_/);
+assert.match(applySource, /appendActivityLog_/);
+assert.match(applySource, /investment_statement_monthly_value/);
+assert.match(applySource, /KEEP_EXISTING/);
+assert.match(applySource, /STALE_REJECTED/);
+assert.doesNotMatch(applySource, /SYS - Investment Activity/);
 assert.match(applyDiffSource, /monthlyDigestPart/);
 assert.match(applyDiffSource, /endingTotalValue/);
 assert.match(applyDiffSource, /existingPresent/);
@@ -645,6 +664,8 @@ assert.doesNotMatch(
   extractFunction(applyDiffSource, 'boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_'),
   /action:\s*'UPDATE'|explicitMonthlyValueReplace|ALREADY_MATCHES/
 );
+assert.match(applyDiffSource, /boundedHoldingsPreviewApplyResolveMonthlyValueDecision_/);
+assert.match(extractFunction(applyDiffSource, 'boundedHoldingsPreviewApplyMonthlyDigestPart_'), /decision:/);
 assert.match(boundedHtml, /boundedHoldingsPreviewBuildGroupedApplyDiffFromDashboard/);
 assert.match(applySheetSource, /boundedHoldingsPreviewApplyFormatUnifiedSheet_/);
 assert.match(applySheetSource, /boundedHoldingsPreviewApplySetUnifiedColumnWidths_/);
@@ -675,8 +696,10 @@ assert.doesNotMatch(applySheetSource, /ensureInvestmentSystemSheet_/);
 assert.match(boundedHtml, /Review holdings changes/);
 assert.match(boundedHtml, /SYS - Investment Holdings Unified/);
 assert.match(boundedHtml, /Monthly investment value/);
-assert.match(boundedHtml, /already has a value; no update will be made/);
-assert.doesNotMatch(boundedHtml, /explicitMonthlyValueReplace|Replace the existing monthly value/);
+assert.match(boundedHtml, /Keep existing/);
+assert.match(boundedHtml, /Replace with statement value/);
+assert.match(boundedHtml, /Already matches/);
+assert.doesNotMatch(boundedHtml, /explicitMonthlyValueReplace/);
 assert.doesNotMatch(boundedSource, /\bsetValues\b|\bappendRow\b/);
 assert.doesNotMatch(applySource, /INPUT - Investments|OUT - History|INPUT - Cash Flow/);
 assert.doesNotMatch(applySource, /rawDocumentText.*PropertiesService|DriveApp|CacheService/s);
@@ -1385,6 +1408,21 @@ function otherMonthValuesFromSchwabSheet(ss) {
   return [3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14].map((col) => sheet.getRange(3, col).getValue());
 }
 
+function statementMonthlyActivity_(ctx) {
+  return (ctx.__activityLogEntries || []).filter((row) =>
+    row.eventType === 'investment_statement_monthly_value');
+}
+
+function lastStatementMonthlyActivity_(ctx) {
+  const rows = statementMonthlyActivity_(ctx);
+  return rows.length ? rows[rows.length - 1] : null;
+}
+
+function assertNoSysInvestmentActivity_(ss, label) {
+  assert.equal(ss.getSheetByName('SYS - Investment Activity'), null,
+    `${label} must not create SYS - Investment Activity`);
+}
+
 const schwabPayload = {
   pickerValue: 'INV-SCHWAB-1',
   accountName: 'Charles Schwab - Personal',
@@ -1488,76 +1526,146 @@ assert.deepEqual(cloneSheetRows(emptySchwabBook.getSheetByName('INPUT - Investme
 
 const emptyDiff = emptySchwabCtx.boundedHoldingsPreviewBuildApplyDiffFromDashboard(schwabPayload);
 assert.equal(emptyDiff.ok, true);
-assert.equal(emptyDiff.diff.monthlyInvestmentValue.action, 'ADD');
+assert.equal(emptyDiff.diff.monthlyInvestmentValue.comparison, 'BLANK');
+assert.equal(emptyDiff.diff.monthlyInvestmentValue.decision, 'IGNORE');
+assert.equal(emptyDiff.diff.monthlyInvestmentValue.action, 'SKIP');
 assert.equal(emptyDiff.diff.monthlyInvestmentValue.proposedValue, 47778.84);
-assert.equal(emptyDiff.diff.monthlyInvestmentValue.willWrite, true);
+assert.equal(emptyDiff.diff.monthlyInvestmentValue.willWrite, false);
 assert.equal(emptyDiff.diff.monthlyInvestmentValue.existingPresent, false);
-assert.match(emptyDiff.diff.monthlyInvestmentValue.message, /Add July 2026 value: \$47,778\.84/);
+assert.match(emptyDiff.diff.monthlyInvestmentValue.message, /July 2026/);
 assert.match(emptyDiff.diffDigest, /./);
 assert.deepEqual(cloneSheetRows(emptySchwabBook.getSheetByName('INPUT - Investments')),
   emptyInvestmentsBeforePreview, 'review must not write monthly investment values');
 
 const otherMonthsBeforeEmptyApply = otherMonthValuesFromSchwabSheet(emptySchwabBook);
-const emptyApply = emptySchwabCtx.boundedHoldingsPreviewApplyFromDashboard({
+const emptyIgnoreApply = emptySchwabCtx.boundedHoldingsPreviewApplyFromDashboard({
   ...schwabPayload,
   diffDigest: emptyDiff.diffDigest,
-  explicitApplyConfirm: true
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'IGNORE'
 });
-assert.equal(emptyApply.ok, true);
-assert.equal(emptyApply.monthlyInvestmentValueWritten, true);
-assert.equal(julyValueFromSchwabSheet(emptySchwabBook), 47778.84);
+assert.equal(emptyIgnoreApply.ok, true);
+assert.notEqual(emptyIgnoreApply.monthlyInvestmentValueWritten, true);
+assert.equal(julyValueFromSchwabSheet(emptySchwabBook), '');
 assert.deepEqual(otherMonthValuesFromSchwabSheet(emptySchwabBook), otherMonthsBeforeEmptyApply);
 const emptyUnified = emptySchwabBook.getSheetByName(unifiedName);
 assert.ok(emptyUnified, 'Schwab Apply must create unified holdings');
 assert.equal(emptyUnified.rows.some((row) => /TIANREN|CHINA TIANREN/i.test(String(row.join(' ')))), false,
   'unpriced holdings must remain excluded');
 assert.equal(emptyUnified.rows.filter((row, index) => index > 0 && String(row[6] || '').trim()).length >= 5, true);
+const ignoreLog = lastStatementMonthlyActivity_(emptySchwabCtx);
+assert.ok(ignoreLog, 'Ignore must write LOG - Activity');
+assert.equal(ignoreLog.payee, 'Charles Schwab - Personal');
+assert.equal(ignoreLog.accountSource, 'Schwab');
+assert.equal(ignoreLog.details.decision, 'IGNORE');
+assert.equal(ignoreLog.details.result, 'SKIPPED');
+assert.equal(ignoreLog.details.oldValue, '');
+assert.equal(ignoreLog.details.proposedValue, 47778.84);
+assert.equal(ignoreLog.details.targetMonth, 'July 2026');
+assert.match(String(ignoreLog.details.documentFingerprint || ignoreLog.details.diffDigest || ''), /./);
+assertNoSysInvestmentActivity_(emptySchwabBook, 'Schwab Ignore');
+
+const addSchwab = makeSchwabWorkbook();
+const addSchwabBuilt = buildContext({ workbook: addSchwab });
+const addDiff = addSchwabBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+  ...schwabPayload,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+assert.equal(addDiff.diff.monthlyInvestmentValue.action, 'ADD');
+assert.equal(addDiff.diff.monthlyInvestmentValue.willWrite, true);
+assert.equal(addDiff.diff.monthlyInvestmentValue.decision, 'ADD');
+assert.match(addDiff.diff.monthlyInvestmentValue.message, /Add July 2026 value: \$47,778\.84/);
+const missingConfirmApply = addSchwabBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...schwabPayload,
+  diffDigest: addDiff.diffDigest,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+assert.equal(missingConfirmApply.ok, false);
+assert.equal(statementMonthlyActivity_(addSchwabBuilt.context).length, 0,
+  'missing final confirmation must not log a monthly-value decision');
+assert.equal(julyValueFromSchwabSheet(addSchwab), '');
+
+const otherMonthsBeforeAdd = otherMonthValuesFromSchwabSheet(addSchwab);
+const emptyApply = addSchwabBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...schwabPayload,
+  diffDigest: addDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+assert.equal(emptyApply.ok, true);
+assert.equal(emptyApply.monthlyInvestmentValueWritten, true);
+assert.equal(julyValueFromSchwabSheet(addSchwab), 47778.84);
+assert.deepEqual(otherMonthValuesFromSchwabSheet(addSchwab), otherMonthsBeforeAdd);
+const addLog = lastStatementMonthlyActivity_(addSchwabBuilt.context);
+assert.equal(addLog.details.decision, 'ADD');
+assert.equal(addLog.details.result, 'APPLIED');
+assert.equal(addLog.details.oldValue, '');
+assert.equal(addLog.details.proposedValue, 47778.84);
+assert.equal(addLog.details.newValue, 47778.84);
+assert.equal(addLog.payee, 'Charles Schwab - Personal');
+assertNoSysInvestmentActivity_(addSchwab, 'Schwab Add');
 
 const alreadyWorkbook = makeSchwabWorkbook({ julyValue: 47778.84 });
 const alreadyBuilt = buildContext({ workbook: alreadyWorkbook });
 const alreadyDiff = alreadyBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(schwabPayload);
 assert.equal(alreadyDiff.ok, true);
+assert.equal(alreadyDiff.diff.monthlyInvestmentValue.comparison, 'MATCH');
+assert.equal(alreadyDiff.diff.monthlyInvestmentValue.decision, 'KEEP');
 assert.equal(alreadyDiff.diff.monthlyInvestmentValue.action, 'SKIP');
-assert.equal(alreadyDiff.diff.monthlyInvestmentValue.reason, 'OCCUPIED');
 assert.equal(alreadyDiff.diff.monthlyInvestmentValue.willWrite, false);
 assert.equal(alreadyDiff.diff.monthlyInvestmentValue.existingPresent, true);
-assert.match(alreadyDiff.diff.monthlyInvestmentValue.message,
-  /July 2026 already has a value; no update will be made\./);
+assert.match(alreadyDiff.diff.monthlyInvestmentValue.message, /Already matches/);
 const alreadyBefore = cloneSheetRows(alreadyWorkbook.getSheetByName('INPUT - Investments'));
 const alreadyApply = alreadyBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
   ...schwabPayload,
   diffDigest: alreadyDiff.diffDigest,
-  explicitApplyConfirm: true
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'KEEP'
 });
 assert.equal(alreadyApply.ok, true);
 assert.notEqual(alreadyApply.monthlyInvestmentValueWritten, true);
 assert.deepEqual(cloneSheetRows(alreadyWorkbook.getSheetByName('INPUT - Investments')), alreadyBefore,
-  'occupied month must not be rewritten');
+  'matching occupied month must not be rewritten');
+const matchLog = lastStatementMonthlyActivity_(alreadyBuilt.context);
+assert.equal(matchLog.details.decision, 'KEEP_EXISTING');
+assert.equal(matchLog.details.result, 'SKIPPED');
+assert.equal(matchLog.details.oldValue, 47778.84);
+assert.equal(matchLog.details.proposedValue, 47778.84);
+assertNoSysInvestmentActivity_(alreadyWorkbook, 'Schwab match');
 
 const zeroWorkbook = makeSchwabWorkbook({ julyValue: 0 });
 const zeroBuilt = buildContext({ workbook: zeroWorkbook });
 const zeroDiff = zeroBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(schwabPayload);
-assert.equal(zeroDiff.diff.monthlyInvestmentValue.action, 'SKIP');
-assert.equal(zeroDiff.diff.monthlyInvestmentValue.reason, 'OCCUPIED');
+assert.equal(zeroDiff.diff.monthlyInvestmentValue.comparison, 'DIFFER');
+assert.equal(zeroDiff.diff.monthlyInvestmentValue.existingPresent, true);
 assert.equal(zeroDiff.diff.monthlyInvestmentValue.existingValue, 0);
+assert.equal(zeroDiff.diff.monthlyInvestmentValue.willWrite, false);
 const zeroBefore = cloneSheetRows(zeroWorkbook.getSheetByName('INPUT - Investments'));
 const zeroApply = zeroBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
   ...schwabPayload,
   diffDigest: zeroDiff.diffDigest,
-  explicitApplyConfirm: true
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'KEEP'
 });
 assert.equal(zeroApply.ok, true);
 assert.notEqual(zeroApply.monthlyInvestmentValueWritten, true);
 assert.equal(julyValueFromSchwabSheet(zeroWorkbook), 0);
 assert.deepEqual(cloneSheetRows(zeroWorkbook.getSheetByName('INPUT - Investments')), zeroBefore,
   'explicit $0 is an occupied value and must not be overwritten');
+const zeroLog = lastStatementMonthlyActivity_(zeroBuilt.context);
+assert.equal(zeroLog.details.decision, 'KEEP_EXISTING');
+assert.equal(zeroLog.details.result, 'SKIPPED');
+assert.equal(zeroLog.details.oldValue, 0);
+assert.equal(zeroLog.details.proposedValue, 47778.84);
+assertNoSysInvestmentActivity_(zeroWorkbook, 'Schwab explicit $0');
 
 const occupiedWorkbook = makeSchwabWorkbook({ julyValue: 50000 });
 const occupiedBuilt = buildContext({ workbook: occupiedWorkbook });
 const occupiedDiff = occupiedBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(schwabPayload);
 assert.equal(occupiedDiff.ok, true);
+assert.equal(occupiedDiff.diff.monthlyInvestmentValue.comparison, 'DIFFER');
+assert.equal(occupiedDiff.diff.monthlyInvestmentValue.decision, 'KEEP');
 assert.equal(occupiedDiff.diff.monthlyInvestmentValue.action, 'SKIP');
-assert.equal(occupiedDiff.diff.monthlyInvestmentValue.reason, 'OCCUPIED');
 assert.equal(occupiedDiff.diff.monthlyInvestmentValue.willWrite, false);
 assert.equal(occupiedDiff.diff.monthlyInvestmentValue.existingValue, 50000);
 assert.equal(occupiedDiff.diff.monthlyInvestmentValue.proposedValue, 47778.84);
@@ -1565,42 +1673,89 @@ const occupiedOtherMonths = otherMonthValuesFromSchwabSheet(occupiedWorkbook);
 const occupiedApply = occupiedBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
   ...schwabPayload,
   diffDigest: occupiedDiff.diffDigest,
-  explicitApplyConfirm: true
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'KEEP'
 });
 assert.equal(occupiedApply.ok, true);
 assert.notEqual(occupiedApply.monthlyInvestmentValueWritten, true);
 assert.equal(julyValueFromSchwabSheet(occupiedWorkbook), 50000,
-  'a different existing monthly value must never be overwritten');
+  'Keep existing must not overwrite a different monthly value');
 assert.deepEqual(otherMonthValuesFromSchwabSheet(occupiedWorkbook), occupiedOtherMonths,
-  'other months remain unchanged when the statement month is occupied');
+  'other months remain unchanged when Keep existing is chosen');
+const keepLog = lastStatementMonthlyActivity_(occupiedBuilt.context);
+assert.equal(keepLog.details.decision, 'KEEP_EXISTING');
+assert.equal(keepLog.details.result, 'SKIPPED');
+assert.equal(keepLog.details.oldValue, 50000);
+assert.equal(keepLog.details.proposedValue, 47778.84);
+assertNoSysInvestmentActivity_(occupiedWorkbook, 'Schwab Keep');
+
+const replaceWorkbook = makeSchwabWorkbook({ julyValue: 50000 });
+const replaceBuilt = buildContext({ workbook: replaceWorkbook });
+const replaceDiff = replaceBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+  ...schwabPayload,
+  monthlyInvestmentValueDecision: 'REPLACE'
+});
+assert.equal(replaceDiff.diff.monthlyInvestmentValue.action, 'REPLACE');
+assert.equal(replaceDiff.diff.monthlyInvestmentValue.willWrite, true);
+assert.match(String(replaceDiff.diff.monthlyInvestmentValue.warning || ''),
+  /existing monthly value will be replaced/i);
+const replaceApply = replaceBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...schwabPayload,
+  diffDigest: replaceDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'REPLACE'
+});
+assert.equal(replaceApply.ok, true);
+assert.equal(replaceApply.monthlyInvestmentValueWritten, true);
+assert.equal(julyValueFromSchwabSheet(replaceWorkbook), 47778.84);
+const replaceLog = lastStatementMonthlyActivity_(replaceBuilt.context);
+assert.equal(replaceLog.details.decision, 'REPLACE');
+assert.equal(replaceLog.details.result, 'APPLIED');
+assert.equal(replaceLog.details.oldValue, 50000);
+assert.equal(replaceLog.details.newValue, 47778.84);
+assert.equal(replaceLog.details.proposedValue, 47778.84);
+assertNoSysInvestmentActivity_(replaceWorkbook, 'Schwab Replace');
 
 const monthlyStaleWorkbook = makeSchwabWorkbook();
 const monthlyStaleBuilt = buildContext({ workbook: monthlyStaleWorkbook });
-const monthlyStaleDiff = monthlyStaleBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(schwabPayload);
+const monthlyStaleDiff = monthlyStaleBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+  ...schwabPayload,
+  monthlyInvestmentValueDecision: 'ADD'
+});
 assert.equal(monthlyStaleDiff.diff.monthlyInvestmentValue.action, 'ADD');
 assert.equal(monthlyStaleDiff.diff.monthlyInvestmentValue.existingPresent, false);
 monthlyStaleWorkbook.getSheetByName('INPUT - Investments').getRange(3, 9).setValue(1);
 const monthlyStaleApply = monthlyStaleBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
   ...schwabPayload,
   diffDigest: monthlyStaleDiff.diffDigest,
-  explicitApplyConfirm: true
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'ADD'
 });
 assert.equal(monthlyStaleApply.ok, false);
 assert.equal(monthlyStaleApply.staleDiff, true);
 assert.equal(julyValueFromSchwabSheet(monthlyStaleWorkbook), 1);
 assert.equal(monthlyStaleWorkbook.getSheetByName(unifiedName), null,
   'stale monthly digest must fail closed before holdings write');
+const staleLog = lastStatementMonthlyActivity_(monthlyStaleBuilt.context);
+assert.equal(staleLog.details.result, 'STALE_REJECTED');
+assert.notEqual(staleLog.details.result, 'APPLIED');
+assert.equal(staleLog.details.decision, 'ADD');
+assertNoSysInvestmentActivity_(monthlyStaleWorkbook, 'Schwab stale');
 
 const failWorkbook = makeSchwabWorkbook();
 const failBuilt = buildContext({ workbook: failWorkbook });
-const failDiff = failBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(schwabPayload);
+const failDiff = failBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+  ...schwabPayload,
+  monthlyInvestmentValueDecision: 'ADD'
+});
 failBuilt.context.updateInvestmentValueByDate = function failMonthly() {
   throw new Error('Synthetic monthly write failure');
 };
 const failApply = failBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
   ...schwabPayload,
   diffDigest: failDiff.diffDigest,
-  explicitApplyConfirm: true
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'ADD'
 });
 assert.equal(failApply.ok, false);
 assert.match(String(failApply.error || ''), /Monthly investment value could not be saved/);
@@ -1608,6 +1763,10 @@ assert.equal(julyValueFromSchwabSheet(failWorkbook), '');
 const failUnified = failWorkbook.getSheetByName(unifiedName);
 assert.ok(!failUnified || failUnified.rows.length <= 1,
   'monthly-write failure must not leave applied holdings rows');
+const failLog = lastStatementMonthlyActivity_(failBuilt.context);
+assert.equal(failLog.details.result, 'FAILED');
+assert.notEqual(failLog.details.result, 'APPLIED');
+assertNoSysInvestmentActivity_(failWorkbook, 'Schwab failed Apply');
 
 const mismatchApply = emptySchwabCtx.boundedHoldingsPreviewApplyFromDashboard({
   ...schwabPayload,
@@ -1625,6 +1784,10 @@ assert.equal(
   emptySchwabCtx.boundedHoldingsPreviewApplyIsMonthlyValueSource_('SCHWAB_BROKERAGE_STATEMENT_PDF'),
   true
 );
+assert.equal(
+  emptySchwabCtx.boundedHoldingsPreviewApplyIsMonthlyValueSource_('FIDELITY_401K_STATEMENT_PDF'),
+  true
+);
 const stashMonthlySkip = emptySchwabCtx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
   {
     source: 'STASH_BROKERAGE_STATEMENT_PDF',
@@ -1638,5 +1801,280 @@ const stashMonthlySkip = emptySchwabCtx.boundedHoldingsPreviewApplyBuildMonthlyI
 assert.equal(stashMonthlySkip.action, 'SKIP');
 assert.equal(stashMonthlySkip.reason, 'UNSUPPORTED_SOURCE');
 assert.equal(stashMonthlySkip.willWrite, false);
+
+function makeFidelity401kWorkbook(options = {}) {
+  const septemberValue = Object.prototype.hasOwnProperty.call(options, 'septemberValue')
+    ? options.septemberValue
+    : '';
+  const months = Array(12).fill('');
+  months[8] = septemberValue;
+  return makeWorkbook({
+    assetsRows: [
+      ['401K Account', 'Retirement', '', 'Yes', 'INV-401K-1', '']
+    ],
+    investmentsRows: buildInvestmentsYearBlockRows(2026, [{
+      name: '401K Account',
+      type: 'Retirement',
+      investmentId: 'INV-401K-1',
+      months
+    }]),
+    monthlyRows: [monthlyHistoryHeaders],
+    registryRows: [
+      FINANCIAL_ACCOUNT_HEADERS,
+      registryRow({
+        stableAccountId: 'STABLE-401K-1',
+        domain: 'RETIREMENT',
+        displayName: '401K Account',
+        institution: 'Fidelity',
+        accountType: 'Retirement',
+        accountSubtype: '',
+        ownerId: 'OWNER-1',
+        registrationType: '401K',
+        currency: 'USD',
+        last4: '',
+        active: 'Yes',
+        identityStatus: 'VERIFIED',
+        legacyDomain: 'SYS_ASSETS',
+        legacyKey: 'INV-401K-1'
+      })
+    ]
+  });
+}
+
+function septemberValueFrom401kSheet(ss) {
+  return ss.getSheetByName('INPUT - Investments').getRange(3, 11).getValue();
+}
+
+function otherMonthValuesFrom401kSheet(ss) {
+  const sheet = ss.getSheetByName('INPUT - Investments');
+  return [3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14].map((col) => sheet.getRange(3, col).getValue());
+}
+
+const fidelityText = fixture('fidelity', 'synthetic_fidelity_401k_statement_sep_2026.txt');
+const fidelityPayload = {
+  pickerValue: 'INV-401K-1',
+  accountName: '401K Account',
+  sysAssetsRow: 2,
+  source: 'FIDELITY_401K_STATEMENT_PDF',
+  rawDocumentText: fidelityText,
+  registrationType: '401K',
+  explicitAccountMatch: true,
+  statementProvider: 'FIDELITY'
+};
+
+const fidelityParsed = emptySchwabCtx.investmentFidelity401kStatementPreviewFromText_(fidelityText);
+assert.equal(fidelityParsed.preview.asOfDate, '2026-09-30');
+assert.equal(fidelityParsed.preview.endingBalance, 1919468.06);
+const fidelityNormalized = emptySchwabCtx.investmentFidelity401kStatementNormalizeMonthlyPreview_(
+  fidelityParsed);
+assert.ok(Array.isArray(fidelityNormalized.holdingsRows));
+assert.equal(fidelityNormalized.holdingsRows.length, 0);
+assert.equal(
+  emptySchwabCtx.boundedHoldingsPreviewApplyBuildProposedRowsFromPreview_(
+    { source: 'FIDELITY_401K_STATEMENT_PDF' },
+    {
+      source: 'FIDELITY_401K_STATEMENT_PDF',
+      asOf: '2026-09-30',
+      endingBalance: 1919468.06,
+      holdingsRows: [{ symbol: 'FAKE', marketValue: 1000 }],
+      cashBalance: 50
+    }
+  ).length,
+  0,
+  'Fidelity Apply must never propose holdings or cash rows'
+);
+
+const skipFidelityConfirm = emptySchwabCtx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+  {
+    source: 'FIDELITY_401K_STATEMENT_PDF',
+    accountName: '401K Account',
+    explicitAccountMatch: false
+  },
+  'SINGLE_ACCOUNT',
+  { accountName: '401K Account', investmentId: 'INV-401K-1' },
+  { asOf: '2026-09-30', endingBalance: 1919468.06 }
+);
+assert.equal(skipFidelityConfirm.action, 'SKIP');
+assert.equal(skipFidelityConfirm.reason, 'EXPLICIT_MATCH_REQUIRED');
+
+const emptyFidelity = makeFidelity401kWorkbook();
+const emptyFidelityBuilt = buildContext({ workbook: emptyFidelity });
+const emptyFidelityCtx = emptyFidelityBuilt.context;
+const emptyFidelityBook = emptyFidelityBuilt.workbook;
+const emptyFidelityBefore = cloneSheetRows(emptyFidelityBook.getSheetByName('INPUT - Investments'));
+const emptyFidelityDiff = emptyFidelityCtx.boundedHoldingsPreviewBuildApplyDiffFromDashboard(fidelityPayload);
+assert.equal(emptyFidelityDiff.ok, true);
+assert.equal(emptyFidelityDiff.diff.monthlyInvestmentValue.comparison, 'BLANK');
+assert.equal(emptyFidelityDiff.diff.monthlyInvestmentValue.decision, 'IGNORE');
+assert.equal(emptyFidelityDiff.diff.monthlyInvestmentValue.action, 'SKIP');
+assert.equal(emptyFidelityDiff.diff.monthlyInvestmentValue.proposedValue, 1919468.06);
+assert.equal(emptyFidelityDiff.diff.monthlyInvestmentValue.willWrite, false);
+assert.equal(emptyFidelityDiff.diff.monthlyInvestmentValue.existingPresent, false);
+assert.equal((emptyFidelityDiff.diff.create || []).length, 0);
+assert.equal((emptyFidelityDiff.diff.update || []).length, 0);
+assert.deepEqual(cloneSheetRows(emptyFidelityBook.getSheetByName('INPUT - Investments')),
+  emptyFidelityBefore, 'review must not write monthly investment values');
+assert.equal(emptyFidelityBook.getSheetByName(unifiedName), null,
+  'Fidelity review must not create unified holdings');
+
+const defaultIgnoreFidelity = emptyFidelityCtx.boundedHoldingsPreviewApplyFromDashboard({
+  ...fidelityPayload,
+  diffDigest: emptyFidelityDiff.diffDigest,
+  explicitApplyConfirm: true
+});
+assert.equal(defaultIgnoreFidelity.ok, true);
+assert.notEqual(defaultIgnoreFidelity.monthlyInvestmentValueWritten, true);
+assert.deepEqual(cloneSheetRows(emptyFidelityBook.getSheetByName('INPUT - Investments')),
+  emptyFidelityBefore, 'default Ignore must not write');
+const fidelityIgnoreLog = lastStatementMonthlyActivity_(emptyFidelityCtx);
+assert.equal(fidelityIgnoreLog.details.decision, 'IGNORE');
+assert.equal(fidelityIgnoreLog.details.result, 'SKIPPED');
+assert.equal(fidelityIgnoreLog.details.oldValue, '');
+assert.equal(fidelityIgnoreLog.details.proposedValue, 1919468.06);
+assert.equal(fidelityIgnoreLog.payee, '401K Account');
+assert.equal(fidelityIgnoreLog.accountSource, 'Fidelity 401(k)');
+assertNoSysInvestmentActivity_(emptyFidelityBook, 'Fidelity Ignore');
+
+const fidelityAddBook = makeFidelity401kWorkbook();
+const fidelityAddBuilt = buildContext({ workbook: fidelityAddBook });
+const fidelityAddDiff = fidelityAddBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+  ...fidelityPayload,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+assert.equal(fidelityAddDiff.diff.monthlyInvestmentValue.action, 'ADD');
+assert.equal(fidelityAddDiff.diff.monthlyInvestmentValue.willWrite, true);
+assert.match(fidelityAddDiff.diff.monthlyInvestmentValue.message,
+  /Add September 2026 value: \$1,919,468\.06/);
+const fidelityMissingConfirm = fidelityAddBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...fidelityPayload,
+  diffDigest: fidelityAddDiff.diffDigest,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+assert.equal(fidelityMissingConfirm.ok, false);
+assert.equal(statementMonthlyActivity_(fidelityAddBuilt.context).length, 0);
+
+const fidelityMonthsBeforeAdd = otherMonthValuesFrom401kSheet(fidelityAddBook);
+const fidelityAddApply = fidelityAddBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...fidelityPayload,
+  diffDigest: fidelityAddDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+assert.equal(fidelityAddApply.ok, true);
+assert.equal(fidelityAddApply.monthlyInvestmentValueWritten, true);
+assert.equal(septemberValueFrom401kSheet(fidelityAddBook), 1919468.06);
+assert.deepEqual(otherMonthValuesFrom401kSheet(fidelityAddBook), fidelityMonthsBeforeAdd,
+  'Fidelity Add must write only the statement month');
+assert.equal(fidelityAddBook.getSheetByName(unifiedName), null,
+  'Fidelity Add must not write SYS - Investment Holdings Unified');
+const fidelityAddLog = lastStatementMonthlyActivity_(fidelityAddBuilt.context);
+assert.equal(fidelityAddLog.details.decision, 'ADD');
+assert.equal(fidelityAddLog.details.result, 'APPLIED');
+assert.equal(fidelityAddLog.details.oldValue, '');
+assert.equal(fidelityAddLog.details.newValue, 1919468.06);
+assertNoSysInvestmentActivity_(fidelityAddBook, 'Fidelity Add');
+
+const occupiedFidelity = makeFidelity401kWorkbook({ septemberValue: 50000 });
+const occupiedFidelityBuilt = buildContext({ workbook: occupiedFidelity });
+const occupiedFidelityDiff = occupiedFidelityBuilt.context
+  .boundedHoldingsPreviewBuildApplyDiffFromDashboard(fidelityPayload);
+assert.equal(occupiedFidelityDiff.diff.monthlyInvestmentValue.comparison, 'DIFFER');
+assert.equal(occupiedFidelityDiff.diff.monthlyInvestmentValue.decision, 'KEEP');
+assert.equal(occupiedFidelityDiff.diff.monthlyInvestmentValue.action, 'SKIP');
+assert.equal(occupiedFidelityDiff.diff.monthlyInvestmentValue.willWrite, false);
+assert.equal(occupiedFidelityDiff.diff.monthlyInvestmentValue.existingValue, 50000);
+assert.equal(occupiedFidelityDiff.diff.monthlyInvestmentValue.proposedValue, 1919468.06);
+const occupiedFidelityBefore = cloneSheetRows(occupiedFidelity.getSheetByName('INPUT - Investments'));
+const occupiedFidelityApply = occupiedFidelityBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...fidelityPayload,
+  diffDigest: occupiedFidelityDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'KEEP'
+});
+assert.equal(occupiedFidelityApply.ok, true);
+assert.notEqual(occupiedFidelityApply.monthlyInvestmentValueWritten, true);
+assert.equal(septemberValueFrom401kSheet(occupiedFidelity), 50000);
+assert.deepEqual(cloneSheetRows(occupiedFidelity.getSheetByName('INPUT - Investments')),
+  occupiedFidelityBefore, 'occupied month Keep existing must not overwrite');
+assert.equal(occupiedFidelity.getSheetByName(unifiedName), null);
+const fidelityKeepLog = lastStatementMonthlyActivity_(occupiedFidelityBuilt.context);
+assert.equal(fidelityKeepLog.details.decision, 'KEEP_EXISTING');
+assert.equal(fidelityKeepLog.details.result, 'SKIPPED');
+assert.equal(fidelityKeepLog.details.oldValue, 50000);
+
+const fidelityReplaceBook = makeFidelity401kWorkbook({ septemberValue: 50000 });
+const fidelityReplaceBuilt = buildContext({ workbook: fidelityReplaceBook });
+const fidelityReplaceDiff = fidelityReplaceBuilt.context
+  .boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+    ...fidelityPayload,
+    monthlyInvestmentValueDecision: 'REPLACE'
+  });
+const fidelityReplaceApply = fidelityReplaceBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...fidelityPayload,
+  diffDigest: fidelityReplaceDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'REPLACE'
+});
+assert.equal(fidelityReplaceApply.ok, true);
+assert.equal(septemberValueFrom401kSheet(fidelityReplaceBook), 1919468.06);
+const fidelityReplaceLog = lastStatementMonthlyActivity_(fidelityReplaceBuilt.context);
+assert.equal(fidelityReplaceLog.details.decision, 'REPLACE');
+assert.equal(fidelityReplaceLog.details.result, 'APPLIED');
+assert.equal(fidelityReplaceLog.details.oldValue, 50000);
+assert.equal(fidelityReplaceLog.details.newValue, 1919468.06);
+
+const zeroFidelity = makeFidelity401kWorkbook({ septemberValue: 0 });
+const zeroFidelityBuilt = buildContext({ workbook: zeroFidelity });
+const zeroFidelityDiff = zeroFidelityBuilt.context
+  .boundedHoldingsPreviewBuildApplyDiffFromDashboard(fidelityPayload);
+assert.equal(zeroFidelityDiff.diff.monthlyInvestmentValue.comparison, 'DIFFER');
+assert.equal(zeroFidelityDiff.diff.monthlyInvestmentValue.existingValue, 0);
+const zeroFidelityBefore = cloneSheetRows(zeroFidelity.getSheetByName('INPUT - Investments'));
+const zeroFidelityApply = zeroFidelityBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...fidelityPayload,
+  diffDigest: zeroFidelityDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'KEEP'
+});
+assert.equal(zeroFidelityApply.ok, true);
+assert.notEqual(zeroFidelityApply.monthlyInvestmentValueWritten, true);
+assert.equal(septemberValueFrom401kSheet(zeroFidelity), 0);
+assert.deepEqual(cloneSheetRows(zeroFidelity.getSheetByName('INPUT - Investments')),
+  zeroFidelityBefore, 'explicit $0 is occupied and must not be overwritten');
+const fidelityZeroLog = lastStatementMonthlyActivity_(zeroFidelityBuilt.context);
+assert.equal(fidelityZeroLog.details.oldValue, 0);
+assert.equal(fidelityZeroLog.details.result, 'SKIPPED');
+
+const staleFidelity = makeFidelity401kWorkbook();
+const staleFidelityBuilt = buildContext({ workbook: staleFidelity });
+const staleFidelityDiff = staleFidelityBuilt.context
+  .boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+    ...fidelityPayload,
+    monthlyInvestmentValueDecision: 'ADD'
+  });
+assert.equal(staleFidelityDiff.diff.monthlyInvestmentValue.action, 'ADD');
+staleFidelity.getSheetByName('INPUT - Investments').getRange(3, 11).setValue(1);
+const staleFidelityApply = staleFidelityBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...fidelityPayload,
+  diffDigest: staleFidelityDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+assert.equal(staleFidelityApply.ok, false);
+assert.equal(staleFidelityApply.staleDiff, true);
+assert.equal(septemberValueFrom401kSheet(staleFidelity), 1);
+assert.equal(staleFidelity.getSheetByName(unifiedName), null);
+const fidelityStaleLog = lastStatementMonthlyActivity_(staleFidelityBuilt.context);
+assert.equal(fidelityStaleLog.details.result, 'STALE_REJECTED');
+assert.notEqual(fidelityStaleLog.details.result, 'APPLIED');
+
+const mismatchFidelity = emptyFidelityCtx.boundedHoldingsPreviewApplyFromDashboard({
+  ...fidelityPayload,
+  explicitAccountMatch: false,
+  diffDigest: emptyFidelityDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+assert.equal(mismatchFidelity.ok, false);
 
 console.log('Bounded holdings preview Apply regressions passed.');

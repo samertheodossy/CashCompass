@@ -92,6 +92,7 @@ function investmentPortfolioDrawerMapAccountRow_(row) {
     pickerValue: investmentId || ('__row__:' + String(row.sysAssetsRow)),
     accountName: accountName,
     type: String(row.type || '').trim(),
+    registrationType: String(row.registrationType || '').trim(),
     currentBalance: row.currentBalance,
     planningPurpose: String(row.planningPurpose || '').trim(),
     statementProvider: provider,
@@ -109,20 +110,60 @@ function investmentPortfolioDrawerRobinhoodImportEligible_(account) {
   return !!account.incomeProducingEligible;
 }
 
+function investmentPortfolioDrawerNormalizeImportSource_(source) {
+  if (typeof investmentPortfolioNormalizeSource_ === 'function') {
+    return investmentPortfolioNormalizeSource_(source || '');
+  }
+  return String(source || '').trim().toUpperCase();
+}
+
+function investmentPortfolioDrawerIsCustomerProductionSource_(source) {
+  var normalized = investmentPortfolioDrawerNormalizeImportSource_(source);
+  return normalized === 'ROBINHOOD_CSV' ||
+    normalized === 'M1_STATEMENT_PDF' ||
+    normalized === 'SCHWAB_BROKERAGE_STATEMENT_PDF' ||
+    normalized === 'STASH_BROKERAGE_STATEMENT_PDF' ||
+    normalized === 'FIDELITY_401K_STATEMENT_PDF';
+}
+
+function investmentPortfolioDrawerIs529Account_(account) {
+  account = account || {};
+  var registration = String(account.registrationType || '').trim().toUpperCase();
+  if (registration === '529') return true;
+  var type = String(account.type || '').trim();
+  var name = String(account.accountName || '').trim();
+  if (/\b529\b/i.test(type)) return true;
+  if (typeof financialIdentityInferRegistration_ === 'function') {
+    return financialIdentityInferRegistration_('INVESTMENT', name, type) === '529';
+  }
+  return /\b529\b/i.test(name + ' ' + type);
+}
+
 function investmentPortfolioDrawerSupportedImportFormats_(provider, previewMode) {
   provider = String(provider || '').trim().toUpperCase();
   previewMode = String(previewMode || '').trim();
   if (provider === 'ROBINHOOD') {
-    return [{ source: 'ROBINHOOD_CSV', label: 'Robinhood activity CSV', productionReady: true }];
+    return [{
+      source: 'ROBINHOOD_CSV',
+      label: 'Robinhood activity CSV',
+      productionReady: true,
+      customerDrawerImport: true
+    }];
   }
   if (provider === 'M1') {
-    return [{ source: 'M1_STATEMENT_PDF', label: 'M1 monthly statement PDF', productionReady: true }];
+    return [{
+      source: 'M1_STATEMENT_PDF',
+      label: 'M1 monthly statement PDF',
+      productionReady: true,
+      customerDrawerImport: true
+    }];
   }
   if (provider === 'ETRADE') {
     return [{
       source: 'ETRADE_POSITIONS_PDF',
       label: 'E*TRADE Expanded Positions PDF',
-      productionReady: true
+      productionReady: true,
+      customerDrawerImport: false
     }];
   }
   if (provider === 'FIDELITY') {
@@ -130,6 +171,7 @@ function investmentPortfolioDrawerSupportedImportFormats_(provider, previewMode)
       source: 'FIDELITY_401K_STATEMENT_PDF',
       label: 'Retirement savings statement PDF',
       productionReady: true,
+      customerDrawerImport: true,
       importPurpose: 'BALANCE_SNAPSHOT',
       accountType: 'RETIREMENT'
     }];
@@ -138,20 +180,217 @@ function investmentPortfolioDrawerSupportedImportFormats_(provider, previewMode)
     return [{
       source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
       label: 'Schwab brokerage statement PDF',
-      productionReady: true
+      productionReady: true,
+      customerDrawerImport: true
     }];
   }
   if (provider === 'STASH') {
     return [{
       source: 'STASH_BROKERAGE_STATEMENT_PDF',
       label: 'Stash brokerage statement PDF',
-      productionReady: true
+      productionReady: true,
+      customerDrawerImport: true
     }];
   }
   if (previewMode === 'GROUPED_PROVIDER') {
-    return [{ source: 'M1_STATEMENT_PDF', label: 'M1 monthly statement PDF', productionReady: true }];
+    return [{
+      source: 'M1_STATEMENT_PDF',
+      label: 'M1 monthly statement PDF',
+      productionReady: true,
+      customerDrawerImport: true
+    }];
   }
   return [];
+}
+
+function investmentPortfolioDrawerCustomerDrawerFormats_(provider, previewMode) {
+  return investmentPortfolioDrawerSupportedImportFormats_(provider, previewMode).filter(function(fmt) {
+    return !!(fmt && fmt.customerDrawerImport === true);
+  });
+}
+
+function investmentPortfolioDrawerCustomerImportEligibility_(account) {
+  account = account || {};
+  var mapped = account.statementProvider
+    ? account
+    : investmentPortfolioDrawerMapAccountRow_(account);
+  var provider = String(mapped.statementProvider || '').trim().toUpperCase();
+  var previewMode = mapped.previewMode;
+  var disabled = function(reason) {
+    return {
+      enabled: false,
+      reason: reason || 'Import not available yet',
+      pickerNote: '',
+      source: '',
+      provider: provider
+    };
+  };
+  var enabled = function(source, pickerNote) {
+    return {
+      enabled: true,
+      reason: '',
+      pickerNote: pickerNote || '',
+      source: source,
+      provider: provider
+    };
+  };
+
+  if (investmentPortfolioDrawerIs529Account_(mapped)) {
+    return disabled('Import not available yet');
+  }
+  if (provider === 'ROBINHOOD') {
+    if (!investmentPortfolioDrawerRobinhoodImportEligible_(mapped)) {
+      return disabled('Robinhood CSV requires an eligible investment account');
+    }
+    return enabled('ROBINHOOD_CSV', '');
+  }
+  if (provider === 'FIDELITY') {
+    if (!investmentPortfolioDrawerIs401kRetirementAccount_(mapped)) {
+      return disabled('Import not available yet');
+    }
+    return enabled('FIDELITY_401K_STATEMENT_PDF', '401(k) supports balance-only import');
+  }
+  var formats = investmentPortfolioDrawerCustomerDrawerFormats_(provider, previewMode);
+  if (!formats.length) return disabled('Import not available yet');
+  return enabled(formats[0].source, '');
+}
+
+function investmentPortfolioDrawerDescribePickerAccount_(row) {
+  var mapped = investmentPortfolioDrawerMapAccountRow_(row);
+  var eligibility = investmentPortfolioDrawerCustomerImportEligibility_(mapped);
+  return {
+    sysAssetsRow: mapped.sysAssetsRow,
+    accountName: mapped.accountName,
+    type: mapped.type,
+    registrationType: mapped.registrationType,
+    currentBalance: row && row.currentBalance !== undefined ? row.currentBalance : mapped.currentBalance,
+    investmentId: mapped.investmentId,
+    planningPurpose: mapped.planningPurpose,
+    inactive: !!(row && row.inactive),
+    pickerValue: mapped.pickerValue,
+    statementProvider: mapped.statementProvider,
+    providerLabel: mapped.providerLabel,
+    previewMode: mapped.previewMode,
+    customerImportEnabled: eligibility.enabled,
+    customerImportDisabledReason: eligibility.reason || '',
+    customerImportPickerNote: eligibility.pickerNote || '',
+    customerImportSource: eligibility.source || ''
+  };
+}
+
+function investmentPortfolioDrawerKnownProviderLabel_(account) {
+  account = account || {};
+  var provider = String(account.statementProvider || '').trim().toUpperCase();
+  if (!provider || provider === 'UNKNOWN' || provider === 'OTHER') return '';
+  var label = String(account.providerLabel || '').trim();
+  return label || investmentPortfolioDrawerProviderLabel_(provider);
+}
+
+function investmentPortfolioDrawerBuildPickerOptionLabel_(account) {
+  account = account || {};
+  var described = account.customerImportEnabled === true || account.customerImportEnabled === false
+    ? account
+    : investmentPortfolioDrawerDescribePickerAccount_(account);
+  var name = String(described.accountName || '').trim();
+  var providerLabel = investmentPortfolioDrawerKnownProviderLabel_(described);
+  var label = providerLabel ? name + ' · ' + providerLabel : name;
+  var note = described.customerImportEnabled
+    ? String(described.customerImportPickerNote || '').trim()
+    : String(described.customerImportDisabledReason || '').trim();
+  if (note) label += ' — ' + note;
+  return label;
+}
+
+function investmentPortfolioDrawerEvaluateCustomerImportRequest_(account, source) {
+  var eligibility = investmentPortfolioDrawerCustomerImportEligibility_(account);
+  var normalized = investmentPortfolioDrawerNormalizeImportSource_(source);
+  if (!normalized) {
+    if (!eligibility.enabled) {
+      return {
+        ok: false,
+        error: eligibility.reason || 'Import not available yet',
+        customerImportEnabled: false,
+        accountName: account && account.accountName,
+        statementProvider: eligibility.provider
+      };
+    }
+    return { ok: true, eligibility: eligibility, customerImportEnabled: true };
+  }
+  if (!investmentPortfolioDrawerIsCustomerProductionSource_(normalized)) {
+    return { ok: true, eligibility: eligibility, labSource: true };
+  }
+  if (!eligibility.enabled) {
+    return {
+      ok: false,
+      error: eligibility.reason || 'Import not available yet',
+      customerImportEnabled: false,
+      accountName: account && account.accountName,
+      statementProvider: eligibility.provider,
+      source: normalized
+    };
+  }
+  if (eligibility.source && normalized !== eligibility.source) {
+    return {
+      ok: false,
+      error: 'That import source is not available for this account.',
+      customerImportEnabled: true,
+      accountName: account && account.accountName,
+      statementProvider: eligibility.provider,
+      source: normalized
+    };
+  }
+  return { ok: true, eligibility: eligibility, customerImportEnabled: true };
+}
+
+function investmentPortfolioDrawerResolveAccountFromPayload_(ss, payload) {
+  payload = payload || {};
+  var pickerValue = String(payload.pickerValue || payload.investmentId || '').trim();
+  if (pickerValue) {
+    var byPicker = investmentPortfolioDrawerResolveAccount_(ss, pickerValue);
+    if (byPicker) return byPicker;
+  }
+  var wantedName = String(payload.accountName || '').trim().toLowerCase();
+  if (!wantedName) return null;
+  var rows = investmentPortfolioDrawerReadActiveAccounts_(ss);
+  var matches = (rows || []).filter(function(row) {
+    return String(row.accountName || '').trim().toLowerCase() === wantedName;
+  });
+  return matches.length === 1 ? investmentPortfolioDrawerMapAccountRow_(matches[0]) : null;
+}
+
+function investmentPortfolioDrawerAssertCustomerImportAllowed_(ss, pickerValueOrPayload, source) {
+  var payload = pickerValueOrPayload && typeof pickerValueOrPayload === 'object'
+    ? pickerValueOrPayload
+    : { pickerValue: pickerValueOrPayload, source: source };
+  if (source && !payload.source) payload = Object.assign({}, payload, { source: source });
+  var normalized = investmentPortfolioDrawerNormalizeImportSource_(payload.source);
+  var account = investmentPortfolioDrawerResolveAccountFromPayload_(ss, payload);
+  if (!account && String(payload.accountName || '').trim()) {
+    account = investmentPortfolioDrawerMapAccountRow_({
+      accountName: payload.accountName,
+      investmentId: payload.investmentId,
+      type: payload.type,
+      planningPurpose: payload.planningPurpose,
+      sysAssetsRow: payload.sysAssetsRow,
+      registrationType: payload.registrationType
+    });
+  }
+  if (!account) {
+    if (normalized && !investmentPortfolioDrawerIsCustomerProductionSource_(normalized)) {
+      return { ok: true, labSource: true };
+    }
+    return { ok: false, error: 'Select an active CashCompass investment account.' };
+  }
+  return investmentPortfolioDrawerEvaluateCustomerImportRequest_(account, payload.source);
+}
+
+function investmentPortfolioDrawerGuardCustomerProductionImport_(ss, payload) {
+  payload = payload || {};
+  var source = investmentPortfolioDrawerNormalizeImportSource_(payload.source);
+  if (!investmentPortfolioDrawerIsCustomerProductionSource_(source)) {
+    return { ok: true };
+  }
+  return investmentPortfolioDrawerAssertCustomerImportAllowed_(ss, payload, source);
 }
 
 function investmentPortfolioDrawerFilterUnifiedRowsForAccount_(rows, account) {
@@ -516,6 +755,12 @@ function investmentPortfolioDrawerBuildStatusLabel_(summary, providerLabel, prev
 function investmentPortfolioDrawerBuildPayload_(ss, account) {
   account = account || {};
   var provider = String(account.statementProvider || '').trim().toUpperCase();
+  var eligibility = investmentPortfolioDrawerCustomerImportEligibility_(account);
+  var customerFormats = eligibility.enabled
+    ? investmentPortfolioDrawerSupportedImportFormats_(provider, account.previewMode).filter(function(fmt) {
+      return fmt && fmt.customerDrawerImport === true && fmt.source === eligibility.source;
+    })
+    : [];
   var unifiedRows = typeof boundedHoldingsPreviewApplyReadExistingRows_ === 'function'
     ? boundedHoldingsPreviewApplyReadExistingRows_(ss) : [];
   var accountUnifiedRows = investmentPortfolioDrawerFilterUnifiedRowsForAccount_(unifiedRows, account);
@@ -530,13 +775,17 @@ function investmentPortfolioDrawerBuildPayload_(ss, account) {
     previewMode: account.previewMode,
     currentBalance: account.currentBalance,
     incomeProducingEligible: !!account.incomeProducingEligible,
+    customerImportEnabled: !!eligibility.enabled,
+    customerImportDisabledReason: eligibility.reason || '',
+    customerImportPickerNote: eligibility.pickerNote || '',
     robinhoodImportEligible: investmentPortfolioDrawerRobinhoodImportEligible_(account),
-    robinhoodCsvImportAvailable: investmentPortfolioDrawerRobinhoodImportEligible_(account),
-    m1ImportAvailable: provider === 'M1' || account.previewMode === 'GROUPED_PROVIDER',
-    schwabImportAvailable: provider === 'SCHWAB',
-    stashImportAvailable: provider === 'STASH',
-    supportedImportFormats: investmentPortfolioDrawerSupportedImportFormats_(
-      provider, account.previewMode),
+    robinhoodCsvImportAvailable: eligibility.enabled && eligibility.source === 'ROBINHOOD_CSV',
+    m1ImportAvailable: eligibility.enabled && eligibility.source === 'M1_STATEMENT_PDF',
+    schwabImportAvailable: eligibility.enabled && eligibility.source === 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+    stashImportAvailable: eligibility.enabled && eligibility.source === 'STASH_BROKERAGE_STATEMENT_PDF',
+    fidelity401kImportAvailable: eligibility.enabled &&
+      eligibility.source === 'FIDELITY_401K_STATEMENT_PDF',
+    supportedImportFormats: customerFormats,
     viewKind: 'EMPTY',
     portfolioStatus: {
       holdingsImported: false,
@@ -601,7 +850,7 @@ function investmentPortfolioDrawerBuildPayload_(ss, account) {
 
   if (provider === 'FIDELITY' || investmentPortfolioDrawerIs401kRetirementAccount_(account)) {
     payload.viewKind = 'FIDELITY_401K_BALANCE';
-    payload.fidelity401kImportAvailable = true;
+    payload.fidelity401kImportAvailable = !!payload.fidelity401kImportAvailable;
     payload.m1ImportAvailable = false;
     payload.schwabImportAvailable = false;
     payload.stashImportAvailable = false;
@@ -688,8 +937,10 @@ function investmentPortfolioDrawerBuild401kBalanceComparison_(priorBalance, endi
 function previewFidelity401kStatementFromDashboard(payload) {
   payload = payload || {};
   var ss = getUserSpreadsheet_();
-  var pickerValue = String(payload.pickerValue || payload.investmentId || '').trim();
-  var account = investmentPortfolioDrawerResolveAccount_(ss, pickerValue);
+  payload = Object.assign({}, payload, { source: 'FIDELITY_401K_STATEMENT_PDF' });
+  var customerGate = investmentPortfolioDrawerGuardCustomerProductionImport_(ss, payload);
+  if (!customerGate.ok) return customerGate;
+  var account = investmentPortfolioDrawerResolveAccountFromPayload_(ss, payload);
   if (!account || !investmentPortfolioDrawerIs401kRetirementAccount_(account)) {
     return {
       ok: false,
@@ -738,5 +989,7 @@ function getInvestmentPortfolioDrawerFromDashboard(pickerValue) {
   if (!account) {
     return { ok: false, error: 'Select an active CashCompass investment account.' };
   }
+  var openGate = investmentPortfolioDrawerEvaluateCustomerImportRequest_(account, '');
+  if (!openGate.ok) return openGate;
   return investmentPortfolioDrawerBuildPayload_(ss, account);
 }
