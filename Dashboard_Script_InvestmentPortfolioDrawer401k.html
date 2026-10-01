@@ -178,7 +178,7 @@ function invDrawer401kRenderMonthlyInvestmentValueHtml_(monthly) {
   } else if (comparison === 'MATCH') {
     html += '<p>Existing value: <strong>' +
       invDrawer401kEscape_(invDrawer401kFormatMoney_(monthly.existingValue)) + '</strong></p>';
-    html += '<p><strong>Already matches.</strong> Keep existing is the only decision. No write is proposed.</p>';
+    html += '<p><strong>Already matches. Existing value will be kept.</strong></p>';
   } else if (comparison === 'DIFFER') {
     html += '<p>Existing value: <strong>' +
       invDrawer401kEscape_(invDrawer401kFormatMoney_(monthly.existingValue)) + '</strong></p>';
@@ -192,7 +192,11 @@ function invDrawer401kRenderMonthlyInvestmentValueHtml_(monthly) {
       '<input type="radio" name="inv_401k_monthly_decision" id="inv_401k_monthly_replace" value="REPLACE"' +
       (selected === 'REPLACE' ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
       '<span>Replace with statement value</span></label>';
-    html += '<p><strong>The existing monthly value will be replaced</strong> if you choose Replace.</p>';
+    if (selected === 'REPLACE') {
+      html += '<p><strong>Warning: the existing monthly value will be replaced.</strong></p>';
+    } else {
+      html += '<p>Existing value will remain unchanged unless Replace is selected.</p>';
+    }
   } else {
     html += '<p><strong>Skip</strong> — ' +
       invDrawer401kEscape_(monthly.message || 'Monthly investment value will not be written.') +

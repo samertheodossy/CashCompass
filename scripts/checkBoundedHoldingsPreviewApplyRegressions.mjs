@@ -661,6 +661,13 @@ assert.doesNotMatch(applySource, /SYS - Investment Activity/);
 assert.match(applyDiffSource, /monthlyDigestPart/);
 assert.match(applyDiffSource, /endingTotalValue/);
 assert.match(applyDiffSource, /existingPresent/);
+assert.match(applyDiffSource, /Already matches\. Existing value will be kept\./);
+assert.match(applyDiffSource, /Existing value will remain unchanged unless Replace is selected\./);
+assert.match(applyDiffSource, /Warning: the existing monthly value will be replaced\./);
+assert.doesNotMatch(
+  extractFunction(applyDiffSource, 'boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_'),
+  /proposal\.warning = proposal\.warning[\s\S]*will be replaced/
+);
 assert.doesNotMatch(applyDiffSource, /holdingsMarketValueSum \+|preview\.analysis/);
 assert.doesNotMatch(
   extractFunction(applyDiffSource, 'boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_'),
@@ -701,7 +708,10 @@ assert.match(boundedHtml, /SYS - Investment Holdings Unified/);
 assert.match(boundedHtml, /Monthly investment value/);
 assert.match(boundedHtml, /Keep existing/);
 assert.match(boundedHtml, /Replace with statement value/);
-assert.match(boundedHtml, /Already matches/);
+assert.match(boundedHtml, /Already matches\. Existing value will be kept\./);
+assert.match(boundedHtml, /Existing value will remain unchanged unless Replace is selected\./);
+assert.match(boundedHtml, /Warning: the existing monthly value will be replaced\./);
+assert.doesNotMatch(boundedHtml, /if you choose Replace/);
 assert.doesNotMatch(boundedHtml, /explicitMonthlyValueReplace/);
 assert.match(boundedHtml, /ETRADE_CLIENT_STATEMENT_PDF/);
 assert.match(boundedHtml, /Etrade Cisco - Future/);
@@ -1538,6 +1548,10 @@ assert.equal(emptyDiff.diff.monthlyInvestmentValue.proposedValue, 47778.84);
 assert.equal(emptyDiff.diff.monthlyInvestmentValue.willWrite, false);
 assert.equal(emptyDiff.diff.monthlyInvestmentValue.existingPresent, false);
 assert.match(emptyDiff.diff.monthlyInvestmentValue.message, /July 2026/);
+assert.doesNotMatch(String(emptyDiff.diff.monthlyInvestmentValue.message || ''),
+  /replaced|remain unchanged unless Replace/);
+assert.doesNotMatch(String(emptyDiff.diff.monthlyInvestmentValue.warning || ''),
+  /replaced|remain unchanged unless Replace/);
 assert.match(emptyDiff.diffDigest, /./);
 assert.deepEqual(cloneSheetRows(emptySchwabBook.getSheetByName('INPUT - Investments')),
   emptyInvestmentsBeforePreview, 'review must not write monthly investment values');
@@ -1619,7 +1633,8 @@ assert.equal(alreadyDiff.diff.monthlyInvestmentValue.decision, 'KEEP');
 assert.equal(alreadyDiff.diff.monthlyInvestmentValue.action, 'SKIP');
 assert.equal(alreadyDiff.diff.monthlyInvestmentValue.willWrite, false);
 assert.equal(alreadyDiff.diff.monthlyInvestmentValue.existingPresent, true);
-assert.match(alreadyDiff.diff.monthlyInvestmentValue.message, /Already matches/);
+assert.equal(alreadyDiff.diff.monthlyInvestmentValue.message,
+  'Already matches. Existing value will be kept.');
 const alreadyBefore = cloneSheetRows(alreadyWorkbook.getSheetByName('INPUT - Investments'));
 const alreadyApply = alreadyBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
   ...schwabPayload,
@@ -1674,6 +1689,12 @@ assert.equal(occupiedDiff.diff.monthlyInvestmentValue.action, 'SKIP');
 assert.equal(occupiedDiff.diff.monthlyInvestmentValue.willWrite, false);
 assert.equal(occupiedDiff.diff.monthlyInvestmentValue.existingValue, 50000);
 assert.equal(occupiedDiff.diff.monthlyInvestmentValue.proposedValue, 47778.84);
+assert.match(occupiedDiff.diff.monthlyInvestmentValue.message,
+  /Existing value will remain unchanged unless Replace is selected\./);
+assert.doesNotMatch(String(occupiedDiff.diff.monthlyInvestmentValue.message || ''),
+  /will be replaced/);
+assert.doesNotMatch(String(occupiedDiff.diff.monthlyInvestmentValue.warning || ''),
+  /will be replaced/);
 const occupiedOtherMonths = otherMonthValuesFromSchwabSheet(occupiedWorkbook);
 const occupiedApply = occupiedBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
   ...schwabPayload,
@@ -1702,8 +1723,8 @@ const replaceDiff = replaceBuilt.context.boundedHoldingsPreviewBuildApplyDiffFro
 });
 assert.equal(replaceDiff.diff.monthlyInvestmentValue.action, 'REPLACE');
 assert.equal(replaceDiff.diff.monthlyInvestmentValue.willWrite, true);
-assert.match(String(replaceDiff.diff.monthlyInvestmentValue.warning || ''),
-  /existing monthly value will be replaced/i);
+assert.match(String(replaceDiff.diff.monthlyInvestmentValue.message || ''),
+  /Warning: the existing monthly value will be replaced/);
 const replaceApply = replaceBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
   ...schwabPayload,
   diffDigest: replaceDiff.diffDigest,
@@ -2295,7 +2316,8 @@ assert.equal(stashMatchDiff.diff.monthlyInvestmentValue.comparison, 'MATCH');
 assert.equal(stashMatchDiff.diff.monthlyInvestmentValue.decision, 'KEEP');
 assert.equal(stashMatchDiff.diff.monthlyInvestmentValue.action, 'SKIP');
 assert.equal(stashMatchDiff.diff.monthlyInvestmentValue.willWrite, false);
-assert.match(stashMatchDiff.diff.monthlyInvestmentValue.message, /Already matches/);
+assert.equal(stashMatchDiff.diff.monthlyInvestmentValue.message,
+  'Already matches. Existing value will be kept.');
 const stashMatchBefore = cloneSheetRows(stashMatchWorkbook.getSheetByName('INPUT - Investments'));
 const stashMatchApply = stashMatchBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
   ...stashPayload,
@@ -2366,8 +2388,8 @@ const stashReplaceDiff = stashReplaceBuilt.context.boundedHoldingsPreviewBuildAp
 });
 assert.equal(stashReplaceDiff.diff.monthlyInvestmentValue.action, 'REPLACE');
 assert.equal(stashReplaceDiff.diff.monthlyInvestmentValue.willWrite, true);
-assert.match(String(stashReplaceDiff.diff.monthlyInvestmentValue.warning || ''),
-  /existing monthly value will be replaced/i);
+assert.match(String(stashReplaceDiff.diff.monthlyInvestmentValue.message || ''),
+  /Warning: the existing monthly value will be replaced/);
 const stashReplaceApply = stashReplaceBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
   ...stashPayload,
   diffDigest: stashReplaceDiff.diffDigest,
@@ -2671,7 +2693,8 @@ assert.equal(futureMatchDiff.diff.monthlyInvestmentValue.comparison, 'MATCH');
 assert.equal(futureMatchDiff.diff.monthlyInvestmentValue.decision, 'KEEP');
 assert.equal(futureMatchDiff.diff.monthlyInvestmentValue.action, 'SKIP');
 assert.equal(futureMatchDiff.diff.monthlyInvestmentValue.willWrite, false);
-assert.match(futureMatchDiff.diff.monthlyInvestmentValue.message, /Already matches/);
+assert.equal(futureMatchDiff.diff.monthlyInvestmentValue.message,
+  'Already matches. Existing value will be kept.');
 const futureMatchBefore = cloneSheetRows(futureMatchWorkbook.getSheetByName('INPUT - Investments'));
 const futureMatchApply = futureMatchBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
   ...futurePayload,
@@ -2701,6 +2724,12 @@ assert.equal(occupiedFutureDiff.diff.monthlyInvestmentValue.action, 'SKIP');
 assert.equal(occupiedFutureDiff.diff.monthlyInvestmentValue.willWrite, false);
 assert.equal(occupiedFutureDiff.diff.monthlyInvestmentValue.existingValue, 50000);
 assert.equal(occupiedFutureDiff.diff.monthlyInvestmentValue.proposedValue, 846353.40);
+assert.match(occupiedFutureDiff.diff.monthlyInvestmentValue.message,
+  /Existing value will remain unchanged unless Replace is selected\./);
+assert.doesNotMatch(String(occupiedFutureDiff.diff.monthlyInvestmentValue.message || ''),
+  /will be replaced/);
+assert.doesNotMatch(String(occupiedFutureDiff.diff.monthlyInvestmentValue.warning || ''),
+  /will be replaced/);
 const occupiedFutureBefore = cloneSheetRows(occupiedFuture.getSheetByName('INPUT - Investments'));
 const occupiedFutureApply = occupiedFutureBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
   ...futurePayload,
@@ -2730,6 +2759,8 @@ assert.equal(futureReplaceDiff.diff.monthlyInvestmentValue.action, 'REPLACE');
 assert.equal(futureReplaceDiff.diff.monthlyInvestmentValue.willWrite, true);
 assert.match(String(futureReplaceDiff.diff.monthlyInvestmentValue.warning || ''),
   /This value is not vested and is not current brokerage holdings\./);
+assert.match(String(futureReplaceDiff.diff.monthlyInvestmentValue.message || ''),
+  /Warning: the existing monthly value will be replaced/);
 const futureReplaceApply = futureReplaceBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
   ...futurePayload,
   diffDigest: futureReplaceDiff.diffDigest,
@@ -2830,6 +2861,14 @@ assert.equal(emptyRsuMonthly.decision, 'IGNORE');
 assert.equal(emptyFutureMonthly.proposedValue, 846353.40);
 assert.equal(emptyFutureMonthly.valueCategory, 'POTENTIAL_UNVESTED_STOCK_PLAN');
 assert.equal(emptyFutureMonthly.comparison, 'BLANK');
+assert.doesNotMatch(String(emptyRsuMonthly.message || ''),
+  /replaced|remain unchanged unless Replace/);
+assert.doesNotMatch(String(emptyFutureMonthly.message || ''),
+  /replaced|remain unchanged unless Replace/);
+assert.doesNotMatch(String(emptyRsuMonthly.warning || ''),
+  /replaced|remain unchanged unless Replace/);
+assert.doesNotMatch(String(emptyFutureMonthly.warning || ''),
+  /will be replaced/);
 assert.equal(emptyCiscoDiff.diff.summary.createCount, 0);
 assert.equal(
   JSON.stringify(emptyCiscoDiff).includes('Etrade Cisco - RSU/ESPP + Future'),
@@ -2943,6 +2982,52 @@ assert.equal(augustValueFromFutureSheet(splitCisco), '');
 const splitLogs = statementMonthlyActivity_(splitCiscoBuilt.context);
 assert.equal(splitLogs.find((row) => row.payee === 'Etrade Cisco - RSU/ESPP').details.result, 'APPLIED');
 assert.equal(splitLogs.find((row) => row.payee === 'Etrade Cisco - Future').details.result, 'SKIPPED');
+
+const matchCisco = makeEtradeFutureWorkbook({ augustValue: 846353.40 });
+matchCisco.getSheetByName('INPUT - Investments').getRange(4, 10).setValue(113042.10);
+const matchCiscoBuilt = buildContext({ workbook: matchCisco });
+const matchCiscoDiff = matchCiscoBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(
+  ciscoProfilePayload);
+assert.equal(monthlyByAccount_(matchCiscoDiff, 'Etrade Cisco - RSU/ESPP').message,
+  'Already matches. Existing value will be kept.');
+assert.equal(monthlyByAccount_(matchCiscoDiff, 'Etrade Cisco - Future').message,
+  'Already matches. Existing value will be kept.');
+
+const differCisco = makeEtradeFutureWorkbook({ augustValue: 50000 });
+differCisco.getSheetByName('INPUT - Investments').getRange(4, 10).setValue(40000);
+const differCiscoKeepBuilt = buildContext({ workbook: differCisco });
+const differCiscoKeepDiff = differCiscoKeepBuilt.context
+  .boundedHoldingsPreviewBuildApplyDiffFromDashboard(ciscoProfilePayload);
+const keepRsu = monthlyByAccount_(differCiscoKeepDiff, 'Etrade Cisco - RSU/ESPP');
+const keepFuture = monthlyByAccount_(differCiscoKeepDiff, 'Etrade Cisco - Future');
+assert.equal(keepRsu.decision, 'KEEP');
+assert.equal(keepFuture.decision, 'KEEP');
+assert.match(keepRsu.message, /Existing value will remain unchanged unless Replace is selected\./);
+assert.match(keepFuture.message, /Existing value will remain unchanged unless Replace is selected\./);
+assert.doesNotMatch(String(keepRsu.message || ''), /will be replaced/);
+assert.doesNotMatch(String(keepFuture.message || ''), /will be replaced/);
+assert.doesNotMatch(String(keepRsu.warning || ''), /will be replaced/);
+assert.doesNotMatch(String(keepFuture.warning || ''), /will be replaced/);
+
+const differCiscoReplace = makeEtradeFutureWorkbook({ augustValue: 50000 });
+differCiscoReplace.getSheetByName('INPUT - Investments').getRange(4, 10).setValue(40000);
+const differCiscoReplaceBuilt = buildContext({ workbook: differCiscoReplace });
+const differCiscoReplaceDiff = differCiscoReplaceBuilt.context
+  .boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+    ...ciscoProfilePayload,
+    monthlyInvestmentValueDecisions: {
+      'Etrade Cisco - RSU/ESPP': 'REPLACE',
+      'Etrade Cisco - Future': 'KEEP'
+    }
+  });
+const replaceRsu = monthlyByAccount_(differCiscoReplaceDiff, 'Etrade Cisco - RSU/ESPP');
+const keepFutureAfterReplace = monthlyByAccount_(differCiscoReplaceDiff, 'Etrade Cisco - Future');
+assert.equal(replaceRsu.decision, 'REPLACE');
+assert.equal(keepFutureAfterReplace.decision, 'KEEP');
+assert.match(replaceRsu.message, /Warning: the existing monthly value will be replaced/);
+assert.match(keepFutureAfterReplace.message,
+  /Existing value will remain unchanged unless Replace is selected\./);
+assert.doesNotMatch(String(keepFutureAfterReplace.message || ''), /will be replaced/);
 
 const staleCisco = makeEtradeFutureWorkbook();
 const staleCiscoBuilt = buildContext({ workbook: staleCisco });

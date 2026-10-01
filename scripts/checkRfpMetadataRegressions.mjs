@@ -237,7 +237,7 @@ assert.match(body,
   /Portfolio activity[\s\S]*?inv_portfolio_drawer_backdrop[\s\S]*?inv_activity_account[\s\S]*?inv_portfolio_account_content[\s\S]*?Portfolio[\s\S]*?Import CSV[\s\S]*?inv_activity_file[\s\S]*?Preview import[\s\S]*?Save imported activity/,
   'Manage Investments must open an account-first Portfolio Activity drawer with Portfolio and Import views');
 assert.match(body,
-  /Choose an account to view portfolio holdings and import statements when available for that provider\./,
+  /Choose a CashCompass account or import profile to view holdings and import statements when available\./,
   'Portfolio Activity account guidance must use customer-facing language');
 assert.doesNotMatch(investmentClient,
   /select\.options\.length === 2\) select\.selectedIndex = 1/,

@@ -2339,6 +2339,13 @@ function investmentPortfolioDrawerClientProviderLabel_(accountName) {
   return '';
 }
 
+function investmentPortfolioDrawerClientOmitFromPicker_(row) {
+  row = row || {};
+  if (row.omitFromActivityPicker === true) return true;
+  var name = String(row.accountName || '').trim();
+  return name === 'Etrade Cisco - Future' || name === 'Etrade Cisco - RSU/ESPP';
+}
+
 function investmentPortfolioDrawerPickerValue_(row) {
   row = row || {};
   var investmentId = String(row.investmentId || '').trim();
@@ -2379,10 +2386,11 @@ function populateInvestmentPortfolioDrawerAccounts_(data) {
   var select = document.getElementById('inv_activity_account');
   if (!select) return;
   var previous = select.value || '';
-  select.innerHTML = '<option value="">— Select account —</option>';
+  select.innerHTML = '<option value="">— Select account or import profile —</option>';
   var count = 0;
   (data && data.managementAccounts || []).forEach(function(row) {
     if (!row || row.inactive) return;
+    if (investmentPortfolioDrawerClientOmitFromPicker_(row)) return;
     var accountName = String(row.accountName || '').trim();
     var pickerValue = investmentPortfolioDrawerPickerValue_(row);
     if (!accountName || !pickerValue) return;
@@ -2441,10 +2449,10 @@ function updateInvestmentPortfolioDrawerAccountHelp_(data) {
   var el = document.querySelector('.investment-portfolio-account-help');
   if (!el) return;
   if (data && data.robinhoodImportEligible) {
-    el.textContent = 'Choose an account to view holdings, update recurring plans, or import when available.';
+    el.textContent = 'Choose a CashCompass account or import profile to view holdings, update recurring plans, or import when available.';
     return;
   }
-  el.textContent = 'Choose an account to view portfolio holdings and import statements when available for that provider.';
+  el.textContent = 'Choose a CashCompass account or import profile to view holdings and import statements when available.';
 }
 
 function investmentPortfolioDrawerShowsPlanActions_(data) {

@@ -1122,25 +1122,23 @@ function boundedHoldingsPreviewApplyBuildTrustedMonthlyValueProposal_(fields) {
     proposal.defaultDecision = 'KEEP';
     proposal.reason = 'MATCH';
     proposal.skipKind = 'MATCH';
-    proposal.message = 'Already matches. Existing ' + monthLabel + ' value ' +
-      moneyExisting + ' matches the statement value.';
+    proposal.message = 'Already matches. Existing value will be kept.';
     return proposal;
   }
 
   proposal.allowedDecisions = ['KEEP', 'REPLACE'];
   proposal.defaultDecision = 'KEEP';
-  proposal.warning = proposal.warning
-    ? (proposal.warning + ' The existing monthly value will be replaced.')
-    : 'The existing monthly value will be replaced.';
   proposal.message = monthLabel + ' existing value ' + moneyExisting +
     ' differs from statement value ' + moneyProposed +
     ' by ' + boundedHoldingsPreviewApplyFormatMoney_(difference) + '.';
   if (decision === 'REPLACE') {
     proposal.action = 'REPLACE';
     proposal.willWrite = true;
+    proposal.message += ' Warning: the existing monthly value will be replaced.';
   } else {
     proposal.reason = 'USER_KEEP';
     proposal.skipKind = 'KEPT';
+    proposal.message += ' Existing value will remain unchanged unless Replace is selected.';
   }
   return proposal;
 }

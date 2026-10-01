@@ -258,6 +258,19 @@ function investmentPortfolioDrawerCustomerImportEligibility_(account) {
   return enabled(formats[0].source, '');
 }
 
+function investmentPortfolioDrawerOmitFromActivityPicker_(account) {
+  var name = String((account && account.accountName) || '').trim();
+  if (typeof investmentEtradeCiscoBrokerageAccountValueMapping_ === 'function' &&
+      name === investmentEtradeCiscoBrokerageAccountValueMapping_().accountName) {
+    return true;
+  }
+  if (typeof investmentEtradePotentialUnvestedStockPlanMapping_ === 'function' &&
+      name === investmentEtradePotentialUnvestedStockPlanMapping_().accountName) {
+    return true;
+  }
+  return false;
+}
+
 function investmentPortfolioDrawerDescribePickerAccount_(row) {
   var mapped = investmentPortfolioDrawerMapAccountRow_(row);
   var eligibility = investmentPortfolioDrawerCustomerImportEligibility_(mapped);
@@ -277,7 +290,8 @@ function investmentPortfolioDrawerDescribePickerAccount_(row) {
     customerImportEnabled: eligibility.enabled,
     customerImportDisabledReason: eligibility.reason || '',
     customerImportPickerNote: eligibility.pickerNote || '',
-    customerImportSource: eligibility.source || ''
+    customerImportSource: eligibility.source || '',
+    omitFromActivityPicker: investmentPortfolioDrawerOmitFromActivityPicker_(mapped)
   };
 }
 

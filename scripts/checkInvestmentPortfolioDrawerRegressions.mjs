@@ -70,6 +70,7 @@ vm.runInContext(`
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerSupportedImportFormats_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerCustomerDrawerFormats_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerCustomerImportEligibility_')}
+  ${extractFunction(drawerSource, 'investmentPortfolioDrawerOmitFromActivityPicker_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerDescribePickerAccount_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerStatementImportProfiles_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerKnownProviderLabel_')}
@@ -217,10 +218,30 @@ function simulateDrawerAccountList(managementAccounts) {
       customerImportDisabledReason: described.customerImportDisabledReason,
       customerImportPickerNote: described.customerImportPickerNote,
       customerImportSource: described.customerImportSource,
+      omitFromActivityPicker: described.omitFromActivityPicker === true,
       optionLabel: context.investmentPortfolioDrawerBuildPickerOptionLabel_(described),
       optionDisabled: described.customerImportEnabled !== true
     };
   });
+}
+
+function simulateActivityPicker(managementAccounts) {
+  var accounts = simulateDrawerAccountList(managementAccounts).filter(function(row) {
+    return row.omitFromActivityPicker !== true;
+  });
+  var profiles = (context.investmentPortfolioDrawerStatementImportProfiles_() || []).map(function(row) {
+    return {
+      accountName: '',
+      pickerValue: row.pickerValue,
+      pickerLabel: row.pickerLabel,
+      customerImportEnabled: row.customerImportEnabled === true,
+      customerImportSource: row.customerImportSource,
+      omitFromActivityPicker: false,
+      optionLabel: row.pickerLabel,
+      optionDisabled: row.customerImportEnabled !== true
+    };
+  });
+  return accounts.concat(profiles);
 }
 
 function simulateImportEligibility(managementAccounts) {
@@ -390,6 +411,14 @@ function byName(name) {
   return drawerList.find((row) => row.accountName === name);
 }
 
+const pickerList = simulateActivityPicker(fixtureAccounts);
+function pickerByName(name) {
+  return pickerList.find((row) => row.accountName === name);
+}
+function pickerByValue(value) {
+  return pickerList.find((row) => row.pickerValue === value);
+}
+
 const enabledNames = [
   '401K Account',
   'Charles Schwab - Personal',
@@ -399,26 +428,38 @@ const enabledNames = [
   'Stash Account'
 ];
 const disabledNames = [
-  'Etrade Cisco - Future',
-  'Etrade Cisco - RSU/ESPP',
   'Laith 529',
   'Lutfi 529',
   'Lutfi Robinhood'
 ];
 enabledNames.forEach((name) => {
-  const row = byName(name);
-  assert.ok(row, `${name} must remain visible`);
+  const row = pickerByName(name);
+  assert.ok(row, `${name} must remain a selectable picker entry`);
   assert.equal(row.optionDisabled, false, `${name} must be selectable`);
   assert.equal(row.customerImportEnabled, true, `${name} must have a customer import path`);
   assert.match(row.optionLabel, new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 });
 disabledNames.forEach((name) => {
-  const row = byName(name);
+  const row = pickerByName(name);
   assert.ok(row, `${name} must remain visible`);
   assert.equal(row.optionDisabled, true, `${name} must stay visible but not selectable`);
   assert.equal(row.customerImportEnabled, false);
   assert.match(row.optionLabel, new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 });
+assert.equal(pickerByName('Etrade Cisco - Future'), undefined,
+  'Etrade Cisco - Future must not be a standalone picker option');
+assert.equal(pickerByName('Etrade Cisco - RSU/ESPP'), undefined,
+  'Etrade Cisco - RSU/ESPP must not be a standalone picker option');
+const ciscoPicker = pickerByValue('__profile__:ETRADE_CISCO_STATEMENT');
+assert.ok(ciscoPicker, 'combined Cisco profile must remain selectable');
+assert.equal(ciscoPicker.optionDisabled, false);
+assert.equal(ciscoPicker.optionLabel, 'E*TRADE Cisco Statement — RSU/ESPP + Future');
+assert.equal(byName('Etrade Cisco - Future').accountName, 'Etrade Cisco - Future');
+assert.equal(byName('Etrade Cisco - RSU/ESPP').accountName, 'Etrade Cisco - RSU/ESPP');
+assert.equal(byName('Etrade Cisco - Future').omitFromActivityPicker, true);
+assert.equal(byName('Etrade Cisco - RSU/ESPP').omitFromActivityPicker, true);
+assert.equal(byName('Stash Account').omitFromActivityPicker, false);
+assert.equal(byName('Laith 529').omitFromActivityPicker, false);
 
 assert.equal(byName('401K Account').customerImportSource, 'FIDELITY_401K_STATEMENT_PDF');
 assert.equal(byName('401K Account').customerImportPickerNote, '401(k) supports balance-only import');
@@ -609,8 +650,15 @@ assert.match(dashboardBody, /Import Schwab statement PDF/);
 assert.match(dashboardBody, /inv_portfolio_schwab_import_view/);
 assert.match(dashboardBody, /Import Stash statement PDF/);
 assert.match(dashboardBody, /inv_portfolio_stash_import_view/);
-assert.match(dashboardBody, /CashCompass investment account/);
-assert.match(dashboardBody, /view portfolio holdings and import statements when available/);
+assert.match(dashboardBody, /for="inv_activity_account">CashCompass account or import profile/);
+assert.match(dashboardBody, /Choose a CashCompass account or import profile to view holdings and import statements when available/);
+assert.match(dashboardInvestments, /function investmentPortfolioDrawerClientOmitFromPicker_/);
+assert.match(dashboardInvestments, /omitFromActivityPicker === true/);
+assert.match(
+  extractFunction(dashboardInvestments, 'populateInvestmentPortfolioDrawerAccounts_'),
+  /investmentPortfolioDrawerClientOmitFromPicker_/
+);
+assert.match(drawerSource, /function investmentPortfolioDrawerOmitFromActivityPicker_/);
 assert.doesNotMatch(dashboardBody, /update recurring plans/);
 assert.match(drawerM1Source, /boundedHoldingsPreviewRunFromDashboard/);
 assert.match(drawerM1Source, /boundedHoldingsPreviewRunGroupedChildFromDashboard/);
@@ -665,6 +713,17 @@ assert.match(drawerEtradeFutureSource, /Etrade Cisco - Future/);
 assert.match(drawerEtradeFutureSource, /Etrade Cisco - RSU\/ESPP/);
 assert.match(drawerEtradeFutureSource, /This value is not vested and is not current brokerage holdings\./);
 assert.match(drawerEtradeFutureSource, /inv_etrade_cisco_monthly_add_/);
+assert.match(drawerEtradeFutureSource, /Already matches\. Existing value will be kept\./);
+assert.match(drawerEtradeFutureSource, /Existing value will remain unchanged unless Replace is selected\./);
+assert.match(drawerEtradeFutureSource, /Warning: the existing monthly value will be replaced\./);
+assert.match(drawerEtradeFutureSource, /Ignore monthly value/);
+assert.doesNotMatch(drawerEtradeFutureSource, /if you choose Replace/);
+assert.match(drawer401kSource, /Already matches\. Existing value will be kept\./);
+assert.match(drawer401kSource, /Existing value will remain unchanged unless Replace is selected\./);
+assert.match(drawer401kSource, /Warning: the existing monthly value will be replaced\./);
+assert.match(drawerSchwabSource, /Already matches\. Existing value will be kept\./);
+assert.match(drawerStashSource, /Already matches\. Existing value will be kept\./);
+assert.match(drawerM1Source, /Already matches\. Existing value will be kept\./);
 assert.match(drawerEtradeFutureSource, /ensureInvDrawerPdfClientReady_/);
 assert.match(drawerEtradeFutureSource, /boundedHoldingsPreviewLoadDocumentTextFromFile_/);
 assert.match(drawerEtradeFutureSource, /previewText \|\| result\.text/);
@@ -1827,5 +1886,25 @@ assert.equal(firstStatementView.partitions[0].marketValueTotal, 1000, 'existing 
 
 const exactDelta = context.investmentPortfolioDrawerComputeNumericDelta_(1100.005, 1000.004);
 assert.ok(Math.abs(exactDelta - 100.001) < 1e-9, 'delta uses exact numeric comparison before rounding');
+
+const roadmap = read('ROADMAP.md');
+assert.match(roadmap, /Cisco Statement — RSU\/ESPP \+ Future/);
+assert.match(roadmap, /BROKERAGE_ACCOUNT_VALUE/);
+assert.match(roadmap, /POTENTIAL_UNVESTED_STOCK_PLAN/);
+assert.match(roadmap, /8\/31\/26/);
+assert.match(roadmap, /pdf\.js/);
+assert.match(roadmap, /Grant-detail \$0 values/);
+assert.match(roadmap, /standalone Cisco picker entries were removed/);
+assert.match(roadmap, /Central no-write runtime validation passed with the real statement/);
+assert.match(roadmap, /Apply writes only `INPUT - Investments`/);
+assert.match(roadmap, /LOG - Activity/);
+assert.match(roadmap, /Samer Etrade Account import support/);
+assert.match(roadmap, /Samer Etrade Account import support[\s\S]{0,120}[Nn]ot implemented/);
+assert.match(roadmap, /Laith 529/);
+assert.match(roadmap, /Lutfi 529/);
+assert.match(roadmap, /Lutfi Etrade Account/);
+assert.match(roadmap, /Lutfi Robinhood/);
+assert.match(roadmap, /any account without a reliable supported export/);
+assert.doesNotMatch(roadmap, /Samer Etrade Account import support is complete/);
 
 console.log('Investment portfolio drawer regressions passed.');
