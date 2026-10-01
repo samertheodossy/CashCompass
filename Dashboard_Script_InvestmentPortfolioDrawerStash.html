@@ -15,7 +15,8 @@ var __invDrawerStashState = {
   applyReviewed: false,
   applyDiff: null,
   applyDiffDigest: '',
-  applyStatusMessage: ''
+  applyStatusMessage: '',
+  monthlyInvestmentValueDecision: ''
 };
 
 function invDrawerStashEscape_(value) {
@@ -84,6 +85,7 @@ function resetInvestmentPortfolioDrawerStashImport_(keepAccount) {
   __invDrawerStashState.applyDiff = null;
   __invDrawerStashState.applyDiffDigest = '';
   __invDrawerStashState.applyStatusMessage = '';
+  __invDrawerStashState.monthlyInvestmentValueDecision = '';
   if (!keepAccount) {
     __invDrawerStashState.selectedAccount = null;
     __invDrawerStashState.registrationTouched = false;
@@ -230,6 +232,7 @@ function clearInvestmentPortfolioDrawerStashApply_(keepPreview) {
   __invDrawerStashState.applyDiff = null;
   __invDrawerStashState.applyDiffDigest = '';
   __invDrawerStashState.applyStatusMessage = '';
+  __invDrawerStashState.monthlyInvestmentValueDecision = '';
   if (!keepPreview) {
     __invDrawerStashState.lastSinglePreview = null;
     __invDrawerStashState.lastPreviewDocumentText = '';
@@ -243,6 +246,70 @@ function invDrawerStashFormatMoney_(value) {
   var n = Number(value);
   if (!isFinite(n)) return '—';
   return (n < 0 ? '-$' : '$') + Math.abs(n).toFixed(2);
+}
+
+function invDrawerStashFormatMonthlyMoney_(value) {
+  return invDrawerStashFormatMoney_(value);
+}
+
+function invDrawerStashRenderMonthlyInvestmentValueHtml_(monthly) {
+  monthly = monthly || {};
+  var comparison = String(monthly.comparison || '');
+  var selected = String(monthly.decision || monthly.defaultDecision || '').trim().toUpperCase();
+  var html = '<div class="card" id="inv_stash_monthly_value_card">' +
+    '<h4>Monthly investment value</h4>';
+  html += '<p>Target month: <strong>' +
+    invDrawerStashEscape_(monthly.monthLabel || 'this month') + '</strong></p>';
+  html += '<p>Statement value: <strong>' +
+    invDrawerStashEscape_(invDrawerStashFormatMonthlyMoney_(monthly.proposedValue)) + '</strong></p>';
+  if (comparison === 'BLANK') {
+    html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+      '<input type="radio" name="inv_stash_monthly_decision" value="ADD"' +
+      (selected === 'ADD' ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
+      '<span>Add value</span></label>';
+    html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+      '<input type="radio" name="inv_stash_monthly_decision" value="IGNORE"' +
+      (selected === 'IGNORE' || !selected ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
+      '<span>Ignore monthly value</span></label>';
+  } else if (comparison === 'MATCH') {
+    html += '<p>Existing value: <strong>' +
+      invDrawerStashEscape_(invDrawerStashFormatMonthlyMoney_(monthly.existingValue)) + '</strong></p>';
+    html += '<p><strong>Already matches.</strong> Keep existing is the only decision. No write is proposed.</p>';
+  } else if (comparison === 'DIFFER') {
+    html += '<p>Existing value: <strong>' +
+      invDrawerStashEscape_(invDrawerStashFormatMonthlyMoney_(monthly.existingValue)) + '</strong></p>';
+    html += '<p>They differ by ' +
+      invDrawerStashEscape_(invDrawerStashFormatMonthlyMoney_(monthly.difference)) + '.</p>';
+    html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+      '<input type="radio" name="inv_stash_monthly_decision" value="KEEP"' +
+      (selected !== 'REPLACE' ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
+      '<span>Keep existing</span></label>';
+    html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+      '<input type="radio" name="inv_stash_monthly_decision" value="REPLACE"' +
+      (selected === 'REPLACE' ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
+      '<span>Replace with statement value</span></label>';
+    html += '<p><strong>The existing monthly value will be replaced</strong> if you choose Replace.</p>';
+  } else {
+    html += '<p><strong>Skip</strong> — ' +
+      invDrawerStashEscape_(monthly.message || 'Monthly investment value will not be written.') +
+      '</p>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function invDrawerStashBindMonthlyInvestmentValueControls_() {
+  var radios = document.querySelectorAll('input[name="inv_stash_monthly_decision"]');
+  var onChange = function() {
+    var selected = document.querySelector('input[name="inv_stash_monthly_decision"]:checked');
+    var next = selected ? String(selected.value || '').trim().toUpperCase() : '';
+    if (next === String(__invDrawerStashState.monthlyInvestmentValueDecision || '').trim().toUpperCase()) {
+      return;
+    }
+    __invDrawerStashState.monthlyInvestmentValueDecision = next;
+    reviewInvestmentPortfolioDrawerStashApplyDiff_();
+  };
+  for (var i = 0; i < radios.length; i++) radios[i].onchange = onChange;
 }
 
 function invDrawerStashFormatAsOf_(value) {
@@ -347,14 +414,14 @@ function renderInvestmentPortfolioDrawerStashApplySection_() {
   var trusted = !!(preview.readiness && preview.readiness.trustedForHoldingsVisibility);
   applyArea.innerHTML = '<div class="card"><h3>Apply approved holdings</h3>' +
     '<p class="muted">Review the diff, then apply holdings to SYS - Investment Holdings Unified. ' +
-    'FDIC insured deposits are saved as cash. This import does not update the monthly investment value. ' +
-    'Transactions are never included.</p>' +
+    'Review also shows the statement month value for the selected account. ' +
+    'FDIC insured deposits are saved as cash. Transactions are never included.</p>' +
     '<div class="investment-import-actions">' +
     '<button type="button" class="small-btn" id="inv_stash_review_apply_btn">Review holdings changes</button>' +
     '<button type="button" class="small-btn primary" id="inv_stash_confirm_apply_btn" disabled>Apply approved holdings</button>' +
     '</div><div id="inv_stash_apply_message" class="muted">' +
     (trusted ? '' : 'Apply is blocked until the statement reconciles.') +
-    '</div></div>';
+    '</div><div id="inv_stash_monthly_area"></div></div>';
   var reviewBtn = document.getElementById('inv_stash_review_apply_btn');
   var confirmBtn = document.getElementById('inv_stash_confirm_apply_btn');
   if (reviewBtn) {
@@ -412,9 +479,20 @@ function reviewInvestmentPortfolioDrawerStashApplyDiff_() {
       __invDrawerStashState.applyDiff = resolved.applyDiff;
       __invDrawerStashState.applyDiffDigest = resolved.applyDiffDigest;
       __invDrawerStashState.applyReviewed = resolved.applyReviewed;
+      var monthly = resolved.applyDiff && resolved.applyDiff.monthlyInvestmentValue || {};
+      __invDrawerStashState.monthlyInvestmentValueDecision = String(
+        monthly.decision || __invDrawerStashState.monthlyInvestmentValueDecision || '').trim().toUpperCase();
       var msgEl = document.getElementById('inv_stash_apply_message');
       var confirmBtn = document.getElementById('inv_stash_confirm_apply_btn');
       if (msgEl) msgEl.textContent = resolved.message;
+      var monthlyEl = document.getElementById('inv_stash_monthly_area');
+      if (monthlyEl) {
+        monthlyEl.innerHTML = resolved.applyDiff
+          ? invDrawerStashRenderMonthlyInvestmentValueHtml_(
+            resolved.applyDiff.monthlyInvestmentValue)
+          : '';
+        invDrawerStashBindMonthlyInvestmentValueControls_();
+      }
       if (confirmBtn) {
         confirmBtn.disabled = !(resolved.applyReviewed && resolved.applyDiff &&
           !resolved.applyDiff.blocked && !resolved.applyDiff.duplicateNoop);
@@ -423,7 +501,9 @@ function reviewInvestmentPortfolioDrawerStashApplyDiff_() {
     .withFailureHandler(function(err) {
       setStatus('inv_stash_status', err.message || String(err), true);
     })
-    .boundedHoldingsPreviewBuildApplyDiffFromDashboard(buildInvDrawerStashPayload_());
+    .boundedHoldingsPreviewBuildApplyDiffFromDashboard(buildInvDrawerStashPayload_({
+      monthlyInvestmentValueDecision: __invDrawerStashState.monthlyInvestmentValueDecision
+    }));
 }
 
 function confirmInvestmentPortfolioDrawerStashApply_() {
@@ -432,6 +512,7 @@ function confirmInvestmentPortfolioDrawerStashApply_() {
   var payload = buildInvDrawerStashPayload_();
   payload.diffDigest = __invDrawerStashState.applyDiffDigest;
   payload.explicitApplyConfirm = true;
+  payload.monthlyInvestmentValueDecision = __invDrawerStashState.monthlyInvestmentValueDecision;
   google.script.run
     .withSuccessHandler(function(res) {
       setStatus('inv_stash_status', res && res.message ? res.message : 'Apply completed.', false);

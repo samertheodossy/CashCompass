@@ -136,8 +136,13 @@ assert.match(drawerStashSource, /boundedHoldingsPreviewRunFromDashboard/);
 assert.match(drawerStashSource, /boundedHoldingsPreviewBuildApplyDiffFromDashboard/);
 assert.match(drawerStashSource, /boundedHoldingsPreviewApplyFromDashboard/);
 assert.doesNotMatch(drawerStashSource, /boundedHoldingsPreviewRunGroupedChildFromDashboard/);
-assert.doesNotMatch(drawerStashSource, /Monthly investment value/);
+assert.match(drawerStashSource, /Monthly investment value/);
+assert.match(drawerStashSource, /monthlyInvestmentValueDecision/);
+assert.match(drawerStashSource, /Ignore monthly value/);
+assert.match(drawerStashSource, /Keep existing/);
+assert.match(drawerStashSource, /Replace with statement value/);
 assert.doesNotMatch(drawerStashSource, /explicitMonthlyValueReplace/);
+assert.doesNotMatch(drawerStashSource, /This import does not update the monthly investment value/);
 assert.match(plannerWeb, /Dashboard_Script_InvestmentPortfolioDrawerStash/);
 assert.match(dashboardBody, /inv_portfolio_stash_import_view/);
 assert.match(dashboardBody, /Import Stash statement PDF/);
@@ -354,21 +359,94 @@ assert.equal(proposed.filter((row) => row.sourceSecurityKey !== '__CASH__').leng
 
 assert.equal(
   context.boundedHoldingsPreviewApplyIsMonthlyValueSource_('STASH_BROKERAGE_STATEMENT_PDF'),
-  false
+  true
 );
-const monthlySkip = context.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+const trustedEnding = context.boundedHoldingsPreviewApplyResolveProviderEndingTotal_(
+  { reconciliation: { ok: true, endingTotalValue: 7782.13 } },
+  'STASH_BROKERAGE_STATEMENT_PDF'
+);
+assert.equal(trustedEnding.value, 7782.13);
+assert.equal(trustedEnding.origin, 'RECONCILIATION');
+assert.equal(
+  context.boundedHoldingsPreviewApplyResolveProviderEndingTotal_(
+    { reconciliation: { ok: false, endingTotalValue: 9000 }, totalAccountValue: 9000 },
+    'STASH_BROKERAGE_STATEMENT_PDF'
+  ).value,
+  null,
+  'failed Stash reconciliation must not propose a monthly value'
+);
+assert.equal(
+  context.boundedHoldingsPreviewApplyResolveProviderEndingTotal_(
+    {
+      totalAccountValue: 7782.13,
+      cashBalance: 67.86,
+      holdingsRows: [
+        { marketValue: 1000 },
+        { marketValue: 6714.27 }
+      ]
+    },
+    'STASH_BROKERAGE_STATEMENT_PDF'
+  ).value,
+  null,
+  'Stash must not calculate a monthly value from holdings'
+);
+assert.equal(
+  context.boundedHoldingsPreviewApplyResolveProviderEndingTotal_(
+    { reconciliation: { ok: true } },
+    'STASH_BROKERAGE_STATEMENT_PDF'
+  ).value,
+  null,
+  'missing Stash ending total must not propose a monthly value'
+);
+context.getCurrentYear_ = function() { return 2026; };
+context.getInvestmentHistoryValueForMonth_ = function() { return ''; };
+const monthlyBlank = context.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
   {
     source: 'STASH_BROKERAGE_STATEMENT_PDF',
     explicitAccountMatch: true,
-    accountName: 'Stash Brokerage'
+    accountName: 'Stash Account'
   },
   'SINGLE_ACCOUNT',
-  { accountName: 'Stash Brokerage', investmentId: 'INV-STASH-SYNTH-1' },
-  { asOf: '2026-08-31', reconciliation: { endingTotalValue: 7782.13 }, cashBalance: 67.86 }
+  { accountName: 'Stash Account', investmentId: 'INV-STASH-SYNTH-1' },
+  {
+    asOf: '2026-08-31',
+    reconciliation: { ok: true, endingTotalValue: 7782.13 },
+    cashBalance: 67.86
+  }
 );
-assert.equal(monthlySkip.action, 'SKIP');
-assert.equal(monthlySkip.reason, 'UNSUPPORTED_SOURCE');
-assert.equal(monthlySkip.willWrite, false);
+assert.equal(monthlyBlank.comparison, 'BLANK');
+assert.equal(monthlyBlank.decision, 'IGNORE');
+assert.equal(monthlyBlank.action, 'SKIP');
+assert.equal(monthlyBlank.proposedValue, 7782.13);
+assert.equal(monthlyBlank.willWrite, false);
+assert.match(monthlyBlank.message, /August 2026/);
+const monthlyAdd = context.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+  {
+    source: 'STASH_BROKERAGE_STATEMENT_PDF',
+    explicitAccountMatch: true,
+    accountName: 'Stash Account',
+    monthlyInvestmentValueDecision: 'ADD'
+  },
+  'SINGLE_ACCOUNT',
+  { accountName: 'Stash Account', investmentId: 'INV-STASH-SYNTH-1' },
+  { asOf: '2026-08-31', reconciliation: { ok: true, endingTotalValue: 7782.13 } }
+);
+assert.equal(monthlyAdd.action, 'ADD');
+assert.equal(monthlyAdd.willWrite, true);
+assert.match(monthlyAdd.message, /Add August 2026 value: \$7,782\.13/);
+const monthlyMissingTotal = context.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+  {
+    source: 'STASH_BROKERAGE_STATEMENT_PDF',
+    explicitAccountMatch: true,
+    accountName: 'Stash Account'
+  },
+  'SINGLE_ACCOUNT',
+  { accountName: 'Stash Account', investmentId: 'INV-STASH-SYNTH-1' },
+  { asOf: '2026-08-31', reconciliation: { ok: false, endingTotalValue: 9000 } }
+);
+assert.equal(monthlyMissingTotal.action, 'SKIP');
+assert.equal(monthlyMissingTotal.reason, 'MISSING_ENDING_TOTAL');
+assert.equal(monthlyMissingTotal.willWrite, false);
 
 const stashAccount = { accountName: 'Stash Brokerage', statementProvider: 'STASH' };
 assert.equal(context.boundedHoldingsPreviewInferIdentityProvider_('Stash Brokerage', null), 'STASH');

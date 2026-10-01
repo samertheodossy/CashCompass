@@ -732,7 +732,8 @@
         var source = String(currentPreviewSource_() || '').trim().toUpperCase();
         return source === 'SCHWAB_BROKERAGE_STATEMENT_PDF' ||
           source === 'M1_STATEMENT_PDF' ||
-          source === 'FIDELITY_401K_STATEMENT_PDF';
+          source === 'FIDELITY_401K_STATEMENT_PDF' ||
+          source === 'STASH_BROKERAGE_STATEMENT_PDF';
       }
 
       function renderMonthlyInvestmentValueHtml_(monthly) {

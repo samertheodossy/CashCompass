@@ -520,7 +520,8 @@ function boundedHoldingsPreviewApplyIsMonthlyValueSource_(source) {
     : String(source || '').trim().toUpperCase();
   return normalized === 'SCHWAB_BROKERAGE_STATEMENT_PDF' ||
     normalized === 'M1_STATEMENT_PDF' ||
-    normalized === 'FIDELITY_401K_STATEMENT_PDF';
+    normalized === 'FIDELITY_401K_STATEMENT_PDF' ||
+    normalized === 'STASH_BROKERAGE_STATEMENT_PDF';
 }
 
 function boundedHoldingsPreviewApplyParseStatementDate_(asOf) {
@@ -579,12 +580,18 @@ function boundedHoldingsPreviewApplyResolveProviderEndingTotal_(preview, source)
   preview = preview || {};
   var recon = preview.reconciliation || null;
   var reconEnding = boundedHoldingsPreviewApplyNullableNumber_(recon && recon.endingTotalValue);
-  if (reconEnding !== null) {
-    return { value: reconEnding, origin: 'RECONCILIATION' };
-  }
   var normalized = typeof investmentPortfolioNormalizeSource_ === 'function'
     ? investmentPortfolioNormalizeSource_(source || '')
     : String(source || '').trim().toUpperCase();
+  if (normalized === 'STASH_BROKERAGE_STATEMENT_PDF') {
+    if (!(recon && recon.ok === true) || reconEnding === null) {
+      return { value: null, origin: '' };
+    }
+    return { value: reconEnding, origin: 'RECONCILIATION' };
+  }
+  if (reconEnding !== null) {
+    return { value: reconEnding, origin: 'RECONCILIATION' };
+  }
   if (normalized === 'SCHWAB_BROKERAGE_STATEMENT_PDF') {
     // Schwab provider snapshot is reconciliation.endingTotalValue (or the
     // parser account snapshot that feeds it). Never use holdings-sum fallback.

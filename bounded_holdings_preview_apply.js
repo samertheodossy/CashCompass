@@ -2,7 +2,7 @@
  * bounded_holdings_preview_apply.js — Bounded unified holdings Apply workflow.
  *
  * Preview remains read-only until explicit Apply confirmation. Holdings write
- * SYS - Investment Holdings Unified. Trusted single-account Schwab/M1/Fidelity
+ * SYS - Investment Holdings Unified. Trusted single-account Schwab/M1/Stash/Fidelity
  * 401(k) Apply may also write the statement month through the canonical
  * investment value writer. Fidelity 401(k) is balance-only: it never proposes
  * unified holdings rows.

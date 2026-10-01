@@ -645,6 +645,8 @@ const boundedHtml = read('BoundedHoldingsPreviewUI.html');
 const boundedSource = read('bounded_holdings_preview.js');
 const etradeText = fixture('etrade', 'synthetic_etrade_positions_minimal.txt');
 const schwabText = fixture('schwab', 'synthetic_schwab_brokerage_statement_pdfjs_space_joined.txt');
+const stashText = fixture('stash', 'synthetic_stash_brokerage_statement_minimal.txt');
+const stashReconFailText = fixture('stash', 'synthetic_stash_brokerage_statement_reconciliation_fail.txt');
 
 assert.match(applySource, /boundedHoldingsPreviewApplyFromDashboard/);
 assert.match(applySource, /boundedHoldingsPreviewBuildApplyDiffFromDashboard/);
@@ -664,7 +666,8 @@ assert.doesNotMatch(
   extractFunction(applyDiffSource, 'boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_'),
   /action:\s*'UPDATE'|explicitMonthlyValueReplace|ALREADY_MATCHES/
 );
-assert.match(applyDiffSource, /boundedHoldingsPreviewApplyResolveMonthlyValueDecision_/);
+assert.match(extractFunction(applyDiffSource, 'boundedHoldingsPreviewApplyIsMonthlyValueSource_'),
+  /STASH_BROKERAGE_STATEMENT_PDF/);
 assert.match(extractFunction(applyDiffSource, 'boundedHoldingsPreviewApplyMonthlyDigestPart_'), /decision:/);
 assert.match(boundedHtml, /boundedHoldingsPreviewBuildGroupedApplyDiffFromDashboard/);
 assert.match(applySheetSource, /boundedHoldingsPreviewApplyFormatUnifiedSheet_/);
@@ -1778,7 +1781,7 @@ assert.equal(mismatchApply.ok, false);
 
 assert.equal(
   emptySchwabCtx.boundedHoldingsPreviewApplyIsMonthlyValueSource_('STASH_BROKERAGE_STATEMENT_PDF'),
-  false
+  true
 );
 assert.equal(
   emptySchwabCtx.boundedHoldingsPreviewApplyIsMonthlyValueSource_('SCHWAB_BROKERAGE_STATEMENT_PDF'),
@@ -1788,19 +1791,74 @@ assert.equal(
   emptySchwabCtx.boundedHoldingsPreviewApplyIsMonthlyValueSource_('FIDELITY_401K_STATEMENT_PDF'),
   true
 );
-const stashMonthlySkip = emptySchwabCtx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+const stashTrustedEnding = emptySchwabCtx.boundedHoldingsPreviewApplyResolveProviderEndingTotal_(
+  { reconciliation: { ok: true, endingTotalValue: 7782.13 } },
+  'STASH_BROKERAGE_STATEMENT_PDF'
+);
+assert.equal(stashTrustedEnding.value, 7782.13);
+assert.equal(stashTrustedEnding.origin, 'RECONCILIATION');
+assert.equal(
+  emptySchwabCtx.boundedHoldingsPreviewApplyResolveProviderEndingTotal_(
+    {
+      reconciliation: { ok: false, endingTotalValue: 9000 },
+      totalAccountValue: 9000,
+      holdingsRows: [{ marketValue: 4000 }, { marketValue: 5000 }]
+    },
+    'STASH_BROKERAGE_STATEMENT_PDF'
+  ).value,
+  null
+);
+const stashMissingReconProposal = emptySchwabCtx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
   {
     source: 'STASH_BROKERAGE_STATEMENT_PDF',
     explicitAccountMatch: true,
-    accountName: 'Stash Brokerage'
+    accountName: 'Stash Account'
   },
   'SINGLE_ACCOUNT',
-  { accountName: 'Stash Brokerage', investmentId: 'INV-STASH-1' },
-  { asOf: '2026-08-31', reconciliation: { endingTotalValue: 7782.13 } }
+  { accountName: 'Stash Account', investmentId: 'INV-STASH-1' },
+  { asOf: '2026-08-31', reconciliation: { ok: false, endingTotalValue: 9000 } }
 );
-assert.equal(stashMonthlySkip.action, 'SKIP');
-assert.equal(stashMonthlySkip.reason, 'UNSUPPORTED_SOURCE');
-assert.equal(stashMonthlySkip.willWrite, false);
+assert.equal(stashMissingReconProposal.action, 'SKIP');
+assert.equal(stashMissingReconProposal.reason, 'MISSING_ENDING_TOTAL');
+assert.equal(stashMissingReconProposal.willWrite, false);
+
+function makeStashWorkbook(options = {}) {
+  const augustValue = Object.prototype.hasOwnProperty.call(options, 'augustValue')
+    ? options.augustValue
+    : '';
+  const months = Array(12).fill('');
+  months[7] = augustValue;
+  return makeWorkbook({
+    assetsRows: [
+      ['Stash Account', 'Brokerage', '7000', 'Yes', 'INV-STASH-1', '']
+    ],
+    investmentsRows: buildInvestmentsYearBlockRows(2026, [{
+      name: 'Stash Account',
+      investmentId: 'INV-STASH-1',
+      months
+    }]),
+    monthlyRows: [monthlyHistoryHeaders],
+    registryRows: [
+      FINANCIAL_ACCOUNT_HEADERS,
+      registryRow({
+        stableAccountId: 'STABLE-STASH-1',
+        domain: 'INVESTMENT',
+        displayName: 'Stash Account',
+        institution: 'Stash',
+        accountType: 'Brokerage',
+        accountSubtype: '',
+        ownerId: 'OWNER-1',
+        registrationType: 'TAXABLE',
+        currency: 'USD',
+        last4: '',
+        active: 'Yes',
+        identityStatus: 'VERIFIED',
+        legacyDomain: 'SYS_ASSETS',
+        legacyKey: 'INV-STASH-1'
+      })
+    ]
+  });
+}
 
 function makeFidelity401kWorkbook(options = {}) {
   const septemberValue = Object.prototype.hasOwnProperty.call(options, 'septemberValue')
@@ -2076,5 +2134,273 @@ const mismatchFidelity = emptyFidelityCtx.boundedHoldingsPreviewApplyFromDashboa
   monthlyInvestmentValueDecision: 'ADD'
 });
 assert.equal(mismatchFidelity.ok, false);
+
+function augustValueFromStashSheet(ss) {
+  return ss.getSheetByName('INPUT - Investments').getRange(3, 10).getValue();
+}
+
+function otherMonthValuesFromStashSheet(ss) {
+  const sheet = ss.getSheetByName('INPUT - Investments');
+  return [3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14].map((col) => sheet.getRange(3, col).getValue());
+}
+
+const stashPayload = {
+  pickerValue: 'INV-STASH-1',
+  accountName: 'Stash Account',
+  sysAssetsRow: 2,
+  source: 'STASH_BROKERAGE_STATEMENT_PDF',
+  rawDocumentText: stashText,
+  registrationType: 'TAXABLE',
+  explicitAccountMatch: true,
+  statementProvider: 'STASH'
+};
+
+const emptyStash = makeStashWorkbook();
+const emptyStashBuilt = buildContext({ workbook: emptyStash });
+const emptyStashCtx = emptyStashBuilt.context;
+const emptyStashBook = emptyStashBuilt.workbook;
+const emptyStashInvestmentsBefore = cloneSheetRows(emptyStashBook.getSheetByName('INPUT - Investments'));
+const emptyStashPreview = emptyStashCtx.boundedHoldingsPreviewRunFromDashboard(stashPayload);
+assert.equal(emptyStashPreview.ok, true, emptyStashPreview.error || 'Stash preview failed');
+assert.match(String(emptyStashPreview.asOf || ''), /^2026-08-31/);
+assert.equal(emptyStashPreview.reconciliation.ok, true);
+assert.equal(emptyStashPreview.reconciliation.endingTotalValue, 7782.13);
+assert.equal(emptyStashPreview.holdingsRows.filter((row) => row.symbol !== 'Cash').length, 7);
+assert.equal(emptyStashPreview.holdingsRows.some((row) => row.symbol === 'ISPXZ'), false);
+assert.deepEqual(cloneSheetRows(emptyStashBook.getSheetByName('INPUT - Investments')),
+  emptyStashInvestmentsBefore, 'Stash preview must not write monthly investment values');
+
+const emptyStashDiff = emptyStashCtx.boundedHoldingsPreviewBuildApplyDiffFromDashboard(stashPayload);
+assert.equal(emptyStashDiff.ok, true);
+assert.equal(emptyStashDiff.diff.monthlyInvestmentValue.comparison, 'BLANK');
+assert.equal(emptyStashDiff.diff.monthlyInvestmentValue.decision, 'IGNORE');
+assert.equal(emptyStashDiff.diff.monthlyInvestmentValue.action, 'SKIP');
+assert.equal(emptyStashDiff.diff.monthlyInvestmentValue.proposedValue, 7782.13);
+assert.equal(emptyStashDiff.diff.monthlyInvestmentValue.willWrite, false);
+assert.equal(emptyStashDiff.diff.monthlyInvestmentValue.existingPresent, false);
+assert.match(emptyStashDiff.diff.monthlyInvestmentValue.message, /August 2026/);
+assert.equal(emptyStashDiff.diff.summary.createCount, 8);
+assert.deepEqual(cloneSheetRows(emptyStashBook.getSheetByName('INPUT - Investments')),
+  emptyStashInvestmentsBefore, 'Stash review must not write monthly investment values');
+
+const otherMonthsBeforeStashIgnore = otherMonthValuesFromStashSheet(emptyStashBook);
+const stashIgnoreApply = emptyStashCtx.boundedHoldingsPreviewApplyFromDashboard({
+  ...stashPayload,
+  diffDigest: emptyStashDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'IGNORE'
+});
+assert.equal(stashIgnoreApply.ok, true, stashIgnoreApply.error || 'Stash Ignore Apply failed');
+assert.notEqual(stashIgnoreApply.monthlyInvestmentValueWritten, true);
+assert.equal(augustValueFromStashSheet(emptyStashBook), '');
+assert.deepEqual(otherMonthValuesFromStashSheet(emptyStashBook), otherMonthsBeforeStashIgnore);
+const stashIgnoreUnified = emptyStashBook.getSheetByName(unifiedName);
+assert.ok(stashIgnoreUnified, 'Stash holdings Apply must create unified holdings');
+assert.equal(stashIgnoreUnified.rows.filter((row, index) => index > 0).length, 8);
+assert.equal(stashIgnoreUnified.rows.some((row) => /ISPXZ/i.test(String(row.join(' ')))), false);
+const stashIgnoreLog = lastStatementMonthlyActivity_(emptyStashCtx);
+assert.ok(stashIgnoreLog, 'Stash Ignore must write LOG - Activity');
+assert.equal(stashIgnoreLog.eventType, 'investment_statement_monthly_value');
+assert.equal(stashIgnoreLog.payee, 'Stash Account');
+assert.equal(stashIgnoreLog.accountSource, 'Stash');
+assert.equal(stashIgnoreLog.details.source, 'STASH_BROKERAGE_STATEMENT_PDF');
+assert.equal(stashIgnoreLog.details.decision, 'IGNORE');
+assert.equal(stashIgnoreLog.details.result, 'SKIPPED');
+assert.equal(stashIgnoreLog.details.oldValue, '');
+assert.equal(stashIgnoreLog.details.proposedValue, 7782.13);
+assert.equal(stashIgnoreLog.details.targetMonth, 'August 2026');
+assert.equal(stashIgnoreLog.details.statementAsOf, '2026-08-31');
+assert.match(String(stashIgnoreLog.details.documentFingerprint || stashIgnoreLog.details.diffDigest || ''), /./);
+assertNoSysInvestmentActivity_(emptyStashBook, 'Stash Ignore');
+
+const addStash = makeStashWorkbook();
+const addStashBuilt = buildContext({ workbook: addStash });
+const stashAddDiff = addStashBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+  ...stashPayload,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+assert.equal(stashAddDiff.diff.monthlyInvestmentValue.action, 'ADD');
+assert.equal(stashAddDiff.diff.monthlyInvestmentValue.willWrite, true);
+assert.equal(stashAddDiff.diff.monthlyInvestmentValue.decision, 'ADD');
+assert.match(stashAddDiff.diff.monthlyInvestmentValue.message, /Add August 2026 value: \$7,782\.13/);
+const stashMissingConfirm = addStashBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...stashPayload,
+  diffDigest: stashAddDiff.diffDigest,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+assert.equal(stashMissingConfirm.ok, false);
+assert.equal(statementMonthlyActivity_(addStashBuilt.context).length, 0);
+assert.equal(augustValueFromStashSheet(addStash), '');
+
+const otherMonthsBeforeStashAdd = otherMonthValuesFromStashSheet(addStash);
+const stashAddApply = addStashBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...stashPayload,
+  diffDigest: stashAddDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+assert.equal(stashAddApply.ok, true, stashAddApply.error || 'Stash Add Apply failed');
+assert.equal(stashAddApply.monthlyInvestmentValueWritten, true);
+assert.equal(augustValueFromStashSheet(addStash), 7782.13);
+assert.deepEqual(otherMonthValuesFromStashSheet(addStash), otherMonthsBeforeStashAdd);
+const stashAddUnified = addStash.getSheetByName(unifiedName);
+assert.equal(stashAddUnified.rows.filter((row, index) => index > 0).length, 8);
+assert.equal(stashAddUnified.rows.some((row) => /ISPXZ/i.test(String(row.join(' ')))), false);
+const stashAddLog = lastStatementMonthlyActivity_(addStashBuilt.context);
+assert.equal(stashAddLog.details.decision, 'ADD');
+assert.equal(stashAddLog.details.result, 'APPLIED');
+assert.equal(stashAddLog.details.oldValue, '');
+assert.equal(stashAddLog.details.proposedValue, 7782.13);
+assert.equal(stashAddLog.details.newValue, 7782.13);
+assert.equal(stashAddLog.payee, 'Stash Account');
+assert.equal(stashAddLog.accountSource, 'Stash');
+assert.equal(
+  (addStashBuilt.context.__activityLogEntries || []).filter((row) =>
+    row.eventType === 'investment_update').length,
+  0,
+  'Stash statement Apply must not add a duplicate investment_update event'
+);
+assertNoSysInvestmentActivity_(addStash, 'Stash Add');
+
+const stashMatchWorkbook = makeStashWorkbook({ augustValue: 7782.13 });
+const stashMatchBuilt = buildContext({ workbook: stashMatchWorkbook });
+const stashMatchDiff = stashMatchBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(stashPayload);
+assert.equal(stashMatchDiff.diff.monthlyInvestmentValue.comparison, 'MATCH');
+assert.equal(stashMatchDiff.diff.monthlyInvestmentValue.decision, 'KEEP');
+assert.equal(stashMatchDiff.diff.monthlyInvestmentValue.action, 'SKIP');
+assert.equal(stashMatchDiff.diff.monthlyInvestmentValue.willWrite, false);
+assert.match(stashMatchDiff.diff.monthlyInvestmentValue.message, /Already matches/);
+const stashMatchBefore = cloneSheetRows(stashMatchWorkbook.getSheetByName('INPUT - Investments'));
+const stashMatchApply = stashMatchBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...stashPayload,
+  diffDigest: stashMatchDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'KEEP'
+});
+assert.equal(stashMatchApply.ok, true);
+assert.notEqual(stashMatchApply.monthlyInvestmentValueWritten, true);
+assert.deepEqual(cloneSheetRows(stashMatchWorkbook.getSheetByName('INPUT - Investments')), stashMatchBefore);
+const stashMatchLog = lastStatementMonthlyActivity_(stashMatchBuilt.context);
+assert.equal(stashMatchLog.details.decision, 'KEEP_EXISTING');
+assert.equal(stashMatchLog.details.result, 'SKIPPED');
+assert.equal(stashMatchLog.details.oldValue, 7782.13);
+assertNoSysInvestmentActivity_(stashMatchWorkbook, 'Stash match');
+
+const stashZeroWorkbook = makeStashWorkbook({ augustValue: 0 });
+const stashZeroBuilt = buildContext({ workbook: stashZeroWorkbook });
+const stashZeroDiff = stashZeroBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(stashPayload);
+assert.equal(stashZeroDiff.diff.monthlyInvestmentValue.comparison, 'DIFFER');
+assert.equal(stashZeroDiff.diff.monthlyInvestmentValue.existingPresent, true);
+assert.equal(stashZeroDiff.diff.monthlyInvestmentValue.existingValue, 0);
+assert.equal(stashZeroDiff.diff.monthlyInvestmentValue.willWrite, false);
+const stashZeroBefore = cloneSheetRows(stashZeroWorkbook.getSheetByName('INPUT - Investments'));
+const stashZeroApply = stashZeroBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...stashPayload,
+  diffDigest: stashZeroDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'KEEP'
+});
+assert.equal(stashZeroApply.ok, true);
+assert.notEqual(stashZeroApply.monthlyInvestmentValueWritten, true);
+assert.equal(augustValueFromStashSheet(stashZeroWorkbook), 0);
+assert.deepEqual(cloneSheetRows(stashZeroWorkbook.getSheetByName('INPUT - Investments')), stashZeroBefore);
+const stashZeroLog = lastStatementMonthlyActivity_(stashZeroBuilt.context);
+assert.equal(stashZeroLog.details.decision, 'KEEP_EXISTING');
+assert.equal(stashZeroLog.details.result, 'SKIPPED');
+assert.equal(stashZeroLog.details.oldValue, 0);
+assertNoSysInvestmentActivity_(stashZeroWorkbook, 'Stash explicit $0');
+
+const stashOccupiedWorkbook = makeStashWorkbook({ augustValue: 50000 });
+const stashOccupiedBuilt = buildContext({ workbook: stashOccupiedWorkbook });
+const stashKeepDiff = stashOccupiedBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(stashPayload);
+assert.equal(stashKeepDiff.diff.monthlyInvestmentValue.comparison, 'DIFFER');
+assert.equal(stashKeepDiff.diff.monthlyInvestmentValue.decision, 'KEEP');
+assert.equal(stashKeepDiff.diff.monthlyInvestmentValue.willWrite, false);
+assert.equal(stashKeepDiff.diff.monthlyInvestmentValue.existingValue, 50000);
+assert.equal(stashKeepDiff.diff.monthlyInvestmentValue.proposedValue, 7782.13);
+const stashKeepApply = stashOccupiedBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...stashPayload,
+  diffDigest: stashKeepDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'KEEP'
+});
+assert.equal(stashKeepApply.ok, true);
+assert.notEqual(stashKeepApply.monthlyInvestmentValueWritten, true);
+assert.equal(augustValueFromStashSheet(stashOccupiedWorkbook), 50000);
+const stashKeepLog = lastStatementMonthlyActivity_(stashOccupiedBuilt.context);
+assert.equal(stashKeepLog.details.decision, 'KEEP_EXISTING');
+assert.equal(stashKeepLog.details.result, 'SKIPPED');
+assertNoSysInvestmentActivity_(stashOccupiedWorkbook, 'Stash Keep');
+
+const stashReplaceWorkbook = makeStashWorkbook({ augustValue: 50000 });
+const stashReplaceBuilt = buildContext({ workbook: stashReplaceWorkbook });
+const stashReplaceDiff = stashReplaceBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+  ...stashPayload,
+  monthlyInvestmentValueDecision: 'REPLACE'
+});
+assert.equal(stashReplaceDiff.diff.monthlyInvestmentValue.action, 'REPLACE');
+assert.equal(stashReplaceDiff.diff.monthlyInvestmentValue.willWrite, true);
+assert.match(String(stashReplaceDiff.diff.monthlyInvestmentValue.warning || ''),
+  /existing monthly value will be replaced/i);
+const stashReplaceApply = stashReplaceBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...stashPayload,
+  diffDigest: stashReplaceDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'REPLACE'
+});
+assert.equal(stashReplaceApply.ok, true, stashReplaceApply.error || 'Stash Replace Apply failed');
+assert.equal(stashReplaceApply.monthlyInvestmentValueWritten, true);
+assert.equal(augustValueFromStashSheet(stashReplaceWorkbook), 7782.13);
+const stashReplaceLog = lastStatementMonthlyActivity_(stashReplaceBuilt.context);
+assert.equal(stashReplaceLog.details.decision, 'REPLACE');
+assert.equal(stashReplaceLog.details.result, 'APPLIED');
+assert.equal(stashReplaceLog.details.oldValue, 50000);
+assert.equal(stashReplaceLog.details.newValue, 7782.13);
+assertNoSysInvestmentActivity_(stashReplaceWorkbook, 'Stash Replace');
+
+const stashStaleWorkbook = makeStashWorkbook();
+const stashStaleBuilt = buildContext({ workbook: stashStaleWorkbook });
+const stashStaleDiff = stashStaleBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+  ...stashPayload,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+assert.equal(stashStaleDiff.diff.monthlyInvestmentValue.action, 'ADD');
+assert.equal(stashStaleDiff.diff.monthlyInvestmentValue.existingPresent, false);
+stashStaleWorkbook.getSheetByName('INPUT - Investments').getRange(3, 10).setValue(1);
+const stashStaleApply = stashStaleBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...stashPayload,
+  diffDigest: stashStaleDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+assert.equal(stashStaleApply.ok, false);
+assert.equal(stashStaleApply.staleDiff, true);
+assert.equal(augustValueFromStashSheet(stashStaleWorkbook), 1);
+assert.equal(stashStaleWorkbook.getSheetByName(unifiedName), null,
+  'stale Stash monthly digest must fail closed before holdings write');
+const stashStaleLog = lastStatementMonthlyActivity_(stashStaleBuilt.context);
+assert.equal(stashStaleLog.details.result, 'STALE_REJECTED');
+assert.notEqual(stashStaleLog.details.result, 'APPLIED');
+assertNoSysInvestmentActivity_(stashStaleWorkbook, 'Stash stale');
+
+const stashReconFailWorkbook = makeStashWorkbook();
+const stashReconFailBuilt = buildContext({ workbook: stashReconFailWorkbook });
+const stashReconFailPreview = stashReconFailBuilt.context.boundedHoldingsPreviewRunFromDashboard({
+  ...stashPayload,
+  rawDocumentText: stashReconFailText
+});
+assert.equal(stashReconFailPreview.ok, true);
+assert.notEqual(stashReconFailPreview.reconciliation && stashReconFailPreview.reconciliation.ok, true);
+const stashReconFailDiff = stashReconFailBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+  ...stashPayload,
+  rawDocumentText: stashReconFailText
+});
+if (stashReconFailDiff.ok) {
+  assert.equal(stashReconFailDiff.diff.monthlyInvestmentValue.action, 'SKIP');
+  assert.equal(stashReconFailDiff.diff.monthlyInvestmentValue.reason, 'MISSING_ENDING_TOTAL');
+  assert.equal(stashReconFailDiff.diff.monthlyInvestmentValue.willWrite, false);
+} else {
+  assert.match(String(stashReconFailDiff.error || ''), /trusted|reconcil/i);
+}
 
 console.log('Bounded holdings preview Apply regressions passed.');
