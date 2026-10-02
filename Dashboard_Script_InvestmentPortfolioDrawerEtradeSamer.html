@@ -1,0 +1,535 @@
+/* Portfolio activity drawer — Samer Etrade Account E*TRADE client-statement PDF import (reuses bounded preview RPCs). */
+var __invDrawerEtradeSamerSetupAccounts = null;
+var __invDrawerEtradeSamerSetupPromise = null;
+var __invDrawerEtradeSamerState = {
+  selectedAccount: null,
+  fileName: '',
+  extractionStatus: '',
+  extractedTextLength: 0,
+  extractionError: '',
+  trustedDocumentText: '',
+  documentFingerprint: '',
+  registrationTouched: false,
+  lastSinglePreview: null,
+  lastPreviewDocumentText: '',
+  applyReviewed: false,
+  applyDiff: null,
+  applyDiffDigest: '',
+  applyStatusMessage: '',
+  monthlyInvestmentValueDecision: ''
+};
+
+function invDrawerEtradeSamerEscape_(value) {
+  return typeof escapeHtml === 'function' ? escapeHtml(value) : String(value || '');
+}
+
+function invDrawerEtradeSamerCurrentText_() {
+  var el = document.getElementById('inv_etrade_samer_document_text');
+  return String(__invDrawerEtradeSamerState.trustedDocumentText || (el && el.value) || '').trim();
+}
+
+function invDrawerEtradeSamerHasDocumentReady_() {
+  return !!invDrawerEtradeSamerCurrentText_();
+}
+
+function invDrawerEtradeSamerRestoreTrustedDocumentText_() {
+  var textEl = document.getElementById('inv_etrade_samer_document_text');
+  var trusted = String(__invDrawerEtradeSamerState.trustedDocumentText || '').trim();
+  if (textEl && trusted && !String(textEl.value || '').trim()) {
+    textEl.value = trusted;
+  }
+}
+
+function syncInvestmentPortfolioDrawerEtradeSamerReadyState_() {
+  invDrawerEtradeSamerRestoreTrustedDocumentText_();
+  updateInvestmentPortfolioDrawerEtradeSamerControls_();
+}
+
+function ensureInvDrawerEtradeSamerSetupAccounts_(onReady, onError) {
+  if (__invDrawerEtradeSamerSetupAccounts) {
+    onReady(__invDrawerEtradeSamerSetupAccounts);
+    return;
+  }
+  if (__invDrawerEtradeSamerSetupPromise) {
+    __invDrawerEtradeSamerSetupPromise.then(onReady).catch(onError);
+    return;
+  }
+  __invDrawerEtradeSamerSetupPromise = new Promise(function(resolve, reject) {
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (!res || !res.ok) {
+          reject(new Error(res && res.error ? res.error : 'Could not load E*TRADE import setup.'));
+          return;
+        }
+        __invDrawerEtradeSamerSetupAccounts = res.accounts || [];
+        resolve(__invDrawerEtradeSamerSetupAccounts);
+      })
+      .withFailureHandler(function(err) {
+        reject(new Error(err && err.message ? err.message : String(err)));
+      })
+      .getBoundedHoldingsPreviewSetupFromDashboard();
+  });
+  __invDrawerEtradeSamerSetupPromise.then(onReady).catch(onError);
+}
+
+function resetInvestmentPortfolioDrawerEtradeSamerImport_(keepAccount) {
+  __invDrawerEtradeSamerState.fileName = '';
+  __invDrawerEtradeSamerState.extractionStatus = '';
+  __invDrawerEtradeSamerState.extractedTextLength = 0;
+  __invDrawerEtradeSamerState.extractionError = '';
+  __invDrawerEtradeSamerState.trustedDocumentText = '';
+  __invDrawerEtradeSamerState.documentFingerprint = '';
+  __invDrawerEtradeSamerState.lastSinglePreview = null;
+  __invDrawerEtradeSamerState.lastPreviewDocumentText = '';
+  __invDrawerEtradeSamerState.applyReviewed = false;
+  __invDrawerEtradeSamerState.applyDiff = null;
+  __invDrawerEtradeSamerState.applyDiffDigest = '';
+  __invDrawerEtradeSamerState.applyStatusMessage = '';
+  __invDrawerEtradeSamerState.monthlyInvestmentValueDecision = '';
+  if (!keepAccount) {
+    __invDrawerEtradeSamerState.selectedAccount = null;
+    __invDrawerEtradeSamerState.registrationTouched = false;
+  }
+  var fileEl = document.getElementById('inv_etrade_samer_document_file');
+  if (fileEl) fileEl.value = '';
+  var textEl = document.getElementById('inv_etrade_samer_document_text');
+  if (textEl) textEl.value = '';
+  var metaEl = document.getElementById('inv_etrade_samer_file_meta');
+  if (metaEl) metaEl.textContent = 'No file selected.';
+  var regEl = document.getElementById('inv_etrade_samer_registration_type');
+  if (regEl && !keepAccount) regEl.value = '';
+  var matchEl = document.getElementById('inv_etrade_samer_explicit_match');
+  if (matchEl) matchEl.checked = false;
+  ['inv_etrade_samer_results', 'inv_etrade_samer_apply_area'].forEach(function(id) {
+    var node = document.getElementById(id);
+    if (node) node.innerHTML = '';
+  });
+  updateInvestmentPortfolioDrawerEtradeSamerControls_();
+}
+
+function initInvestmentPortfolioDrawerEtradeSamerImport_(pickerValue, portfolioData) {
+  pickerValue = String(pickerValue || '').trim();
+  portfolioData = portfolioData || {};
+  resetInvestmentPortfolioDrawerEtradeSamerImport_(false);
+  if (!pickerValue || !portfolioData.etradeSamerImportAvailable) return;
+  ensureInvDrawerEtradeSamerSetupAccounts_(function(accounts) {
+    var match = (accounts || []).filter(function(row) {
+      return String(row.pickerValue || row.investmentId || '') === pickerValue;
+    })[0];
+    if (!match) {
+      setStatus('inv_etrade_samer_status', 'E*TRADE import setup could not resolve this account.', true);
+      return;
+    }
+    __invDrawerEtradeSamerState.selectedAccount = match;
+    var hintEl = document.getElementById('inv_etrade_samer_account_hint');
+    if (hintEl) {
+      hintEl.textContent = match.identityMessage ||
+        ('Import one E*TRADE client statement PDF for ' + match.accountName + '.');
+    }
+    var matchText = document.getElementById('inv_etrade_samer_explicit_match_text');
+    if (matchText) {
+      matchText.textContent = 'I confirm this document belongs to ' +
+        (match.accountName || 'the selected account') + '.';
+    }
+    if (match.suggestedRegistrationType && !__invDrawerEtradeSamerState.registrationTouched) {
+      var regEl = document.getElementById('inv_etrade_samer_registration_type');
+      if (regEl) regEl.value = match.suggestedRegistrationType;
+    }
+    updateInvestmentPortfolioDrawerEtradeSamerControls_();
+  }, function(err) {
+    setStatus('inv_etrade_samer_status', err.message || String(err), true);
+  });
+}
+
+function updateInvestmentPortfolioDrawerEtradeSamerControls_() {
+  var previewBtn = document.getElementById('inv_etrade_samer_preview_btn');
+  var hasText = invDrawerEtradeSamerHasDocumentReady_();
+  var reg = String(document.getElementById('inv_etrade_samer_registration_type') &&
+    document.getElementById('inv_etrade_samer_registration_type').value || '').trim();
+  var confirmed = !!(document.getElementById('inv_etrade_samer_explicit_match') &&
+    document.getElementById('inv_etrade_samer_explicit_match').checked);
+  var ready = !!__invDrawerEtradeSamerState.selectedAccount && hasText && !!reg && confirmed;
+  if (previewBtn) previewBtn.disabled = !ready;
+}
+
+function onInvestmentPortfolioDrawerEtradeSamerRegistrationChanged_() {
+  __invDrawerEtradeSamerState.registrationTouched = true;
+  if (__invDrawerEtradeSamerState.lastSinglePreview ||
+      __invDrawerEtradeSamerState.applyDiff ||
+      __invDrawerEtradeSamerState.applyReviewed ||
+      __invDrawerEtradeSamerState.applyDiffDigest) {
+    var results = document.getElementById('inv_etrade_samer_results');
+    if (results) results.innerHTML = '';
+    clearInvestmentPortfolioDrawerEtradeSamerApply_(false);
+  }
+  syncInvestmentPortfolioDrawerEtradeSamerReadyState_();
+}
+
+function onInvestmentPortfolioDrawerEtradeSamerFileChanged_() {
+  var fileEl = document.getElementById('inv_etrade_samer_document_file');
+  var file = fileEl && fileEl.files && fileEl.files[0];
+  var metaEl = document.getElementById('inv_etrade_samer_file_meta');
+  var textEl = document.getElementById('inv_etrade_samer_document_text');
+  __invDrawerEtradeSamerState.extractionError = '';
+  if (!file) {
+    if (metaEl) metaEl.textContent = 'No file selected.';
+    if (textEl) textEl.value = '';
+    updateInvestmentPortfolioDrawerEtradeSamerControls_();
+    return;
+  }
+  if (metaEl) metaEl.textContent = 'Reading ' + file.name + '…';
+  ensureInvDrawerPdfClientReady_(function() {
+    boundedHoldingsPreviewLoadDocumentTextFromFile_(file, pdfjsLib, {
+      source: 'ETRADE_CLIENT_STATEMENT_PDF',
+      groupedMode: false,
+      accountProvider: 'ETRADE'
+    }).then(function(result) {
+      result = result || {};
+      __invDrawerEtradeSamerState.fileName = file.name;
+      __invDrawerEtradeSamerState.extractionStatus = result.extractionStatus || '';
+      __invDrawerEtradeSamerState.extractedTextLength = Number(result.extractedTextLength || 0);
+      __invDrawerEtradeSamerState.trustedDocumentText = String(result.text || '');
+      __invDrawerEtradeSamerState.documentFingerprint = String(result.documentFingerprint || '');
+      if (textEl) textEl.value = result.displayTextInEditor === false ? '' : String(result.text || '');
+      if (metaEl) {
+        metaEl.textContent = file.name + ' · ' +
+          (__invDrawerEtradeSamerState.extractedTextLength || invDrawerEtradeSamerCurrentText_().length) + ' chars';
+      }
+      clearInvestmentPortfolioDrawerEtradeSamerApply_(true);
+      syncInvestmentPortfolioDrawerEtradeSamerReadyState_();
+    }).catch(function(err) {
+      __invDrawerEtradeSamerState.extractionError = err && err.message ? err.message : String(err);
+      if (metaEl) metaEl.textContent = __invDrawerEtradeSamerState.extractionError;
+      if (textEl) textEl.value = '';
+      updateInvestmentPortfolioDrawerEtradeSamerControls_();
+    });
+  }, function(err) {
+    if (metaEl) metaEl.textContent = err.message || String(err);
+  });
+}
+
+function buildInvDrawerEtradeSamerPayload_(extra) {
+  var account = __invDrawerEtradeSamerState.selectedAccount || {};
+  var payload = {
+    pickerValue: String(account.pickerValue || __investmentPortfolioSelectedId || '').trim(),
+    sysAssetsRow: account.sysAssetsRow,
+    accountName: account.accountName || '',
+    source: 'ETRADE_CLIENT_STATEMENT_PDF',
+    rawDocumentText: invDrawerEtradeSamerCurrentText_(),
+    extractionMeta: null,
+    documentFingerprint: String(__invDrawerEtradeSamerState.documentFingerprint || '').trim(),
+    registrationType: document.getElementById('inv_etrade_samer_registration_type').value,
+    explicitAccountMatch: document.getElementById('inv_etrade_samer_explicit_match').checked,
+    statementProvider: 'ETRADE',
+    previewMode: account.previewMode || 'SINGLE_ACCOUNT'
+  };
+  if (extra) Object.keys(extra).forEach(function(key) { payload[key] = extra[key]; });
+  return payload;
+}
+
+function clearInvestmentPortfolioDrawerEtradeSamerApply_(keepPreview) {
+  __invDrawerEtradeSamerState.applyReviewed = false;
+  __invDrawerEtradeSamerState.applyDiff = null;
+  __invDrawerEtradeSamerState.applyDiffDigest = '';
+  __invDrawerEtradeSamerState.applyStatusMessage = '';
+  __invDrawerEtradeSamerState.monthlyInvestmentValueDecision = '';
+  if (!keepPreview) {
+    __invDrawerEtradeSamerState.lastSinglePreview = null;
+    __invDrawerEtradeSamerState.lastPreviewDocumentText = '';
+  }
+  var applyArea = document.getElementById('inv_etrade_samer_apply_area');
+  if (applyArea) applyArea.innerHTML = '';
+}
+
+function invDrawerEtradeSamerFormatMoney_(value) {
+  if (value === null || typeof value === 'undefined' || value === '') return '—';
+  var n = Number(value);
+  if (!isFinite(n)) return '—';
+  return (n < 0 ? '-$' : '$') + Math.abs(n).toFixed(2);
+}
+
+function invDrawerEtradeSamerFormatMonthlyMoney_(value) {
+  return invDrawerEtradeSamerFormatMoney_(value);
+}
+
+function invDrawerEtradeSamerRenderMonthlyInvestmentValueHtml_(monthly) {
+  monthly = monthly || {};
+  var comparison = String(monthly.comparison || '');
+  var selected = String(monthly.decision || monthly.defaultDecision || '').trim().toUpperCase();
+  var html = '<div class="card" id="inv_etrade_samer_monthly_value_card">' +
+    '<h4>Monthly investment value</h4>';
+  html += '<p>Target month: <strong>' +
+    invDrawerEtradeSamerEscape_(monthly.monthLabel || 'this month') + '</strong></p>';
+  html += '<p>Statement value: <strong>' +
+    invDrawerEtradeSamerEscape_(invDrawerEtradeSamerFormatMonthlyMoney_(monthly.proposedValue)) + '</strong></p>';
+  if (comparison === 'BLANK') {
+    html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+      '<input type="radio" name="inv_etrade_samer_monthly_decision" value="ADD"' +
+      (selected === 'ADD' ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
+      '<span>Add value</span></label>';
+    html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+      '<input type="radio" name="inv_etrade_samer_monthly_decision" value="IGNORE"' +
+      (selected === 'IGNORE' || !selected ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
+      '<span>Ignore monthly value</span></label>';
+  } else if (comparison === 'MATCH') {
+    html += '<p>Existing value: <strong>' +
+      invDrawerEtradeSamerEscape_(invDrawerEtradeSamerFormatMonthlyMoney_(monthly.existingValue)) + '</strong></p>';
+    html += '<p><strong>Already matches. Existing value will be kept.</strong></p>';
+  } else if (comparison === 'DIFFER') {
+    html += '<p>Existing value: <strong>' +
+      invDrawerEtradeSamerEscape_(invDrawerEtradeSamerFormatMonthlyMoney_(monthly.existingValue)) + '</strong></p>';
+    html += '<p>They differ by ' +
+      invDrawerEtradeSamerEscape_(invDrawerEtradeSamerFormatMonthlyMoney_(monthly.difference)) + '.</p>';
+    html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+      '<input type="radio" name="inv_etrade_samer_monthly_decision" value="KEEP"' +
+      (selected !== 'REPLACE' ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
+      '<span>Keep existing</span></label>';
+    html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
+      '<input type="radio" name="inv_etrade_samer_monthly_decision" value="REPLACE"' +
+      (selected === 'REPLACE' ? ' checked' : '') + ' style="width:auto;margin-top:3px;">' +
+      '<span>Replace with statement value</span></label>';
+    if (selected === 'REPLACE') {
+      html += '<p><strong>Warning: the existing monthly value will be replaced.</strong></p>';
+    } else {
+      html += '<p>Existing value will remain unchanged unless Replace is selected.</p>';
+    }
+  } else {
+    html += '<p><strong>Skip</strong> — ' +
+      invDrawerEtradeSamerEscape_(monthly.message || 'Monthly investment value will not be written.') +
+      '</p>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function invDrawerEtradeSamerBindMonthlyInvestmentValueControls_() {
+  var radios = document.querySelectorAll('input[name="inv_etrade_samer_monthly_decision"]');
+  var onChange = function() {
+    var selected = document.querySelector('input[name="inv_etrade_samer_monthly_decision"]:checked');
+    var next = selected ? String(selected.value || '').trim().toUpperCase() : '';
+    if (next === String(__invDrawerEtradeSamerState.monthlyInvestmentValueDecision || '').trim().toUpperCase()) {
+      return;
+    }
+    __invDrawerEtradeSamerState.monthlyInvestmentValueDecision = next;
+    reviewInvestmentPortfolioDrawerEtradeSamerApplyDiff_();
+  };
+  for (var i = 0; i < radios.length; i++) radios[i].onchange = onChange;
+}
+
+function invDrawerEtradeSamerFormatAsOf_(value) {
+  var text = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+  return text;
+}
+
+function invDrawerEtradeSamerEndingValue_(preview) {
+  preview = preview || {};
+  if (preview.reconciliation && preview.reconciliation.endingTotalValue != null &&
+      preview.reconciliation.endingTotalValue !== '') {
+    return preview.reconciliation.endingTotalValue;
+  }
+  return preview.totalAccountValue;
+}
+
+function renderInvDrawerEtradeSamerSingleResults_(res) {
+  var host = document.getElementById('inv_etrade_samer_results');
+  if (!host) return;
+  if (!res || !res.ok) {
+    host.innerHTML = '<div class="error-box">' +
+      invDrawerEtradeSamerEscape_(res && res.error ? res.error : 'Preview failed.') + '</div>';
+    return;
+  }
+  var preview = res;
+  __invDrawerEtradeSamerState.lastSinglePreview = res;
+  __invDrawerEtradeSamerState.lastPreviewDocumentText = invDrawerEtradeSamerCurrentText_();
+  clearInvestmentPortfolioDrawerEtradeSamerApply_(true);
+  var trusted = !!(preview.readiness && preview.readiness.trustedForHoldingsVisibility);
+  var asOf = invDrawerEtradeSamerFormatAsOf_(preview.asOf);
+  var endingValue = invDrawerEtradeSamerEndingValue_(preview);
+  var html = '<div class="card"><div class="pill ' + (trusted ? 'pill-ok' : 'pill-warn') + '">' +
+    (trusted ? 'E*TRADE preview ready' : 'E*TRADE preview needs review') + '</div> ' +
+    invDrawerEtradeSamerEscape_(asOf ? ('As-of ' + asOf) : '') +
+    (endingValue != null && endingValue !== ''
+      ? invDrawerEtradeSamerEscape_(' · Ending ' + invDrawerEtradeSamerFormatMoney_(endingValue))
+      : '') +
+    '</div>';
+  if (preview.cashBalance != null && preview.cashBalance !== '') {
+    html += '<div class="card muted">Cash / Bank Deposit Program: ' +
+      invDrawerEtradeSamerEscape_(invDrawerEtradeSamerFormatMoney_(preview.cashBalance)) + '</div>';
+  }
+  var holdings = preview.holdingsRows || [];
+  if (holdings.length) {
+    html += '<div class="card"><div class="card-title">Priced holdings</div><ul>';
+    holdings.forEach(function(row) {
+      html += '<li>' + invDrawerEtradeSamerEscape_(row.symbol || '') + ' · ' +
+        invDrawerEtradeSamerEscape_(row.description || '') + ' · ' +
+        invDrawerEtradeSamerEscape_(String(row.quantity != null ? row.quantity : '—')) +
+        ' @ ' + invDrawerEtradeSamerEscape_(invDrawerEtradeSamerFormatMoney_(row.price)) +
+        ' = ' + invDrawerEtradeSamerEscape_(invDrawerEtradeSamerFormatMoney_(row.marketValue)) + '</li>';
+    });
+    html += '</ul></div>';
+  }
+  var unsupported = (preview.unsupportedRows || []).filter(function(row) {
+    var reason = String(row && row.reason || '').trim();
+    return reason !== 'PURCHASES_OR_REINVESTMENT_ROW' && reason !== 'SUMMARY_TOTAL_ROW';
+  });
+  if (unsupported.length) {
+    html += '<div class="card"><div class="card-title">Unsupported rows</div><ul>';
+    unsupported.forEach(function(row) {
+      html += '<li>' + invDrawerEtradeSamerEscape_(row.symbol || row.ticker || 'Row') +
+        (row.description ? (' · ' + invDrawerEtradeSamerEscape_(row.description)) : '') +
+        ' · ' + invDrawerEtradeSamerEscape_(row.reason || 'UNSUPPORTED') + '</li>';
+    });
+    html += '</ul></div>';
+  }
+  (preview.warnings || []).forEach(function(warning) {
+    html += '<div class="card muted">' + invDrawerEtradeSamerEscape_(warning) + '</div>';
+  });
+  if (!trusted) {
+    html += '<div class="error-box">Holdings preview is not trusted for Apply.</div>';
+  }
+  host.innerHTML = html;
+  renderInvestmentPortfolioDrawerEtradeSamerApplySection_();
+}
+
+function previewInvestmentPortfolioDrawerEtradeSamer_() {
+  var btn = document.getElementById('inv_etrade_samer_preview_btn');
+  if (btn) btn.disabled = true;
+  setStatusLoading('inv_etrade_samer_status', 'Parsing E*TRADE statement in memory…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (btn) btn.disabled = false;
+      setStatus('inv_etrade_samer_status', '', false);
+      renderInvDrawerEtradeSamerSingleResults_(res);
+      updateInvestmentPortfolioDrawerEtradeSamerControls_();
+    })
+    .withFailureHandler(function(err) {
+      if (btn) btn.disabled = false;
+      setStatus('inv_etrade_samer_status', err.message || String(err), true);
+    })
+    .boundedHoldingsPreviewRunFromDashboard(buildInvDrawerEtradeSamerPayload_());
+}
+
+function renderInvestmentPortfolioDrawerEtradeSamerApplySection_() {
+  var applyArea = document.getElementById('inv_etrade_samer_apply_area');
+  if (!applyArea) return;
+  var preview = __invDrawerEtradeSamerState.lastSinglePreview;
+  if (!preview) {
+    applyArea.innerHTML = '';
+    return;
+  }
+  var trusted = !!(preview.readiness && preview.readiness.trustedForHoldingsVisibility);
+  applyArea.innerHTML = '<div class="card"><h3>Apply approved holdings</h3>' +
+    '<p class="muted">Review the diff, then apply holdings to SYS - Investment Holdings Unified. ' +
+    'Review also shows the statement month value for the selected account. ' +
+    'Cash and Bank Deposit Program balances are saved as cash. Statement activity, dividends, and tax lots are not imported.</p>' +
+    '<div class="investment-import-actions">' +
+    '<button type="button" class="small-btn" id="inv_etrade_samer_review_apply_btn">Review holdings changes</button>' +
+    '<button type="button" class="small-btn primary" id="inv_etrade_samer_confirm_apply_btn" disabled>Apply approved holdings</button>' +
+    '</div><div id="inv_etrade_samer_apply_message" class="muted">' +
+    (trusted ? '' : 'Apply is blocked until the statement reconciles.') +
+    '</div><div id="inv_etrade_samer_monthly_area"></div></div>';
+  var reviewBtn = document.getElementById('inv_etrade_samer_review_apply_btn');
+  var confirmBtn = document.getElementById('inv_etrade_samer_confirm_apply_btn');
+  if (reviewBtn) {
+    reviewBtn.disabled = !trusted;
+    reviewBtn.onclick = reviewInvestmentPortfolioDrawerEtradeSamerApplyDiff_;
+  }
+  if (confirmBtn) {
+    confirmBtn.disabled = true;
+    confirmBtn.onclick = confirmInvestmentPortfolioDrawerEtradeSamerApply_;
+  }
+}
+
+function invDrawerEtradeSamerResolveApplyDiffBundle_(bundle) {
+  if (!bundle || bundle.ok === false) {
+    return {
+      ok: false,
+      error: String((bundle && bundle.error) || '').trim() || 'Could not build diff.',
+      applyDiff: null,
+      applyDiffDigest: '',
+      applyReviewed: false,
+      message: String((bundle && bundle.error) || '').trim() || 'Could not build diff.'
+    };
+  }
+  if (!bundle.diff) {
+    return {
+      ok: false,
+      error: 'Could not build diff.',
+      applyDiff: null,
+      applyDiffDigest: '',
+      applyReviewed: false,
+      message: 'Could not build diff.'
+    };
+  }
+  var digest = String(bundle.diffDigest || '').trim();
+  var diff = bundle.diff;
+  var message = 'Creates: ' + String((diff.summary && diff.summary.createCount) || 0) +
+    ' · Updates: ' + String((diff.summary && diff.summary.updateCount) || 0) +
+    (diff.blocked ? (' · Blocked: ' + (diff.blockReason || 'review required')) : '');
+  return {
+    ok: true,
+    error: '',
+    applyDiff: diff,
+    applyDiffDigest: digest,
+    applyReviewed: !!digest,
+    message: message
+  };
+}
+
+function reviewInvestmentPortfolioDrawerEtradeSamerApplyDiff_() {
+  setStatusLoading('inv_etrade_samer_status', 'Building holdings diff…');
+  google.script.run
+    .withSuccessHandler(function(bundle) {
+      setStatus('inv_etrade_samer_status', '', false);
+      var resolved = invDrawerEtradeSamerResolveApplyDiffBundle_(bundle);
+      __invDrawerEtradeSamerState.applyDiff = resolved.applyDiff;
+      __invDrawerEtradeSamerState.applyDiffDigest = resolved.applyDiffDigest;
+      __invDrawerEtradeSamerState.applyReviewed = resolved.applyReviewed;
+      var monthly = resolved.applyDiff && resolved.applyDiff.monthlyInvestmentValue || {};
+      __invDrawerEtradeSamerState.monthlyInvestmentValueDecision = String(
+        monthly.decision || __invDrawerEtradeSamerState.monthlyInvestmentValueDecision || '').trim().toUpperCase();
+      var msgEl = document.getElementById('inv_etrade_samer_apply_message');
+      var confirmBtn = document.getElementById('inv_etrade_samer_confirm_apply_btn');
+      if (msgEl) msgEl.textContent = resolved.message;
+      var monthlyEl = document.getElementById('inv_etrade_samer_monthly_area');
+      if (monthlyEl) {
+        monthlyEl.innerHTML = resolved.applyDiff
+          ? invDrawerEtradeSamerRenderMonthlyInvestmentValueHtml_(
+            resolved.applyDiff.monthlyInvestmentValue)
+          : '';
+        invDrawerEtradeSamerBindMonthlyInvestmentValueControls_();
+      }
+      if (confirmBtn) {
+        confirmBtn.disabled = !(resolved.applyReviewed && resolved.applyDiff &&
+          !resolved.applyDiff.blocked && !resolved.applyDiff.duplicateNoop);
+      }
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_etrade_samer_status', err.message || String(err), true);
+    })
+    .boundedHoldingsPreviewBuildApplyDiffFromDashboard(buildInvDrawerEtradeSamerPayload_({
+      monthlyInvestmentValueDecision: __invDrawerEtradeSamerState.monthlyInvestmentValueDecision
+    }));
+}
+
+function confirmInvestmentPortfolioDrawerEtradeSamerApply_() {
+  if (!__invDrawerEtradeSamerState.applyReviewed || !__invDrawerEtradeSamerState.applyDiffDigest) return;
+  setStatusLoading('inv_etrade_samer_status', 'Applying approved holdings…');
+  var payload = buildInvDrawerEtradeSamerPayload_();
+  payload.diffDigest = __invDrawerEtradeSamerState.applyDiffDigest;
+  payload.explicitApplyConfirm = true;
+  payload.monthlyInvestmentValueDecision = __invDrawerEtradeSamerState.monthlyInvestmentValueDecision;
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('inv_etrade_samer_status', res && res.message ? res.message : 'Apply completed.', false);
+      clearInvestmentPortfolioDrawerEtradeSamerApply_(true);
+      var picker = __investmentPortfolioSelectedId;
+      if (picker) applyInvestmentPortfolioAccountChange_(
+        document.getElementById('inv_activity_account'), picker);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_etrade_samer_status', err.message || String(err), true);
+    })
+    .boundedHoldingsPreviewApplyFromDashboard(payload);
+}

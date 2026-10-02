@@ -532,9 +532,15 @@ function boundedHoldingsPreviewApplyIsMonthlyValueSource_(source, accountName) {
       normalized === 'STASH_BROKERAGE_STATEMENT_PDF') {
     return true;
   }
-  if (normalized === 'ETRADE_CLIENT_STATEMENT_PDF' &&
-      typeof investmentEtradeMatchesPotentialUnvestedStockPlanMapping_ === 'function') {
-    return investmentEtradeMatchesPotentialUnvestedStockPlanMapping_(accountName, normalized);
+  if (normalized === 'ETRADE_CLIENT_STATEMENT_PDF') {
+    if (typeof investmentEtradeMatchesSamerBrokerageAccountValueMapping_ === 'function' &&
+        investmentEtradeMatchesSamerBrokerageAccountValueMapping_(accountName, normalized)) {
+      return true;
+    }
+    if (typeof investmentEtradeMatchesPotentialUnvestedStockPlanMapping_ === 'function') {
+      return investmentEtradeMatchesPotentialUnvestedStockPlanMapping_(accountName, normalized);
+    }
+    return false;
   }
   return false;
 }
@@ -599,6 +605,21 @@ function boundedHoldingsPreviewApplyResolveProviderEndingTotal_(preview, source)
     ? investmentPortfolioNormalizeSource_(source || '')
     : String(source || '').trim().toUpperCase();
   if (normalized === 'ETRADE_CLIENT_STATEMENT_PDF') {
+    var accountName = String((preview && preview.accountName) || '').trim();
+    var valueCategory = String((preview && preview.valueCategory) || '').trim();
+    var isSamerBrokerage =
+      valueCategory === 'BROKERAGE_ACCOUNT_VALUE' ||
+      (typeof investmentEtradeMatchesSamerBrokerageAccountValueMapping_ === 'function' &&
+        investmentEtradeMatchesSamerBrokerageAccountValueMapping_(accountName, normalized));
+    if (isSamerBrokerage) {
+      if (!(recon && recon.ok === true) || reconEnding === null) {
+        var samerEnding = boundedHoldingsPreviewApplyNullableNumber_(
+          preview.endingTotalValue);
+        if (samerEnding === null) return { value: null, origin: '' };
+        return { value: samerEnding, origin: 'ENDING_TOTAL_VALUE' };
+      }
+      return { value: reconEnding, origin: 'ENDING_TOTAL_VALUE' };
+    }
     var potential = boundedHoldingsPreviewApplyNullableNumber_(
       preview.potentialUnvestedStockPlanValue);
     if (potential === null) return { value: null, origin: '' };
@@ -995,7 +1016,9 @@ function boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(payload
       });
   }
 
-  var ending = boundedHoldingsPreviewApplyResolveProviderEndingTotal_(preview, source);
+  var ending = boundedHoldingsPreviewApplyResolveProviderEndingTotal_(
+    Object.assign({}, preview, { accountName: preview.accountName || accountName }),
+    source);
   if (ending.value === null) {
     return boundedHoldingsPreviewApplyBuildMonthlySkip_('MISSING_ENDING_TOTAL',
       'Statement ending account value is missing, so the monthly investment value was skipped.',
@@ -1025,6 +1048,11 @@ function boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(payload
     : null;
   var isPotentialUnvested = source === 'ETRADE_CLIENT_STATEMENT_PDF' &&
     mapping && accountName === mapping.accountName;
+  var samerMapping = typeof investmentEtradeSamerBrokerageAccountValueMapping_ === 'function'
+    ? investmentEtradeSamerBrokerageAccountValueMapping_()
+    : null;
+  var isSamerBrokerage = source === 'ETRADE_CLIENT_STATEMENT_PDF' &&
+    samerMapping && accountName === samerMapping.accountName;
   return boundedHoldingsPreviewApplyBuildTrustedMonthlyValueProposal_({
     source: source,
     monthlyInvestmentValueDecision: payload.monthlyInvestmentValueDecision,
@@ -1035,8 +1063,10 @@ function boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(payload
     existingPresent: !!existing.present,
     existingValue: existing.present ? existing.value : null,
     proposedValue: ending.value,
-    valueCategory: isPotentialUnvested ? mapping.valueCategory : '',
-    valueLabel: isPotentialUnvested ? mapping.valueLabel : '',
+    valueCategory: isPotentialUnvested ? mapping.valueCategory
+      : (isSamerBrokerage ? samerMapping.valueCategory : ''),
+    valueLabel: isPotentialUnvested ? mapping.valueLabel
+      : (isSamerBrokerage ? samerMapping.valueLabel : ''),
     warning: isPotentialUnvested ? mapping.warning : ''
   });
 }

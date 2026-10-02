@@ -14,6 +14,16 @@ var ETRADE_CLIENT_STATEMENT_HOLDINGS_COLUMNS_ = [
   'securityDescription', 'quantity', 'sharePrice', 'totalCost', 'marketValue', 'unrealizedGain'
 ];
 
+var ETRADE_CLIENT_STATEMENT_BOILERPLATE_SYMBOLS_ = {
+  SIPA: true,
+  SIPC: true,
+  FX: true,
+  LOSS: true,
+  MMF: true,
+  DEBITS: true,
+  CONTINUED: true
+};
+
 var ETRADE_CLIENT_STATEMENT_SECTION_STOP_PATTERNS_ = [
   /^Potential\s+Restricted\s+Stock/i,
   /^Restricted\s+Stock/i,
@@ -24,7 +34,10 @@ var ETRADE_CLIENT_STATEMENT_SECTION_STOP_PATTERNS_ = [
   /^Activity\s+Summary/i,
   /^Activity\s+Detail/i,
   /^Total\s+Cash,\s*Bank\s+Deposit/i,
+  /^CASH,?\s+BANK\s+DEPOSIT\s+PROGRAM/i,
   /^Ending\s+Total\s+Value/i,
+  /^MONEY\s+MARKET\s+FUND\b/i,
+  /^NET\s+CREDITS/i,
   /^Terms\s+and\s+Conditions/i,
   /^Page\s+\d+\s+of\s+\d+/i,
   /^--\s*\d+\s+of\s+\d+\s*--/i
@@ -68,6 +81,31 @@ function investmentEtradeCiscoBrokerageAccountValueMapping_() {
     valueLabel: 'Brokerage account value',
     providerLabel: 'E*TRADE'
   };
+}
+
+/**
+ * Explicit mapping for the Samer E*TRADE self-directed brokerage import.
+ * Exact account name only — never infer from display-name text such as "Samer"
+ * or statement account numbers. Monthly INPUT value plus Unified holdings.
+ */
+function investmentEtradeSamerBrokerageAccountValueMapping_() {
+  return {
+    accountName: 'Samer Etrade Account',
+    source: 'ETRADE_CLIENT_STATEMENT_PDF',
+    valueCategory: 'BROKERAGE_ACCOUNT_VALUE',
+    valueLabel: 'Brokerage account value',
+    providerLabel: 'E*TRADE'
+  };
+}
+
+function investmentEtradeMatchesSamerBrokerageAccountValueMapping_(accountName, source) {
+  var mapping = investmentEtradeSamerBrokerageAccountValueMapping_();
+  if (String(accountName || '').trim() !== mapping.accountName) return false;
+  if (source == null || String(source).trim() === '') return true;
+  var normalized = typeof investmentPortfolioNormalizeSource_ === 'function'
+    ? investmentPortfolioNormalizeSource_(source)
+    : String(source || '').trim().toUpperCase();
+  return normalized === mapping.source;
 }
 
 /**
@@ -316,6 +354,8 @@ function investmentEtradeClientStatementReflowSections_(text) {
     'Security Description Quantity Share Price Total Cost Market Value Unrealized Gain/Loss',
     'Security Description Quantity Share Price',
     'Total Cash, Bank Deposit Program, and Money Market Funds',
+    'CASH, BANK DEPOSIT PROGRAM AND MONEY MARKET FUNDS',
+    'For the Period',
     'Ending Total Value (as of',
     'Potential Restricted Stock',
     'Exercisable Value',
@@ -377,7 +417,46 @@ function investmentEtradeClientStatementPrepareTextForParsing_(rawText) {
     return true;
   });
   lines = investmentEtradeClientStatementMergeWrappedHeaderLines_(lines);
-  return lines.join('\n');
+  var expanded = [];
+  lines.forEach(function(line) {
+    String(investmentEtradeClientStatementExpandGluedHoldingsLine_(line) || '').split('\n')
+      .forEach(function(part) {
+        part = String(part || '').trim();
+        if (part) expanded.push(part);
+      });
+  });
+  return expanded.join('\n');
+}
+
+function investmentEtradeClientStatementInsertHoldingsRowBreaks_(text) {
+  var out = String(text || '');
+  if (!out) return out;
+  out = out.replace(/\s+(Purchases|Reinvestments)\b/gi, '\n$1');
+  out = out.replace(/\s+(Total\s+[\d,]+(?:\.\d+)?)/gi, '\n$1');
+  out = out.replace(/\s+([A-Z][A-Za-z0-9 .,&/'+-]{1,80}\([A-Z][A-Z0-9.\-]{0,11}\))/g, '\n$1');
+  out = out.replace(/\s+(Activity\s+Summary|Activity\s+Detail|Realized\s+Gains?|Total\s+Cash|CASH,\s+BANK\s+DEPOSIT\s+PROGRAM|Ending\s+Total\s+Value|Total\s+Equities|Total\s+Account\s+Value|TOTAL\s+VALUE|MONEY\s+MARKET\s+FUND|NET\s+CREDITS|Accrued\s+Interest|Terms\s+and\s+Conditions)\b/gi, '\n$1');
+  return out;
+}
+
+function investmentEtradeClientStatementExpandGluedHoldingsLine_(line) {
+  var text = String(line || '');
+  if (!text) return text;
+  var headerRe = /Security\s+Description\s+Quantity\s+Share\s+Price(?:\s+Total\s+Cost)?(?:\s+Market\s+Value)?(?:\s+Unrealized\s+Gain\/Loss(?:\s*%)?)?(?:\s+Est\s+Annual\s+Income)?(?:\s+Current\s+Yield\s*%)?(?:\s+Est\s+YTD\s+Income)?/i;
+  var headerMatch = text.match(headerRe);
+  var parts = [];
+  var rest = text;
+  if (headerMatch) {
+    var before = text.slice(0, headerMatch.index).trim();
+    if (before) parts.push(before);
+    parts.push(String(headerMatch[0] || '').trim());
+    rest = text.slice(headerMatch.index + headerMatch[0].length);
+  }
+  rest = investmentEtradeClientStatementInsertHoldingsRowBreaks_(rest);
+  String(rest || '').split('\n').forEach(function(part) {
+    part = String(part || '').trim();
+    if (part) parts.push(part);
+  });
+  return parts.length ? parts.join('\n') : text;
 }
 
 function investmentEtradeClientStatementExtractContent_(input) {
@@ -438,7 +517,7 @@ function investmentEtradeClientStatementHasMoney_(value) {
 
 function investmentEtradeClientStatementTokenizeRow_(text) {
   var tokens = [];
-  var pattern = /\$?\([\d,.\-]+\)|\$[\d,.\-]+|\d{1,2}\/\d{1,2}\/\d{4}|[A-Za-z][A-Za-z0-9.\-&']*|\bTotal\b|\bPurchases\b|\bReinvestments\b|[\d,]+(?:\.\d+)?/gi;
+  var pattern = /\$?\([\d,.\-]+\)|-\$[\d,.\-]+|\$[\d,.\-]+|\d{1,2}\/\d{1,2}\/\d{4}|[A-Za-z][A-Za-z0-9.\-&']*|\bTotal\b|\bPurchases\b|\bReinvestments\b|[\d,]+(?:\.\d+)?/gi;
   var match;
   while ((match = pattern.exec(String(text || ''))) !== null) {
     tokens.push(match[0]);
@@ -464,7 +543,9 @@ function investmentEtradeClientStatementSplitLine_(line) {
 
 function investmentEtradeClientStatementExtractSymbol_(text) {
   var match = String(text || '').match(/\(([A-Z][A-Z0-9.\-]{0,11})\)/);
-  return match ? String(match[1] || '').trim().toUpperCase() : '';
+  var symbol = match ? String(match[1] || '').trim().toUpperCase() : '';
+  if (!symbol || ETRADE_CLIENT_STATEMENT_BOILERPLATE_SYMBOLS_[symbol]) return '';
+  return symbol;
 }
 
 function investmentEtradeClientStatementDetectAccountKind_(text) {
@@ -518,6 +599,11 @@ function investmentEtradeClientStatementIsSummaryTotalRow_(line) {
     return true;
   }
   if (/Total Cash, Bank Deposit/i.test(text)) return true;
+  if (/(?:Total\s+)?Cash,?\s+Bank\s+Deposit\s+Program,?\s+and\s+Money\s+Market\s+Funds/i.test(text)) {
+    return true;
+  }
+  if (/^Total\s+(Value|Assets|Beginning)\b/i.test(text) || /^TOTAL\s+VALUE\b/i.test(text)) return true;
+  if (/Total Cash Related Activity/i.test(text)) return true;
   if (/Ending Total Value/i.test(text)) return true;
   return false;
 }
@@ -533,36 +619,157 @@ function investmentEtradeClientStatementIsPurchasesOrReinvestmentRow_(line) {
   return /^\s*(Purchases|Reinvestments)\b/i.test(String(line || '').trim());
 }
 
-function investmentEtradeClientStatementExtractNumericFieldsAfterTotal_(cells) {
+function investmentEtradeClientStatementIsHoldingsTableFooter_(line) {
+  var text = String(line || '').trim();
+  return /^TOTAL VALUE\s+[\d.]+%/i.test(text) || /^Percentage of Holdings\b/i.test(text);
+}
+
+function investmentEtradeClientStatementIsInlineSecurityHoldingRow_(line) {
+  var text = String(line || '').trim();
+  if (!text) return false;
+  if (investmentEtradeClientStatementIsPurchasesOrReinvestmentRow_(text)) return false;
+  if (investmentEtradeClientStatementIsSecurityTotalRow_(text)) return false;
+  if (investmentEtradeClientStatementIsSummaryTotalRow_(text)) return false;
+  if (!investmentEtradeClientStatementExtractSymbol_(text)) return false;
+  return /\([A-Z][A-Z0-9.\-]{0,11}\)\s+[\d,]+(?:\.\d+)?/.test(text);
+}
+
+function investmentEtradeClientStatementIsMoneyToken_(tok) {
+  tok = String(tok || '').trim();
+  return /^\$/.test(tok) || /^\(.*\)$/.test(tok) || (/^[\-$]/.test(tok) && /[\d]/.test(tok));
+}
+
+function investmentEtradeClientStatementFindHoldingNumericStart_(cells) {
   cells = cells || [];
   var start = -1;
-  for (var i = 0; i < cells.length; i++) {
-    if (/^Total$/i.test(String(cells[i] || '').trim())) {
-      start = i + 1;
-      break;
-    }
+  var i;
+  for (i = 0; i < cells.length; i++) {
+    if (/^Total$/i.test(String(cells[i] || '').trim())) start = i + 1;
   }
+  if (start >= 0) return start;
+  for (i = 0; i < cells.length; i++) {
+    if (investmentEtradeClientStatementExtractSymbol_(cells[i])) start = i + 1;
+  }
+  return start;
+}
+
+function investmentEtradeClientStatementCollectHoldingNumericValues_(cells, start) {
+  cells = cells || [];
+  var tokens = start >= 0 ? cells.slice(start) : cells;
+  var quantity = NaN;
+  var values = [];
+  var i;
+  for (i = 0; i < tokens.length; i++) {
+    var tok = String(tokens[i] || '').trim();
+    if (!tok || tok === '—' || tok === '-' || tok === '–') continue;
+    if (/%/.test(tok)) continue;
+    if (/^[A-Za-z]/.test(tok) && !/^\$/.test(tok)) break;
+    if (!isFinite(quantity)) {
+      var qty = investmentEtradeClientStatementSafeParseNumber_(tok);
+      if (isFinite(qty)) {
+        quantity = qty;
+        continue;
+      }
+    }
+    if (investmentEtradeClientStatementIsMoneyToken_(tok)) {
+      var money = investmentEtradeClientStatementSafeParseMoney_(tok);
+      if (investmentEtradeClientStatementHasMoney_(money)) values.push(money);
+      continue;
+    }
+    var num = investmentEtradeClientStatementSafeParseNumber_(tok);
+    if (isFinite(num)) values.push(num);
+  }
+  return { quantity: quantity, values: values };
+}
+
+function investmentEtradeClientStatementCostGainMatchesMarket_(cost, gain, market) {
+  if (!investmentEtradeClientStatementHasMoney_(cost) ||
+      !investmentEtradeClientStatementHasMoney_(gain) ||
+      !investmentEtradeClientStatementHasMoney_(market)) {
+    return false;
+  }
+  return Math.abs(Math.round((cost + gain) * 100) / 100 - market) <= 0.05;
+}
+
+function investmentEtradeClientStatementExtractNumericFieldsAfterTotal_(cells) {
+  cells = cells || [];
+  var start = investmentEtradeClientStatementFindHoldingNumericStart_(cells);
   if (start < 0) {
     var joined = cells.join(' ');
     var match = joined.match(/\bTotal\b\s+([\d,]+\.?\d*)\s+(\$[\d,().\-]+)\s+(\$[\d,().\-]+)\s+(\$[\d,().\-]+)\s+(\$[\d,().\-]+)/i);
     if (!match) return null;
-    return {
-      quantity: investmentEtradeClientStatementSafeParseNumber_(match[1]),
-      sharePrice: investmentEtradeClientStatementSafeParseMoney_(match[2]),
-      totalCost: investmentEtradeClientStatementSafeParseMoney_(match[3]),
-      marketValue: investmentEtradeClientStatementSafeParseMoney_(match[4]),
-      unrealizedGain: investmentEtradeClientStatementSafeParseMoney_(match[5])
-    };
+    return investmentEtradeClientStatementAssignTotalNumericFields_(
+      investmentEtradeClientStatementSafeParseNumber_(match[1]),
+      [
+        investmentEtradeClientStatementSafeParseMoney_(match[2]),
+        investmentEtradeClientStatementSafeParseMoney_(match[3]),
+        investmentEtradeClientStatementSafeParseMoney_(match[4]),
+        investmentEtradeClientStatementSafeParseMoney_(match[5])
+      ]
+    );
   }
-  var nums = cells.slice(start);
-  while (nums.length < 5) nums.push('');
-  return {
-    quantity: investmentEtradeClientStatementSafeParseNumber_(nums[0]),
-    sharePrice: investmentEtradeClientStatementSafeParseMoney_(nums[1]),
-    totalCost: investmentEtradeClientStatementSafeParseMoney_(nums[2]),
-    marketValue: investmentEtradeClientStatementSafeParseMoney_(nums[3]),
-    unrealizedGain: investmentEtradeClientStatementSafeParseMoney_(nums[4])
+  var collected = investmentEtradeClientStatementCollectHoldingNumericValues_(cells, start);
+  return investmentEtradeClientStatementAssignTotalNumericFields_(collected.quantity, collected.values);
+}
+
+function investmentEtradeClientStatementAssignTotalNumericFields_(quantity, values) {
+  values = values || [];
+  var empty = {
+    quantity: quantity,
+    sharePrice: NaN,
+    totalCost: NaN,
+    marketValue: NaN,
+    unrealizedGain: NaN,
+    ambiguous: false,
+    invalidMarket: false
   };
+  if (!isFinite(quantity) || values.length < 3) return empty;
+  var omittedPrice = investmentEtradeClientStatementCostGainMatchesMarket_(
+    values[0], values[2], values[1]);
+  var withPrice = values.length >= 4 && investmentEtradeClientStatementCostGainMatchesMarket_(
+    values[1], values[3], values[2]);
+  if (omittedPrice && withPrice) {
+    empty.ambiguous = true;
+    return empty;
+  }
+  var price = NaN;
+  var cost = NaN;
+  var market = NaN;
+  var gain = NaN;
+  if (withPrice) {
+    price = values[0];
+    cost = values[1];
+    market = values[2];
+    gain = values[3];
+  } else if (omittedPrice) {
+    cost = values[0];
+    market = values[1];
+    gain = values[2];
+    price = quantity ? Math.round((market / quantity) * 10000) / 10000 : NaN;
+  } else {
+    return empty;
+  }
+  if (!investmentEtradeClientStatementHasMoney_(market) || market < 0) {
+    empty.invalidMarket = true;
+    return empty;
+  }
+  return {
+    quantity: quantity,
+    sharePrice: price,
+    totalCost: cost,
+    marketValue: market,
+    unrealizedGain: gain,
+    ambiguous: false,
+    invalidMarket: false
+  };
+}
+
+function investmentEtradeClientStatementHoldingsRowAlignmentGap_(row) {
+  if (!row || !isFinite(row.quantity) || !investmentEtradeClientStatementHasMoney_(row.sharePrice) ||
+      !investmentEtradeClientStatementHasMoney_(row.marketValue)) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return Math.abs(Math.round(row.quantity * row.sharePrice * 100) / 100 - row.marketValue);
 }
 
 function investmentEtradeClientStatementValidatedIsoDate_(year, month, day) {
@@ -594,6 +801,67 @@ function investmentEtradeClientStatementNormalizeStatementDate_(value) {
   return investmentEtradeClientStatementValidatedIsoDate_(year, us[1], us[2]);
 }
 
+function investmentEtradeClientStatementMonthNameToNumber_(name) {
+  var key = String(name || '').trim().toLowerCase().slice(0, 3);
+  var months = {
+    jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+    jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12
+  };
+  return months[key] || 0;
+}
+
+function investmentEtradeClientStatementFormatUsDate_(year, month, day) {
+  year = Number(year);
+  month = Number(month);
+  day = Number(day);
+  if (!isFinite(year) || !isFinite(month) || !isFinite(day) || month < 1 || day < 1) return '';
+  return String(month) + '/' + String(day) + '/' + String(year);
+}
+
+function investmentEtradeClientStatementParseStatementPeriodFromText_(text) {
+  var source = String(text || '').replace(/For the\s+Period/gi, 'For the Period');
+  if (!source) return null;
+  var numeric = source.match(/Statement period:\s*(\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2}))\s+(?:to|-|–)\s+(\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2}))/i);
+  if (numeric) {
+    return { start: numeric[1], end: numeric[2] };
+  }
+  var numericFor = source.match(
+    /For the Period\s+(\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2}))\s*(?:to|-|–)\s*(\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2}))/i);
+  if (numericFor) {
+    return { start: numericFor[1], end: numericFor[2] };
+  }
+  var twoNamed = source.match(
+    /For the Period\s+([A-Za-z]+)\s+(\d{1,2}),?\s*(?:(\d{4})\s+)?(?:to|-|–)\s+([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})/i);
+  if (twoNamed) {
+    var startYear = twoNamed[3] || twoNamed[6];
+    var start = investmentEtradeClientStatementFormatUsDate_(
+      startYear, investmentEtradeClientStatementMonthNameToNumber_(twoNamed[1]), twoNamed[2]);
+    var end = investmentEtradeClientStatementFormatUsDate_(
+      twoNamed[6], investmentEtradeClientStatementMonthNameToNumber_(twoNamed[4]), twoNamed[5]);
+    if (start && end) return { start: start, end: end };
+  }
+  var collapsed = source.match(
+    /For the Period\s+([A-Za-z]+)\s+(\d{1,2})\s*[-–—]\s*(\d{1,2}),\s*(\d{4})/i);
+  if (collapsed) {
+    var month = investmentEtradeClientStatementMonthNameToNumber_(collapsed[1]);
+    var startDate = investmentEtradeClientStatementFormatUsDate_(collapsed[4], month, collapsed[2]);
+    var endDate = investmentEtradeClientStatementFormatUsDate_(collapsed[4], month, collapsed[3]);
+    if (startDate && endDate) return { start: startDate, end: endDate };
+  }
+  return null;
+}
+
+function investmentEtradeClientStatementIsCashFundsLabel_(text) {
+  return /(?:Total\s+)?Cash,?\s+Bank\s+Deposit\s+Program,?\s+and\s+Money\s+Market\s+Funds/i
+    .test(String(text || ''));
+}
+
+function investmentEtradeClientStatementIsCashFundsDebitLabel_(text) {
+  var value = String(text || '');
+  return /(?:Total\s+)?Cash,?\s+Bank\s+Deposit\s+Program,?\s+and\s+Money\s+Market\s+Funds\s+Debit/i
+    .test(value) || /Cash,\s*BDP,\s*MMFs\s*\(Debit\)/i.test(value);
+}
+
 function investmentEtradeClientStatementResolvePreambleAsOfDate_(preamble) {
   preamble = preamble || {};
   var asOf = investmentEtradeClientStatementNormalizeStatementDate_(preamble.asOfDate);
@@ -610,6 +878,7 @@ function investmentEtradeClientStatementParsePreamble_(lines, fullText) {
     accountTitle: '',
     accountType: '',
     cashBalance: null,
+    cashDebit: null,
     accruedInterest: null,
     excludedBalances: [],
     endingTotalValue: null,
@@ -619,10 +888,10 @@ function investmentEtradeClientStatementParsePreamble_(lines, fullText) {
   (lines || []).forEach(function(line) {
     var text = String(line || '').trim();
     if (!text) return;
-    var periodMatch = text.match(/^Statement period:\s*(\d{1,2}\/\d{1,2}\/\d{4})\s+to\s+(\d{1,2}\/\d{1,2}\/\d{4})/i);
-    if (periodMatch) {
-      preamble.statementPeriodStart = periodMatch[1];
-      preamble.statementPeriodEnd = periodMatch[2];
+    var periodMatch = investmentEtradeClientStatementParseStatementPeriodFromText_(text);
+    if (periodMatch && periodMatch.end) {
+      preamble.statementPeriodStart = periodMatch.start || '';
+      preamble.statementPeriodEnd = periodMatch.end;
       return;
     }
     var accountNumberMatch = text.match(/^Account number:\s*(\S+)/i);
@@ -639,9 +908,12 @@ function investmentEtradeClientStatementParsePreamble_(lines, fullText) {
     if (accountMatch) {
       preamble.accountLabel = String(accountMatch[1] || '').trim();
     }
-    var accruedLineMatch = text.match(/^Accrued\s+Interest\b[^$]*(\$[\d,().\-]+)/i);
+    var accruedLineMatch = text.match(/^Accrued\s+Interest\s+(\$[\d,().\-]+)\s*$/i);
     if (accruedLineMatch) {
-      preamble.accruedInterest = investmentEtradeClientStatementSafeParseMoney_(accruedLineMatch[1]);
+      var accruedAmount = investmentEtradeClientStatementSafeParseMoney_(accruedLineMatch[1]);
+      if (investmentEtradeClientStatementHasMoney_(accruedAmount) && accruedAmount >= 0) {
+        preamble.accruedInterest = accruedAmount;
+      }
       return;
     }
     var excludedLineMatch = text.match(
@@ -657,6 +929,13 @@ function investmentEtradeClientStatementParsePreamble_(lines, fullText) {
     }
   });
   var compact = investmentEtradeClientStatementCompactText_(fullText);
+  if (!preamble.statementPeriodEnd) {
+    var compactPeriod = investmentEtradeClientStatementParseStatementPeriodFromText_(compact);
+    if (compactPeriod && compactPeriod.end) {
+      preamble.statementPeriodStart = compactPeriod.start || '';
+      preamble.statementPeriodEnd = compactPeriod.end;
+    }
+  }
   var endingDateRe =
     /Ending\s+Total\s+Value\s*\(\s*as\s+of\s+(\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2}))(?!\d)\s*\)/gi;
   var endingDateMatch;
@@ -685,21 +964,35 @@ function investmentEtradeClientStatementParsePreamble_(lines, fullText) {
   if (endingMatch) {
     preamble.endingTotalValue = investmentEtradeClientStatementSafeParseMoney_(endingMatch[1]);
   }
+  preamble.cashDebit = null;
+  var cashDebitMatch = compact.match(
+    /(?:Total\s+)?Cash,?\s+Bank\s+Deposit\s+Program,?\s+and\s+Money\s+Market\s+Funds\s+Debit[^$]*(\$[\d,().\-]+)/i);
+  if (cashDebitMatch) {
+    preamble.cashDebit = investmentEtradeClientStatementSafeParseMoney_(cashDebitMatch[1]);
+  }
   var cashMatch = compact.match(
-    /Total Cash, Bank Deposit Program, and Money Market Funds(?!\s+Debit)[^$]*(\$[\d,().\-]+)/i);
+    /(?:Total\s+)?Cash,?\s+Bank\s+Deposit\s+Program,?\s+and\s+Money\s+Market\s+Funds(?!\s+Debit)[^$]*(\$[\d,().\-]+)/i);
   if (cashMatch) {
     preamble.cashBalance = investmentEtradeClientStatementSafeParseMoney_(cashMatch[1]);
   }
   (lines || []).forEach(function(line) {
     var text = String(line || '').trim();
-    if (!/Total Cash, Bank Deposit Program, and Money Market Funds/i.test(text)) return;
-    if (/Debit/i.test(text)) return;
+    if (!investmentEtradeClientStatementIsCashFundsLabel_(text)) return;
     var moneyMatch = text.match(/(\$[\d,().\-]+)\s*$/);
-    if (moneyMatch && investmentEtradeClientStatementHasMoney_(
-      investmentEtradeClientStatementSafeParseMoney_(moneyMatch[1]))) {
-      preamble.cashBalance = investmentEtradeClientStatementSafeParseMoney_(moneyMatch[1]);
+    if (!moneyMatch) return;
+    var amount = investmentEtradeClientStatementSafeParseMoney_(moneyMatch[1]);
+    if (!investmentEtradeClientStatementHasMoney_(amount)) return;
+    if (investmentEtradeClientStatementIsCashFundsDebitLabel_(text) || /\bDebit\b/i.test(text)) {
+      preamble.cashDebit = amount;
+      return;
     }
+    preamble.cashBalance = amount;
   });
+  var closingCashMatch = compact.match(/CLOSING CASH,\s*BDP,\s*MMFs[^$]*(\$[\d,().\-]+)/i);
+  if (closingCashMatch) {
+    preamble.cashBalance = investmentEtradeClientStatementSafeParseMoney_(closingCashMatch[1]);
+    preamble.cashDebit = null;
+  }
   return preamble;
 }
 
@@ -708,6 +1001,7 @@ function investmentEtradeClientStatementParseHoldingsSection_(lines, headerIndex
   var excluded = [];
   var currentSymbol = '';
   var currentDescription = '';
+  var seenSymbols = {};
   for (var i = headerIndex + 1; i < lines.length; i++) {
     var line = String(lines[i] || '').trim();
     if (!line || /^#/.test(line)) continue;
@@ -721,6 +1015,7 @@ function investmentEtradeClientStatementParseHoldingsSection_(lines, headerIndex
     }
     if (investmentEtradeClientStatementIsSummaryTotalRow_(line)) {
       excluded.push({ rowIndex: i + 1, reason: 'SUMMARY_TOTAL_ROW', line: line });
+      if (investmentEtradeClientStatementIsHoldingsTableFooter_(line)) break;
       continue;
     }
     if (investmentEtradeClientStatementIsPurchasesOrReinvestmentRow_(line)) {
@@ -733,12 +1028,13 @@ function investmentEtradeClientStatementParseHoldingsSection_(lines, headerIndex
       continue;
     }
     var symbolInLine = investmentEtradeClientStatementExtractSymbol_(line);
-    if (symbolInLine && !investmentEtradeClientStatementIsSecurityTotalRow_(line)) {
+    var inlineHolding = investmentEtradeClientStatementIsInlineSecurityHoldingRow_(line);
+    if (symbolInLine && !investmentEtradeClientStatementIsSecurityTotalRow_(line) && !inlineHolding) {
       currentSymbol = symbolInLine;
       currentDescription = line;
       continue;
     }
-    if (!investmentEtradeClientStatementIsSecurityTotalRow_(line)) {
+    if (!investmentEtradeClientStatementIsSecurityTotalRow_(line) && !inlineHolding) {
       if (/\b(Unvested|Hypothetical|Grant)\b/i.test(line)) {
         excluded.push({ rowIndex: i + 1, reason: 'STOCK_PLAN_EXCLUDED_ROW', line: line });
       }
@@ -766,6 +1062,10 @@ function investmentEtradeClientStatementParseHoldingsSection_(lines, headerIndex
       });
       continue;
     }
+    if (inlineHolding) {
+      currentSymbol = symbol;
+      currentDescription = line;
+    }
     var nums = investmentEtradeClientStatementExtractNumericFieldsAfterTotal_(cells);
     if (!nums) {
       excluded.push({
@@ -777,21 +1077,70 @@ function investmentEtradeClientStatementParseHoldingsSection_(lines, headerIndex
       });
       continue;
     }
+    if (nums.ambiguous) {
+      excluded.push({
+        rowIndex: i + 1,
+        reason: 'AMBIGUOUS_HOLDING_COLUMNS',
+        symbol: symbol,
+        line: line,
+        errors: ['cost, market, and gain columns are ambiguous']
+      });
+      continue;
+    }
+    if (nums.invalidMarket) {
+      excluded.push({
+        rowIndex: i + 1,
+        reason: 'INVALID_MARKET_VALUE',
+        symbol: symbol,
+        line: line,
+        errors: ['market value is negative']
+      });
+      continue;
+    }
     var errors = [];
     if (!isFinite(nums.quantity)) errors.push('quantity');
     if (!investmentEtradeClientStatementHasMoney_(nums.sharePrice)) errors.push('sharePrice');
     if (!investmentEtradeClientStatementHasMoney_(nums.marketValue)) errors.push('marketValue');
+    if (investmentEtradeClientStatementHasMoney_(nums.marketValue) && nums.marketValue < 0) {
+      errors.push('negativeMarketValue');
+    }
     if (errors.length) {
       excluded.push({
         rowIndex: i + 1,
-        reason: 'MALFORMED_TOTAL_ROW',
+        reason: errors.indexOf('negativeMarketValue') >= 0 ? 'INVALID_MARKET_VALUE' : 'MALFORMED_TOTAL_ROW',
         symbol: symbol,
         line: line,
         errors: errors
       });
       continue;
     }
-    holdings.push({
+    if (seenSymbols[symbol]) {
+      var existing = seenSymbols[symbol];
+      var candidateGap = investmentEtradeClientStatementHoldingsRowAlignmentGap_({
+        quantity: nums.quantity,
+        sharePrice: nums.sharePrice,
+        marketValue: nums.marketValue
+      });
+      var existingGap = investmentEtradeClientStatementHoldingsRowAlignmentGap_(existing);
+      if (candidateGap + 0.01 < existingGap) {
+        existing.rowIndex = i + 1;
+        existing.securityDescription = currentDescription || existing.securityDescription || line;
+        existing.quantity = nums.quantity;
+        existing.sharePrice = nums.sharePrice;
+        existing.totalCost = investmentEtradeClientStatementHasMoney_(nums.totalCost) ? nums.totalCost : null;
+        existing.marketValue = nums.marketValue;
+        existing.unrealizedGain = investmentEtradeClientStatementHasMoney_(nums.unrealizedGain)
+          ? nums.unrealizedGain : null;
+      }
+      excluded.push({
+        rowIndex: i + 1,
+        reason: 'DUPLICATE_SYMBOL_TOTAL',
+        symbol: symbol,
+        line: line
+      });
+      continue;
+    }
+    var holdingRow = {
       rowIndex: i + 1,
       symbol: symbol,
       securityDescription: currentDescription || line,
@@ -801,7 +1150,9 @@ function investmentEtradeClientStatementParseHoldingsSection_(lines, headerIndex
       marketValue: nums.marketValue,
       unrealizedGain: investmentEtradeClientStatementHasMoney_(nums.unrealizedGain)
         ? nums.unrealizedGain : null
-    });
+    };
+    seenSymbols[symbol] = holdingRow;
+    holdings.push(holdingRow);
   }
   return { holdings: holdings, excluded: excluded };
 }
@@ -821,10 +1172,11 @@ function investmentEtradeClientStatementBuildReconciliation_(preamble, holdings)
     return sum + (investmentEtradeClientStatementHasMoney_(row.marketValue) ? row.marketValue : 0);
   }, 0);
   var cash = investmentEtradeClientStatementHasMoney_(preamble.cashBalance) ? preamble.cashBalance : 0;
+  var cashDebit = investmentEtradeClientStatementHasMoney_(preamble.cashDebit) ? preamble.cashDebit : 0;
   var accruedInterest = investmentEtradeClientStatementHasMoney_(preamble.accruedInterest)
     ? preamble.accruedInterest : 0;
   var excludedBalanceSum = investmentEtradeClientStatementSumExcludedBalances_(preamble);
-  var computedBase = Math.round((holdingsSum + cash) * 100) / 100;
+  var computedBase = Math.round((holdingsSum + cash - cashDebit) * 100) / 100;
   var explainedAdjustments = Math.round((accruedInterest + excludedBalanceSum) * 100) / 100;
   var computedTotal = Math.round((computedBase + explainedAdjustments) * 100) / 100;
   var ending = investmentEtradeClientStatementHasMoney_(preamble.endingTotalValue)
@@ -856,6 +1208,7 @@ function investmentEtradeClientStatementBuildReconciliation_(preamble, holdings)
     endingTotalValue: ending,
     holdingsMarketValueSum: Math.round(holdingsSum * 100) / 100,
     cashBalance: investmentEtradeClientStatementHasMoney_(preamble.cashBalance) ? cash : null,
+    cashDebit: investmentEtradeClientStatementHasMoney_(preamble.cashDebit) ? cashDebit : null,
     accruedInterest: investmentEtradeClientStatementHasMoney_(preamble.accruedInterest)
       ? accruedInterest : null,
     excludedBalances: (preamble.excludedBalances || []).slice(),
@@ -1289,6 +1642,7 @@ function investmentEtradeClientStatementBuildUnifiedPreview_(input, parseResult,
     endingTotalValue: preamble.endingTotalValue,
     asOfDate: preamble.asOfDate || '',
     cashBalance: preamble.cashBalance,
+    cashDebit: preamble.cashDebit,
     accruedInterest: preamble.accruedInterest,
     excludedBalances: (preamble.excludedBalances || []).slice(),
     documentFingerprint: fingerprint,
@@ -1447,6 +1801,85 @@ function investmentEtradeNormalizePotentialUnvestedMonthlyPreview_(parseResult) 
       realizedGainLoss: false
     }
   };
+}
+
+function investmentEtradeValidateSamerBrokerageStatement_(parseResult) {
+  parseResult = parseResult || {};
+  var mapping = investmentEtradeSamerBrokerageAccountValueMapping_();
+  var preamble = parseResult.preamble || {};
+  var asOf = investmentEtradeClientStatementResolvePreambleAsOfDate_(preamble);
+  if (!parseResult.ok) {
+    return {
+      ok: false,
+      reviewRequired: true,
+      source: mapping.source,
+      error: parseResult.error || 'Could not parse this E*TRADE statement.'
+    };
+  }
+  var periodEnd = investmentEtradeClientStatementNormalizeStatementDate_(
+    preamble.statementPeriodEnd);
+  if (!String(preamble.statementPeriodEnd || '').trim() || !periodEnd) {
+    return {
+      ok: false,
+      reviewRequired: true,
+      source: mapping.source,
+      error: 'Statement period is missing or invalid, so the monthly investment value was skipped.'
+    };
+  }
+  if (asOf && periodEnd !== asOf) {
+    return {
+      ok: false,
+      reviewRequired: true,
+      source: mapping.source,
+      error: 'Statement period end and ending-total as-of date do not match.'
+    };
+  }
+  if (!asOf) {
+    return {
+      ok: false,
+      reviewRequired: true,
+      source: mapping.source,
+      error: 'Statement as-of date is required for Samer Etrade Account.'
+    };
+  }
+  var ending = investmentEtradeCiscoStatementProfileResolveEndingTotal_(parseResult);
+  if (ending == null) {
+    return {
+      ok: false,
+      reviewRequired: true,
+      source: mapping.source,
+      error: 'Brokerage ending account value was not found on this E*TRADE statement.'
+    };
+  }
+  return {
+    ok: true,
+    source: mapping.source,
+    accountName: mapping.accountName,
+    valueCategory: mapping.valueCategory,
+    valueLabel: mapping.valueLabel,
+    asOf: asOf,
+    ending: ending
+  };
+}
+
+function investmentEtradeAttachSamerBrokeragePreviewContract_(preview, parseResult, accountName) {
+  if (typeof investmentEtradeMatchesSamerBrokerageAccountValueMapping_ !== 'function' ||
+      !investmentEtradeMatchesSamerBrokerageAccountValueMapping_(accountName, 'ETRADE_CLIENT_STATEMENT_PDF')) {
+    return preview;
+  }
+  var validated = investmentEtradeValidateSamerBrokerageStatement_(parseResult);
+  if (!validated.ok) return validated;
+  preview = preview || {};
+  preview.accountName = validated.accountName;
+  preview.valueCategory = validated.valueCategory;
+  preview.valueLabel = validated.valueLabel;
+  preview.asOf = validated.asOf;
+  preview.asOfDate = validated.asOf;
+  preview.endingTotalValue = validated.ending;
+  preview.endingBalance = validated.ending;
+  preview.proposedValue = validated.ending;
+  if (preview.totalAccountValue == null) preview.totalAccountValue = validated.ending;
+  return preview;
 }
 
 function investmentEtradeCiscoStatementProfileResolveEndingTotal_(parseResult) {

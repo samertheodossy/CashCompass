@@ -1830,12 +1830,12 @@ assert.equal(
 );
 assert.equal(
   emptySchwabCtx.boundedHoldingsPreviewApplyIsMonthlyValueSource_(
-    'ETRADE_CLIENT_STATEMENT_PDF', 'Lutfi Etrade Account'),
-  false
+    'ETRADE_CLIENT_STATEMENT_PDF', 'Samer Etrade Account'),
+  true
 );
 assert.equal(
   emptySchwabCtx.boundedHoldingsPreviewApplyIsMonthlyValueSource_(
-    'ETRADE_CLIENT_STATEMENT_PDF', 'Samer Etrade Account'),
+    'ETRADE_CLIENT_STATEMENT_PDF', 'Lutfi Etrade Account'),
   false
 );
 const stashTrustedEnding = emptySchwabCtx.boundedHoldingsPreviewApplyResolveProviderEndingTotal_(
@@ -3116,6 +3116,378 @@ if (stashReconFailDiff.ok) {
   assert.equal(stashReconFailDiff.diff.monthlyInvestmentValue.willWrite, false);
 } else {
   assert.match(String(stashReconFailDiff.error || ''), /trusted|reconcil/i);
+}
+
+function makeSamerEtradeWorkbook(options = {}) {
+  const augustValue = Object.prototype.hasOwnProperty.call(options, 'augustValue')
+    ? options.augustValue
+    : '';
+  const months = Array(12).fill('');
+  months[7] = augustValue;
+  return makeWorkbook({
+    assetsRows: [
+      ['Samer Etrade Account', 'Brokerage', '7000', 'Yes', 'INV-ET-SAMER-1', ''],
+      ['Lutfi Etrade Account', 'Brokerage', '', 'Yes', 'INV-ET-LUTFI-1', ''],
+      ['Etrade Cisco - Future', 'Brokerage', '', 'Yes', 'INV-ET-FUTURE-1', ''],
+      ['Etrade Cisco - RSU/ESPP', 'Brokerage', '', 'Yes', 'INV-ET-RSU-1', '']
+    ],
+    investmentsRows: buildInvestmentsYearBlockRows(2026, [{
+      name: 'Samer Etrade Account',
+      investmentId: 'INV-ET-SAMER-1',
+      months
+    }, {
+      name: 'Lutfi Etrade Account',
+      investmentId: 'INV-ET-LUTFI-1',
+      months: Array(12).fill('')
+    }, {
+      name: 'Etrade Cisco - Future',
+      investmentId: 'INV-ET-FUTURE-1',
+      months: Array(12).fill('')
+    }, {
+      name: 'Etrade Cisco - RSU/ESPP',
+      investmentId: 'INV-ET-RSU-1',
+      months: Array(12).fill('')
+    }]),
+    monthlyRows: [monthlyHistoryHeaders],
+    registryRows: [
+      FINANCIAL_ACCOUNT_HEADERS,
+      registryRow({
+        stableAccountId: 'STABLE-ET-SAMER-1',
+        domain: 'INVESTMENT',
+        displayName: 'Samer Etrade Account',
+        institution: 'E*TRADE',
+        accountType: 'Brokerage',
+        accountSubtype: '',
+        ownerId: 'OWNER-1',
+        registrationType: 'TAXABLE',
+        currency: 'USD',
+        last4: '',
+        active: 'Yes',
+        identityStatus: 'VERIFIED',
+        legacyDomain: 'SYS_ASSETS',
+        legacyKey: 'INV-ET-SAMER-1'
+      }),
+      registryRow({
+        stableAccountId: 'STABLE-ET-LUTFI-1',
+        domain: 'INVESTMENT',
+        displayName: 'Lutfi Etrade Account',
+        institution: 'E*TRADE',
+        accountType: 'Brokerage',
+        accountSubtype: '',
+        ownerId: 'OWNER-1',
+        registrationType: 'TAXABLE',
+        currency: 'USD',
+        last4: '',
+        active: 'Yes',
+        identityStatus: 'VERIFIED',
+        legacyDomain: 'SYS_ASSETS',
+        legacyKey: 'INV-ET-LUTFI-1'
+      }),
+      registryRow({
+        stableAccountId: 'STABLE-ET-FUTURE-1',
+        domain: 'INVESTMENT',
+        displayName: 'Etrade Cisco - Future',
+        institution: 'E*TRADE',
+        accountType: 'Brokerage',
+        accountSubtype: '',
+        ownerId: 'OWNER-1',
+        registrationType: 'TAXABLE',
+        currency: 'USD',
+        last4: '',
+        active: 'Yes',
+        identityStatus: 'VERIFIED',
+        legacyDomain: 'SYS_ASSETS',
+        legacyKey: 'INV-ET-FUTURE-1'
+      }),
+      registryRow({
+        stableAccountId: 'STABLE-ET-RSU-1',
+        domain: 'INVESTMENT',
+        displayName: 'Etrade Cisco - RSU/ESPP',
+        institution: 'E*TRADE',
+        accountType: 'Brokerage',
+        accountSubtype: '',
+        ownerId: 'OWNER-1',
+        registrationType: 'TAXABLE',
+        currency: 'USD',
+        last4: '',
+        active: 'Yes',
+        identityStatus: 'VERIFIED',
+        legacyDomain: 'SYS_ASSETS',
+        legacyKey: 'INV-ET-RSU-1'
+      })
+    ]
+  });
+}
+
+function augustValueFromSamerSheet(ss) {
+  return ss.getSheetByName('INPUT - Investments').getRange(3, 10).getValue();
+}
+
+function lutfiAugustValueFromSamerSheet(ss) {
+  return ss.getSheetByName('INPUT - Investments').getRange(4, 10).getValue();
+}
+
+function futureAugustFromSamerSheet(ss) {
+  return ss.getSheetByName('INPUT - Investments').getRange(5, 10).getValue();
+}
+
+function rsuAugustFromSamerSheet(ss) {
+  return ss.getSheetByName('INPUT - Investments').getRange(6, 10).getValue();
+}
+
+function otherMonthValuesFromSamerSheet(ss) {
+  const sheet = ss.getSheetByName('INPUT - Investments');
+  return [3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14].map((col) => sheet.getRange(3, col).getValue());
+}
+
+const samerText = fixture('etrade', 'synthetic_etrade_client_statement_samer_brokerage.txt');
+const samerPayload = {
+  pickerValue: 'INV-ET-SAMER-1',
+  accountName: 'Samer Etrade Account',
+  sysAssetsRow: 2,
+  source: 'ETRADE_CLIENT_STATEMENT_PDF',
+  rawDocumentText: samerText,
+  registrationType: 'TAXABLE',
+  explicitAccountMatch: true,
+  statementProvider: 'ETRADE'
+};
+
+const samerEnding = emptySchwabCtx.boundedHoldingsPreviewApplyResolveProviderEndingTotal_(
+  {
+    accountName: 'Samer Etrade Account',
+    valueCategory: 'BROKERAGE_ACCOUNT_VALUE',
+    reconciliation: { ok: true, endingTotalValue: 7205 },
+    potentialUnvestedStockPlanValue: 846353.40,
+    totalAccountValue: 7205
+  },
+  'ETRADE_CLIENT_STATEMENT_PDF'
+);
+assert.equal(samerEnding.value, 7205);
+assert.equal(samerEnding.origin, 'ENDING_TOTAL_VALUE');
+assert.notEqual(samerEnding.value, 846353.40);
+
+const lutfiSkipMonthly = emptySchwabCtx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+  {
+    source: 'ETRADE_CLIENT_STATEMENT_PDF',
+    accountName: 'Lutfi Etrade Account',
+    explicitAccountMatch: true
+  },
+  'SINGLE_ACCOUNT',
+  { accountName: 'Lutfi Etrade Account', investmentId: 'INV-ET-LUTFI-1' },
+  { asOf: '2026-08-31', reconciliation: { ok: true, endingTotalValue: 7205 } }
+);
+assert.equal(lutfiSkipMonthly.action, 'SKIP');
+assert.equal(lutfiSkipMonthly.reason, 'UNSUPPORTED_SOURCE');
+
+const emptySamer = makeSamerEtradeWorkbook();
+const emptySamerBuilt = buildContext({ workbook: emptySamer });
+const emptySamerCtx = emptySamerBuilt.context;
+const emptySamerBook = emptySamerBuilt.workbook;
+const emptySamerInvestmentsBefore = cloneSheetRows(emptySamerBook.getSheetByName('INPUT - Investments'));
+const emptySamerPreview = emptySamerCtx.boundedHoldingsPreviewRunFromDashboard(samerPayload);
+assert.equal(emptySamerPreview.ok, true, emptySamerPreview.error || 'Samer E*TRADE preview failed');
+assert.match(String(emptySamerPreview.asOf || ''), /^2026-08-31/);
+assert.equal(emptySamerPreview.accountName, 'Samer Etrade Account');
+assert.equal(emptySamerPreview.reconciliation.ok, true);
+assert.equal(emptySamerPreview.reconciliation.endingTotalValue, 7205);
+assert.equal(emptySamerPreview.cashBalance, 5000);
+assert.equal(emptySamerPreview.holdingsRows.filter((row) => row.symbol !== 'Cash').length, 4);
+assert.deepEqual(
+  [...emptySamerPreview.holdingsRows.filter((row) => row.symbol !== 'Cash').map((row) => row.symbol).sort()],
+  ['SYNA', 'SYNB', 'VTI', 'ZERO']
+);
+assert.equal(emptySamerPreview.holdingsRows.find((row) => row.symbol === 'ZERO').marketValue, 0);
+assert.equal(emptySamerPreview.capabilities.activities, false);
+assert.equal(emptySamerPreview.capabilities.taxLots, false);
+assert.deepEqual(cloneSheetRows(emptySamerBook.getSheetByName('INPUT - Investments')),
+  emptySamerInvestmentsBefore, 'Samer preview must not write monthly investment values');
+
+const missingPeriodPreview = emptySamerCtx.boundedHoldingsPreviewRunFromDashboard({
+  ...samerPayload,
+  rawDocumentText: samerText.replace(/^Statement period:.*$/m, 'Account number: XXXX-BROKERAGE-001')
+});
+assert.equal(missingPeriodPreview.ok, false);
+assert.match(String(missingPeriodPreview.error || ''), /Statement period is missing or invalid/);
+
+const gluedSamerText = fixture('etrade', 'extracted_etrade_client_statement_samer_glued_pdfjs.txt');
+const gluedSamerPreview = emptySamerCtx.boundedHoldingsPreviewRunFromDashboard({
+  ...samerPayload,
+  rawDocumentText: gluedSamerText
+});
+assert.equal(gluedSamerPreview.ok, true, gluedSamerPreview.error || 'glued Samer preview failed');
+assert.match(String(gluedSamerPreview.asOf || ''), /^2026-08-31/);
+assert.equal(gluedSamerPreview.accountName, 'Samer Etrade Account');
+assert.equal(gluedSamerPreview.proposedValue, 7205);
+assert.equal(gluedSamerPreview.cashBalance, 5000);
+assert.equal(gluedSamerPreview.holdingsRows.filter((row) => row.symbol !== 'Cash').length, 4);
+assert.deepEqual(
+  [...gluedSamerPreview.holdingsRows.filter((row) => row.symbol !== 'Cash').map((row) => row.symbol).sort()],
+  ['SYNA', 'SYNB', 'VTI', 'ZERO']
+);
+assert.equal(gluedSamerPreview.holdingsRows.find((row) => row.symbol === 'ZERO').marketValue, 0);
+
+const gluedMissingPeriodPreview = emptySamerCtx.boundedHoldingsPreviewRunFromDashboard({
+  ...samerPayload,
+  rawDocumentText: gluedSamerText.replace(/For the Period August 1-31, 2026/g, 'CLIENT STATEMENT')
+});
+assert.equal(gluedMissingPeriodPreview.ok, false);
+assert.match(String(gluedMissingPeriodPreview.error || ''), /Statement period is missing or invalid/);
+
+const mismatchPreview = emptySamerCtx.boundedHoldingsPreviewRunFromDashboard({
+  ...samerPayload,
+  explicitAccountMatch: false
+});
+assert.equal(mismatchPreview.ok, false);
+
+const emptySamerDiff = emptySamerCtx.boundedHoldingsPreviewBuildApplyDiffFromDashboard(samerPayload);
+assert.equal(emptySamerDiff.ok, true, emptySamerDiff.error || 'Samer diff failed');
+assert.equal(emptySamerDiff.diff.monthlyInvestmentValue.comparison, 'BLANK');
+assert.equal(emptySamerDiff.diff.monthlyInvestmentValue.decision, 'IGNORE');
+assert.equal(emptySamerDiff.diff.monthlyInvestmentValue.action, 'SKIP');
+assert.equal(emptySamerDiff.diff.monthlyInvestmentValue.proposedValue, 7205);
+assert.equal(emptySamerDiff.diff.monthlyInvestmentValue.willWrite, false);
+assert.equal(emptySamerDiff.diff.monthlyInvestmentValue.valueCategory, 'BROKERAGE_ACCOUNT_VALUE');
+assert.equal(emptySamerDiff.diff.summary.createCount, 5);
+assert.deepEqual(cloneSheetRows(emptySamerBook.getSheetByName('INPUT - Investments')),
+  emptySamerInvestmentsBefore, 'Samer review must not write monthly investment values');
+
+const otherMonthsBeforeSamerIgnore = otherMonthValuesFromSamerSheet(emptySamerBook);
+const samerIgnoreApply = emptySamerCtx.boundedHoldingsPreviewApplyFromDashboard({
+  ...samerPayload,
+  diffDigest: emptySamerDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'IGNORE'
+});
+assert.equal(samerIgnoreApply.ok, true, samerIgnoreApply.error || 'Samer Ignore Apply failed');
+assert.notEqual(samerIgnoreApply.monthlyInvestmentValueWritten, true);
+assert.equal(augustValueFromSamerSheet(emptySamerBook), '');
+assert.equal(lutfiAugustValueFromSamerSheet(emptySamerBook), '');
+assert.equal(futureAugustFromSamerSheet(emptySamerBook), '');
+assert.equal(rsuAugustFromSamerSheet(emptySamerBook), '');
+assert.deepEqual(otherMonthValuesFromSamerSheet(emptySamerBook), otherMonthsBeforeSamerIgnore);
+const samerIgnoreUnified = emptySamerBook.getSheetByName(unifiedName);
+assert.ok(samerIgnoreUnified, 'Samer holdings Apply must create unified holdings');
+const samerUnifiedRows = samerIgnoreUnified.rows.filter((row, index) => index > 0);
+assert.equal(samerUnifiedRows.length, 5);
+assert.ok(samerUnifiedRows.every((row) => String(row[2] || row.parentAccount || '').includes('Samer Etrade Account') ||
+  String(row.join(' ')).includes('Samer Etrade Account')));
+assert.equal(samerUnifiedRows.some((row) => /Lutfi Etrade Account|Etrade Cisco/i.test(String(row.join(' ')))), false);
+assert.ok(samerUnifiedRows.some((row) => /ZERO/.test(String(row.join(' ')))));
+assert.ok(samerUnifiedRows.some((row) => /\bCash\b/i.test(String(row.join(' ')))));
+assert.ok(samerUnifiedRows.some((row) => /VTI/.test(String(row.join(' ')))));
+const samerIgnoreLog = lastStatementMonthlyActivity_(emptySamerCtx);
+assert.ok(samerIgnoreLog, 'Samer Ignore must write LOG - Activity');
+assert.equal(samerIgnoreLog.eventType, 'investment_statement_monthly_value');
+assert.equal(samerIgnoreLog.payee, 'Samer Etrade Account');
+assert.equal(samerIgnoreLog.details.source, 'ETRADE_CLIENT_STATEMENT_PDF');
+assert.equal(samerIgnoreLog.details.decision, 'IGNORE');
+assert.equal(samerIgnoreLog.details.result, 'SKIPPED');
+assert.equal(samerIgnoreLog.details.proposedValue, 7205);
+assertNoSysInvestmentActivity_(emptySamerBook, 'Samer Ignore');
+
+const addSamer = makeSamerEtradeWorkbook();
+const addSamerBuilt = buildContext({ workbook: addSamer });
+const samerAddDiff = addSamerBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+  ...samerPayload,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+assert.equal(samerAddDiff.diff.monthlyInvestmentValue.willWrite, true);
+const samerAddApply = addSamerBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...samerPayload,
+  diffDigest: samerAddDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+assert.equal(samerAddApply.ok, true, samerAddApply.error || 'Samer Add Apply failed');
+assert.equal(augustValueFromSamerSheet(addSamer), 7205);
+assert.equal(lutfiAugustValueFromSamerSheet(addSamer), '');
+assert.equal(futureAugustFromSamerSheet(addSamer), '');
+assert.equal(rsuAugustFromSamerSheet(addSamer), '');
+const samerAddLog = lastStatementMonthlyActivity_(addSamerBuilt.context);
+assert.equal(samerAddLog.details.decision, 'ADD');
+assert.equal(samerAddLog.details.result, 'APPLIED');
+assertNoSysInvestmentActivity_(addSamer, 'Samer Add');
+
+const samerDupDiff = addSamerBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(samerPayload);
+assert.equal(samerDupDiff.ok, true);
+assert.equal(samerDupDiff.duplicateNoop, true);
+const samerDupApply = addSamerBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...samerPayload,
+  diffDigest: samerDupDiff.diffDigest,
+  explicitApplyConfirm: true
+});
+assert.equal(samerDupApply.ok, true);
+assert.equal(samerDupApply.duplicateNoop, true);
+assert.equal(augustValueFromSamerSheet(addSamer), 7205);
+
+const occupiedSamer = makeSamerEtradeWorkbook({ augustValue: 1 });
+const occupiedSamerBuilt = buildContext({ workbook: occupiedSamer });
+const samerKeepDiff = occupiedSamerBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(samerPayload);
+assert.equal(samerKeepDiff.diff.monthlyInvestmentValue.comparison, 'DIFFER');
+assert.equal(samerKeepDiff.diff.monthlyInvestmentValue.decision, 'KEEP');
+assert.equal(samerKeepDiff.diff.monthlyInvestmentValue.willWrite, false);
+const samerKeepApply = occupiedSamerBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...samerPayload,
+  diffDigest: samerKeepDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'KEEP'
+});
+assert.equal(samerKeepApply.ok, true);
+assert.equal(augustValueFromSamerSheet(occupiedSamer), 1);
+
+const replaceSamer = makeSamerEtradeWorkbook({ augustValue: 1 });
+const replaceSamerBuilt = buildContext({ workbook: replaceSamer });
+const samerReplaceDiff = replaceSamerBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+  ...samerPayload,
+  monthlyInvestmentValueDecision: 'REPLACE'
+});
+assert.equal(samerReplaceDiff.diff.monthlyInvestmentValue.willWrite, true);
+const samerReplaceApply = replaceSamerBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...samerPayload,
+  diffDigest: samerReplaceDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'REPLACE'
+});
+assert.equal(samerReplaceApply.ok, true);
+assert.equal(augustValueFromSamerSheet(replaceSamer), 7205);
+assert.equal(lutfiAugustValueFromSamerSheet(replaceSamer), '');
+assert.equal(futureAugustFromSamerSheet(replaceSamer), '');
+assert.equal(rsuAugustFromSamerSheet(replaceSamer), '');
+
+const staleSamer = makeSamerEtradeWorkbook({ augustValue: 1 });
+const staleSamerBuilt = buildContext({ workbook: staleSamer });
+const samerStaleDiff = staleSamerBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard({
+  ...samerPayload,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+staleSamer.getSheetByName('INPUT - Investments').getRange(3, 10).setValue(2);
+const samerStaleApply = staleSamerBuilt.context.boundedHoldingsPreviewApplyFromDashboard({
+  ...samerPayload,
+  diffDigest: samerStaleDiff.diffDigest,
+  explicitApplyConfirm: true,
+  monthlyInvestmentValueDecision: 'ADD'
+});
+assert.equal(samerStaleApply.ok, false);
+assert.equal(samerStaleApply.staleDiff, true);
+assert.equal(augustValueFromSamerSheet(staleSamer), 2);
+assert.equal(staleSamer.getSheetByName(unifiedName), null,
+  'stale Samer monthly digest must fail closed before holdings write');
+const samerStaleLog = lastStatementMonthlyActivity_(staleSamerBuilt.context);
+assert.equal(samerStaleLog.details.result, 'STALE_REJECTED');
+assertNoSysInvestmentActivity_(staleSamer, 'Samer stale');
+
+const lutfiPayload = {
+  ...samerPayload,
+  pickerValue: 'INV-ET-LUTFI-1',
+  accountName: 'Lutfi Etrade Account',
+  sysAssetsRow: 3
+};
+const lutfiBook = makeSamerEtradeWorkbook();
+const lutfiBuilt = buildContext({ workbook: lutfiBook });
+const lutfiDiff = lutfiBuilt.context.boundedHoldingsPreviewBuildApplyDiffFromDashboard(lutfiPayload);
+if (lutfiDiff.ok) {
+  assert.equal(lutfiDiff.diff.monthlyInvestmentValue.action, 'SKIP');
+  assert.equal(lutfiDiff.diff.monthlyInvestmentValue.reason, 'UNSUPPORTED_SOURCE');
 }
 
 console.log('Bounded holdings preview Apply regressions passed.');

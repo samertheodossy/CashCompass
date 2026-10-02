@@ -80,6 +80,7 @@ function buildContext() {
 
 const ctx = buildContext();
 const mainFixture = fixture('synthetic_etrade_client_statement_main.txt');
+const samerBrokerageFixture = fixture('synthetic_etrade_client_statement_samer_brokerage.txt');
 const esppFixture = fixture('synthetic_etrade_client_statement_espp.txt');
 const futureFixture = fixture('synthetic_etrade_client_statement_cisco_future_potential.txt');
 const extractedPotentialSummaryFixture = fixture(
@@ -152,6 +153,309 @@ assert.deepEqual([...mainSymbols], ['SYNA', 'SYNB']);
 assert.equal(mainParse.reconciliation.ok, true);
 assert.equal(mainParse.reconciliation.tolerance, 2);
 assert.equal(mainParse.reconciliation.rule, 'ABSOLUTE_USD_2.00');
+assert.equal(mainParse.preamble.cashBalance, 5000);
+assert.equal(mainParse.preamble.cashDebit, 0);
+assert.equal(mainParse.reconciliation.cashDebit, 0);
+assert.ok(mainParse.excluded.some((row) => row.reason === 'PURCHASES_OR_REINVESTMENT_ROW'));
+assert.equal(mainParse.holdings.find((row) => row.symbol === 'SYNA').quantity, 105);
+
+const samerParse = ctx.investmentEtradeClientStatementParseText_(samerBrokerageFixture);
+assert.equal(samerParse.ok, true);
+assert.equal(samerParse.accountKind, 'BROKERAGE');
+assert.match(String(samerParse.preamble.statementPeriodStart || ''), /8\/1\/26/);
+assert.match(String(samerParse.preamble.statementPeriodEnd || ''), /8\/31\/26/);
+assert.equal(samerParse.preamble.asOfDate, '2026-08-31');
+assert.equal(samerParse.preamble.endingTotalValue, 7205);
+assert.equal(samerParse.preamble.cashBalance, 5000);
+assert.equal(samerParse.preamble.cashDebit, 0);
+assert.equal(samerParse.preamble.accruedInterest, 5);
+assert.equal(samerParse.holdings.length, 4);
+assert.deepEqual([...samerParse.holdings.map((row) => row.symbol).sort()], ['SYNA', 'SYNB', 'VTI', 'ZERO']);
+assert.equal(samerParse.holdings.find((row) => row.symbol === 'SYNA').quantity, 105);
+assert.equal(samerParse.holdings.find((row) => row.symbol === 'SYNA').marketValue, 1000);
+assert.equal(samerParse.holdings.find((row) => row.symbol === 'VTI').marketValue, 200);
+assert.equal(samerParse.holdings.find((row) => row.symbol === 'ZERO').quantity, 10);
+assert.equal(samerParse.holdings.find((row) => row.symbol === 'ZERO').marketValue, 0);
+assert.equal(samerParse.holdings.find((row) => row.symbol === 'ZERO').sharePrice, 0);
+assert.ok(samerParse.excluded.some((row) => row.reason === 'PURCHASES_OR_REINVESTMENT_ROW' && row.symbol === 'SYNA'));
+assert.equal(samerParse.reconciliation.ok, true);
+assert.equal(samerParse.reconciliation.endingTotalValue, 7205);
+assert.equal(samerParse.potentialUnvestedStockPlan.value, null);
+assert.doesNotMatch(samerBrokerageFixture, /273-530203-203/);
+assert.doesNotMatch(samerBrokerageFixture, /Samer L Theodossy/i);
+
+const samerValid = ctx.investmentEtradeValidateSamerBrokerageStatement_(samerParse);
+assert.equal(samerValid.ok, true);
+assert.equal(samerValid.accountName, 'Samer Etrade Account');
+assert.equal(samerValid.asOf, '2026-08-31');
+assert.equal(samerValid.ending, 7205);
+assert.equal(samerValid.valueCategory, 'BROKERAGE_ACCOUNT_VALUE');
+
+const missingPeriodParse = ctx.investmentEtradeClientStatementParseText_(
+  samerBrokerageFixture.replace(/^Statement period:.*$/m, 'Account number: XXXX-BROKERAGE-001'));
+assert.equal(ctx.investmentEtradeValidateSamerBrokerageStatement_(missingPeriodParse).ok, false);
+assert.match(String(ctx.investmentEtradeValidateSamerBrokerageStatement_(missingPeriodParse).error || ''),
+  /Statement period is missing or invalid/);
+
+const mismatchedPeriod = Object.assign({}, samerParse, {
+  preamble: Object.assign({}, samerParse.preamble, { statementPeriodEnd: '7/31/26' })
+});
+assert.equal(ctx.investmentEtradeValidateSamerBrokerageStatement_(mismatchedPeriod).ok, false);
+assert.match(String(ctx.investmentEtradeValidateSamerBrokerageStatement_(mismatchedPeriod).error || ''),
+  /do not match/);
+
+const gluedSamerFixture = fixture('extracted_etrade_client_statement_samer_glued_pdfjs.txt');
+assert.doesNotMatch(gluedSamerFixture, /Statement period:/i);
+assert.match(gluedSamerFixture, /For the Period August 1-31, 2026/);
+assert.match(gluedSamerFixture, /CASH, BANK DEPOSIT PROGRAM AND MONEY MARKET FUNDS \$5,000\.00/);
+assert.doesNotMatch(gluedSamerFixture, /273-530203-203/);
+assert.doesNotMatch(gluedSamerFixture, /Samer L Theodossy/i);
+
+const gluedSamerParse = ctx.investmentEtradeClientStatementParseText_(gluedSamerFixture);
+assert.equal(gluedSamerParse.ok, true, gluedSamerParse.error || 'glued Samer extract parse failed');
+assert.equal(gluedSamerParse.accountKind, 'BROKERAGE');
+assert.equal(
+  ctx.investmentEtradeClientStatementNormalizeStatementDate_(gluedSamerParse.preamble.statementPeriodStart),
+  '2026-08-01'
+);
+assert.equal(
+  ctx.investmentEtradeClientStatementNormalizeStatementDate_(gluedSamerParse.preamble.statementPeriodEnd),
+  '2026-08-31'
+);
+assert.equal(gluedSamerParse.preamble.asOfDate, '2026-08-31');
+assert.equal(gluedSamerParse.preamble.endingTotalValue, 7205);
+assert.equal(gluedSamerParse.preamble.cashBalance, 5000);
+assert.equal(gluedSamerParse.preamble.cashDebit, 0);
+assert.equal(gluedSamerParse.preamble.accruedInterest, 5);
+assert.equal(gluedSamerParse.holdings.length, 4);
+assert.deepEqual(
+  [...gluedSamerParse.holdings.map((row) => row.symbol).sort()],
+  ['SYNA', 'SYNB', 'VTI', 'ZERO']
+);
+assert.equal(gluedSamerParse.holdings.find((row) => row.symbol === 'SYNA').quantity, 105);
+assert.equal(gluedSamerParse.holdings.find((row) => row.symbol === 'SYNA').marketValue, 1000);
+assert.equal(gluedSamerParse.holdings.find((row) => row.symbol === 'VTI').marketValue, 200);
+assert.equal(gluedSamerParse.holdings.find((row) => row.symbol === 'ZERO').quantity, 10);
+assert.equal(gluedSamerParse.holdings.find((row) => row.symbol === 'ZERO').marketValue, 0);
+assert.ok(gluedSamerParse.excluded.some((row) => row.reason === 'PURCHASES_OR_REINVESTMENT_ROW' && row.symbol === 'SYNA'));
+assert.equal(
+  gluedSamerParse.holdings.filter((row) => row.symbol === 'SYNA').length,
+  1,
+  'Purchases/Reinvestment continuation must not duplicate SYNA'
+);
+assert.equal(gluedSamerParse.reconciliation.ok, true, gluedSamerParse.reconciliation.blockingReason || 'glued recon failed');
+assert.equal(gluedSamerParse.reconciliation.endingTotalValue, 7205);
+
+const gluedSamerValid = ctx.investmentEtradeValidateSamerBrokerageStatement_(gluedSamerParse);
+assert.equal(gluedSamerValid.ok, true, gluedSamerValid.error || 'glued Samer validator failed');
+assert.equal(gluedSamerValid.accountName, 'Samer Etrade Account');
+assert.equal(gluedSamerValid.asOf, '2026-08-31');
+assert.equal(gluedSamerValid.ending, 7205);
+
+const gluedSamerAttached = ctx.investmentEtradeAttachSamerBrokeragePreviewContract_(
+  {
+    ok: true,
+    holdingsRows: gluedSamerParse.holdings.map((row) => ({
+      symbol: row.symbol,
+      quantity: row.quantity,
+      marketValue: row.marketValue
+    })),
+    asOf: gluedSamerParse.preamble.asOfDate
+  },
+  gluedSamerParse,
+  'Samer Etrade Account'
+);
+assert.equal(gluedSamerAttached.ok, true, gluedSamerAttached.error || 'glued Samer attach failed');
+assert.equal(gluedSamerAttached.accountName, 'Samer Etrade Account');
+assert.equal(gluedSamerAttached.proposedValue, 7205);
+assert.equal(gluedSamerAttached.holdingsRows.length, 4);
+assert.equal(gluedSamerAttached.holdingsRows.find((row) => row.symbol === 'ZERO').marketValue, 0);
+
+const wrappedPeriodParse = ctx.investmentEtradeClientStatementParseText_(
+  gluedSamerFixture.replace(/For the Period August 1-31, 2026/g, 'For the\nPeriod August 1-31, 2026')
+);
+assert.equal(
+  ctx.investmentEtradeClientStatementNormalizeStatementDate_(wrappedPeriodParse.preamble.statementPeriodEnd),
+  '2026-08-31'
+);
+
+const gluedDebitParse = ctx.investmentEtradeClientStatementParseText_(
+  gluedSamerFixture
+    .replace(/Ending Total Value \(as of 8\/31\/26\) \$7,205\.00/g, 'Ending Total Value (as of 8/31/26) $7,105.00')
+    .replace(/FUNDS DEBIT \$0\.00/g, 'FUNDS DEBIT $100.00')
+    .replace(/Total Account Value \$7,205\.00/g, 'Total Account Value $7,105.00')
+);
+assert.equal(gluedDebitParse.preamble.cashBalance, 5000);
+assert.equal(gluedDebitParse.preamble.cashDebit, 100);
+assert.equal(gluedDebitParse.preamble.endingTotalValue, 7105);
+assert.equal(gluedDebitParse.reconciliation.ok, true, gluedDebitParse.reconciliation.blockingReason || 'debit recon failed');
+
+const gluedMissingPeriodParse = ctx.investmentEtradeClientStatementParseText_(
+  gluedSamerFixture.replace(/For the Period August 1-31, 2026/g, 'CLIENT STATEMENT')
+);
+assert.equal(String(gluedMissingPeriodParse.preamble.statementPeriodEnd || '').trim(), '');
+assert.equal(ctx.investmentEtradeValidateSamerBrokerageStatement_(gluedMissingPeriodParse).ok, false);
+assert.match(String(ctx.investmentEtradeValidateSamerBrokerageStatement_(gluedMissingPeriodParse).error || ''),
+  /Statement period is missing or invalid/);
+const gluedMissingAttached = ctx.investmentEtradeAttachSamerBrokeragePreviewContract_(
+  { ok: true, holdingsRows: [{ symbol: 'SYNA' }] },
+  gluedMissingPeriodParse,
+  'Samer Etrade Account'
+);
+assert.equal(gluedMissingAttached.ok, false);
+assert.equal(gluedMissingAttached.holdingsRows, undefined);
+
+const gluedInvalidPeriodParse = ctx.investmentEtradeClientStatementParseText_(
+  gluedSamerFixture.replace(/August 1-31, 2026/g, 'August 1-32, 2026')
+);
+assert.equal(ctx.investmentEtradeValidateSamerBrokerageStatement_(gluedInvalidPeriodParse).ok, false);
+assert.match(String(ctx.investmentEtradeValidateSamerBrokerageStatement_(gluedInvalidPeriodParse).error || ''),
+  /Statement period is missing or invalid/);
+
+const noDollarPriceParse = ctx.investmentEtradeClientStatementParseText_(
+  samerBrokerageFixture.replace(
+    'Total 105.000 $10.00 $950.00 $1,000.00 $50.00 $100.00 2.00%',
+    'Total 105.000 9.5238 $950.00 $1,000.00 $50.00 $100.00 2.00%'
+  )
+);
+assert.equal(noDollarPriceParse.holdings.find((row) => row.symbol === 'SYNA').sharePrice, 9.5238);
+assert.equal(noDollarPriceParse.holdings.find((row) => row.symbol === 'SYNA').marketValue, 1000);
+assert.equal(noDollarPriceParse.holdings.find((row) => row.symbol === 'SYNA').totalCost, 950);
+
+const missingPriceParse = ctx.investmentEtradeClientStatementParseText_(
+  samerBrokerageFixture.replace(
+    'Total 105.000 $10.00 $950.00 $1,000.00 $50.00 $100.00 2.00%',
+    'Total 105.000 $950.00 $1,000.00 $50.00'
+  )
+);
+assert.equal(missingPriceParse.holdings.find((row) => row.symbol === 'SYNA').marketValue, 1000);
+assert.equal(missingPriceParse.holdings.find((row) => row.symbol === 'SYNA').totalCost, 950);
+assert.equal(missingPriceParse.holdings.find((row) => row.symbol === 'SYNA').sharePrice, 9.5238);
+
+const shiftedCostAsPriceParse = ctx.investmentEtradeClientStatementParseText_(
+  samerBrokerageFixture.replace(
+    'Total 105.000 $10.00 $950.00 $1,000.00 $50.00 $100.00 2.00%',
+    'Total 105.000 $950.00 9.5238 $1,000.00 $50.00'
+  )
+);
+assert.equal(shiftedCostAsPriceParse.holdings.find((row) => row.symbol === 'SYNA'), undefined);
+assert.ok(shiftedCostAsPriceParse.excluded.some((row) =>
+  row.symbol === 'SYNA' && row.reason === 'MALFORMED_TOTAL_ROW'));
+
+const ambiguousColumnsParse = ctx.investmentEtradeClientStatementParseText_(
+  samerBrokerageFixture.replace(
+    'WORTHLESS CORP (ZERO) Total 10.000 $0.00 $100.00 $0.00 -$100.00',
+    'WORTHLESS CORP (ZERO) Total 10.000 $0.00 $100.00 $0.00 -$100.00\nAMBIGUOUS CORP (SYNZ) Total 1.000 $5.00 $15.00 $10.00 -$5.00'
+  )
+);
+assert.equal(ambiguousColumnsParse.holdings.find((row) => row.symbol === 'SYNZ'), undefined);
+assert.ok(ambiguousColumnsParse.excluded.some((row) =>
+  row.symbol === 'SYNZ' && row.reason === 'AMBIGUOUS_HOLDING_COLUMNS'));
+
+const duplicateBetterSecond = ctx.investmentEtradeClientStatementParseText_(
+  samerBrokerageFixture.replace(
+    'WORTHLESS CORP (ZERO) Total 10.000 $0.00 $100.00 $0.00 -$100.00',
+    'WORTHLESS CORP (ZERO) Total 10.000 $0.00 $100.00 $0.00 -$100.00\nSYNA CORP (SYNA) Total 105.000 9.5238 $950.00 $1,000.00 $50.00'
+  )
+);
+assert.equal(duplicateBetterSecond.holdings.filter((row) => row.symbol === 'SYNA').length, 1);
+assert.equal(duplicateBetterSecond.holdings.find((row) => row.symbol === 'SYNA').marketValue, 1000);
+assert.ok(duplicateBetterSecond.excluded.some((row) => row.reason === 'DUPLICATE_SYMBOL_TOTAL' && row.symbol === 'SYNA'));
+
+const closingCashParse = ctx.investmentEtradeClientStatementParseText_(
+  samerBrokerageFixture.replace(
+    'Total Cash, Bank Deposit Program, and Money Market Funds $5,000.00',
+    'CASH, BANK DEPOSIT PROGRAM AND MONEY MARKET FUNDS ($12.34)\nCLOSING CASH, BDP, MMFs $5,000.00 $5,000.00'
+  )
+);
+assert.equal(closingCashParse.preamble.cashBalance, 5000);
+
+const accountDetailFixture = fixture('extracted_etrade_client_statement_samer_account_detail_pdfjs.txt');
+assert.doesNotMatch(accountDetailFixture, /273-530203-203/);
+assert.doesNotMatch(accountDetailFixture, /Samer L Theodossy/i);
+assert.match(accountDetailFixture, /For the Period August 1-31, 2026/);
+assert.match(accountDetailFixture, /ARISTA NETWORKS INC \(ANET\)/);
+assert.match(accountDetailFixture, /TOTAL VALUE\s+100\.00%/);
+
+const accountDetailParse = ctx.investmentEtradeClientStatementParseText_(accountDetailFixture);
+assert.equal(accountDetailParse.ok, true, accountDetailParse.error || 'account-detail parse failed');
+const accountDetailSymbols = [
+  'AAPL', 'AGG', 'AMC', 'ANET', 'AVGO', 'BAC', 'C', 'CLEUF', 'COST', 'CSOC',
+  'ISRG', 'LCID', 'LUMN', 'META', 'NFLX', 'NVDA', 'NXPI', 'PLAY', 'QQQI', 'RIVN',
+  'SBUX', 'SOFI', 'SPCX', 'SPY', 'TGT', 'TSLA', 'TWLO', 'UAA', 'UNH', 'WMT',
+  'WOOF', 'ZS'
+];
+assert.deepEqual(
+  [...accountDetailParse.holdings.map((row) => row.symbol).sort()],
+  accountDetailSymbols
+);
+assert.equal(
+  accountDetailParse.holdings.filter((row) => row.symbol === 'ANET').length,
+  1
+);
+assert.equal(accountDetailParse.holdings.find((row) => row.symbol === 'ANET').quantity, 650);
+assert.equal(accountDetailParse.holdings.find((row) => row.symbol === 'ANET').sharePrice, 195.69);
+assert.equal(accountDetailParse.holdings.find((row) => row.symbol === 'ANET').marketValue, 127198.50);
+assert.equal(accountDetailParse.holdings.find((row) => row.symbol === 'ANET').totalCost, 3023.25);
+assert.equal(accountDetailParse.holdings.find((row) => row.symbol === 'CLEUF').marketValue, 0);
+assert.equal(accountDetailParse.holdings.find((row) => row.symbol === 'C').marketValue, 105.43);
+assert.ok(accountDetailParse.holdings.find((row) => row.symbol === 'C').marketValue > 0);
+assert.equal(accountDetailParse.holdings.find((row) => row.symbol === 'AAPL').marketValue, 47756.27);
+assert.equal(accountDetailParse.holdings.find((row) => row.symbol === 'AAPL').totalCost, 4616.23);
+assert.equal(accountDetailParse.holdings.find((row) => row.symbol === 'COST').marketValue, 38020.83);
+assert.equal(accountDetailParse.holdings.find((row) => row.symbol === 'PLAY').marketValue, 365);
+assert.ok(Math.abs(accountDetailParse.holdings.find((row) => row.symbol === 'PLAY').sharePrice - (365 / 40.691)) < 0.01);
+assert.equal(accountDetailParse.holdings.find((row) => row.symbol === 'NVDA').marketValue, 12828.64);
+assert.equal(accountDetailParse.holdings.find((row) => row.symbol === 'SPY').marketValue, 101.25);
+const expectedMarkets = {
+  AMC: 5.28, AAPL: 47756.27, ANET: 127198.50, BAC: 3799.83, AVGO: 27090.74,
+  CSOC: 7.00, CLEUF: 0.00, C: 105.43, COST: 38020.83, PLAY: 365.00,
+  ISRG: 1130.58, LCID: 24.25, LUMN: 124.21, META: 40196.01, NFLX: 32420.00,
+  NVDA: 12828.64, NXPI: 7059.31, WOOF: 103.74, RIVN: 337.26, SOFI: 1788.00,
+  SPCX: 2011.66, SBUX: 8727.06, TGT: 1729.14, TSLA: 25756.50, TWLO: 9425.20,
+  UAA: 206.64, UNH: 4441.61, WMT: 7051.04, ZS: 2825.78, AGG: 5.07,
+  QQQI: 1104.83, SPY: 101.25
+};
+accountDetailSymbols.forEach((symbol) => {
+  const row = accountDetailParse.holdings.find((holding) => holding.symbol === symbol);
+  assert.ok(row, `${symbol} must be parsed once`);
+  assert.equal(row.marketValue, expectedMarkets[symbol], `${symbol} market`);
+  assert.ok(row.marketValue >= 0, `${symbol} market must not be negative`);
+});
+assert.ok(accountDetailParse.excluded.some((row) => row.reason === 'SUMMARY_TOTAL_ROW'));
+assert.ok(accountDetailParse.excluded.some((row) => row.reason === 'PURCHASES_OR_REINVESTMENT_ROW'));
+assert.equal(accountDetailParse.holdings.filter((row) => row.symbol === 'MMF').length, 0);
+assert.equal(accountDetailParse.holdings.filter((row) => row.symbol === 'DEBITS').length, 0);
+assert.equal(accountDetailParse.holdings.filter((row) => row.symbol === 'CONTINUED').length, 0);
+assert.equal(
+  accountDetailParse.holdings.filter((row) =>
+    accountDetailParse.holdings.filter((other) => other.symbol === row.symbol).length > 1
+  ).length,
+  0
+);
+assert.equal(accountDetailParse.preamble.endingTotalValue, 403855.85);
+assert.equal(accountDetailParse.preamble.cashBalance, 109.19);
+assert.equal(accountDetailParse.reconciliation.ok, true, accountDetailParse.reconciliation.blockingReason || 'account-detail recon failed');
+assert.equal(accountDetailParse.reconciliation.unexplainedDifference, 0);
+
+const accountDetailAttached = ctx.investmentEtradeAttachSamerBrokeragePreviewContract_(
+  {
+    ok: true,
+    holdingsRows: accountDetailParse.holdings.map((row) => ({
+      symbol: row.symbol,
+      quantity: row.quantity,
+      price: row.sharePrice,
+      marketValue: row.marketValue
+    })),
+    asOf: accountDetailParse.preamble.asOfDate
+  },
+  accountDetailParse,
+  'Samer Etrade Account'
+);
+assert.equal(accountDetailAttached.ok, true, accountDetailAttached.error || 'account-detail attach failed');
+assert.equal(accountDetailAttached.proposedValue, 403855.85);
+assert.equal(accountDetailAttached.holdingsRows.find((row) => row.symbol === 'ANET').marketValue, 127198.50);
+assert.ok(accountDetailAttached.holdingsRows.find((row) => row.symbol === 'C').marketValue > 0);
 
 // --- ESPP parse ---
 const esppParse = ctx.investmentEtradeClientStatementParseText_(esppFixture);
@@ -182,6 +486,24 @@ assert.equal(ctx.investmentEtradeMatchesPotentialUnvestedStockPlanMapping_(
   'Future Etrade Cisco', 'ETRADE_CLIENT_STATEMENT_PDF'), false);
 assert.equal(ctx.investmentEtradeMatchesPotentialUnvestedStockPlanMapping_(
   'Etrade Cisco - Future', 'ETRADE_POSITIONS_PDF'), false);
+
+const samerMapping = ctx.investmentEtradeSamerBrokerageAccountValueMapping_();
+assert.equal(samerMapping.accountName, 'Samer Etrade Account');
+assert.equal(samerMapping.source, 'ETRADE_CLIENT_STATEMENT_PDF');
+assert.equal(samerMapping.valueCategory, 'BROKERAGE_ACCOUNT_VALUE');
+assert.equal(ctx.investmentEtradeMatchesSamerBrokerageAccountValueMapping_('Samer Etrade Account'), true);
+assert.equal(ctx.investmentEtradeMatchesSamerBrokerageAccountValueMapping_(
+  'Samer Etrade Account', 'ETRADE_CLIENT_STATEMENT_PDF'), true);
+assert.equal(ctx.investmentEtradeMatchesSamerBrokerageAccountValueMapping_(
+  'Etrade Cisco - Future', 'ETRADE_CLIENT_STATEMENT_PDF'), false);
+assert.equal(ctx.investmentEtradeMatchesSamerBrokerageAccountValueMapping_(
+  'Etrade Cisco - RSU/ESPP', 'ETRADE_CLIENT_STATEMENT_PDF'), false);
+assert.equal(ctx.investmentEtradeMatchesSamerBrokerageAccountValueMapping_(
+  'Lutfi Etrade Account', 'ETRADE_CLIENT_STATEMENT_PDF'), false);
+assert.equal(ctx.investmentEtradeMatchesSamerBrokerageAccountValueMapping_(
+  'Samer L Theodossy', 'ETRADE_CLIENT_STATEMENT_PDF'), false);
+assert.equal(ctx.investmentEtradeMatchesSamerBrokerageAccountValueMapping_(
+  'Samer Etrade Account', 'ETRADE_POSITIONS_PDF'), false);
 
 const futureParse = ctx.investmentEtradeClientStatementParseText_(futureFixture);
 assert.equal(futureParse.ok, true);

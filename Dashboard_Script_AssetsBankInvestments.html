@@ -2126,17 +2126,20 @@ function onInvestmentPortfolioDrawerBackdropClick_(event) {
 
 function setInvestmentPortfolioDrawerView_(view) {
   var data = __investmentPortfolioData || {};
-  var requested = view === 'import' ? 'import'
-    : (view === 'm1' ? 'm1'
-      : (view === 'schwab' ? 'schwab'
-        : (view === 'stash' ? 'stash'
-          : (view === '401k' ? '401k'
-            : (view === 'etrade-future' ? 'etrade-future' : 'portfolio')))));
+  var requested = 'portfolio';
+  if (view === 'import') requested = 'import';
+  else if (view === 'm1') requested = 'm1';
+  else if (view === 'schwab') requested = 'schwab';
+  else if (view === 'stash') requested = 'stash';
+  else if (view === '401k') requested = '401k';
+  else if (view === 'etrade-samer') requested = 'etrade-samer';
+  else if (view === 'etrade-future') requested = 'etrade-future';
   var mode = requested;
   if (mode === 'import' && !data.robinhoodCsvImportAvailable) mode = 'portfolio';
   if (mode === 'm1' && !data.m1ImportAvailable) mode = 'portfolio';
   if (mode === 'schwab' && !data.schwabImportAvailable) mode = 'portfolio';
   if (mode === 'stash' && !data.stashImportAvailable) mode = 'portfolio';
+  if (mode === 'etrade-samer' && !data.etradeSamerImportAvailable) mode = 'portfolio';
   if (mode === '401k' && !data.fidelity401kImportAvailable) mode = 'portfolio';
   if (mode === 'etrade-future' && !data.etradeCiscoStatementImportAvailable) mode = 'portfolio';
   var portfolio = document.getElementById('inv_portfolio_view');
@@ -2144,6 +2147,7 @@ function setInvestmentPortfolioDrawerView_(view) {
   var m1View = document.getElementById('inv_portfolio_m1_import_view');
   var schwabView = document.getElementById('inv_portfolio_schwab_import_view');
   var stashView = document.getElementById('inv_portfolio_stash_import_view');
+  var etradeSamerView = document.getElementById('inv_portfolio_etrade_samer_import_view');
   var k401View = document.getElementById('inv_portfolio_401k_import_view');
   var etradeFutureView = document.getElementById('inv_portfolio_etrade_future_import_view');
   var portfolioBtn = document.getElementById('inv_portfolio_view_btn');
@@ -2151,6 +2155,7 @@ function setInvestmentPortfolioDrawerView_(view) {
   var m1Btn = document.getElementById('inv_portfolio_m1_import_btn');
   var schwabBtn = document.getElementById('inv_portfolio_schwab_import_btn');
   var stashBtn = document.getElementById('inv_portfolio_stash_import_btn');
+  var etradeSamerBtn = document.getElementById('inv_portfolio_etrade_samer_import_btn');
   var k401Btn = document.getElementById('inv_portfolio_401k_import_btn');
   var etradeFutureBtn = document.getElementById('inv_portfolio_etrade_future_import_btn');
   if (portfolio) portfolio.hidden = mode !== 'portfolio';
@@ -2158,6 +2163,7 @@ function setInvestmentPortfolioDrawerView_(view) {
   if (m1View) m1View.hidden = mode !== 'm1';
   if (schwabView) schwabView.hidden = mode !== 'schwab';
   if (stashView) stashView.hidden = mode !== 'stash';
+  if (etradeSamerView) etradeSamerView.hidden = mode !== 'etrade-samer';
   if (k401View) k401View.hidden = mode !== '401k';
   if (etradeFutureView) etradeFutureView.hidden = mode !== 'etrade-future';
   if (portfolioBtn) {
@@ -2179,6 +2185,10 @@ function setInvestmentPortfolioDrawerView_(view) {
   if (stashBtn) {
     stashBtn.classList.toggle('active', mode === 'stash');
     stashBtn.setAttribute('aria-selected', mode === 'stash' ? 'true' : 'false');
+  }
+  if (etradeSamerBtn) {
+    etradeSamerBtn.classList.toggle('active', mode === 'etrade-samer');
+    etradeSamerBtn.setAttribute('aria-selected', mode === 'etrade-samer' ? 'true' : 'false');
   }
   if (k401Btn) {
     k401Btn.classList.toggle('active', mode === '401k');
@@ -2203,6 +2213,10 @@ function setInvestmentPortfolioDrawerView_(view) {
       typeof initInvestmentPortfolioDrawerStashImport_ === 'function') {
     initInvestmentPortfolioDrawerStashImport_(__investmentPortfolioSelectedId, __investmentPortfolioData);
   }
+  if (mode === 'etrade-samer' && __investmentPortfolioData && __investmentPortfolioData.etradeSamerImportAvailable &&
+      typeof initInvestmentPortfolioDrawerEtradeSamerImport_ === 'function') {
+    initInvestmentPortfolioDrawerEtradeSamerImport_(__investmentPortfolioSelectedId, __investmentPortfolioData);
+  }
   if (mode === '401k' && __investmentPortfolioData && __investmentPortfolioData.fidelity401kImportAvailable &&
       typeof initInvestmentPortfolioDrawer401kImport_ === 'function') {
     initInvestmentPortfolioDrawer401kImport_(__investmentPortfolioSelectedId, __investmentPortfolioData);
@@ -2220,6 +2234,7 @@ function syncInvestmentPortfolioDrawerImportTabs_(data) {
   var m1Btn = document.getElementById('inv_portfolio_m1_import_btn');
   var schwabBtn = document.getElementById('inv_portfolio_schwab_import_btn');
   var stashBtn = document.getElementById('inv_portfolio_stash_import_btn');
+  var etradeSamerBtn = document.getElementById('inv_portfolio_etrade_samer_import_btn');
   var k401Btn = document.getElementById('inv_portfolio_401k_import_btn');
   var etradeFutureBtn = document.getElementById('inv_portfolio_etrade_future_import_btn');
   if (importBtn) {
@@ -2237,6 +2252,10 @@ function syncInvestmentPortfolioDrawerImportTabs_(data) {
   if (stashBtn) {
     stashBtn.hidden = !data.stashImportAvailable;
     stashBtn.textContent = 'Import Stash statement PDF';
+  }
+  if (etradeSamerBtn) {
+    etradeSamerBtn.hidden = !data.etradeSamerImportAvailable;
+    etradeSamerBtn.textContent = 'Import E*TRADE statement PDF';
   }
   if (k401Btn) {
     k401Btn.hidden = !data.fidelity401kImportAvailable;

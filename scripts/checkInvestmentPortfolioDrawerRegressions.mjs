@@ -25,6 +25,7 @@ const drawerSchwabSource = read('Dashboard_Script_InvestmentPortfolioDrawerSchwa
 const drawerStashSource = read('Dashboard_Script_InvestmentPortfolioDrawerStash.html');
 const drawer401kSource = read('Dashboard_Script_InvestmentPortfolioDrawer401k.html');
 const drawerEtradeFutureSource = read('Dashboard_Script_InvestmentPortfolioDrawerEtradeFuture.html');
+const drawerEtradeSamerSource = read('Dashboard_Script_InvestmentPortfolioDrawerEtradeSamer.html');
 const etradeClientSource = read('investment_etrade_client_statement_pdf.js');
 const webappSource = read('webapp.js');
 const drawerSource = read('investment_portfolio_drawer.js');
@@ -57,6 +58,8 @@ vm.runInContext(`
   ${extractFunction(etradeClientSource, 'investmentEtradeCiscoBrokerageAccountValueMapping_')}
   ${extractFunction(etradeClientSource, 'investmentEtradeCiscoStatementImportProfile_')}
   ${extractFunction(etradeClientSource, 'investmentEtradeMatchesCiscoStatementImportProfile_')}
+  ${extractFunction(etradeClientSource, 'investmentEtradeSamerBrokerageAccountValueMapping_')}
+  ${extractFunction(etradeClientSource, 'investmentEtradeMatchesSamerBrokerageAccountValueMapping_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerProviderLabel_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerMatchGroupProvider_')}
   ${extractFunction(drawerSource, 'investmentPortfolioDrawerIs401kRetirementAccount_')}
@@ -193,6 +196,30 @@ const fixtureAccounts = [
     inactive: false
   },
   {
+    sysAssetsRow: 21,
+    accountName: 'Samer Etrade Account',
+    type: 'Brokerage',
+    investmentId: 'inv-samer-etrade',
+    planningPurpose: '',
+    inactive: false
+  },
+  {
+    sysAssetsRow: 22,
+    accountName: 'Lutfi Etrade Account',
+    type: 'Brokerage',
+    investmentId: 'inv-lutfi-etrade',
+    planningPurpose: '',
+    inactive: false
+  },
+  {
+    sysAssetsRow: 23,
+    accountName: 'Laith Etrade Account',
+    type: 'Brokerage',
+    investmentId: 'inv-laith-etrade',
+    planningPurpose: '',
+    inactive: false
+  },
+  {
     sysAssetsRow: 99,
     accountName: 'Stopped Legacy Brokerage',
     type: 'Brokerage',
@@ -301,7 +328,7 @@ assert.match(dashboardStyles, /#9aa3ad/);
 
 // --- Active account list includes all active accounts, excludes inactive ---
 const drawerList = simulateDrawerAccountList(fixtureAccounts);
-assert.equal(drawerList.length, 11, 'drawer must list every active investment account');
+assert.equal(drawerList.length, 14, 'drawer must list every active investment account');
 assert.deepEqual(
   drawerList.map((row) => row.accountName).sort(),
   [
@@ -310,10 +337,13 @@ assert.deepEqual(
     'Etrade Cisco - Future',
     'Etrade Cisco - RSU/ESPP',
     'Laith 529',
+    'Laith Etrade Account',
     'Lutfi 529',
+    'Lutfi Etrade Account',
     'Lutfi Robinhood',
     'M1 Account - Gmail',
     'M1 Account - yahoo',
+    'Samer Etrade Account',
     'Samer Robinhood',
     'Stash Account'
   ].sort()
@@ -331,7 +361,7 @@ assert.equal(
 );
 assert.equal(
   drawerList.filter((row) => row.planningPurpose !== 'INCOME_PRODUCING').length,
-  10,
+  13,
   'non-income-producing active accounts must still appear'
 );
 
@@ -425,12 +455,15 @@ const enabledNames = [
   'M1 Account - Gmail',
   'M1 Account - yahoo',
   'Samer Robinhood',
+  'Samer Etrade Account',
   'Stash Account'
 ];
 const disabledNames = [
   'Laith 529',
   'Lutfi 529',
-  'Lutfi Robinhood'
+  'Lutfi Robinhood',
+  'Lutfi Etrade Account',
+  'Laith Etrade Account'
 ];
 enabledNames.forEach((name) => {
   const row = pickerByName(name);
@@ -475,6 +508,9 @@ assert.equal(byName('Samer Robinhood').customerImportSource, 'ROBINHOOD_CSV');
 assert.match(byName('Samer Robinhood').optionLabel, /Samer Robinhood · Robinhood/);
 assert.equal(byName('Stash Account').customerImportSource, 'STASH_BROKERAGE_STATEMENT_PDF');
 assert.match(byName('Stash Account').optionLabel, /Stash Account · Stash/);
+assert.equal(byName('Samer Etrade Account').customerImportSource, 'ETRADE_CLIENT_STATEMENT_PDF');
+assert.equal(byName('Samer Etrade Account').customerImportEnabled, true);
+assert.match(byName('Samer Etrade Account').optionLabel, /Samer Etrade Account · E\*TRADE/);
 
 const ciscoProfile = context.investmentPortfolioDrawerStatementImportProfiles_()[0];
 assert.ok(ciscoProfile);
@@ -533,7 +569,8 @@ enabledNames.forEach((name) => {
   assert.equal(allowed.ok, true, `${name} must invoke its supported import`);
 });
 
-['Etrade Cisco - Future', 'Etrade Cisco - RSU/ESPP', 'Laith 529', 'Lutfi 529', 'Lutfi Robinhood'].forEach((name) => {
+['Etrade Cisco - Future', 'Etrade Cisco - RSU/ESPP', 'Laith 529', 'Lutfi 529', 'Lutfi Robinhood',
+  'Lutfi Etrade Account', 'Laith Etrade Account'].forEach((name) => {
   const open = evaluateNamed(name, '');
   assert.equal(open.ok, false, `${name} must not open the customer drawer`);
   assert.match(String(open.error || ''), /Import not available yet|eligible investment account/);
@@ -555,6 +592,13 @@ assert.equal(etradeLab.labSource, true);
 const futureCustomerSource = evaluateNamed('Etrade Cisco - Future', 'ETRADE_CLIENT_STATEMENT_PDF');
 assert.equal(futureCustomerSource.ok, true, 'lab Future-only CLIENT_STATEMENT remains available off the customer picker');
 assert.equal(futureCustomerSource.labSource, true);
+const samerCustomerSource = evaluateNamed('Samer Etrade Account', 'ETRADE_CLIENT_STATEMENT_PDF');
+assert.equal(samerCustomerSource.ok, true);
+assert.notEqual(samerCustomerSource.labSource, true);
+assert.equal(samerCustomerSource.customerImportEnabled, true);
+const lutfiEtradeLab = evaluateNamed('Lutfi Etrade Account', 'ETRADE_CLIENT_STATEMENT_PDF');
+assert.equal(lutfiEtradeLab.ok, true, 'Lutfi E*TRADE lab CLIENT_STATEMENT remains off the customer picker');
+assert.equal(lutfiEtradeLab.labSource, true);
 const futureWrongSource = evaluateNamed('Etrade Cisco - Future', 'SCHWAB_BROKERAGE_STATEMENT_PDF');
 assert.equal(futureWrongSource.ok, false);
 assert.match(String(futureWrongSource.error || ''), /Import not available yet/);
@@ -619,7 +663,7 @@ assert.equal(
   'income-producing E*TRADE must not invoke Robinhood CSV'
 );
 
-['Lutfi Etrade Account', 'Samer Etrade Account', 'Laith Etrade Account'].forEach((name) => {
+['Lutfi Etrade Account', 'Laith Etrade Account'].forEach((name) => {
   const row = context.investmentPortfolioDrawerDescribePickerAccount_({
     sysAssetsRow: 30,
     accountName: name,
@@ -637,6 +681,14 @@ assert.match(dashboardInvestments, /!data\.schwabImportAvailable/);
 assert.match(dashboardInvestments, /!data\.stashImportAvailable/);
 assert.match(dashboardInvestments, /!data\.fidelity401kImportAvailable/);
 assert.match(dashboardInvestments, /!data\.etradeCiscoStatementImportAvailable/);
+assert.match(dashboardInvestments, /!data\.etradeSamerImportAvailable/);
+assert.doesNotThrow(() => {
+  new Function(dashboardInvestments);
+}, 'Dashboard_Script_AssetsBankInvestments.html must parse so loadInvestmentSection can fill the Update dropdown');
+assert.match(
+  extractFunction(dashboardInvestments, 'setInvestmentPortfolioDrawerView_'),
+  /else if \(view === 'etrade-samer'\) requested = 'etrade-samer';/
+);
 
 // --- No workbook writes in drawer module ---
 assert.doesNotMatch(drawerSource, /\bsetValues\b|\bappendRow\b|\bsetValue\b/);
@@ -676,6 +728,7 @@ assert.match(drawerSource, /previewFidelity401kStatementFromDashboard/);
 assert.match(drawerSource, /previewEtradeCiscoFutureStatementFromDashboard/);
 assert.match(drawerSource, /previewEtradeCiscoStatementProfileFromDashboard/);
 assert.match(drawerSource, /etradeCiscoStatementImportAvailable/);
+assert.match(drawerSource, /etradeSamerImportAvailable/);
 assert.match(drawerSource, /ETRADE_CISCO_STATEMENT/);
 assert.match(drawerSource, /investmentPortfolioDrawerStatementImportProfiles_/);
 assert.doesNotMatch(drawerSource, /Etrade Cisco - RSU\/ESPP \+ Future/);
@@ -771,6 +824,34 @@ assert.doesNotMatch(drawerStashSource, /boundedHoldingsPreviewRunGroupedChildFro
 assert.doesNotMatch(drawerStashSource, /\bsetValues\b|\bappendRow\b/);
 assert.match(drawerStashSource, /lastSinglePreview = res;/);
 assert.match(dashboardInvestments, /stashImportAvailable/);
+assert.match(dashboardInvestments, /etradeSamerImportAvailable/);
+assert.match(drawerEtradeSamerSource, /boundedHoldingsPreviewRunFromDashboard/);
+assert.match(drawerEtradeSamerSource, /boundedHoldingsPreviewBuildApplyDiffFromDashboard/);
+assert.match(drawerEtradeSamerSource, /boundedHoldingsPreviewApplyFromDashboard/);
+assert.match(drawerEtradeSamerSource, /payload\.explicitApplyConfirm = true/);
+assert.match(drawerEtradeSamerSource, /monthlyInvestmentValueDecision/);
+assert.match(drawerEtradeSamerSource, /Monthly investment value/);
+assert.match(drawerEtradeSamerSource, /Ignore monthly value/);
+assert.match(drawerEtradeSamerSource, /Keep existing/);
+assert.match(drawerEtradeSamerSource, /Replace with statement value/);
+assert.match(drawerEtradeSamerSource, /Already matches\. Existing value will be kept\./);
+assert.match(drawerEtradeSamerSource, /Existing value will remain unchanged unless Replace is selected\./);
+assert.match(drawerEtradeSamerSource, /Warning: the existing monthly value will be replaced\./);
+assert.match(drawerEtradeSamerSource, /reason !== 'PURCHASES_OR_REINVESTMENT_ROW'/);
+assert.match(drawerEtradeSamerSource, /reason !== 'SUMMARY_TOTAL_ROW'/);
+assert.match(drawerEtradeSamerSource, /ETRADE_CLIENT_STATEMENT_PDF/);
+assert.match(drawerEtradeSamerSource, /ensureInvDrawerPdfClientReady_/);
+assert.match(drawerEtradeSamerSource, /accountProvider: 'ETRADE'/);
+assert.doesNotMatch(drawerEtradeSamerSource, /boundedHoldingsPreviewRunGroupedChildFromDashboard/);
+assert.doesNotMatch(drawerEtradeSamerSource, /\bsetValues\b|\bappendRow\b/);
+assert.match(dashboardBody, /inv_portfolio_etrade_samer_import_view/);
+assert.match(dashboardBody, /Import E\*TRADE statement PDF/);
+assert.match(read('PlannerDashboardWeb.html'), /Dashboard_Script_InvestmentPortfolioDrawerEtradeSamer/);
+assert.ok(
+  read('PlannerDashboardWeb.html').indexOf('Dashboard_Script_InvestmentPortfolioDrawerM1') <
+    read('PlannerDashboardWeb.html').indexOf('Dashboard_Script_InvestmentPortfolioDrawerEtradeSamer'),
+  'M1 PDF helper include must load before the Samer E*TRADE drawer'
+);
 
 const schwabDrawerDom = (function() {
   const nodes = {};
@@ -1898,8 +1979,8 @@ assert.match(roadmap, /standalone Cisco picker entries were removed/);
 assert.match(roadmap, /Central no-write runtime validation passed with the real statement/);
 assert.match(roadmap, /Apply writes only `INPUT - Investments`/);
 assert.match(roadmap, /LOG - Activity/);
-assert.match(roadmap, /Samer Etrade Account import support/);
-assert.match(roadmap, /Samer Etrade Account import support[\s\S]{0,120}[Nn]ot implemented/);
+assert.match(roadmap, /Samer Etrade Account/);
+assert.match(roadmap, /Central runtime validation still needed/);
 assert.match(roadmap, /Laith 529/);
 assert.match(roadmap, /Lutfi 529/);
 assert.match(roadmap, /Lutfi Etrade Account/);

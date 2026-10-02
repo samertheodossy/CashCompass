@@ -1,0 +1,92 @@
+Beginning Total Value (as of 8/1/26) $382,158.35 Ending Total Value (as of 8/31/26) $403,855.85 Includes Accrued Interest CLIENT STATEMENT For the Period August 1-31, 2026 STATEMENT FOR: SYNTHETIC HOLDER Morgan Stanley Smith Barney LLC. Member SIPC. E*TRADE is a business of Morgan Stanley.
+Account Summary CLIENT STATEMENT For the Period August 1-31, 2026 Self-Directed Brokerage Account XXXX-BROKERAGE-001
+Security Description Quantity Share Price Total Cost Market Value Unrealized Gain/Loss Unrealized Gain/Loss % Est Ann Income Current Yield %
+AMC ENTRTANMNT HLDGS INC CL A (AMC)  2.000  $2.640  $159.00  $5.28  $(153.72)  —  —  Asset Class:
+Equities  APPLE INC (AAPL)
+Purchases  1.000  1.00  1.00  1.00  0.00
+Reinvestments  1.000  1.00  1.00  1.00  0.00
+Total  150.722  4,616.23  47,756.27  43,140.02  162.78  0.34  Rating: Morgan Stanley: 1, Morningstar: 2; Asset Class:
+Equities  ARISTA NETWORKS INC (ANET)  650.000  195.690  3,023.25  127,198.50  124,175.25  —  —  Rating: Morgan Stanley: 1, Morningstar: 1; Asset Class:
+Equities  BANK OF AMERICA CORP (BAC)
+Purchases  1.000  1.00  1.00  1.00  0.00
+Reinvestments  1.000  1.00  1.00  1.00  0.00
+Total  61.347  1,122.16  3,799.83  2,677.69  78.52  2.07  Rating: Morgan Stanley: 1, Morningstar: 2; Asset Class:
+Equities  BROADCOM INC (AVGO)
+Purchases  1.000  1.00  1.00  1.00  0.00
+Reinvestments  1.000  1.00  1.00  1.00  0.00
+Total  73.151  1,859.12  27,090.74  25,231.61  190.19  0.70  Rating: Morgan Stanley: 1, Morningstar: 1; Asset Class:
+Equities  CADUCEUS SOFTWARE SYS CORP COM (CSOC)  2,500.000  0.003  92.00  7.00  (85.00)  —  —  Asset Class:
+Equities  CHINA LIBERAL ED HLDGS LTD NEW (CLEUF)  24.000  0.000  12,436.62  0.00  (12,436.62)  —  —  Asset Class:
+Equities  CITIGROUP INC NEW (C)
+Purchases  1.000  1.00  1.00  1.00  0.00
+Reinvestments  1.000  1.00  1.00  1.00  0.00
+Total  0.801  320.95  105.43  (215.52)  2.15  2.04  Rating: Morgan Stanley: 1, Morningstar: 2; Asset Class:
+Equities  COSTCO WHOLESALE CORP NEW (COST)
+Purchases  1.000  1.00  1.00  1.00  0.00
+Reinvestments  1.000  1.00  1.00  1.00  0.00
+Total  40.281  4,646.96  38,020.83  33,373.90  236.85  0.62  Rating: Morgan Stanley: 1, Morningstar: 3; Asset Class: Equities
+DAVE & BUSTERS ENTMT INC COM (PLAY)
+Purchases  1.000  1.00  1.00  1.00  0.00
+Reinvestments  1.000  1.00  1.00  1.00  0.00
+Total  40.691  2,269.80  365.00  (1,904.80)  —  —  Asset Class:
+Equities  INTUITIVE SURGICAL INC (ISRG)  3.000  376.860  303.26  1,130.58  827.32  —  —  Rating: Morningstar: 2; Asset Class:
+Equities  LUCID GROUP INC NEW (LCID)  5.000  4.850  1,460.40  24.25  (1,436.15)  —  —  Rating: Morgan Stanley: 3; Asset Class:
+Equities  LUMEN TECHNOLOGIES INC (LUMN)
+Purchases  1.000  1.00  1.00  1.00  0.00
+Reinvestments  1.000  1.00  1.00  1.00  0.00
+Total  19.874  312.72  124.21  (188.52)  —  —  Rating: Morningstar: 2; Asset Class:
+Equities  META PLATFORMS INC CL A (META)
+Purchases  1.000  1.00  1.00  1.00  0.00
+Reinvestments  1.000  1.00  1.00  1.00  0.00
+Total  70.231  2,510.68  40,196.01  37,685.33  147.49  0.37  Rating: Morgan Stanley: 1, Morningstar: 1; Asset Class:
+Equities  NETFLIX INC (NFLX)  400.000  81.050  7,191.75  32,420.00  25,228.26  —  —  Rating: Morgan Stanley: 1, Morningstar: 2; Asset Class:
+Equities  NVIDIA CORPORATION (NVDA)
+Purchases  1.000  1.00  1.00  1.00  0.00
+Reinvestments  1.000  1.00  1.00  1.00  0.00
+Total  58.106  7,444.99  12,828.64  5,383.66  58.11  0.45  Rating: Morgan Stanley: 1, Morningstar: 1; Asset Class:
+Equities  NXP SEMICONDUCTORS NV (NXPI)
+Purchases  1.000  1.00  1.00  1.00  0.00
+Reinvestments  1.000  1.00  1.00  1.00  0.00
+Total  31.425  2,752.33  7,059.31  4,306.99  127.46  1.81  Rating: Morgan Stanley: 1, Morningstar: 1; Asset Class:
+Equities  PETCO HEALTH & WELLNESS CO (WOOF)  39.000  2.660  1,046.27  103.74  (942.53)  —  —  Rating: Morgan Stanley: 2; Asset Class:
+Equities  RIVIAN AUTOMOTIVE INC CL A (RIVN)  21.000  16.060  2,540.72  337.26  (2,203.46)  —  —  Rating: Morgan Stanley: 3, Morningstar: 1; Asset Class:
+Equities  SOFI TECHNOLOGIES INC (SOFI)  100.000  17.880  524.72  1,788.00  1,263.28  —  —  Rating: Morgan Stanley: 3, Morningstar: 2; Asset Class:
+Equities  SPACE EXPLORATION TECHN-CL A (SPCX)  14.000  143.690  1,890.00  2,011.66  121.66  —  —  Rating: Morgan Stanley: 1, Morningstar: 3; Asset Class: Equities
+STARBUCKS CORP WASHINGTON (SBUX)
+Purchases  1.000  1.00  1.00  1.00  0.00
+Reinvestments  1.000  1.00  1.00  1.00  0.00
+Total  82.137  3,345.84  8,727.06  5,381.24  203.70  2.33  Rating: Morgan Stanley: 1, Morningstar: 3; Asset Class:
+Equities  TARGET CORPORATION (TGT)
+Purchases  1.000  1.00  1.00  1.00  0.00
+Reinvestments  1.000  1.00  1.00  1.00  0.00
+Total  10.748  1,637.20  1,729.14  91.94  49.87  2.88  Rating: Morgan Stanley: 1, Morningstar: 3; Asset Class:
+Equities  TESLA INC (TSLA)  70.000  367.950  986.26  25,756.50  24,770.24  —  —  Rating: Morgan Stanley: 2, Morningstar: 1; Asset Class:
+Equities  TWILIO INC CL A (TWLO)  40.000  235.630  1,139.03  9,425.20  8,286.17  —  —  Rating: Morgan Stanley: 1, Morningstar: 2; Asset Class:
+Equities  UNDER ARMOUR INC CL A (UAA)  41.000  5.040  1,639.38  206.64  (1,432.76)  —  —  Rating: Morningstar: 1; Asset Class:
+Equities  UNITEDHEALTH GP INC (UNH)
+Purchases  1.000  1.00  1.00  1.00  0.00
+Reinvestments  1.000  1.00  1.00  1.00  0.00
+Total  11.406  1,183.89  4,441.61  3,257.72  105.85  2.38  Rating: Morgan Stanley: 1, Morningstar: 1; Asset Class:
+Equities  WALMART INC (WMT)
+Purchases  1.000  1.00  1.00  1.00  0.00
+Reinvestments  1.000  1.00  1.00  1.00  0.00
+Total  67.236  2,759.78  7,051.04  4,291.26  66.56  0.94  Rating: Morgan Stanley: 1, Morningstar: 3; Asset Class:
+Equities  ZSCALER, INC (ZS)  15.000  188.385  454.95  2,825.78  2,370.83  —  —  Rating: Morgan Stanley: 2, Morningstar: 1; Asset Class: Equities
+ISHARES CORE U.S. AGGREGATE (AGG)
+Purchases  1.000  1.00  1.00  1.00  0.00
+Reinvestments  1.000  1.00  1.00  1.00  0.00
+Total  0.052  3.39  5.07  1.68  0.21  4.14  Next Dividend Payable 09/04/26; Asset Class:
+FI & Pref  NEOS NASDAQ-100 HIGH INC ETF (QQQI)
+Purchases  1.000  1.00  1.00  1.00  0.00
+Reinvestments  1.000  1.00  1.00  1.00  0.00
+Total  20.235  1,079.34  1,104.83  25.49  154.76  14.01  Next Dividend Payable 09/2026; Asset Class:
+Alt  STATE STREET SPDR S&P 500 ETF (SPY)
+Purchases  1.000  1.00  1.00  1.00  0.00
+Reinvestments  1.000  1.00  1.00  1.00  0.00
+Total  0.132  48.08  101.25  53.17  0.99  0.98  Next Dividend Payable 10/2026; Asset Class: Equities
+TOTAL VALUE  100.00%  $72,801.07  $403,855.85  $330,945.63  $1,585.49 — 0.39%
+CLOSING CASH, BDP, MMFs $109.19
+MONEY MARKET FUND (MMF) AND BANK DEPOSIT PROGRAM ACTIVITY  Activity Date  Activity Type  Description  Credits/(Debits)
+NET CREDITS/(DEBITS) $64.74
+AND BANK DEPOSIT PROGRAM ACTIVITY (CONTINUED)
+Activity Summary SYNA CORP (SYNA) Dividend $10.00

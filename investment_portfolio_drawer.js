@@ -251,6 +251,10 @@ function investmentPortfolioDrawerCustomerImportEligibility_(account) {
     return enabled('FIDELITY_401K_STATEMENT_PDF', '401(k) supports balance-only import');
   }
   if (provider === 'ETRADE') {
+    if (typeof investmentEtradeMatchesSamerBrokerageAccountValueMapping_ === 'function' &&
+        investmentEtradeMatchesSamerBrokerageAccountValueMapping_(mapped.accountName, '')) {
+      return enabled('ETRADE_CLIENT_STATEMENT_PDF', '');
+    }
     return disabled('Import not available yet');
   }
   var formats = investmentPortfolioDrawerCustomerDrawerFormats_(provider, previewMode);
@@ -351,6 +355,9 @@ function investmentPortfolioDrawerEvaluateCustomerImportRequest_(account, source
     return { ok: true, eligibility: eligibility, customerImportEnabled: true };
   }
   if (!investmentPortfolioDrawerIsCustomerProductionSource_(normalized)) {
+    if (eligibility.enabled && eligibility.source && normalized === eligibility.source) {
+      return { ok: true, eligibility: eligibility, customerImportEnabled: true };
+    }
     return { ok: true, eligibility: eligibility, labSource: true };
   }
   if (!eligibility.enabled) {
@@ -432,6 +439,13 @@ function investmentPortfolioDrawerGuardCustomerProductionImport_(ss, payload) {
     return { ok: true, statementImportProfile: true };
   }
   if (!investmentPortfolioDrawerIsCustomerProductionSource_(source)) {
+    var labAccount = investmentPortfolioDrawerResolveAccountFromPayload_(ss, payload);
+    if (labAccount) {
+      var labEligibility = investmentPortfolioDrawerCustomerImportEligibility_(labAccount);
+      if (labEligibility.enabled && labEligibility.source && labEligibility.source === source) {
+        return investmentPortfolioDrawerAssertCustomerImportAllowed_(ss, payload, source);
+      }
+    }
     return { ok: true };
   }
   return investmentPortfolioDrawerAssertCustomerImportAllowed_(ss, payload, source);
@@ -829,6 +843,10 @@ function investmentPortfolioDrawerBuildPayload_(ss, account) {
     stashImportAvailable: eligibility.enabled && eligibility.source === 'STASH_BROKERAGE_STATEMENT_PDF',
     fidelity401kImportAvailable: eligibility.enabled &&
       eligibility.source === 'FIDELITY_401K_STATEMENT_PDF',
+    etradeSamerImportAvailable: eligibility.enabled &&
+      eligibility.source === 'ETRADE_CLIENT_STATEMENT_PDF' &&
+      typeof investmentEtradeMatchesSamerBrokerageAccountValueMapping_ === 'function' &&
+      investmentEtradeMatchesSamerBrokerageAccountValueMapping_(account.accountName, eligibility.source),
     etradeFutureImportAvailable: false,
     etradeCiscoStatementImportAvailable: false,
     supportedImportFormats: customerFormats,
@@ -901,6 +919,7 @@ function investmentPortfolioDrawerBuildPayload_(ss, account) {
     payload.schwabImportAvailable = false;
     payload.stashImportAvailable = false;
     payload.robinhoodCsvImportAvailable = false;
+    payload.etradeSamerImportAvailable = false;
     payload.etradeFutureImportAvailable = false;
     payload.etradeCiscoStatementImportAvailable = false;
     payload.portfolioStatus = {
@@ -1151,6 +1170,7 @@ function investmentPortfolioDrawerBuildCiscoStatementProfilePayload_(ss) {
     customerImportEnabled: true,
     customerImportSource: profile.source,
     etradeCiscoStatementImportAvailable: true,
+    etradeSamerImportAvailable: false,
     etradeFutureImportAvailable: false,
     m1ImportAvailable: false,
     schwabImportAvailable: false,

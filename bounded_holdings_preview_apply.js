@@ -5,7 +5,9 @@
  * SYS - Investment Holdings Unified. Trusted single-account Schwab/M1/Stash/Fidelity
  * 401(k) Apply may also write the statement month through the canonical
  * investment value writer. Fidelity 401(k) is balance-only: it never proposes
- * unified holdings rows.
+ * unified holdings rows. Samer Etrade Account uses the same Unified holdings
+ * Apply plus monthly INPUT value. E*TRADE Cisco combined and Future potential
+ * paths remain monthly-value only.
  */
 
 function boundedHoldingsPreviewApplyAssertExplicitConfirm_(payload) {
@@ -49,6 +51,70 @@ function boundedHoldingsPreviewApplyBuildSingleScope_(accountValidation, preview
     contentFingerprint: boundedHoldingsPreviewApplyBuildContentFingerprintFromPreview_(preview),
     asOfDate: boundedHoldingsPreviewApplyNormalizeAsOfDate_(preview.asOf),
     statementPeriodEnd: boundedHoldingsPreviewApplyNormalizeAsOfDate_(preview.asOf)
+  };
+}
+
+function boundedHoldingsPreviewApplyRebuildEtradeSamerBrokeragePreview_(ss, payload, accountValidation) {
+  payload = payload || {};
+  var mapping = typeof investmentEtradeSamerBrokerageAccountValueMapping_ === 'function'
+    ? investmentEtradeSamerBrokerageAccountValueMapping_()
+    : {
+      accountName: 'Samer Etrade Account',
+      source: 'ETRADE_CLIENT_STATEMENT_PDF'
+    };
+  if (payload.explicitAccountMatch !== true) {
+    return {
+      ok: false,
+      error: 'Confirm this document belongs to ' + mapping.accountName + '.'
+    };
+  }
+  var previewPayload = Object.assign({}, payload || {}, {
+    stableAccountId: accountValidation && accountValidation.stableAccountId,
+    registrationType: accountValidation && accountValidation.registrationType,
+    explicitAccountMatch: true,
+    source: mapping.source,
+    accountName: String(payload.accountName || '').trim() || mapping.accountName
+  });
+  accountValidation = accountValidation ||
+    boundedHoldingsPreviewValidateSelectedAccount_(ss, previewPayload);
+  if (!accountValidation.ok) return accountValidation;
+  if (typeof investmentEtradeMatchesSamerBrokerageAccountValueMapping_ !== 'function' ||
+      !investmentEtradeMatchesSamerBrokerageAccountValueMapping_(
+        accountValidation.accountName, mapping.source)) {
+    return {
+      ok: false,
+      error: 'Select ' + mapping.accountName + ' before applying this E*TRADE statement.'
+    };
+  }
+  var preview = holdingsPreviewLabBuildPreview_(previewPayload);
+  if (!preview.ok) return preview;
+  var parsed = typeof investmentEtradeClientStatementParseText_ === 'function'
+    ? investmentEtradeClientStatementParseText_(payload.rawDocumentText)
+    : { ok: false, error: 'E*TRADE client statement parser is unavailable.' };
+  if (typeof investmentEtradeAttachSamerBrokeragePreviewContract_ === 'function') {
+    preview = investmentEtradeAttachSamerBrokeragePreviewContract_(
+      preview, parsed, accountValidation.accountName);
+  }
+  if (!preview || !preview.ok) {
+    return preview && preview.ok === false ? preview : {
+      ok: false,
+      error: 'Could not validate the Samer Etrade Account statement.'
+    };
+  }
+  var reviewCheck = boundedHoldingsPreviewApplyRejectReviewRequiredPreview_(preview);
+  if (!reviewCheck.ok) return reviewCheck;
+  var documentFingerprint = boundedHoldingsPreviewApplyBuildDocumentFingerprint_(
+    mapping.source, payload.rawDocumentText);
+  if (!documentFingerprint) {
+    return { ok: false, error: 'Document fingerprint could not be built for Apply.' };
+  }
+  return {
+    ok: true,
+    accountValidation: accountValidation,
+    preview: preview,
+    documentFingerprint: documentFingerprint,
+    scope: boundedHoldingsPreviewApplyBuildSingleScope_(
+      accountValidation, preview, previewPayload, documentFingerprint)
   };
 }
 
@@ -307,6 +373,12 @@ function boundedHoldingsPreviewApplyRebuildSinglePreview_(ss, payload) {
         investmentEtradeMatchesPotentialUnvestedStockPlanMapping_(
           etradeAccountValidation.accountName, requestedSource)) {
       return boundedHoldingsPreviewApplyRebuildEtradeFuturePreview_(
+        ss, payload, etradeAccountValidation);
+    }
+    if (typeof investmentEtradeMatchesSamerBrokerageAccountValueMapping_ === 'function' &&
+        investmentEtradeMatchesSamerBrokerageAccountValueMapping_(
+          etradeAccountValidation.accountName, requestedSource)) {
+      return boundedHoldingsPreviewApplyRebuildEtradeSamerBrokeragePreview_(
         ss, payload, etradeAccountValidation);
     }
   }

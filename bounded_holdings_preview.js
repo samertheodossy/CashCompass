@@ -132,7 +132,19 @@ function boundedHoldingsPreviewRunFromDashboard(payload) {
       var customerGate = investmentPortfolioDrawerGuardCustomerProductionImport_(ss, previewPayload);
       if (!customerGate.ok) return customerGate;
     }
-    return holdingsPreviewLabBuildPreview_(previewPayload);
+    var preview = holdingsPreviewLabBuildPreview_(previewPayload);
+    if (preview && preview.ok &&
+        typeof investmentEtradeAttachSamerBrokeragePreviewContract_ === 'function' &&
+        typeof investmentEtradeClientStatementParseText_ === 'function' &&
+        typeof investmentEtradeMatchesSamerBrokerageAccountValueMapping_ === 'function' &&
+        investmentEtradeMatchesSamerBrokerageAccountValueMapping_(
+          previewPayload.accountName, previewPayload.source)) {
+      preview = investmentEtradeAttachSamerBrokeragePreviewContract_(
+        preview,
+        investmentEtradeClientStatementParseText_(previewPayload.rawDocumentText),
+        previewPayload.accountName);
+    }
+    return preview;
   });
 }
 
