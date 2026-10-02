@@ -270,6 +270,19 @@
       add('purchase_guidance_before_results', purchaseGuidancePass, purchaseGuidancePass
         ? 'Purchase showed guidance and kept its result wall hidden before a simulation.'
         : 'Purchase exposed dash-only results before a successful simulation.');
+      customerLeaks = customerLeaks.concat(customerLanguageLeaks('Planning → Purchase simulator'));
+
+      if (typeof showTab === 'function') showTab('education');
+      if (typeof loadEducationSection === 'function') loadEducationSection();
+      await new Promise(function(resolve) { setTimeout(resolve, 1200); });
+      var educationPanel = document.getElementById('education');
+      var educationPass = activeTab('planning', 'education') &&
+        !!(educationPanel && /Lutfi 529/.test(String(educationPanel.textContent || '')) &&
+          /Laith 529/.test(String(educationPanel.textContent || '')));
+      add('education_exact_identities', educationPass, educationPass
+        ? 'Education showed separate Lutfi 529 and Laith 529 identities.'
+        : 'Education did not show both exact 529 identities.');
+      customerLeaks = customerLeaks.concat(customerLanguageLeaks('Planning → Education'));
 
       click('.btn-help-prominent');
       await waitFor(function() { return activePage('help'); }, 10000, 'Help');

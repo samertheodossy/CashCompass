@@ -1,0 +1,499 @@
+/* Planning — Education tab (slices A/B: saved inputs only, no projection) */
+var educationLoadGeneration_ = 0;
+var educationUiData = null;
+var educationSelectedAccount_ = 'Lutfi 529';
+var educationLineItemDrafts_ = [];
+
+function loadEducationSection() {
+  const initialLoadTiming = startDashboardInitialLoadStage_('education');
+  const generation = ++educationLoadGeneration_;
+  google.script.run
+    .withSuccessHandler(function(data) {
+      if (generation !== educationLoadGeneration_) return;
+      applyEducationUiData_(data);
+      setStatus('education_status', '', false);
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
+    })
+    .withFailureHandler(function(err) {
+      if (generation !== educationLoadGeneration_) return;
+      renderSurfaceState_('education_status', {
+        kind: 'unavailable',
+        title: 'Education is unavailable right now.',
+        message: customerSafeErrorMessage_(err && err.message ? err.message : String(err),
+          'CashCompass could not load Education. Try again in a moment.'),
+        actionLabel: 'Try again',
+        onAction: loadEducationSection
+      });
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
+    })
+    .getEducationUiData();
+}
+
+function applyEducationUiData_(data) {
+  educationUiData = data || {};
+  const names = educationUiData.accountNames || ['Lutfi 529', 'Laith 529'];
+  if (names.indexOf(educationSelectedAccount_) === -1) {
+    educationSelectedAccount_ = names[0] || 'Lutfi 529';
+  }
+  educationLineItemDrafts_ = (educationUiData.lineItems || []).map(function(item, index) {
+    return Object.assign({ clientKey: 'saved-' + index }, item);
+  });
+  fillEducationHousehold_(educationUiData.household || {});
+  renderEducationAccountCards_();
+  fillEducationSelectedPlan_();
+  renderEducationLineItems_();
+}
+
+function fillEducationHousehold_(household) {
+  const selected = document.getElementById('edu_selectedScenario');
+  if (selected) selected.value = household.selectedScenario || 'Base';
+  educationFillOptionalNumber_('edu_return_low', household.expectedAnnualReturnPct && household.expectedAnnualReturnPct.low);
+  educationFillOptionalNumber_('edu_return_base', household.expectedAnnualReturnPct && household.expectedAnnualReturnPct.base);
+  educationFillOptionalNumber_('edu_return_high', household.expectedAnnualReturnPct && household.expectedAnnualReturnPct.high);
+  educationFillOptionalNumber_('edu_inflation_low', household.educationCostInflationPct && household.educationCostInflationPct.low);
+  educationFillOptionalNumber_('edu_inflation_base', household.educationCostInflationPct && household.educationCostInflationPct.base);
+  educationFillOptionalNumber_('edu_inflation_high', household.educationCostInflationPct && household.educationCostInflationPct.high);
+}
+
+function educationExactUiAccountName_(accountName) {
+  const names = (educationUiData && educationUiData.accountNames && educationUiData.accountNames.length)
+    ? educationUiData.accountNames
+    : ['Lutfi 529', 'Laith 529'];
+  return names.indexOf(accountName) === -1 ? '' : accountName;
+}
+
+function selectEducationAccount(accountName) {
+  const exactName = educationExactUiAccountName_(accountName);
+  if (!exactName) return;
+  collectEducationSelectedPlanIntoState_();
+  collectEducationLineItemsFromDom_();
+  educationSelectedAccount_ = exactName;
+  renderEducationAccountCards_();
+  fillEducationSelectedPlan_();
+  renderEducationLineItems_();
+}
+
+function renderEducationAccountCards_() {
+  const cards = document.querySelectorAll('.education-account-card[data-account-name]');
+  for (let i = 0; i < cards.length; i++) {
+    const btn = cards[i];
+    const name = btn.getAttribute('data-account-name');
+    const selected = name === educationSelectedAccount_;
+    btn.className = 'education-account-card' + (selected ? ' active' : '');
+    btn.setAttribute('aria-selected', selected ? 'true' : 'false');
+  }
+}
+
+function educationSelectedPlan_() {
+  const plans = educationUiData && educationUiData.plans ? educationUiData.plans : [];
+  for (let i = 0; i < plans.length; i++) {
+    if (plans[i].accountName === educationSelectedAccount_) return plans[i];
+  }
+  return {
+    accountName: educationSelectedAccount_,
+    coverageGoal: '',
+    currentMonthlyContribution: { present: false, value: null },
+    contributionEntryStatus: '',
+    plannedChoice: '',
+    plannedChoiceEntryStatus: '',
+    notes: '',
+    liveBalance: { found: false, currentBalancePresent: false }
+  };
+}
+
+function fillEducationSelectedPlan_() {
+  const plan = educationSelectedPlan_();
+  const title = document.getElementById('edu_selected_title');
+  if (title) title.textContent = plan.accountName;
+  const live = plan.liveBalance || {};
+  const balance = document.getElementById('edu_live_balance');
+  if (balance) {
+    balance.textContent = live.currentBalancePresent
+      ? fmtCurrency(live.currentBalance)
+      : 'Not entered';
+  }
+  const found = document.getElementById('edu_live_found');
+  if (found) {
+    found.textContent = live.found
+      ? ('From Investments' + (live.type ? ' · ' + live.type : ''))
+      : 'Not found in Investments';
+  }
+  educationSetValue_('edu_coverageGoal', plan.coverageGoal || '');
+  educationFillOptionalCurrency_('edu_currentMonthlyContribution', plan.currentMonthlyContribution);
+  educationSetValue_('edu_contributionEntryStatus', plan.contributionEntryStatus || '');
+  educationSetValue_('edu_plannedChoice', plan.plannedChoice || '');
+  educationSetValue_('edu_plannedChoiceEntryStatus', plan.plannedChoiceEntryStatus || '');
+  educationSetValue_('edu_notes', plan.notes || '');
+}
+
+function educationLineItemsForSelectedAccount_() {
+  return educationLineItemDrafts_.filter(function(item) {
+    return item.accountName === educationSelectedAccount_;
+  });
+}
+
+function renderEducationLineItems_() {
+  const host = document.getElementById('edu_line_items');
+  if (!host) return;
+  host.innerHTML = '';
+  const rows = educationLineItemsForSelectedAccount_();
+  if (!rows.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'Add a school, cost, or contribution row.';
+    host.appendChild(empty);
+    return;
+  }
+  rows.forEach(function(item) {
+    host.appendChild(educationLineItemEditor_(item));
+  });
+}
+
+function educationLineItemEditor_(item) {
+  const wrap = document.createElement('div');
+  wrap.className = 'education-line-item';
+  wrap.setAttribute('data-client-key', item.clientKey);
+  wrap.setAttribute('data-account-name', item.accountName || educationSelectedAccount_);
+  wrap.innerHTML =
+    '<p class="education-line-item-account">Account: <strong data-edu-line-account></strong></p>' +
+    '<div class="grid-2">' +
+      '<div>' +
+        '<label>Record type</label>' +
+        '<select data-edu-field="recordType">' +
+          '<option value="STAGE">School / program stage</option>' +
+          '<option value="COST">Cost</option>' +
+          '<option value="CONTRIBUTION_CHANGE">Contribution change</option>' +
+        '</select>' +
+        '<label>Kind</label>' +
+        '<select data-edu-field="kind"></select>' +
+        '<label>Label</label>' +
+        '<input type="text" data-edu-field="label">' +
+        '<label>Amount</label>' +
+        '<div class="education-amount-row">' +
+          '<input type="text" data-edu-field="amount" inputmode="decimal">' +
+          '<button type="button" class="small-btn" data-edu-clear-amount>Clear</button>' +
+        '</div>' +
+        '<label>Status</label>' +
+        '<select data-edu-field="entryStatus">' +
+          '<option value="">Not entered</option>' +
+          '<option value="ESTIMATE">Estimate</option>' +
+          '<option value="CONFIRMED">Confirmed</option>' +
+        '</select>' +
+      '</div>' +
+      '<div>' +
+        '<label>Start month</label>' +
+        '<input type="month" data-edu-field="startMonth">' +
+        '<label>End month</label>' +
+        '<input type="month" data-edu-field="endMonth">' +
+        '<label>Academic year</label>' +
+        '<input type="text" data-edu-field="academicYear" placeholder="Example: 2028-29">' +
+        '<label>Year completeness</label>' +
+        '<select data-edu-field="yearCompleteness">' +
+          '<option value="">Not entered</option>' +
+          '<option value="COMPLETE">Complete</option>' +
+          '<option value="PARTIAL">Partial</option>' +
+        '</select>' +
+        '<label>Overlap policy</label>' +
+        '<select data-edu-field="overlapPolicy">' +
+          '<option value="">Not entered</option>' +
+          '<option value="ADDS">Adds to other costs</option>' +
+          '<option value="REPLACES">Replaces overlapping costs</option>' +
+        '</select>' +
+        '<label>Remainder policy</label>' +
+        '<select data-edu-field="remainderPolicy">' +
+          '<option value="">Not entered</option>' +
+          '<option value="CONTINUE">Continue</option>' +
+          '<option value="REDUCE">Reduce</option>' +
+          '<option value="PAUSE">Pause</option>' +
+        '</select>' +
+        '<label>Notes</label>' +
+        '<input type="text" data-edu-field="notes">' +
+      '</div>' +
+    '</div>' +
+    '<button type="button" class="small-btn" data-edu-remove-item>Remove row</button>';
+
+  wrap.querySelector('[data-edu-line-account]').textContent = item.accountName || educationSelectedAccount_;
+  wrap.querySelector('[data-edu-field="recordType"]').value = item.recordType || 'COST';
+  educationFillKindOptions_(wrap, item.recordType || 'COST', item.kind || '');
+  wrap.querySelector('[data-edu-field="label"]').value = item.label || '';
+  educationFillOptionalCurrencyInput_(wrap.querySelector('[data-edu-field="amount"]'), item.amount);
+  wrap.querySelector('[data-edu-field="entryStatus"]').value = item.entryStatus || '';
+  wrap.querySelector('[data-edu-field="startMonth"]').value = item.startMonth || '';
+  wrap.querySelector('[data-edu-field="endMonth"]').value = item.endMonth || '';
+  wrap.querySelector('[data-edu-field="academicYear"]').value = item.academicYear || '';
+  wrap.querySelector('[data-edu-field="yearCompleteness"]').value = item.yearCompleteness || '';
+  wrap.querySelector('[data-edu-field="overlapPolicy"]').value = item.overlapPolicy || '';
+  wrap.querySelector('[data-edu-field="remainderPolicy"]').value = item.remainderPolicy || '';
+  wrap.querySelector('[data-edu-field="notes"]').value = item.notes || '';
+
+  wrap.querySelector('[data-edu-field="recordType"]').onchange = function() {
+    educationFillKindOptions_(wrap, this.value, '');
+  };
+  const amountInput = wrap.querySelector('[data-edu-field="amount"]');
+  amountInput.onfocus = function() { educationCurrencyFocus_(amountInput); };
+  amountInput.onblur = function() { educationCurrencyBlur_(amountInput); };
+  wrap.querySelector('[data-edu-clear-amount]').onclick = function() {
+    amountInput.value = '';
+  };
+  wrap.querySelector('[data-edu-remove-item]').onclick = function() {
+    collectEducationLineItemsFromDom_();
+    educationLineItemDrafts_ = educationLineItemDrafts_.filter(function(row) {
+      return row.clientKey !== item.clientKey;
+    });
+    renderEducationLineItems_();
+  };
+  return wrap;
+}
+
+function educationFillKindOptions_(wrap, recordType, selected) {
+  const select = wrap.querySelector('[data-edu-field="kind"]');
+  if (!select) return;
+  const options = recordType === 'STAGE'
+    ? [
+      ['UNDERGRAD', 'Undergraduate'],
+      ['GRAD', 'Graduate'],
+      ['LAW', 'Law'],
+      ['STUDY_ABROAD', 'Study abroad'],
+      ['OTHER', 'Other']
+    ]
+    : (recordType === 'CONTRIBUTION_CHANGE'
+      ? [
+        ['CONTINUE', 'Continue'],
+        ['REDUCE', 'Reduce'],
+        ['PAUSE', 'Pause'],
+        ['START', 'Start']
+      ]
+      : [
+        ['TUITION_SEMESTER', 'Semester tuition'],
+        ['LIVING_MONTHLY', 'Monthly living'],
+        ['ONE_TIME', 'One-time cost'],
+        ['ANNUAL_ESTIMATE', 'Annual estimate']
+      ]);
+  select.innerHTML = '';
+  options.forEach(function(pair) {
+    const opt = document.createElement('option');
+    opt.value = pair[0];
+    opt.textContent = pair[1];
+    select.appendChild(opt);
+  });
+  select.value = selected && options.some(function(pair) { return pair[0] === selected; })
+    ? selected
+    : options[0][0];
+}
+
+function addEducationLineItem() {
+  collectEducationSelectedPlanIntoState_();
+  collectEducationLineItemsFromDom_();
+  educationLineItemDrafts_.push({
+    clientKey: 'new-' + Date.now() + '-' + educationLineItemDrafts_.length,
+    itemId: '',
+    accountName: educationSelectedAccount_,
+    recordType: 'COST',
+    kind: 'TUITION_SEMESTER',
+    label: '',
+    amount: { present: false, value: null },
+    entryStatus: '',
+    startMonth: '',
+    endMonth: '',
+    academicYear: '',
+    yearCompleteness: '',
+    overlapPolicy: '',
+    remainderPolicy: '',
+    notes: ''
+  });
+  renderEducationLineItems_();
+}
+
+function saveEducation() {
+  const payload = collectEducationSavePayload_();
+  google.script.run
+    .withSuccessHandler(function(result) {
+      applyEducationUiData_(result && result.data);
+      setStatus('education_status', (result && result.message) || 'Education plan saved.', false);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('education_status', customerSafeErrorMessage_(
+        err && err.message ? err.message : String(err),
+        'CashCompass could not save Education.'
+      ), true);
+    })
+    .saveEducationInputs(payload);
+}
+
+function clearEducationSelectedPlan() {
+  const accountName = educationSelectedAccount_;
+  google.script.run
+    .withSuccessHandler(function(result) {
+      applyEducationUiData_(result && result.data);
+      educationSelectedAccount_ = accountName;
+      renderEducationAccountCards_();
+      fillEducationSelectedPlan_();
+      renderEducationLineItems_();
+      setStatus('education_status', (result && result.message) || ('Cleared ' + accountName + ' education inputs.'), false);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('education_status', customerSafeErrorMessage_(
+        err && err.message ? err.message : String(err),
+        'CashCompass could not clear Education.'
+      ), true);
+    })
+    .clearEducationPlan({ accountName: accountName });
+}
+
+function collectEducationSavePayload_() {
+  collectEducationSelectedPlanIntoState_();
+  collectEducationLineItemsFromDom_();
+  return {
+    household: {
+      selectedScenario: educationGetValue_('edu_selectedScenario') || 'Base',
+      expectedAnnualReturnPct: {
+        low: educationOptionalNumberFromInput_('edu_return_low'),
+        base: educationOptionalNumberFromInput_('edu_return_base'),
+        high: educationOptionalNumberFromInput_('edu_return_high')
+      },
+      educationCostInflationPct: {
+        low: educationOptionalNumberFromInput_('edu_inflation_low'),
+        base: educationOptionalNumberFromInput_('edu_inflation_base'),
+        high: educationOptionalNumberFromInput_('edu_inflation_high')
+      }
+    },
+    plans: (educationUiData.plans || []).map(function(plan) {
+      return {
+        accountName: plan.accountName,
+        coverageGoal: plan.coverageGoal,
+        currentMonthlyContribution: plan.currentMonthlyContribution,
+        contributionEntryStatus: plan.contributionEntryStatus,
+        plannedChoice: plan.plannedChoice,
+        plannedChoiceEntryStatus: plan.plannedChoiceEntryStatus,
+        notes: plan.notes
+      };
+    }),
+    lineItems: educationLineItemDrafts_.map(function(item) {
+      return {
+        itemId: item.itemId,
+        accountName: item.accountName,
+        recordType: item.recordType,
+        kind: item.kind,
+        label: item.label,
+        amount: item.amount,
+        entryStatus: item.entryStatus,
+        startMonth: item.startMonth,
+        endMonth: item.endMonth,
+        academicYear: item.academicYear,
+        yearCompleteness: item.yearCompleteness,
+        overlapPolicy: item.overlapPolicy,
+        remainderPolicy: item.remainderPolicy,
+        notes: item.notes
+      };
+    })
+  };
+}
+
+function collectEducationSelectedPlanIntoState_() {
+  if (!educationUiData || !educationUiData.plans) return;
+  educationUiData.plans = educationUiData.plans.map(function(plan) {
+    if (plan.accountName !== educationSelectedAccount_) return plan;
+    return Object.assign({}, plan, {
+      coverageGoal: educationGetValue_('edu_coverageGoal'),
+      currentMonthlyContribution: educationOptionalNumberFromInput_('edu_currentMonthlyContribution'),
+      contributionEntryStatus: educationGetValue_('edu_contributionEntryStatus'),
+      plannedChoice: educationGetValue_('edu_plannedChoice'),
+      plannedChoiceEntryStatus: educationGetValue_('edu_plannedChoiceEntryStatus'),
+      notes: educationGetValue_('edu_notes')
+    });
+  });
+}
+
+function collectEducationLineItemsFromDom_() {
+  const host = document.getElementById('edu_line_items');
+  if (!host) return;
+  const editors = host.querySelectorAll('.education-line-item');
+  editors.forEach(function(editor) {
+    const key = editor.getAttribute('data-client-key');
+    for (let i = 0; i < educationLineItemDrafts_.length; i++) {
+      if (educationLineItemDrafts_[i].clientKey !== key) continue;
+      const amountInput = editor.querySelector('[data-edu-field="amount"]');
+      educationLineItemDrafts_[i] = Object.assign({}, educationLineItemDrafts_[i], {
+        recordType: editor.querySelector('[data-edu-field="recordType"]').value,
+        kind: editor.querySelector('[data-edu-field="kind"]').value,
+        label: editor.querySelector('[data-edu-field="label"]').value,
+        amount: educationOptionalNumberFromRaw_(amountInput && amountInput.value),
+        entryStatus: editor.querySelector('[data-edu-field="entryStatus"]').value,
+        startMonth: editor.querySelector('[data-edu-field="startMonth"]').value,
+        endMonth: editor.querySelector('[data-edu-field="endMonth"]').value,
+        academicYear: editor.querySelector('[data-edu-field="academicYear"]').value,
+        yearCompleteness: editor.querySelector('[data-edu-field="yearCompleteness"]').value,
+        overlapPolicy: editor.querySelector('[data-edu-field="overlapPolicy"]').value,
+        remainderPolicy: editor.querySelector('[data-edu-field="remainderPolicy"]').value,
+        notes: editor.querySelector('[data-edu-field="notes"]').value
+      });
+    }
+  });
+}
+
+function educationFillOptionalNumber_(id, parsed) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (!parsed || !parsed.present) {
+    el.value = '';
+    return;
+  }
+  el.value = String(parsed.value);
+}
+
+function educationFillOptionalCurrency_(id, parsed) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  educationFillOptionalCurrencyInput_(el, parsed);
+}
+
+function educationFillOptionalCurrencyInput_(el, parsed) {
+  if (!el) return;
+  if (!parsed || !parsed.present) {
+    el.value = '';
+    return;
+  }
+  el.value = fmtCurrency(parsed.value);
+}
+
+function educationOptionalNumberFromInput_(id) {
+  const el = document.getElementById(id);
+  return educationOptionalNumberFromRaw_(el ? el.value : '');
+}
+
+function educationOptionalNumberFromRaw_(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return { present: false, value: null };
+  const num = toNumber(text);
+  if (isNaN(num)) return { present: false, value: null };
+  return { present: true, value: num };
+}
+
+function educationSetValue_(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.value = value || '';
+}
+
+function educationGetValue_(id) {
+  const el = document.getElementById(id);
+  return el ? String(el.value || '').trim() : '';
+}
+
+function educationCurrencyFocus_(input) {
+  if (!input) return;
+  const num = toNumber(input.value);
+  if (input.value === '' || isNaN(num)) return;
+  input.value = String(num);
+}
+
+function educationCurrencyBlur_(input) {
+  if (!input) return;
+  const raw = String(input.value || '').trim();
+  if (!raw) {
+    input.value = '';
+    return;
+  }
+  const num = toNumber(raw);
+  if (isNaN(num)) return;
+  input.value = fmtCurrency(num);
+}

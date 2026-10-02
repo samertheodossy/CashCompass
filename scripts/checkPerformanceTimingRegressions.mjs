@@ -405,6 +405,7 @@ for (const hiddenLoader of [
   'loadHouseSection', 'loadHouseExpensesSection', 'loadBankSection',
   'loadInvestmentSection', 'loadDebtSection', 'loadPaymentSection',
   'loadUpcomingSection', 'loadRetirementSection', 'loadPurchaseSimulatorSection',
+  'loadEducationSection',
   'loadDashboardActionSections', 'loadIncomeSourcesSection'
 ]) {
   assert.ok(!initDashboardSource.includes(`${hiddenLoader}(`),

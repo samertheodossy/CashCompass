@@ -276,7 +276,7 @@ function dashboardPageForTab_(name) {
   if (name === 'houses' || name === 'bank' || name === 'investments' || name === 'debts') return 'assets';
   if (name === 'payments' || name === 'upcoming' || name === 'donations' || name === 'billsDue' || name === 'income') return 'cashflow';
   if (name === 'houseExpenses' || name === 'propertyPerformance') return 'properties';
-  if (name === 'retirement' || name === 'purchase' ||
+  if (name === 'retirement' || name === 'purchase' || name === 'education' ||
       name === 'debtPayoff' || name === 'rollingDebtPayoff' || name === 'nextActions' ||
       name === 'capitalAllocationPreview') return 'planning';
   return '';
@@ -687,6 +687,7 @@ function showTab(name) {
   } else if (
     name === 'retirement' ||
     name === 'purchase' ||
+    name === 'education' ||
     name === 'debtPayoff' ||
     name === 'rollingDebtPayoff' ||
     name === 'nextActions' ||
@@ -785,6 +786,10 @@ function showTab(name) {
 
   if (name === 'purchase' && typeof loadPurchaseSimulatorSection === 'function') {
     loadPurchaseSimulatorSection();
+  }
+
+  if (name === 'education' && typeof loadEducationSection === 'function') {
+    loadEducationSection();
   }
 }
 

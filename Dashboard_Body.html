@@ -2268,6 +2268,10 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
               aria-controls="purchase" data-tab="purchase" onclick="showTab('purchase')">
         Purchase simulator
       </button>
+      <button id="planning_tool_education" class="tab-btn" role="tab" aria-selected="false"
+              aria-controls="education" data-tab="education" onclick="showTab('education')">
+        Education
+      </button>
     </div>
 
     <div id="debts" class="panel">
@@ -2631,6 +2635,115 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <div style="margin-top:10px;"><strong>Warning:</strong> <span id="ps_warning" class="muted">—</span></div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div id="education" class="panel" role="tabpanel" aria-labelledby="planning_tool_education">
+      <div class="panel-head">
+        <div>
+          <h2>Education planner</h2>
+          <p class="planning-panel-purpose">
+            Save school, cost, and contribution choices. Forecasts are not calculated yet.
+          </p>
+        </div>
+        <div class="updated">Saved inputs only</div>
+      </div>
+
+      <div id="edu_account_cards" class="education-account-selector" role="tablist" aria-label="Education accounts">
+        <button type="button" id="edu_account_lutfi" class="education-account-card active" role="tab"
+                aria-selected="true" aria-controls="edu_selected_plan" data-account-name="Lutfi 529"
+                onclick="selectEducationAccount('Lutfi 529')">Lutfi 529</button>
+        <button type="button" id="edu_account_laith" class="education-account-card" role="tab"
+                aria-selected="false" aria-controls="edu_selected_plan" data-account-name="Laith 529"
+                onclick="selectEducationAccount('Laith 529')">Laith 529</button>
+      </div>
+
+      <div class="education-layout">
+        <div id="edu_selected_plan">
+          <h3 id="edu_selected_title">Lutfi 529</h3>
+          <div class="education-balance-summary" aria-live="polite">
+            <span class="education-balance-label">Current balance</span>
+            <strong id="edu_live_balance">Not entered</strong>
+            <span class="muted" id="edu_live_found">Not found in Investments</span>
+          </div>
+
+          <label>Coverage goal</label>
+          <input type="text" id="edu_coverageGoal" placeholder="Leave blank until known">
+
+          <label>Current monthly contribution</label>
+          <div class="education-amount-row">
+            <input type="text" id="edu_currentMonthlyContribution" inputmode="decimal"
+                   onfocus="currencyFocus('edu_currentMonthlyContribution')"
+                   onblur="currencyBlur('edu_currentMonthlyContribution')"
+                   placeholder="Blank means unknown">
+            <button type="button" class="small-btn" onclick="document.getElementById('edu_currentMonthlyContribution').value=''">Clear</button>
+          </div>
+          <label>Contribution status</label>
+          <select id="edu_contributionEntryStatus">
+            <option value="">Not entered</option>
+            <option value="ESTIMATE">Estimate</option>
+            <option value="CONFIRMED">Confirmed</option>
+          </select>
+
+          <label>Planned choice</label>
+          <select id="edu_plannedChoice">
+            <option value="">Not entered</option>
+            <option value="CONTINUE">Continue</option>
+            <option value="REDUCE">Reduce</option>
+            <option value="PAUSE">Pause</option>
+          </select>
+          <label>Planned-choice status</label>
+          <select id="edu_plannedChoiceEntryStatus">
+            <option value="">Not entered</option>
+            <option value="ESTIMATE">Estimate</option>
+            <option value="CONFIRMED">Confirmed</option>
+          </select>
+
+          <label>Notes</label>
+          <input type="text" id="edu_notes">
+
+          <details class="planning-advanced-details">
+            <summary>Scenario rates</summary>
+            <div class="planning-advanced-fields">
+              <label>Selected scenario</label>
+              <select id="edu_selectedScenario">
+                <option value="Low">Low</option>
+                <option value="Base">Base</option>
+                <option value="High">High</option>
+              </select>
+              <div class="education-rate-grid">
+                <div></div>
+                <div class="muted">Low</div>
+                <div class="muted">Base</div>
+                <div class="muted">High</div>
+                <label>Expected annual return %</label>
+                <input type="number" id="edu_return_low" step="0.01" placeholder="">
+                <input type="number" id="edu_return_base" step="0.01" placeholder="">
+                <input type="number" id="edu_return_high" step="0.01" placeholder="">
+                <label>Education cost inflation %</label>
+                <input type="number" id="edu_inflation_low" step="0.01" placeholder="">
+                <input type="number" id="edu_inflation_base" step="0.01" placeholder="">
+                <input type="number" id="edu_inflation_high" step="0.01" placeholder="">
+              </div>
+              <p class="muted">Leave a rate blank when it is unknown. Enter 0.00 only when the rate is actually zero.</p>
+            </div>
+          </details>
+
+        </div>
+
+        <div class="education-line-items-section">
+          <div class="panel-head education-line-items-head">
+            <h3>Stages, costs, and contribution changes</h3>
+            <button type="button" class="small-btn" onclick="addEducationLineItem()">Add row</button>
+          </div>
+          <div id="edu_line_items"></div>
+        </div>
+
+        <div class="education-actions">
+          <button type="button" onclick="saveEducation()">Save education plan</button>
+          <button type="button" class="small-btn" onclick="clearEducationSelectedPlan()">Clear selected plan</button>
+        </div>
+        <div id="education_status" class="status"></div>
       </div>
     </div>
 

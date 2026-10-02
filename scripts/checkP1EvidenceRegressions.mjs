@@ -223,6 +223,8 @@ assert.match(firstRunE2E, /'empty_bills_open_add'/,
   'First-Run E2E must require empty Bills to open directly in Add bill');
 assert.match(firstRunE2E, /'purchase_guidance_before_results'/,
   'First-Run E2E must require Purchase guidance while unready result panels remain hidden');
+assert.match(firstRunBrowser, /add\('education_exact_identities'/,
+  'First-Run browser coverage must visit Education and check Lutfi 529 and Laith 529 identities');
 assert.match(firstRunE2E, /'retirement_guidance_not_ready'/,
   'First-Run E2E must require Retirement prerequisite guidance coverage');
 assert.match(firstRunBrowser,

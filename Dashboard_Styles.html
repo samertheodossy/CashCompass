@@ -997,7 +997,7 @@
      selected tool. This Week alone exposes its focused secondary selector. */
   .tabs.planning-primary-tools {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 8px;
     margin: 0 0 16px 0;
   }
@@ -1911,6 +1911,106 @@
   .planning-advanced-fields {
     padding: 2px 12px 12px;
   }
+  .education-account-selector {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 0 0 16px;
+  }
+  .education-account-card {
+    width: 100%;
+    margin: 0;
+    min-height: 48px;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    padding: 12px;
+    background: #f8fafc;
+    color: #1f2937;
+    font-size: 14px;
+    font-weight: 700;
+    text-align: center;
+    cursor: pointer;
+  }
+  .education-account-card:hover {
+    background: #eef2f7;
+    color: #0f172a;
+  }
+  .education-account-card.active {
+    border-color: #1f4e78;
+    background: #1f4e78;
+    color: #ffffff;
+    box-shadow: none;
+  }
+  .education-account-card.active:hover {
+    background: #1a4368;
+    color: #ffffff;
+  }
+  .education-account-card:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, 0.45);
+    outline-offset: 2px;
+  }
+  .education-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .education-balance-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 10px;
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #f8fafc;
+    color: #1f2937;
+  }
+  .education-balance-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #334155;
+  }
+  .education-line-items-head {
+    padding: 0;
+    border: 0;
+    margin-bottom: 10px;
+  }
+  .education-line-items-head h3 { margin: 0; }
+  .education-line-item-account {
+    margin: 0 0 10px;
+    color: #334155;
+    font-size: 13px;
+  }
+  .education-amount-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .education-amount-row input { flex: 1; min-width: 0; }
+  .education-amount-row .small-btn { width: auto; margin: 0; }
+  .education-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .education-actions .small-btn { width: auto; margin: 0; }
+  .education-line-item {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 12px;
+    margin: 0 0 12px;
+    background: #ffffff;
+  }
+  .education-rate-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    align-items: center;
+    margin-top: 8px;
+  }
+  .education-rate-grid label { margin: 0; }
 
   .debt-payoff-summary .debt-payoff-overall-head {
     font-size: 1.3rem;
@@ -4648,6 +4748,12 @@
     }
     .planning-primary-tools .tab-btn {
       flex: 0 0 min(210px, 72vw);
+    }
+    .education-account-selector {
+      grid-template-columns: 1fr 1fr;
+    }
+    .education-layout {
+      grid-template-columns: minmax(0, 1fr);
     }
     .property-performance-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }

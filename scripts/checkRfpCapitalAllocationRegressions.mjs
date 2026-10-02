@@ -88,7 +88,7 @@ assert.match(source, /PROTECT_90_DAY_OPERATING_RESERVE[\s\S]*?FUND_SAMER_ROBINHO
 assert.match(dashboardData, /function generateOccurrences_\(rule, todayOnly, effectiveDate, horizonEnd\)/);
 assert.match(plannerCore, /dueDayKnown:\s*dueDayKnown/,
   'normalized debts must retain whether the source actually supplied a valid recurring due day');
-assert.match(body, /planning-primary-tools[\s\S]*?class="tab-btn active"[\s\S]*?data-tab="capitalAllocationPreview"[\s\S]*?This week[\s\S]*?data-tab="rollingDebtPayoff"[\s\S]*?data-tab="debtPayoff"[\s\S]*?data-tab="retirement"[\s\S]*?data-tab="purchase"/);
+assert.match(body, /planning-primary-tools[\s\S]*?class="tab-btn active"[\s\S]*?data-tab="capitalAllocationPreview"[\s\S]*?This week[\s\S]*?data-tab="rollingDebtPayoff"[\s\S]*?data-tab="debtPayoff"[\s\S]*?data-tab="retirement"[\s\S]*?data-tab="purchase"[\s\S]*?data-tab="education"/);
 assert.doesNotMatch(body, /planning-next-actions-feature|planning-tool-group--do-now|planning-tool-group--explore|data-tab="nextActions"/);
 assert.match(body, /id="nextActions" class="panel"/);
 assert.match(body, /id="capitalAllocationPreview" class="panel active"/);

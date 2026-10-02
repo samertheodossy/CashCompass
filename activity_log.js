@@ -1,5 +1,5 @@
 /**
- * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_update, bill_deactivate, bill_reactivate, house expense, house_add, house_value_update, house_deactivate, house_reactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_update, bank_account_deactivate, investment_add, investment_update, investment_statement_monthly_value, investment_account_update, investment_deactivate, investment_reactivate, investment_planning_purpose_update, debt_add, debt_deactivate, debt_reactivate, debt_update, income_add, income_deactivate, planner_email_deferred, planner_email_sent, planner_email_invalid_recipient, …). Eligible Donations retain fingerprint-gated removal; newly recorded direct Quick Add operations can be corrected through their exact operation envelope. Other events remain audit evidence.
+ * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_update, bill_deactivate, bill_reactivate, house expense, house_add, house_value_update, house_deactivate, house_reactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_update, bank_account_deactivate, investment_add, investment_update, investment_statement_monthly_value, investment_account_update, investment_deactivate, investment_reactivate, investment_planning_purpose_update, debt_add, debt_deactivate, debt_reactivate, debt_update, income_add, income_deactivate, planner_email_deferred, planner_email_sent, planner_email_invalid_recipient, education_plan_update, …). Eligible Donations retain fingerprint-gated removal; newly recorded direct Quick Add operations can be corrected through their exact operation envelope. Other events remain audit evidence.
  * Complements OUT - History (planner-run snapshots). Tab: LOG - Activity.
  */
 
@@ -1834,6 +1834,7 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
   if (etEarly === 'investment_reactivate') return 'Investment';
   if (etEarly === 'investment_planning_purpose_update') return 'Investment';
   if (etEarly === 'investment_plan_update') return 'Investment';
+  if (etEarly === 'education_plan_update') return 'Education';
   if (etEarly === 'debt_add') return 'Debt';
   if (etEarly === 'debt_deactivate') return 'Debt';
   if (etEarly === 'debt_reactivate') return 'Debt';
@@ -1965,6 +1966,7 @@ function activityLogActionLabel_(eventType, detailsJson) {
     case 'investment_reactivate': return 'Account reactivated';
     case 'investment_planning_purpose_update': return 'Planning purpose updated';
     case 'investment_plan_update': return 'Portfolio plan updated';
+    case 'education_plan_update': return 'Education plan updated';
     case 'debt_add': return 'Account added';
     case 'debt_deactivate': return 'Tracking stopped';
     case 'debt_reactivate': return 'Tracking resumed';
@@ -2667,6 +2669,7 @@ function activityLogIsNonMonetaryEvent_(eventType) {
     et === 'investment_reactivate' ||
     et === 'investment_planning_purpose_update' ||
     et === 'investment_plan_update' ||
+    et === 'education_plan_update' ||
     et === 'debt_deactivate' ||
     et === 'debt_reactivate' ||
     // debt_update rows carry the new value inside the action label (not

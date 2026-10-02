@@ -18,6 +18,7 @@ const files = Object.fromEntries(await Promise.all([
   'Dashboard_Script_PlanningDebtPayoff.html',
   'Dashboard_Script_PlanningNextActions.html',
   'Dashboard_Script_PlanningPurchaseSim.html',
+  'Dashboard_Script_PlanningEducation.html',
   'Dashboard_Script_PlanningRetirement.html',
   'Dashboard_Script_PropertyPerformance.html',
   'Dashboard_Script_PropertiesHouseExpenses.html',
@@ -212,6 +213,7 @@ for (const hiddenLoader of [
   'loadHouseSection', 'loadHouseExpensesSection', 'loadBankSection',
   'loadInvestmentSection', 'loadDebtSection', 'loadPaymentSection',
   'loadUpcomingSection', 'loadRetirementSection', 'loadPurchaseSimulatorSection',
+  'loadEducationSection',
   'loadDashboardActionSections', 'loadIncomeSourcesSection'
 ]) {
   assert.ok(!initDashboardBody.includes(`${hiddenLoader}(`),
@@ -276,7 +278,8 @@ for (const [tab, loader] of [
   ['billsDue', 'loadDashboardActionSections'],
   ['income', 'loadIncomeSourcesSection'],
   ['retirement', 'loadRetirementSection'],
-  ['purchase', 'loadPurchaseSimulatorSection']
+  ['purchase', 'loadPurchaseSimulatorSection'],
+  ['education', 'loadEducationSection']
 ]) {
   assert.match(showTabBody,
     new RegExp(`name === ['"]${tab}['"][\\s\\S]*?${loader}\\(\\)`),
@@ -1506,12 +1509,12 @@ const planning = body.slice(
   body.indexOf('<!--\n    Onboarding Phase 1')
 );
 assert.match(planning,
-  /class="tabs planning-primary-tools"[\s\S]*?data-tab="capitalAllocationPreview"[\s\S]*?This week[\s\S]*?data-tab="rollingDebtPayoff"[\s\S]*?Rolling debt payoff[\s\S]*?data-tab="debtPayoff"[\s\S]*?Debt overview[\s\S]*?data-tab="retirement"[\s\S]*?Retirement[\s\S]*?data-tab="purchase"[\s\S]*?Purchase simulator/,
-  'Planning must expose one five-tool primary selector with This Week first');
+  /class="tabs planning-primary-tools"[\s\S]*?data-tab="capitalAllocationPreview"[\s\S]*?This week[\s\S]*?data-tab="rollingDebtPayoff"[\s\S]*?Rolling debt payoff[\s\S]*?data-tab="debtPayoff"[\s\S]*?Debt overview[\s\S]*?data-tab="retirement"[\s\S]*?Retirement[\s\S]*?data-tab="purchase"[\s\S]*?Purchase simulator[\s\S]*?data-tab="education"[\s\S]*?Education/,
+  'Planning must expose one six-tool primary selector with This Week first');
 assert.match(planning,
   /role="tablist" aria-label="Planning tools"[\s\S]*?role="tab" aria-selected="true"[\s\S]*?aria-controls="capitalAllocationPreview"[\s\S]*?role="tabpanel" aria-labelledby="planning_tool_this_week"/,
   'Planning primary navigation must expose selected state and tab-to-panel relationships');
-for (const tab of ['capitalAllocationPreview', 'rollingDebtPayoff', 'debtPayoff', 'retirement', 'purchase']) {
+for (const tab of ['capitalAllocationPreview', 'rollingDebtPayoff', 'debtPayoff', 'retirement', 'purchase', 'education']) {
   assert.equal((planning.match(new RegExp(`data-tab=["']${tab}["']`, 'g')) || []).length, 1,
     `Planning must preserve exactly one navigation route for ${tab}`);
 }
@@ -1530,14 +1533,14 @@ assert.match(planning,
 assert.match(planning,
   /id="rollingDebtPayoff"[\s\S]*?actionable month-by-month payoff plan/,
   'Rolling debt payoff must clearly identify its action-planning purpose');
-assert.equal((planning.match(/class="planning-advanced-details"/g) || []).length, 2,
-  'Retirement and Purchase must each progressively disclose advanced assumptions');
+assert.equal((planning.match(/class="planning-advanced-details"/g) || []).length, 3,
+  'Retirement, Purchase, and Education must each progressively disclose advanced assumptions');
 assert.match(planning,
   /<details class="rolling-dp-json-wrap">[\s\S]*?Advanced: Raw JSON export/,
   'Rolling debt raw output must remain inside an explicitly advanced disclosure');
 assert.match(styles,
-  /\.tabs\.planning-primary-tools\s*\{[\s\S]*?grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/,
-  'Planning primary tools must share one five-choice desktop selector');
+  /\.tabs\.planning-primary-tools\s*\{[\s\S]*?grid-template-columns:\s*repeat\(6,\s*minmax\(0,\s*1fr\)\)/,
+  'Planning primary tools must share one six-choice desktop selector');
 assert.match(styles,
   /@media \(max-width:\s*760px\)[\s\S]*?\.tabs\.planning-primary-tools\s*\{[\s\S]*?overflow-x:\s*auto[\s\S]*?\.planning-primary-tools \.tab-btn\s*\{[\s\S]*?flex:\s*0 0 min\(210px,\s*72vw\)/,
   'Planning primary tools must remain readable in an accessible mobile scroll strip');
@@ -3861,7 +3864,8 @@ for (const [source, loaderName] of [
   [files['Dashboard_Script_BillsDue.html'], 'loadActiveBillsManagementUi_'],
   [files['Dashboard_Script_CashFlowUpcoming.html'], 'loadUpcomingSection'],
   [files['Dashboard_Script_PlanningRetirement.html'], 'loadRetirementSection'],
-  [files['Dashboard_Script_PlanningPurchaseSim.html'], 'loadPurchaseSimulatorSection']
+  [files['Dashboard_Script_PlanningPurchaseSim.html'], 'loadPurchaseSimulatorSection'],
+  [files['Dashboard_Script_PlanningEducation.html'], 'loadEducationSection']
 ]) {
   const start = source.indexOf(`function ${loaderName}(`);
   const next = source.indexOf('\nfunction ', start + 1);
