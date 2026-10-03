@@ -22,10 +22,6 @@
  *   optional money uses present/absent evidence, matching Investments.
  * - First-create is an insert-only no-op when the sheet already exists
  *   (Retirement convention). Existing Education data is never reformatted.
- * - Retirement is unchanged in this slice. `getCurrentInvestableAssetsForRetirement_`
- *   still sums every named `SYS - Assets` Current Balance, including 529s.
- *   Filtering 529s out of Retirement investable assets is a separate review.
- *
  * Customer editing stays under Planning → Education. There is no Education
  * card on frozen Planning Overview / This Week.
  */
@@ -200,13 +196,7 @@ function buildEducationUiData_(ss, planSheet, lineSheet) {
     household: household,
     plans: plans,
     lineItems: readEducationLineItems_(lineSheet),
-    accountNames: EDUCATION_ACCOUNT_NAMES_.slice(),
-    retirement529Review: {
-      labeled: true,
-      retirementCodeUnchanged: true,
-      summary:
-        'Retirement still includes 529 balances in current investable assets. That filter is a separate review.'
-    }
+    accountNames: EDUCATION_ACCOUNT_NAMES_.slice()
   };
 }
 

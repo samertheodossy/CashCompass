@@ -25,8 +25,9 @@ assert.match(educationSource, /Laith 529/);
 assert.match(educationSource, /INPUT - Education Line Items/);
 assert.match(educationSource, /blankEducationPlan_/);
 assert.match(educationSource, /education_plan_update/);
-assert.match(educationSource, /getCurrentInvestableAssetsForRetirement_/);
-assert.match(educationSource, /Filtering 529s out of Retirement investable assets is a separate review/);
+assert.doesNotMatch(educationSource, /getCurrentInvestableAssetsForRetirement_/);
+assert.doesNotMatch(educationSource, /Filtering 529s out of Retirement investable assets/);
+assert.doesNotMatch(educationSource, /retirement529Review/);
 assert.doesNotMatch(
   educationSource.slice(
     educationSource.indexOf('function getOrCreateEducationSheet_'),
@@ -43,13 +44,15 @@ assert.doesNotMatch(
 );
 
 assert.match(retirementSource,
-  /function getCurrentInvestableAssetsForRetirement_\([\s\S]*?sumColumnByHeader_\(sheet, 'Current Balance'\)/);
+  /function isRetirementExcludedEducationAssetType_\([\s\S]*?EDUCATION[\s\S]*?529/);
+assert.match(retirementSource,
+  /function getCurrentInvestableAssetsForRetirement_\([\s\S]*?isRetirementExcludedEducationAssetType_/);
 assert.doesNotMatch(
   retirementSource.slice(
     retirementSource.indexOf('function getCurrentInvestableAssetsForRetirement_'),
-    retirementSource.indexOf('function getCurrentInvestableAssetsForRetirement_') + 400
+    retirementSource.indexOf('function getCurrentInvestableAssetsForRetirement_') + 900
   ),
-  /529/
+  /Lutfi 529|Laith 529/
 );
 
 assert.match(activitySource, /etEarly === 'education_plan_update'\) return 'Education'/);
@@ -111,7 +114,12 @@ assert.doesNotMatch(client, /No school, cost, or contribution-change rows yet fo
 assert.doesNotMatch(client, /host\.innerHTML = ''[\s\S]*createElement\('button'\)[\s\S]*Lutfi 529/);
 assert.doesNotMatch(client, /education_retirement_529_note/);
 assert.match(help, /Each saved plan stays on its own exact account/);
-assert.doesNotMatch(help, /Choose the account at the top of Education|Retirement still includes 529|investable assets/);
+const educationHelp = help.slice(
+  help.indexOf('id="help-education"'),
+  help.indexOf('id="help-advanced"')
+);
+assert.doesNotMatch(educationHelp, /Retirement|investable assets|529 balances/);
+assert.match(help, /Current investable assets exclude accounts typed Education or 529/);
 assert.match(planning, /class="tab-btn active"[\s\S]*?data-tab="capitalAllocationPreview"/);
 assert.equal((planning.match(/class="tab-btn active"/g) || []).length, 1,
   'Planning default must remain a single active primary tool');
@@ -314,7 +322,7 @@ assert.equal(firstData.plans[1].currentMonthlyContribution.present, false);
 assert.equal(firstData.plans[0].coverageGoal, '');
 assert.equal(firstData.lineItems.length, 0);
 assert.equal(firstData.household.expectedAnnualReturnPct.base.present, false);
-assert.equal(firstData.retirement529Review.retirementCodeUnchanged, true);
+assert.equal(firstData.retirement529Review, undefined);
 
 const planValues = firstSs.getSheetByName('INPUT - Education').getDataRange().getValues();
 assert.ok(planValues.some((row) => row[0] === 'Lutfi 529'));

@@ -1337,8 +1337,37 @@ function randomNormal_(mean, stdDev) {
   return mean + z * stdDev;
 }
 
+function isRetirementExcludedEducationAssetType_(type) {
+  const normalized = String(type || '').trim().toUpperCase();
+  return normalized === 'EDUCATION' || normalized === '529';
+}
+
 function getCurrentInvestableAssetsForRetirement_(optionalSs) {
   const ss = optionalSs || getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'ASSETS');
-  return sumColumnByHeader_(sheet, 'Current Balance');
+  const range = sheet.getDataRange();
+  const values = range.getValues();
+  const display = range.getDisplayValues();
+  if (display.length < 2) return 0;
+
+  const headers = display[0];
+  const nameCol = headers.indexOf('Account Name');
+  const typeCol = headers.indexOf('Type');
+  const balanceCol = headers.indexOf('Current Balance');
+  if (nameCol === -1) {
+    throw new Error('Sheet "' + sheet.getName() + '" must contain header: Account Name');
+  }
+  if (balanceCol === -1) {
+    throw new Error('Sheet "' + sheet.getName() + '" must contain header: Current Balance');
+  }
+
+  let total = 0;
+  for (let r = 1; r < values.length; r++) {
+    const rowName = String(display[r][nameCol] || '').trim();
+    if (!rowName) continue;
+    const type = typeCol === -1 ? '' : String(display[r][typeCol] || '').trim();
+    if (isRetirementExcludedEducationAssetType_(type)) continue;
+    total += toNumber_(values[r][balanceCol]);
+  }
+  return round2_(total);
 }

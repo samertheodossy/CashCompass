@@ -3603,6 +3603,12 @@ assert.match(retirementServer,
 assert.doesNotMatch(retirementServer,
   /function getRetirementScenarioRow_[\s\S]*?['"]Target Retirement Age['"]:\s*\d+/,
   'Retirement scenario access must not depend on stale fixed row numbers');
+assert.match(body,
+  /id="ret_info_assets"[\s\S]*?Education and 529 accounts are not included/);
+assert.doesNotMatch(
+  body.slice(body.indexOf('id="education"'), body.indexOf('id="debtPayoff"')),
+  /Education and 529 accounts are not included|Current investable assets/
+);
 assert.match(styles,
   /#ret_scenario_cards\[hidden\],[\s\S]*?#ret_results_panel\[hidden\]\s*\{[\s\S]*?display:\s*none !important;/,
   'Retirement hidden result panels must stay hidden despite grid styles');

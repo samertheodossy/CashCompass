@@ -1063,11 +1063,10 @@ model expected RSU vesting as variable, uncertain compensation with timing.
 Unvested awards must not count as guaranteed retirement income and must not be
 double-counted with other income or assets.
 
-**Education and 529 treatment** *(roadmap only; not implemented or
-runtime-tested)* — incorporate education-cost timing and expected 529 use into
-retirement cash-flow projections, while keeping 529 balances separate from
-unrestricted retirement assets. Review the current Retirement investable-assets
-calculation, which appears to include 529 balances.
+**Education and 529 treatment** — Retirement current investable assets exclude
+`SYS - Assets` rows typed Education or 529. Remaining roadmap work is
+education-cost timing and expected 529 use in retirement cash-flow projections,
+not the investable-assets filter.
 
 ### Area 11 — Explainable recommendations
 
@@ -1121,7 +1120,7 @@ Edit/Rename disposition, or frozen-candidate evidence `8a`–`8f`.
 | **DE-7** | Mortgage acceleration | DE-4; Property Performance V1 | Extra principal, refinance, interest, cash-flow, opportunity cost, rental treatment, prepayment limits |
 | **DE-8** | Tax-aware portfolio actions | DE-2, DE-3 tax lots; Robinhood protection policy | Candidate lots, ST/LT, basis, RSU/ESPP, concentration, taxable vs retirement, estimated tax; no auto-sell |
 | **DE-9** | Robinhood funding optimization | DE-3, DE-5; current Robinhood policy floor | Contribution, capacity, allocation, dividends, total return, tax, concentration, time-to-income; not yield-only |
-| **DE-10** | Retirement and income planning | DE-2 401(k); DE-3 history; current Retirement surface | Contributions/match/allocation, wrappers, RSU/ESPP as uncertain vesting (no guaranteed income, no double-count), education-cost/529 timing with 529s kept separate from unrestricted retirement assets, rent, age, sequencing, SS/pension when present, cash-flow gap; review current investable-assets 529 inclusion. Roadmap only — not implemented or runtime-tested |
+| **DE-10** | Retirement and income planning | DE-2 401(k); DE-3 history; current Retirement surface | Contributions/match/allocation, wrappers, RSU/ESPP as uncertain vesting (no guaranteed income, no double-count), education-cost/529 timing with 529s kept separate from unrestricted retirement assets, rent, age, sequencing, SS/pension when present, cash-flow gap. Current investable assets already exclude SYS - Assets rows typed Education or 529. Remaining DE-10 work is roadmap only — not implemented or runtime-tested |
 | **DE-11** | Explainable recommendation packet | Required output of DE-4 through DE-10 | Action, amount, benefit, assumptions, tax, liquidity, risks, missing data, confidence; explicit approval |
 | **DE-12** | Safety and governance evidence | Cross-cutting from DE-1 | No auto-trade/pay/match/apply; assumptions; audit trail; user approval; bounded-workbook writer prohibition |
 
