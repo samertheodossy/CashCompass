@@ -15,7 +15,7 @@ This is the current import and review model. It does not reopen frozen Planning 
 ### Completed foundations
 
 - Manual **Update / Add new / Manage** for Bank Accounts, Investments, Houses, and Debts: Update records a confirmed monthly (or field) value; Add new creates the account or property; Manage edits identity/settings or stops tracking.
-- Explicit **$0.00** is valid confirmed evidence. Unknown or blank is not $0 and does not create evidence (Bank Update/Add new, Investments **Update** / **Add new**, Houses Add/Update).
+- Explicit **$0.00** is valid confirmed evidence. Unknown or blank is not $0 and does not create evidence (Bank Update/Add new, Investments **Update** / **Add new**, Houses Add/Update). Statement import and investment CSV money follow the same rule: blank/missing stays unknown; explicit `0` / `$0.00` stays zero.
 - Bank monthly-balance saves leave **Available Now**, **Minimum Buffer**, **Use Policy**, and **Priority** unchanged unless the user explicitly opts in. Planning continues to use CashCompass INPUT/SYS values.
 - **Investments → Portfolio activity** is the only investment import/review surface. Do not invent a second import page. Preview does not write until an explicit save/apply in that drawer. Runtime-validated customer paths:
   - **Samer Robinhood** — activity CSV; writes `SYS - Investment Activity` and derived `SYS - Investment Holdings`. `INPUT - Investments` remains the account-total authority. Robinhood → Unified remains deferred.
@@ -24,6 +24,8 @@ This is the current import and review model. It does not reopen frozen Planning 
   - **Stash Account** — brokerage statement PDF detailed holdings Apply to `SYS - Investment Holdings Unified`. This import does **not** update monthly `INPUT - Investments` values.
   - **E\*TRADE Cisco Statement — RSU/ESPP + Future** — one E*TRADE/Morgan Stanley client-statement PDF supports both Cisco backend accounts. The picker uses one combined import profile. **Etrade Cisco - RSU/ESPP** maps the actual brokerage value to `BROKERAGE_ACCOUNT_VALUE`. **Etrade Cisco - Future** maps the potential/unvested summary value to `POTENTIAL_UNVESTED_STOCK_PLAN`. Statement date formats including `8/31/26` normalize correctly. PDF text extraction uses the existing browser pdf.js path. Grant-detail $0 values, hypothetical-plan $0 values, holdings sums, and brokerage value reuse are excluded. Apply writes only `INPUT - Investments`. No holdings, CSCO shares, tax lots, transactions, dividends, or `SYS - Investment Activity` rows are created. Activity logging uses `LOG - Activity`. Central no-write runtime validation passed with the real statement. The two standalone Cisco picker entries were removed because the combined profile replaces them.
   - **Samer Etrade Account** — source implemented (`500639f`) in the same Portfolio activity drawer: monthly `INPUT - Investments` value plus Unified holdings from one `ETRADE_CLIENT_STATEMENT_PDF`. Exact account identity only. Keep/Replace monthly decisions, stale-cell protection, and `LOG - Activity` reuse the shared contracts. Statement activity, dividends, tax lots, and realized gains are not imported. **Central clasp + Preview/Apply of the real August 2026 statement is still required** before this path is runtime-validated. Do not treat the Cisco statement profile as covering this account.
+- **Planning → Education** saves school, cost, and contribution inputs for the exact accounts **Lutfi 529** and **Laith 529**. Live balances come from Investments / `SYS - Assets` and are not copied. Forecasts and coverage math are not calculated yet. Education does not carry Retirement messaging.
+- **Retirement current investable assets** exclude `SYS - Assets` rows typed **Education** or **529** (Type metadata only, not account-name matching). Overview Retirement outlook uses that same filtered total. Net worth and other Planning asset totals still include those balances. Remaining Education/Retirement work is coverage timing and cash-flow projection, not this filter.
 
 #### Customer-facing investment account inventory (2026-10-01)
 
@@ -35,9 +37,9 @@ This is the complete active investment list. Imports stay in the common **Invest
 | **Charles Schwab - Personal** | Schwab | Runtime-validated detailed holdings Apply to Unified. Blank-only monthly INPUT fill still needs **October** runtime validation. Occupied cells, including explicit $0, must not be overwritten |
 | **Etrade Cisco - Future** | E*TRADE | Potential/unvested stock-plan monthly value from the combined **E\*TRADE Cisco Statement — RSU/ESPP + Future** picker profile only. Exact account identity stays **Etrade Cisco - Future**. Not a standalone picker option. Not vested holdings |
 | **Etrade Cisco - RSU/ESPP** | E*TRADE | Brokerage ending-total monthly value from the same combined Cisco statement-import profile only. Exact account identity stays **Etrade Cisco - RSU/ESPP**. Not a standalone picker option |
-| **Laith 529** | None detected | Manual Update/Add only until a reliable source exists. Do not invent a 529 adapter |
+| **Laith 529** | None detected | Manual Update/Add only until a reliable source exists. Do not invent a 529 adapter. Planning → Education already holds saved inputs for this exact account; forecasts are not calculated yet. Retirement investable assets exclude this row when Type is Education or 529 |
 | **Laith Etrade Account** | E*TRADE | No production customer import path. Keep as its own partition. Client-statement PDF/OCR remains deferred |
-| **Lutfi 529** | None detected | Manual Update/Add only until a reliable source exists. Do not invent a 529 adapter |
+| **Lutfi 529** | None detected | Manual Update/Add only until a reliable source exists. Do not invent a 529 adapter. Planning → Education already holds saved inputs for this exact account; forecasts are not calculated yet. Retirement investable assets exclude this row when Type is Education or 529 |
 | **Lutfi Etrade Account** | E*TRADE | No production customer import path. Keep as its own partition. Client-statement PDF/OCR remains deferred |
 | **Lutfi Robinhood** | Robinhood | Not runtime-validated. Needs eligibility (Income-Producing + Investment Id, same CSV drawer) and a real import proof. Do not treat **Samer Robinhood** evidence as covering this account |
 | **M1 Account - Gmail** | M1 | Runtime-validated grouped statement PDF Apply to Unified. Child partitions stay under this parent (max five). Grouped Apply does not write the parent monthly INPUT value |
@@ -72,13 +74,14 @@ These are planned, not complete:
 - **c. Property valuations drawer** — returns when an external evidence source is implemented. Until then, Houses → Update remains the only manual house-value entry path. Do not present an empty drawer or a second manual valuation form. No live listing APIs in this slice. No new house valuation source and no Zillow/Redfin scraping.
 - **e. Remaining E\*TRADE accounts** — **Laith Etrade Account** and **Lutfi Etrade Account** have no production customer import tab. Keep each as its **own** partition. Do not group them. Do **not** enable Lutfi Etrade. **Etrade Cisco - RSU/ESPP** and **Etrade Cisco - Future** stay separate INPUT identities and are filled together only from **E\*TRADE Cisco Statement — RSU/ESPP + Future**. **Samer Etrade Account** is already implemented in source.
 - **e2. Lutfi Robinhood** — needs CSV eligibility and runtime validation in the existing Portfolio activity drawer. Do not copy **Samer Robinhood** proof onto this account.
-- **e3. Laith 529** and **Lutfi 529** — remain manual until a reliable source is available. No detected provider/import. Any account without a reliable supported export stays deferred.
+- **e3. Laith 529** and **Lutfi 529** — remain **manual investment Update/Add** until a reliable source is available. No 529 import adapter. Planning → Education is the saved-input surface for these exact accounts; do not invent a second Education import page. Forecasts stay deferred.
 
 ### Deferred / future work
 
 - **f. Optional Zillow/Redfin or uploaded valuation evidence** — provider-neutral property evidence only if later approved. No live Zillow/Redfin APIs are in the current product.
 - **g. Remaining investment imports** — Central runtime proofs: **Samer Etrade Account** clasp + Preview/Apply; **401K Account** blank-month ending-balance Apply. Then **Lutfi Robinhood** eligibility and runtime validation. Production customer import path for remaining E\*TRADE accounts (**Laith Etrade Account**, **Lutfi Etrade Account**; client-statement PDF/OCR **deferred**); **Laith 529** and **Lutfi 529** stay manual until a reliable source exists; any account without a reliable supported export stays deferred. The combined **E\*TRADE Cisco Statement — RSU/ESPP + Future** monthly-value profile is complete. **Samer Etrade Account** monthly value + Unified holdings is implemented in source (`500639f`) and is not a remaining build. **Samer Robinhood**, **M1 Account - Gmail**, **M1 Account - yahoo**, **Charles Schwab - Personal**, and **Stash Account** detailed holdings are no longer in this remaining list. Robinhood → Unified stays deferred. Stash does not gain monthly INPUT writes in this sequence. No auto-mapping and no silent Apply.
 - **h. Income, debt payoff, HELOC, mortgage, tax, and portfolio decision features** — including residual Rolling Financial Plan / Multi-Broker Portfolio Intelligence ranking, Whole-Household Debt Freedom Planner, and related north-star work. These do not interrupt the activity-drawer sequence.
+- **i. Education forecasts** — Planning → Education currently saves inputs only. Coverage, overlap, and projection math stay deferred. Do not mix 529 balances back into Retirement investable assets.
 
 ---
 
@@ -555,8 +558,8 @@ restoration, extra debt by APR, confirmed Income-Producing funding pace, and exp
 after same-week minimums; and reconciles every cash use to ending cash. A
 read-only **This Week** experience renders the weekly ledger, ranked choices,
 blockers, protected cash, and a current-week-only monthly rollup as Planning's
-default tool. Planning now uses one five-choice selector: This week, Rolling
-debt payoff, Debt overview, Retirement, and Purchase simulator. The legacy Next
+default tool. Planning uses one selector: This week, Rolling
+debt payoff, Debt overview, Retirement, Purchase simulator, and Education. The legacy Next
 Actions reader/panel remains compatible, while its routes and Setup completion
 resolve to This week → Overview; the common app has no alternate Planning URL.
 The Bills occurrence
@@ -1063,10 +1066,9 @@ model expected RSU vesting as variable, uncertain compensation with timing.
 Unvested awards must not count as guaranteed retirement income and must not be
 double-counted with other income or assets.
 
-**Education and 529 treatment** — Retirement current investable assets exclude
-`SYS - Assets` rows typed Education or 529. Remaining roadmap work is
-education-cost timing and expected 529 use in retirement cash-flow projections,
-not the investable-assets filter.
+**Education and 529 treatment**
+- **Done in source:** Planning → Education saves Lutfi 529 / Laith 529 inputs (no forecast yet). Retirement current investable assets, including Overview Retirement outlook, exclude `SYS - Assets` rows typed Education or 529. Classification uses Type only. Net worth still includes those balances.
+- **Remaining (roadmap only; not implemented or runtime-tested):** education-cost timing and expected 529 use in retirement cash-flow projections; Education coverage/projection math.
 
 ### Area 11 — Explainable recommendations
 
@@ -1120,7 +1122,7 @@ Edit/Rename disposition, or frozen-candidate evidence `8a`–`8f`.
 | **DE-7** | Mortgage acceleration | DE-4; Property Performance V1 | Extra principal, refinance, interest, cash-flow, opportunity cost, rental treatment, prepayment limits |
 | **DE-8** | Tax-aware portfolio actions | DE-2, DE-3 tax lots; Robinhood protection policy | Candidate lots, ST/LT, basis, RSU/ESPP, concentration, taxable vs retirement, estimated tax; no auto-sell |
 | **DE-9** | Robinhood funding optimization | DE-3, DE-5; current Robinhood policy floor | Contribution, capacity, allocation, dividends, total return, tax, concentration, time-to-income; not yield-only |
-| **DE-10** | Retirement and income planning | DE-2 401(k); DE-3 history; current Retirement surface | Contributions/match/allocation, wrappers, RSU/ESPP as uncertain vesting (no guaranteed income, no double-count), education-cost/529 timing with 529s kept separate from unrestricted retirement assets, rent, age, sequencing, SS/pension when present, cash-flow gap. Current investable assets already exclude SYS - Assets rows typed Education or 529. Remaining DE-10 work is roadmap only — not implemented or runtime-tested |
+| **DE-10** | Retirement and income planning | DE-2 401(k); DE-3 history; current Retirement surface | Remaining: contributions/match/allocation, wrappers, RSU/ESPP as uncertain vesting (no guaranteed income, no double-count), education-cost/529 timing in cash-flow projections, rent, age, sequencing, SS/pension when present, cash-flow gap. Already done: Retirement investable assets exclude SYS - Assets rows typed Education or 529; Overview uses that filtered total; Education saved inputs exist without forecasts. Remaining DE-10 work is roadmap only — not implemented or runtime-tested |
 | **DE-11** | Explainable recommendation packet | Required output of DE-4 through DE-10 | Action, amount, benefit, assumptions, tax, liquidity, risks, missing data, confidence; explicit approval |
 | **DE-12** | Safety and governance evidence | Cross-cutting from DE-1 | No auto-trade/pay/match/apply; assumptions; audit trail; user approval; bounded-workbook writer prohibition |
 
