@@ -261,7 +261,7 @@ function invDrawerEtradeSamerRenderMonthlyInvestmentValueHtml_(monthly) {
   html += '<p>Target month: <strong>' +
     invDrawerEtradeSamerEscape_(monthly.monthLabel || 'this month') + '</strong></p>';
   html += '<p>Statement value: <strong>' +
-    invDrawerEtradeSamerEscape_(invDrawerEtradeSamerFormatMonthlyMoney_(monthly.proposedValue)) + '</strong></p>';
+    invDrawerEtradeSamerEscape_(monthly.proposedValueLabel || invDrawerEtradeSamerFormatMonthlyMoney_(monthly.proposedValue)) + '</strong></p>';
   if (comparison === 'BLANK') {
     html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
       '<input type="radio" name="inv_etrade_samer_monthly_decision" value="ADD"' +

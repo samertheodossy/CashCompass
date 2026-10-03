@@ -229,7 +229,7 @@ function invDrawerEtradeFutureRenderMonthlyInvestmentValueHtml_(monthly) {
   html += '<p>Target month: <strong>' +
     invDrawerEtradeFutureEscape_(monthly.monthLabel || 'this month') + '</strong></p>';
   html += '<p>Statement value: <strong>' +
-    invDrawerEtradeFutureEscape_(invDrawerEtradeFutureFormatMoney_(monthly.proposedValue)) +
+    invDrawerEtradeFutureEscape_(monthly.proposedValueLabel || invDrawerEtradeFutureFormatMoney_(monthly.proposedValue)) +
     '</strong></p>';
   if (monthly.warning || monthly.valueCategory === 'POTENTIAL_UNVESTED_STOCK_PLAN') {
     html += '<p><strong>' + invDrawerEtradeFutureEscape_(monthly.warning ||

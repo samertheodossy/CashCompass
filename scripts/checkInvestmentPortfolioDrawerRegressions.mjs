@@ -749,6 +749,7 @@ assert.match(drawer401kSource, /boundedHoldingsPreviewBuildApplyDiffFromDashboar
 assert.match(drawer401kSource, /boundedHoldingsPreviewApplyFromDashboard/);
 assert.match(drawer401kSource, /payload\.explicitApplyConfirm = true/);
 assert.match(drawer401kSource, /monthlyInvestmentValueDecision/);
+assert.match(drawer401kSource, /proposedValueLabel \|\| invDrawer401kFormatMoney_/);
 assert.match(drawer401kSource, /Ignore monthly value/);
 assert.match(drawer401kSource, /Keep existing/);
 assert.match(drawer401kSource, /Replace with statement value/);
@@ -761,6 +762,7 @@ assert.match(drawerEtradeFutureSource, /boundedHoldingsPreviewBuildApplyDiffFrom
 assert.match(drawerEtradeFutureSource, /boundedHoldingsPreviewApplyFromDashboard/);
 assert.match(drawerEtradeFutureSource, /payload\.explicitApplyConfirm = true/);
 assert.match(drawerEtradeFutureSource, /monthlyInvestmentValueDecisions/);
+assert.match(drawerEtradeFutureSource, /proposedValueLabel \|\| invDrawerEtradeFutureFormatMoney_/);
 assert.match(drawerEtradeFutureSource, /Potential\/unvested stock-plan value/);
 assert.match(drawerEtradeFutureSource, /Etrade Cisco - Future/);
 assert.match(drawerEtradeFutureSource, /Etrade Cisco - RSU\/ESPP/);
@@ -816,6 +818,7 @@ assert.match(drawerStashSource, /boundedHoldingsPreviewBuildApplyDiffFromDashboa
 assert.match(drawerStashSource, /boundedHoldingsPreviewApplyFromDashboard/);
 assert.match(drawerStashSource, /payload\.explicitApplyConfirm = true/);
 assert.match(drawerStashSource, /monthlyInvestmentValueDecision/);
+assert.match(drawerStashSource, /proposedValueLabel \|\| invDrawerStashFormatMonthlyMoney_/);
 assert.match(drawerStashSource, /Monthly investment value/);
 assert.match(drawerStashSource, /Ignore monthly value/);
 assert.match(drawerStashSource, /Keep existing/);
@@ -830,6 +833,7 @@ assert.match(drawerEtradeSamerSource, /boundedHoldingsPreviewBuildApplyDiffFromD
 assert.match(drawerEtradeSamerSource, /boundedHoldingsPreviewApplyFromDashboard/);
 assert.match(drawerEtradeSamerSource, /payload\.explicitApplyConfirm = true/);
 assert.match(drawerEtradeSamerSource, /monthlyInvestmentValueDecision/);
+assert.match(drawerEtradeSamerSource, /proposedValueLabel \|\| invDrawerEtradeSamerFormatMonthlyMoney_/);
 assert.match(drawerEtradeSamerSource, /Monthly investment value/);
 assert.match(drawerEtradeSamerSource, /Ignore monthly value/);
 assert.match(drawerEtradeSamerSource, /Keep existing/);
@@ -987,6 +991,7 @@ assert.doesNotMatch(
 assert.doesNotMatch(drawerSchwabSource, /bundle\.diffPreview/);
 assert.match(drawerSchwabSource, /invDrawerSchwabResolveApplyDiffBundle_/);
 assert.match(drawerSchwabSource, /Monthly investment value/);
+assert.match(drawerSchwabSource, /proposedValueLabel \|\| invDrawerSchwabFormatMonthlyMoney_/);
 assert.match(drawerSchwabSource, /monthlyInvestmentValueDecision/);
 assert.match(drawerSchwabSource, /Keep existing/);
 assert.match(drawerSchwabSource, /Replace with statement value/);
@@ -994,6 +999,7 @@ assert.doesNotMatch(drawerSchwabSource, /explicitMonthlyValueReplace/);
 assert.doesNotMatch(drawerM1Source, /bundle\.diffPreview/);
 assert.match(drawerM1Source, /invDrawerM1ResolveApplyDiffBundle_/);
 assert.match(drawerM1Source, /Monthly investment value/);
+assert.match(drawerM1Source, /proposedValueLabel \|\| invDrawerM1FormatMoney_/);
 assert.match(drawerM1Source, /monthlyInvestmentValueDecision/);
 assert.match(drawerM1Source, /Keep existing/);
 assert.match(drawerM1Source, /Replace with statement value/);

@@ -403,8 +403,10 @@ function investmentM1SplitStatementLine_(line) {
 }
 
 function investmentM1SafeParseMoney_(text) {
+  var raw = String(text == null ? '' : text).trim();
+  if (!raw) return NaN;
   try {
-    var value = parseInvestmentImportMoney_(text);
+    var value = parseInvestmentImportMoney_(raw);
     return isFinite(value) ? value : NaN;
   } catch (e) {
     return NaN;
@@ -876,7 +878,8 @@ function investmentM1BuildUnifiedHoldingsPreviewFromStatement_(input, parseResul
     activities: false,
     holdings: (parseResult.holdings || []).length > 0,
     taxLots: false,
-    accountSnapshot: !!(preamble.totalAccountValue || preamble.cashBalance),
+    accountSnapshot: investmentM1HasMoney_(preamble.totalAccountValue) ||
+      investmentM1HasMoney_(preamble.cashBalance),
     dividendHistory: false,
     realizedGainLoss: false
   };
@@ -970,11 +973,13 @@ function investmentM1BuildUnifiedHoldingsPreviewFromStatement_(input, parseResul
   preview.realizedGainLoss = [];
   preview.distributions = [];
   preview.activities = [];
-  if (preamble.totalAccountValue || preamble.cashBalance !== null) {
+  if (investmentM1HasMoney_(preamble.totalAccountValue) ||
+      investmentM1HasMoney_(preamble.cashBalance)) {
     preview.accountSnapshots = [{
       stableAccountId: stableAccountId,
       snapshotType: 'CASH',
-      marketValue: preamble.totalAccountValue,
+      marketValue: investmentM1HasMoney_(preamble.totalAccountValue)
+        ? preamble.totalAccountValue : null,
       cashBalance: investmentM1HasMoney_(preamble.cashBalance) ? preamble.cashBalance : null,
       asOf: sourceAsOf,
       authority: 'PROVIDER_REPORTED',
@@ -998,6 +1003,8 @@ function investmentM1BuildUnifiedHoldingsPreviewFromStatement_(input, parseResul
     accountLabel: preamble.accountLabel || '',
     accountTitle: preamble.accountTitle || '',
     accountType: preamble.accountType || '',
+    endingTotalValue: investmentM1HasMoney_(preamble.totalAccountValue)
+      ? round2_(Number(preamble.totalAccountValue)) : null,
     equitiesSubtotal: preamble.equitiesSubtotal,
     totalPortfolioSubtotal: preamble.totalPortfolioSubtotal,
     cashPlusEquitiesReconciles: investmentM1BreakdownReconcilesToTotal_(preamble),

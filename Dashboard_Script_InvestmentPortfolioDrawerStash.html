@@ -261,7 +261,7 @@ function invDrawerStashRenderMonthlyInvestmentValueHtml_(monthly) {
   html += '<p>Target month: <strong>' +
     invDrawerStashEscape_(monthly.monthLabel || 'this month') + '</strong></p>';
   html += '<p>Statement value: <strong>' +
-    invDrawerStashEscape_(invDrawerStashFormatMonthlyMoney_(monthly.proposedValue)) + '</strong></p>';
+    invDrawerStashEscape_(monthly.proposedValueLabel || invDrawerStashFormatMonthlyMoney_(monthly.proposedValue)) + '</strong></p>';
   if (comparison === 'BLANK') {
     html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
       '<input type="radio" name="inv_stash_monthly_decision" value="ADD"' +

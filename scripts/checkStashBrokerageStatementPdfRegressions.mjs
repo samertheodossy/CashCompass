@@ -476,4 +476,67 @@ assert.equal(
 
 assert.equal(context.boundedHoldingsPreviewFindIdentityProvider_('STASH').institution, 'Stash');
 
+context.getCurrentYear_ = function() { return 2026; };
+context.getInvestmentHistoryValueForMonth_ = function() { return ''; };
+
+const stashMissingTotalText = statementFixture.replace(
+  /TOTAL PRICED PORTFOLIO(?: \$[\d,]+\.\d{2}| [\d,]+\.\d{2} [\d,]+\.\d{2})/g,
+  'TOTAL PRICED PORTFOLIO'
+);
+const stashMissingParsed = context.investmentStashParseBrokerageStatementPdfText_(stashMissingTotalText);
+assert.equal(stashMissingParsed.ok, true, stashMissingParsed.error || 'Stash missing total parse failed');
+assert.equal(stashMissingParsed.preamble.accountValue, null);
+assert.equal(stashMissingParsed.reconciliation.endingTotalValue, null);
+assert.notEqual(stashMissingParsed.reconciliation.endingTotalValue, 0);
+const stashMissingProposal = context.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+  {
+    source: 'STASH_BROKERAGE_STATEMENT_PDF',
+    explicitAccountMatch: true,
+    accountName: 'Stash Account',
+    monthlyInvestmentValueDecision: 'ADD'
+  },
+  'SINGLE_ACCOUNT',
+  { accountName: 'Stash Account', investmentId: 'INV-STASH-SYNTH-1' },
+  { asOf: '2026-08-31', reconciliation: stashMissingParsed.reconciliation }
+);
+assert.equal(stashMissingProposal.proposedValue, null);
+assert.equal(stashMissingProposal.willWrite, false);
+assert.ok(!stashMissingProposal.allowedDecisions.includes('ADD'));
+
+const stashZeroText = [
+  'STASH CAPITAL',
+  'Apex Clearing Corporation',
+  'August 1, 2026 - August 31, 2026',
+  'ACCOUNT NUMBER XXXX0000',
+  'FDIC Insured Deposits 0.00 0.00',
+  'TOTAL PRICED PORTFOLIO 0.00 0.00',
+  'DESCRIPTION SYMBOL/CUSIP ACCOUNT TYPE QUANTITY PRICE MARKET VALUE LAST PERIOD\'S MARKET VALUE',
+  'FDIC INSURED DEPOSITS',
+  'Total FDIC Insured Deposits $0.00',
+  'EQUITIES / OPTIONS',
+  'Total Equities $0.00',
+  'TOTAL PRICED PORTFOLIO $0.00'
+].join('\n');
+const stashZeroParsed = context.investmentStashParseBrokerageStatementPdfText_(stashZeroText);
+assert.equal(stashZeroParsed.ok, true, stashZeroParsed.error || 'Stash $0 parse failed');
+assert.equal(stashZeroParsed.preamble.accountValue, 0);
+assert.equal(stashZeroParsed.reconciliation.endingTotalValue, 0);
+assert.equal(stashZeroParsed.reconciliation.ok, true);
+const stashZeroProposal = context.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+  {
+    source: 'STASH_BROKERAGE_STATEMENT_PDF',
+    explicitAccountMatch: true,
+    accountName: 'Stash Account',
+    monthlyInvestmentValueDecision: 'ADD'
+  },
+  'SINGLE_ACCOUNT',
+  { accountName: 'Stash Account', investmentId: 'INV-STASH-SYNTH-1' },
+  { asOf: '2026-08-31', reconciliation: stashZeroParsed.reconciliation }
+);
+assert.equal(stashZeroProposal.proposedValue, 0);
+assert.ok(
+  stashZeroProposal.allowedDecisions.includes('ADD') || stashZeroProposal.action === 'ADD',
+  'Stash explicit $0 must remain an Add-capable proposal'
+);
+
 console.log('Stash brokerage statement PDF regressions passed.');

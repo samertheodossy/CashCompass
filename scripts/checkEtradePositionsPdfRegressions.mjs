@@ -211,4 +211,45 @@ assert.equal(holdingsOnly.ok, true);
 assert.equal(holdingsOnly.normalized.activities.length, 0);
 assert.equal(holdingsOnly.normalized.holdingsSnapshots.length, 3);
 
+const blankLastPriceText = positionsFixture.replace(
+  'SYNETF | Trade | $50.00 | -$0.50 | -1.00% | 100 | $4,800.00 | -$50.00 | $200.00 | 4.17% | $5,000.00',
+  'SYNETF | Trade |  | -$0.50 | -1.00% | 100 | $4,800.00 | -$50.00 | $200.00 | 4.17% | $5,000.00'
+);
+const blankLastPricePreview = context.investmentEtradePreviewPositionsPdf_({
+  source: 'ETRADE_PACKAGE',
+  rawPositionsText: blankLastPriceText,
+  accountMeta
+});
+assert.ok(!blankLastPricePreview.normalized.holdingsSnapshots.some((row) => row.ticker === 'SYNETF'));
+assert.ok(blankLastPricePreview.normalized.unsupportedRows.some((row) =>
+  row.reason === 'MALFORMED_POSITION_HEADER' && String(row.symbol || '') === 'SYNETF'));
+
+const blankMarketValueText = positionsFixture.replace(
+  'SYNETF | Trade | $50.00 | -$0.50 | -1.00% | 100 | $4,800.00 | -$50.00 | $200.00 | 4.17% | $5,000.00',
+  'SYNETF | Trade | $50.00 | -$0.50 | -1.00% | 100 | $4,800.00 | -$50.00 | $200.00 | 4.17% | '
+);
+const blankMarketValuePreview = context.investmentEtradePreviewPositionsPdf_({
+  source: 'ETRADE_PACKAGE',
+  rawPositionsText: blankMarketValueText,
+  accountMeta
+});
+assert.ok(!blankMarketValuePreview.normalized.holdingsSnapshots.some((row) => row.ticker === 'SYNETF'));
+assert.ok(blankMarketValuePreview.normalized.unsupportedRows.some((row) =>
+  row.reason === 'MALFORMED_POSITION_HEADER' && String(row.symbol || '') === 'SYNETF'));
+
+const explicitZeroLastPriceText = positionsFixture.replace(
+  'SYNETF | Trade | $50.00 | -$0.50 | -1.00% | 100 | $4,800.00 | -$50.00 | $200.00 | 4.17% | $5,000.00',
+  'SYNETF | Trade | $0.00 | -$0.50 | -1.00% | 100 | $4,800.00 | -$50.00 | $200.00 | 4.17% | $0.00'
+);
+const explicitZeroLastPricePreview = context.investmentEtradePreviewPositionsPdf_({
+  source: 'ETRADE_PACKAGE',
+  rawPositionsText: explicitZeroLastPriceText,
+  accountMeta
+});
+const zeroSynetf = explicitZeroLastPricePreview.normalized.holdingsSnapshots.find((row) =>
+  row.ticker === 'SYNETF');
+assert.ok(zeroSynetf, 'Explicit $0.00 last price and market value must remain a valid holding');
+assert.equal(zeroSynetf.currentPrice, 0);
+assert.equal(zeroSynetf.marketValue, 0);
+
 console.log('E*TRADE Positions PDF regressions passed.');

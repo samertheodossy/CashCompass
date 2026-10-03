@@ -146,7 +146,13 @@ function boundedHoldingsPreviewApplyRowKey_(row) {
 }
 
 function boundedHoldingsPreviewApplyNullableNumber_(value) {
-  if (value === null || typeof value === 'undefined' || value === '') return null;
+  if (value === null || typeof value === 'undefined') return null;
+  if (typeof value === 'string') {
+    value = value.trim();
+    if (!value) return null;
+  } else if (value === '') {
+    return null;
+  }
   var num = Number(value);
   return isFinite(num) ? round2_(num) : null;
 }

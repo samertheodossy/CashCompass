@@ -254,7 +254,7 @@ function invDrawerSchwabRenderMonthlyInvestmentValueHtml_(monthly) {
   html += '<p>Target month: <strong>' +
     invDrawerSchwabEscape_(monthly.monthLabel || 'this month') + '</strong></p>';
   html += '<p>Statement value: <strong>' +
-    invDrawerSchwabEscape_(invDrawerSchwabFormatMonthlyMoney_(monthly.proposedValue)) + '</strong></p>';
+    invDrawerSchwabEscape_(monthly.proposedValueLabel || invDrawerSchwabFormatMonthlyMoney_(monthly.proposedValue)) + '</strong></p>';
   if (comparison === 'BLANK') {
     html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
       '<input type="radio" name="inv_schwab_monthly_decision" value="ADD"' +

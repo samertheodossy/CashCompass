@@ -640,6 +640,18 @@ function boundedHoldingsPreviewApplyResolveProviderEndingTotal_(preview, source)
     return { value: null, origin: '' };
   }
   if (normalized === 'M1_STATEMENT_PDF') {
+    if (Object.prototype.hasOwnProperty.call(preview, 'endingTotalValue')) {
+      var reportedEnding = boundedHoldingsPreviewApplyNullableNumber_(preview.endingTotalValue);
+      if (reportedEnding === null) return { value: null, origin: '' };
+      return { value: reportedEnding, origin: 'PROVIDER_SNAPSHOT' };
+    }
+    if (preview.statementParseMeta &&
+        Object.prototype.hasOwnProperty.call(preview.statementParseMeta, 'endingTotalValue')) {
+      var metaEnding = boundedHoldingsPreviewApplyNullableNumber_(
+        preview.statementParseMeta.endingTotalValue);
+      if (metaEnding === null) return { value: null, origin: '' };
+      return { value: metaEnding, origin: 'PROVIDER_SNAPSHOT' };
+    }
     if (!(preview.capabilities && preview.capabilities.accountSnapshot)) {
       return { value: null, origin: '' };
     }
@@ -728,6 +740,7 @@ function boundedHoldingsPreviewApplySanitizeMonthlyValueForClient_(monthly) {
     existingPresent: !!monthly.existingPresent,
     existingValue: monthly.existingValue,
     proposedValue: monthly.proposedValue,
+    proposedValueLabel: String(monthly.proposedValueLabel || ''),
     comparison: String(monthly.comparison || ''),
     decision: String(monthly.decision || ''),
     defaultDecision: String(monthly.defaultDecision || ''),
@@ -756,6 +769,7 @@ function boundedHoldingsPreviewApplyBuildMonthlySkip_(reason, message, extras) {
     existingPresent: !!extras.existingPresent,
     existingValue: extras.existingValue != null ? extras.existingValue : null,
     proposedValue: extras.proposedValue != null ? extras.proposedValue : null,
+    proposedValueLabel: String(extras.proposedValueLabel || ''),
     comparison: String(extras.comparison || ''),
     decision: String(extras.decision || ''),
     defaultDecision: String(extras.defaultDecision || ''),
@@ -767,6 +781,20 @@ function boundedHoldingsPreviewApplyBuildMonthlySkip_(reason, message, extras) {
     valueCategory: String(extras.valueCategory || ''),
     valueLabel: String(extras.valueLabel || '')
   };
+}
+
+function boundedHoldingsPreviewApplyBuildMissingStatementValueSkip_(extras) {
+  return boundedHoldingsPreviewApplyBuildMonthlySkip_(
+    'MISSING_ENDING_TOTAL',
+    'Statement value is not provided. Needs review. Add and Replace are not available.',
+    Object.assign({
+      proposedValue: null,
+      proposedValueLabel: 'Not provided',
+      comparison: 'MISSING',
+      skipKind: 'NEEDS_REVIEW',
+      allowedDecisions: []
+    }, extras || {})
+  );
 }
 
 function boundedHoldingsPreviewApplyFormatMoney_(value) {
@@ -920,14 +948,12 @@ function boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposalForLeg_(
   }
   var ending = boundedHoldingsPreviewApplyResolveMonthlyValueForLeg_(preview, source, leg);
   if (ending.value === null) {
-    return boundedHoldingsPreviewApplyBuildMonthlySkip_('MISSING_ENDING_TOTAL',
-      'Statement value is missing, so the monthly investment value was skipped.',
-      {
-        accountName: accountName,
-        investmentId: investmentId,
-        asOfDate: parsed.iso,
-        monthLabel: monthLabel
-      });
+    return boundedHoldingsPreviewApplyBuildMissingStatementValueSkip_({
+      accountName: accountName,
+      investmentId: investmentId,
+      asOfDate: parsed.iso,
+      monthLabel: monthLabel
+    });
   }
   var existing = boundedHoldingsPreviewApplyReadExistingMonthlyValue_(accountName, parsed);
   if (!existing.ok) {
@@ -1020,14 +1046,12 @@ function boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(payload
     Object.assign({}, preview, { accountName: preview.accountName || accountName }),
     source);
   if (ending.value === null) {
-    return boundedHoldingsPreviewApplyBuildMonthlySkip_('MISSING_ENDING_TOTAL',
-      'Statement ending account value is missing, so the monthly investment value was skipped.',
-      {
-        accountName: accountName,
-        investmentId: investmentId,
-        asOfDate: parsed.iso,
-        monthLabel: monthLabel
-      });
+    return boundedHoldingsPreviewApplyBuildMissingStatementValueSkip_({
+      accountName: accountName,
+      investmentId: investmentId,
+      asOfDate: parsed.iso,
+      monthLabel: monthLabel
+    });
   }
 
   var existing = boundedHoldingsPreviewApplyReadExistingMonthlyValue_(accountName, parsed);
@@ -1074,8 +1098,24 @@ function boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(payload
 function boundedHoldingsPreviewApplyBuildTrustedMonthlyValueProposal_(fields) {
   fields = fields || {};
   var existingPresent = !!fields.existingPresent;
-  var existingValue = existingPresent ? round2_(Number(fields.existingValue)) : null;
-  var proposedValue = round2_(Number(fields.proposedValue));
+  var existingValue = existingPresent
+    ? boundedHoldingsPreviewApplyNullableNumber_(fields.existingValue)
+    : null;
+  var proposedValue = boundedHoldingsPreviewApplyNullableNumber_(fields.proposedValue);
+  if (proposedValue === null) {
+    return boundedHoldingsPreviewApplyBuildMissingStatementValueSkip_({
+      accountName: fields.accountName,
+      investmentId: fields.investmentId,
+      asOfDate: fields.asOfDate,
+      monthLabel: fields.monthLabel,
+      existingPresent: existingPresent,
+      existingValue: existingValue,
+      source: fields.source,
+      valueCategory: String(fields.valueCategory || ''),
+      valueLabel: String(fields.valueLabel || ''),
+      warning: String(fields.warning || '')
+    });
+  }
   var comparison = 'BLANK';
   if (existingPresent) {
     comparison = existingValue === proposedValue ? 'MATCH' : 'DIFFER';
@@ -1119,6 +1159,7 @@ function boundedHoldingsPreviewApplyBuildTrustedMonthlyValueProposal_(fields) {
     existingPresent: existingPresent,
     existingValue: existingPresent ? existingValue : null,
     proposedValue: proposedValue,
+    proposedValueLabel: '',
     comparison: comparison,
     decision: decision,
     defaultDecision: '',

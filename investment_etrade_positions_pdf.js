@@ -308,8 +308,10 @@ function investmentEtradeHasPositionsMoney_(value) {
 
 function investmentEtradeExtractPositionsNumericFields_(cells) {
   var pricePaidText = String(cells[6] || '').trim();
+  var lastPriceText = String(cells[2] || '').trim();
+  var marketValueText = String(cells[10] || '').trim();
   return {
-    lastPrice: investmentEtradeSafeParsePositionsMoney_(cells[2]),
+    lastPrice: lastPriceText ? investmentEtradeSafeParsePositionsMoney_(cells[2]) : NaN,
     changeDollar: investmentEtradeSafeParsePositionsMoney_(cells[3]),
     changePercent: investmentEtradeSafeParsePositionsNumber_(String(cells[4] || '').replace(/%/g, '')),
     quantity: investmentEtradeSafeParsePositionsNumber_(cells[5]),
@@ -317,7 +319,7 @@ function investmentEtradeExtractPositionsNumericFields_(cells) {
     daysGain: investmentEtradeSafeParsePositionsMoney_(cells[7]),
     totalGain: investmentEtradeSafeParsePositionsMoney_(cells[8]),
     totalGainPercent: investmentEtradeSafeParsePositionsNumber_(String(cells[9] || '').replace(/%/g, '')),
-    marketValue: investmentEtradeSafeParsePositionsMoney_(cells[10])
+    marketValue: marketValueText ? investmentEtradeSafeParsePositionsMoney_(cells[10]) : NaN
   };
 }
 

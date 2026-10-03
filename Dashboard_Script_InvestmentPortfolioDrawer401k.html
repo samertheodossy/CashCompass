@@ -165,7 +165,7 @@ function invDrawer401kRenderMonthlyInvestmentValueHtml_(monthly) {
   html += '<p>Target month: <strong>' +
     invDrawer401kEscape_(monthly.monthLabel || 'this month') + '</strong></p>';
   html += '<p>Statement value: <strong>' +
-    invDrawer401kEscape_(invDrawer401kFormatMoney_(monthly.proposedValue)) + '</strong></p>';
+    invDrawer401kEscape_(monthly.proposedValueLabel || invDrawer401kFormatMoney_(monthly.proposedValue)) + '</strong></p>';
   if (comparison === 'BLANK') {
     html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
       '<input type="radio" name="inv_401k_monthly_decision" id="inv_401k_monthly_add" value="ADD"' +

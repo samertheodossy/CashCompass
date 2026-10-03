@@ -142,6 +142,7 @@ assert.match(functionSource('saveTrackedInvestmentAccountFromDashboard'),
 const activityContext = vm.createContext({ String, Number, Object, Array, Math, isFinite });
 vm.runInContext(`
   function round2_(value) { return Math.round(Number(value) * 100) / 100; }
+  ${activityFunctionSource('investmentImportHasMoney_')}
   ${activityFunctionSource('classifyInvestmentImportRow_')}
   ${activityFunctionSource('isInvestmentImportNonActivityFooter_')}
   ${activityFunctionSource('summarizeInvestmentImportPreview_')}

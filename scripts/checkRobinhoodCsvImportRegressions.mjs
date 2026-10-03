@@ -92,6 +92,8 @@ vm.runInContext(`
   }
   ${extractFunction(activitySource, 'normalizeInvestmentImportDate_')}
   ${extractFunction(activitySource, 'parseInvestmentImportMoney_')}
+  ${extractFunction(activitySource, 'parseInvestmentImportOptionalMoney_')}
+  ${extractFunction(activitySource, 'investmentImportHasMoney_')}
   ${extractFunction(activitySource, 'parseInvestmentImportNumber_')}
   ${extractFunction(activitySource, 'parseRobinhoodCsvQuantity_')}
   ${extractFunction(activitySource, 'normalizeInvestmentTicker_')}
@@ -331,6 +333,151 @@ const goldenComparison = context.investmentActivityBuildRobinhoodPortfolioCompar
 );
 assert.notEqual(goldenComparison.marketValue.direction, 'flat');
 
+const goldenContribution = goldenPreview.acceptedRows.find((row) => row.activityType === 'CONTRIBUTION');
+assert.ok(goldenContribution, 'Golden CSV must accept ACH deposits with amounts');
+assert.equal(goldenContribution.price, null);
+assert.ok(goldenContribution.amount > 0);
+const goldenDividend = goldenPreview.acceptedRows.find((row) => row.activityType === 'DIVIDEND');
+assert.ok(goldenDividend);
+assert.equal(goldenDividend.price, null);
+assert.ok(goldenDividend.amount > 0);
+
+// --- Blank CSV money is unknown; explicit 0 remains zero ---
+assert.equal(context.parseInvestmentImportOptionalMoney_(''), null);
+assert.equal(context.parseInvestmentImportOptionalMoney_('   '), null);
+assert.equal(context.parseInvestmentImportOptionalMoney_('0'), 0);
+assert.equal(context.parseInvestmentImportOptionalMoney_('$0.00'), 0);
+assert.equal(context.parseInvestmentImportOptionalMoney_('($5.00)'), -5);
+assert.equal(context.investmentImportHasMoney_(null), false);
+assert.equal(context.investmentImportHasMoney_(0), true);
+assert.equal(context.parseInvestmentImportMoney_(''), 0);
+
+const blankBuyClass = context.classifyInvestmentImportRow_({
+  activityDate: '2026-05-10',
+  ticker: 'QQQ',
+  transCode: 'Buy',
+  quantity: 1,
+  price: 100,
+  amount: null,
+  description: 'Invesco QQQ',
+  recurring: false
+}, cutoff, { QQQ: true }, {});
+assert.equal(blankBuyClass.accepted, false);
+assert.equal(blankBuyClass.reason, 'MISSING_AMOUNT');
+
+const zeroBuyClass = context.classifyInvestmentImportRow_({
+  activityDate: '2026-05-10',
+  ticker: 'QQQ',
+  transCode: 'Buy',
+  quantity: 1,
+  price: 0,
+  amount: 0,
+  description: 'Invesco QQQ',
+  recurring: false
+}, cutoff, { QQQ: true }, {});
+assert.equal(zeroBuyClass.accepted, true);
+assert.equal(zeroBuyClass.activityType, 'BUY');
+
+const blankCdivClass = context.classifyInvestmentImportRow_({
+  activityDate: '2026-05-10',
+  ticker: 'QQQ',
+  transCode: 'CDIV',
+  quantity: 0,
+  price: null,
+  amount: null,
+  description: 'Cash Div',
+  recurring: false
+}, cutoff, { QQQ: true }, {});
+assert.equal(blankCdivClass.accepted, false);
+assert.equal(blankCdivClass.reason, 'MISSING_AMOUNT');
+
+const zeroCdivClass = context.classifyInvestmentImportRow_({
+  activityDate: '2026-05-10',
+  ticker: 'QQQ',
+  transCode: 'CDIV',
+  quantity: 0,
+  price: 0,
+  amount: 0,
+  description: 'Cash Div',
+  recurring: false
+}, cutoff, { QQQ: true }, {});
+assert.equal(zeroCdivClass.accepted, false);
+assert.notEqual(zeroCdivClass.reason, 'MISSING_AMOUNT');
+
+const blankSellClass = context.classifyInvestmentImportRow_({
+  activityDate: '2026-05-10',
+  ticker: 'QQQ',
+  transCode: 'Sell',
+  quantity: 1,
+  price: 100,
+  amount: null,
+  description: 'Invesco QQQ',
+  recurring: false
+}, cutoff, { QQQ: true }, {});
+assert.equal(blankSellClass.accepted, false);
+assert.equal(blankSellClass.reason, 'MISSING_AMOUNT');
+
+function robinhoodActivityCsv(dataRows) {
+  return [
+    '"Activity Date","Process Date","Settle Date","Instrument","Description","Trans Code","Quantity","Price","Amount"'
+  ].concat(dataRows).join('\n');
+}
+
+function previewRobinhoodMoneyCsv(rawCsv) {
+  return context.previewInvestmentActivityImportFromDashboard({
+    investmentId: 'inv-robinhood-golden',
+    cutoffDate: '2026-04-27',
+    rawCsv,
+    tickerDecisions: {}
+  }, mockSs);
+}
+
+const blankAmountPreview = previewRobinhoodMoneyCsv(robinhoodActivityCsv([
+  '8/4/2026,8/4/2026,8/5/2026,QQQ,Invesco QQQ Recurring,Buy,1,$100.00,($100.00)',
+  '8/5/2026,8/5/2026,8/6/2026,QQQ,Invesco QQQ Recurring,Buy,1,$100.00,'
+]));
+assert.equal(blankAmountPreview.acceptedRows.length, 1);
+assert.equal(blankAmountPreview.acceptedRows[0].amount, -100);
+assert.ok(blankAmountPreview.excludedRows.some((row) =>
+  row.reason === 'MISSING_AMOUNT' && row.transCode === 'Buy'));
+
+const explicitZeroAmountPreview = previewRobinhoodMoneyCsv(robinhoodActivityCsv([
+  '8/4/2026,8/4/2026,8/5/2026,QQQ,Invesco QQQ Recurring,Buy,1,$100.00,$0.00'
+]));
+assert.equal(explicitZeroAmountPreview.acceptedRows.length, 1);
+assert.equal(explicitZeroAmountPreview.acceptedRows[0].amount, 0);
+assert.equal(explicitZeroAmountPreview.acceptedRows[0].price, 100);
+
+const blankPricePreview = previewRobinhoodMoneyCsv(robinhoodActivityCsv([
+  '8/4/2026,8/4/2026,8/5/2026,QQQ,Invesco QQQ Recurring,Buy,1,,($100.00)'
+]));
+assert.equal(blankPricePreview.acceptedRows.length, 1);
+assert.equal(blankPricePreview.acceptedRows[0].price, null);
+assert.equal(blankPricePreview.acceptedRows[0].amount, -100);
+
+const explicitZeroPricePreview = previewRobinhoodMoneyCsv(robinhoodActivityCsv([
+  '8/4/2026,8/4/2026,8/5/2026,QQQ,Invesco QQQ Recurring,Buy,1,$0.00,($100.00)'
+]));
+assert.equal(explicitZeroPricePreview.acceptedRows.length, 1);
+assert.equal(explicitZeroPricePreview.acceptedRows[0].price, 0);
+assert.equal(explicitZeroPricePreview.acceptedRows[0].amount, -100);
+
+const blankCdivPreview = previewRobinhoodMoneyCsv(robinhoodActivityCsv([
+  '8/4/2026,8/4/2026,8/5/2026,QQQ,Invesco QQQ Recurring,Buy,1,$100.00,($100.00)',
+  '8/4/2026,8/4/2026,8/4/2026,QQQ,Cash Div,CDIV,,,'
+]));
+assert.equal(blankCdivPreview.acceptedRows.length, 1);
+assert.ok(blankCdivPreview.excludedRows.some((row) =>
+  row.reason === 'MISSING_AMOUNT' && row.transCode === 'CDIV'));
+
+const explicitZeroCdivPreview = previewRobinhoodMoneyCsv(robinhoodActivityCsv([
+  '8/4/2026,8/4/2026,8/5/2026,QQQ,Invesco QQQ Recurring,Buy,1,$100.00,($100.00)',
+  '8/4/2026,8/4/2026,8/4/2026,QQQ,Cash Div,CDIV,,,0'
+]));
+assert.equal(explicitZeroCdivPreview.acceptedRows.length, 1);
+assert.ok(!explicitZeroCdivPreview.acceptedRows.some((row) => row.activityType === 'DIVIDEND'));
+assert.ok(!explicitZeroCdivPreview.excludedRows.some((row) => row.reason === 'MISSING_AMOUNT'));
+
 // --- Newer export with OEXP / Quantity "1S" must preview successfully ---
 const oexpPreview = previewRobinhoodFixture(fixture('synthetic_robinhood_activity_oexp_1s.txt'));
 assert.equal(oexpPreview.acceptedRows.length, 104, 'OEXP 1S row must not block preview');
@@ -366,6 +513,8 @@ assert.equal(
 );
 
 assert.match(activitySource, /parseRobinhoodCsvQuantity_/);
+assert.match(activitySource, /parseInvestmentImportOptionalMoney_/);
+assert.match(activitySource, /MISSING_AMOUNT/);
 assert.match(activitySource, /ROBINHOOD_CSV_NON_SHARE_QUANTITY_CODES_/);
 assert.match(activitySource, /CORPORATE_ACTION_IN/);
 assert.match(activitySource, /investmentActivityWriteRobinhoodPortfolioComparison_/);

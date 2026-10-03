@@ -93,6 +93,13 @@ assert.equal(parsed.preamble.total, 1234.56);
 assert.ok(parsed.footerRows.length >= 4, 'Footer disclaimer rows must be excluded from data parse');
 assert.ok(parsed.dataRows.length >= 18, 'Synthetic fixture must include supported activity rows');
 
+const blankTotalParsed = context.investmentEtradeParseTxnCsv_(
+  minimalCsv.replace('Total: $1,234.56', 'Total:'));
+assert.equal(blankTotalParsed.preamble.total, null);
+const zeroTotalParsed = context.investmentEtradeParseTxnCsv_(
+  minimalCsv.replace('Total: $1,234.56', 'Total: $0.00'));
+assert.equal(zeroTotalParsed.preamble.total, 0);
+
 // --- Preview entry point ---
 const preview = context.investmentAdapterPreviewEtradePackage_({
   source: 'ETRADE_PACKAGE',
@@ -148,6 +155,51 @@ assert.notEqual(feeDebitRow.activityType, 'EXPENSE');
 assert.notEqual(feeCreditRow.activityType, 'EXPENSE');
 
 assert.equal(byType.INTEREST, 1);
+
+const splitRow = preview.normalized.activities.find((row) => row.activitySubtype === 'STOCK_SPLIT');
+assert.ok(splitRow, 'Fixture must include a stock-split row');
+assert.equal(splitRow.amount, 0);
+const shareTransfer = preview.normalized.activities.find((row) =>
+  row.activityType === 'TRANSFER_OUT' && /TFR TO ACCT/i.test(String(row.description || '')));
+assert.ok(shareTransfer, 'Fixture must include a zero-cash share transfer');
+assert.equal(shareTransfer.amount, 0);
+assert.equal(shareTransfer.price, null);
+
+const blankAmountCsv = minimalCsv.replace(
+  '04/10/2024,04/10/2024,04/11/2024,Bought,SYNETF FRACTIONAL BUY,SYNETF,--,0.123,100.00,-12.30,0.99,--,--',
+  '04/10/2024,04/10/2024,04/11/2024,Bought,SYNETF FRACTIONAL BUY,SYNETF,--,0.123,100.00,,0.99,--,--'
+);
+const blankAmountPreview = context.investmentAdapterPreviewEtradePackage_({
+  source: 'ETRADE_PACKAGE',
+  rawCsv: blankAmountCsv,
+  accountMeta: {
+    stableAccountId: 'INV-ET-SYNTH-1',
+    registrationType: 'TAXABLE'
+  }
+});
+assert.equal(blankAmountPreview.ok, true, blankAmountPreview.error || 'blank amount preview failed');
+assert.ok(!blankAmountPreview.normalized.activities.some((row) =>
+  row.ticker === 'SYNETF' && row.activityType === 'BUY'));
+assert.ok(blankAmountPreview.normalized.unsupportedRows.some((row) =>
+  row.reason === 'MISSING_AMOUNT'));
+
+const explicitZeroAmountCsv = minimalCsv.replace(
+  '04/10/2024,04/10/2024,04/11/2024,Bought,SYNETF FRACTIONAL BUY,SYNETF,--,0.123,100.00,-12.30,0.99,--,--',
+  '04/10/2024,04/10/2024,04/11/2024,Bought,SYNETF FRACTIONAL BUY,SYNETF,--,0.123,100.00,0.00,0.99,--,--'
+);
+const explicitZeroAmountPreview = context.investmentAdapterPreviewEtradePackage_({
+  source: 'ETRADE_PACKAGE',
+  rawCsv: explicitZeroAmountCsv,
+  accountMeta: {
+    stableAccountId: 'INV-ET-SYNTH-1',
+    registrationType: 'TAXABLE'
+  }
+});
+const explicitZeroBuy = explicitZeroAmountPreview.normalized.activities.find((row) =>
+  row.ticker === 'SYNETF' && row.activityType === 'BUY');
+assert.ok(explicitZeroBuy, 'Explicit CSV 0.00 amount must remain a valid BUY');
+assert.equal(explicitZeroBuy.amount, 0);
+assert.equal(explicitZeroBuy.price, 100);
 
 // --- Transfers / exchanges must not be trades ---
 preview.normalized.activities.forEach((row) => {

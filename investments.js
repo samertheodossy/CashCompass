@@ -738,6 +738,25 @@ function investmentNumericEvidencePresent_(raw) {
   return !(raw === '' || raw === null || raw === undefined);
 }
 
+/**
+ * Blank or whitespace is unknown, not $0. Explicit numeric 0 is present
+ * evidence. Invalid text is rejected instead of coerced to 0.
+ * @param {*} raw
+ * @returns {{unknown: boolean, amount: (number|null)}}
+ */
+function resolveInvestmentMonthlyValue_(raw) {
+  if (!investmentNumericEvidencePresent_(raw) || String(raw).trim() === '') {
+    return { unknown: true, amount: null };
+  }
+  const text = String(raw).trim().replace(/\$/g, '').replace(/,/g, '').replace(/\s+/g, '');
+  if (typeof raw !== 'number' && !/^-?\d+(\.\d+)?$/.test(text)) {
+    throw new Error('Value must be a valid number.');
+  }
+  const amount = round2_(typeof raw === 'number' ? raw : Number(text));
+  if (!isFinite(amount)) throw new Error('Value must be a valid number.');
+  return { unknown: false, amount: amount };
+}
+
 function getInvestmentHistoryValueForMonth_(accountName, year, balanceDate) {
   const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'INVESTMENTS');
@@ -779,13 +798,13 @@ function updateInvestmentValueByDate(payload) {
 
   const accountName = String(payload.accountName || '').trim();
   const balanceDate = parseIsoDateLocal_(payload.balanceDate);
-  const rawValue = payload ? payload.currentValue : undefined;
+  const currentParsed = resolveInvestmentMonthlyValue_(payload ? payload.currentValue : undefined);
   // Blank is unknown, not $0. Explicit numeric 0 is present evidence and
   // remains a valid Update save. Mirrors Bank/House monthly Update.
-  if (!investmentNumericEvidencePresent_(rawValue) || String(rawValue).trim() === '') {
+  if (currentParsed.unknown) {
     throw new Error('Enter a value, including 0.00 if the investment is actually at zero.');
   }
-  const currentValue = toNumber_(rawValue);
+  const currentValue = currentParsed.amount;
 
   if (!accountName) throw new Error('Account name is required.');
 
@@ -809,7 +828,10 @@ function updateInvestmentValueByDate(payload) {
     if (prevRow !== -1) {
       const prevCol = getMonthColumnByDate_(prevSheet, balanceDate, prevBlock.headerRow);
       const prevCell = prevSheet.getRange(prevRow, prevCol);
-      previousRaw = round2_(toNumber_(prevCell.getValue()));
+      const prevRaw = prevCell.getValue();
+      previousRaw = investmentNumericEvidencePresent_(prevRaw) && String(prevRaw).trim() !== ''
+        ? round2_(toNumber_(prevRaw))
+        : null;
       previousDisplay = String(prevCell.getDisplayValue() || '').trim();
     }
   } catch (prevErr) {

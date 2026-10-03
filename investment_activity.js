@@ -344,8 +344,8 @@ function previewInvestmentActivityImportFromDashboard(payload, optionalSs) {
       description: description,
       transCode: transCode,
       quantity: parseRobinhoodCsvQuantity_(raw[indexes['Quantity']], transCode, r + 1),
-      price: parseInvestmentImportMoney_(raw[indexes['Price']]),
-      amount: parseInvestmentImportMoney_(raw[indexes['Amount']]),
+      price: parseInvestmentImportOptionalMoney_(raw[indexes['Price']]),
+      amount: parseInvestmentImportOptionalMoney_(raw[indexes['Amount']]),
       recurring: recurring
     });
   }
@@ -446,15 +446,22 @@ function previewInvestmentActivityImportFromDashboard(payload, optionalSs) {
     if (!candidate.lastActivityDate || row.activityDate > candidate.lastActivityDate) {
       candidate.lastActivityDate = row.activityDate;
     }
-    if (code === 'BUY') candidate.purchaseAmount += Math.abs(row.amount);
-    if (code === 'SELL') candidate.saleAmount += Math.abs(row.amount);
-    if (code === 'CDIV') candidate.dividendAmount += Math.abs(row.amount);
+    if (code === 'BUY' && investmentImportHasMoney_(row.amount)) {
+      candidate.purchaseAmount += Math.abs(row.amount);
+    }
+    if (code === 'SELL' && investmentImportHasMoney_(row.amount)) {
+      candidate.saleAmount += Math.abs(row.amount);
+    }
+    if (code === 'CDIV' && investmentImportHasMoney_(row.amount)) {
+      candidate.dividendAmount += Math.abs(row.amount);
+    }
     if (code === 'BUY' && row.recurring) {
       if (row.activityDate > candidate.latestRecurringDate) {
         candidate.latestRecurringDate = row.activityDate;
         candidate.latestRecurringAmount = 0;
       }
-      if (row.activityDate === candidate.latestRecurringDate) {
+      if (row.activityDate === candidate.latestRecurringDate &&
+          investmentImportHasMoney_(row.amount)) {
         candidate.latestRecurringAmount += Math.abs(row.amount);
       }
       candidate.recurringDetected = true;
@@ -479,7 +486,8 @@ function previewInvestmentActivityImportFromDashboard(payload, optionalSs) {
         row.activityDate > latestRecurringInFile[row.ticker].activityDate) {
       latestRecurringInFile[row.ticker] = { activityDate: row.activityDate, amount: 0 };
     }
-    if (row.activityDate === latestRecurringInFile[row.ticker].activityDate) {
+    if (row.activityDate === latestRecurringInFile[row.ticker].activityDate &&
+        investmentImportHasMoney_(row.amount)) {
       latestRecurringInFile[row.ticker].amount = round2_(
         latestRecurringInFile[row.ticker].amount + Math.abs(row.amount));
     }
@@ -505,7 +513,8 @@ function previewInvestmentActivityImportFromDashboard(payload, optionalSs) {
   });
   var administrativeOffsets = {};
   parsed.forEach(function(row) {
-    if (String(row.transCode || '').toUpperCase() !== 'GOLD' || row.amount >= 0) return;
+    if (String(row.transCode || '').toUpperCase() !== 'GOLD' ||
+        !investmentImportHasMoney_(row.amount) || row.amount >= 0) return;
     administrativeOffsets[row.activityDate + '|' + round2_(Math.abs(row.amount))] = true;
   });
   var activityBoundaryByTicker = {};
@@ -544,7 +553,8 @@ function previewInvestmentActivityImportFromDashboard(payload, optionalSs) {
   // avoids treating unrelated trading proceeds as family contributions.
   parsed.forEach(function(row) {
     var code = String(row.transCode || '').toUpperCase();
-    if (code !== 'ACH' || !/ACH Deposit/i.test(row.description) || row.amount <= 0) return;
+    if (code !== 'ACH' || !/ACH Deposit/i.test(row.description) ||
+        !investmentImportHasMoney_(row.amount) || row.amount <= 0) return;
     if (row.activityDate >= cutoff) return;
     var daysBefore = investmentImportDayNumber_(cutoff) -
       investmentImportDayNumber_(row.activityDate);
@@ -629,7 +639,10 @@ function importInvestmentActivityFromDashboard(payload, optionalSs) {
       newRows.push([
         row.importKey, preview.investmentId, preview.accountName,
         row.activityDate, row.settleDate, row.ticker, row.activityType,
-        row.quantity, row.price, row.amount, row.recurring ? 'Yes' : 'No',
+        row.quantity,
+        investmentImportHasMoney_(row.price) ? row.price : '',
+        investmentImportHasMoney_(row.amount) ? row.amount : '',
+        row.recurring ? 'Yes' : 'No',
         row.description, INVESTMENT_ACTIVITY_SOURCE_ROBINHOOD_, now
       ]);
     });
@@ -796,6 +809,16 @@ function parseInvestmentImportMoney_(value) {
   return round2_(negative ? -numeric : numeric);
 }
 
+function parseInvestmentImportOptionalMoney_(value) {
+  var text = String(value == null ? '' : value).trim();
+  if (!text) return null;
+  return parseInvestmentImportMoney_(text);
+}
+
+function investmentImportHasMoney_(value) {
+  return value !== null && typeof value !== 'undefined' && value !== '' && isFinite(Number(value));
+}
+
 function parseInvestmentImportNumber_(value) {
   var text = String(value || '').trim();
   if (!text) return 0;
@@ -864,7 +887,8 @@ function classifyInvestmentImportRow_(row, cutoff, universe, administrativeOffse
       /\b(call|put)\b/i.test(row.description)) {
     return { accepted: false, reason: 'OPTIONS_ACTIVITY' };
   }
-  if (code === 'ACH' && /ACH Deposit/i.test(row.description) && row.amount > 0) {
+  if (code === 'ACH' && /ACH Deposit/i.test(row.description) &&
+      investmentImportHasMoney_(row.amount) && row.amount > 0) {
     if (administrativeOffsets &&
         administrativeOffsets[row.activityDate + '|' + round2_(Math.abs(row.amount))]) {
       return { accepted: false, reason: 'CASH_OR_ADMIN' };
@@ -874,7 +898,12 @@ function classifyInvestmentImportRow_(row, cutoff, universe, administrativeOffse
   if (!row.ticker || !universe[row.ticker]) {
     return { accepted: false, reason: row.ticker ? 'OUTSIDE_PORTFOLIO' : 'CASH_OR_ADMIN' };
   }
-  if (code === 'CDIV' && row.amount > 0) return { accepted: true, activityType: 'DIVIDEND' };
+  if (code === 'CDIV') {
+    if (!investmentImportHasMoney_(row.amount)) {
+      return { accepted: false, reason: 'MISSING_AMOUNT' };
+    }
+    if (row.amount > 0) return { accepted: true, activityType: 'DIVIDEND' };
+  }
   if (code === 'SXCH' || code === 'CONV' || code === 'MRGS' || code === 'SPL' || code === 'SPR') {
     if (!(Number(row.quantity) > 0)) {
       return { accepted: false, reason: 'UNSUPPORTED_ACTIVITY' };
@@ -882,9 +911,17 @@ function classifyInvestmentImportRow_(row, cutoff, universe, administrativeOffse
     return { accepted: true, activityType: 'CORPORATE_ACTION_IN' };
   }
   if (code === 'BUY') {
+    if (!investmentImportHasMoney_(row.amount)) {
+      return { accepted: false, reason: 'MISSING_AMOUNT' };
+    }
     return { accepted: true, activityType: row.recurring ? 'RECURRING_BUY' : 'BUY' };
   }
-  if (code === 'SELL') return { accepted: true, activityType: 'SELL' };
+  if (code === 'SELL') {
+    if (!investmentImportHasMoney_(row.amount)) {
+      return { accepted: false, reason: 'MISSING_AMOUNT' };
+    }
+    return { accepted: true, activityType: 'SELL' };
+  }
   return { accepted: false, reason: 'UNSUPPORTED_ACTIVITY' };
 }
 
@@ -1231,11 +1268,20 @@ function summarizeInvestmentImportPreview_(accepted, excluded, universe) {
     if (!summary.lastActivityDate || row.activityDate > summary.lastActivityDate) {
       summary.lastActivityDate = row.activityDate;
     }
-    if (row.activityType === 'CONTRIBUTION') summary.contributions += row.amount;
-    if (row.activityType === 'OPENING_CAPITAL') summary.openingCapital += row.amount;
-    if (row.activityType === 'DIVIDEND') summary.dividends += row.amount;
-    if (row.activityType === 'SELL') summary.sales += row.amount;
-    if (row.activityType === 'BUY' || row.activityType === 'RECURRING_BUY') {
+    if (row.activityType === 'CONTRIBUTION' && investmentImportHasMoney_(row.amount)) {
+      summary.contributions += row.amount;
+    }
+    if (row.activityType === 'OPENING_CAPITAL' && investmentImportHasMoney_(row.amount)) {
+      summary.openingCapital += row.amount;
+    }
+    if (row.activityType === 'DIVIDEND' && investmentImportHasMoney_(row.amount)) {
+      summary.dividends += row.amount;
+    }
+    if (row.activityType === 'SELL' && investmentImportHasMoney_(row.amount)) {
+      summary.sales += row.amount;
+    }
+    if ((row.activityType === 'BUY' || row.activityType === 'RECURRING_BUY') &&
+        investmentImportHasMoney_(row.amount)) {
       summary.purchases += Math.abs(row.amount);
     }
   });
@@ -1243,10 +1289,13 @@ function summarizeInvestmentImportPreview_(accepted, excluded, universe) {
   var openingContributions = 0;
   accepted.forEach(function(row) {
     if (row.activityDate !== summary.firstActivityDate) return;
-    if (row.activityType === 'BUY' || row.activityType === 'RECURRING_BUY') {
+    if ((row.activityType === 'BUY' || row.activityType === 'RECURRING_BUY') &&
+        investmentImportHasMoney_(row.amount)) {
       openingPurchases += Math.abs(row.amount);
     }
-    if (row.activityType === 'CONTRIBUTION') openingContributions += row.amount;
+    if (row.activityType === 'CONTRIBUTION' && investmentImportHasMoney_(row.amount)) {
+      openingContributions += row.amount;
+    }
   });
   summary.openingCapital = round2_(summary.openingCapital);
   summary.incidentalProceedsInvested = round2_(Math.max(0,

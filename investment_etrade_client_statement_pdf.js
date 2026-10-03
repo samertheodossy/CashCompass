@@ -494,8 +494,10 @@ function investmentEtradeClientStatementResolveDocumentFingerprint_(input) {
 }
 
 function investmentEtradeClientStatementSafeParseMoney_(text) {
+  var raw = String(text == null ? '' : text).trim();
+  if (!raw) return NaN;
   try {
-    var value = parseInvestmentImportMoney_(text);
+    var value = parseInvestmentImportMoney_(raw);
     return isFinite(value) ? value : NaN;
   } catch (e) {
     return NaN;
@@ -960,7 +962,7 @@ function investmentEtradeClientStatementParsePreamble_(lines, fullText) {
     preamble.asOfDate = uniqueValidEndingDates[0];
   }
   var endingMatch = compact.match(
-    /Ending\s+Total\s+Value(?:\s*\(\s*as\s+of\s+\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2})(?!\d)\s*\))?[^$]*(\$[\d,().\-]+)/i);
+    /Ending\s+Total\s+Value(?:\s*\(\s*as\s+of\s+\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2})(?!\d)\s*\))?\s*(\$[\d,().\-]+)/i);
   if (endingMatch) {
     preamble.endingTotalValue = investmentEtradeClientStatementSafeParseMoney_(endingMatch[1]);
   }
@@ -1887,10 +1889,11 @@ function investmentEtradeCiscoStatementProfileResolveEndingTotal_(parseResult) {
   var recon = parseResult.reconciliation || {};
   var preamble = parseResult.preamble || {};
   var ending = recon.endingTotalValue;
-  if (ending == null || ending === '') ending = preamble.endingTotalValue;
-  if (ending == null || ending === '') return null;
-  var value = round2_(Number(ending));
-  return isFinite(value) ? value : null;
+  if (!investmentEtradeClientStatementHasMoney_(ending)) {
+    ending = preamble.endingTotalValue;
+  }
+  if (!investmentEtradeClientStatementHasMoney_(ending)) return null;
+  return round2_(Number(ending));
 }
 
 function investmentEtradeNormalizeCiscoStatementProfilePreview_(parseResult) {

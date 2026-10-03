@@ -48,6 +48,7 @@ vm.runInContext(`
   function round2_(value) { return Math.round(Number(value) * 100) / 100; }
   ${extractFunction(activitySource, 'normalizeInvestmentImportDate_')}
   ${extractFunction(activitySource, 'parseInvestmentImportMoney_')}
+  ${extractFunction(activitySource, 'investmentImportHasMoney_')}
   ${extractFunction(activitySource, 'parseInvestmentImportNumber_')}
   ${extractFunction(activitySource, 'normalizeInvestmentTicker_')}
   ${extractFunction(activitySource, 'classifyInvestmentImportRow_')}

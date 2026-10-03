@@ -314,4 +314,62 @@ assert.doesNotMatch(m1Source, /SpreadsheetApp|setValues|appendRow/);
 assert.doesNotMatch(m1Source, /PropertiesService|CacheService|DriveApp|Logger\.log/);
 assert.doesNotMatch(adaptersSource, /investmentPortfolioEnsure/);
 
+const missingTotalText = statementFixture.replace(/\$10,000\.00 \/ \$500\.00 \[5\.26%\]\n/, '');
+const missingTotalParsed = context.investmentM1ParseStatementPdfText_(missingTotalText);
+assert.equal(missingTotalParsed.ok, true, missingTotalParsed.error || 'M1 missing total parse failed');
+assert.equal(missingTotalParsed.preamble.totalAccountValue, null);
+const missingTotalPreview = context.investmentAdapterPreviewM1StatementPdf_({
+  source: 'M1_STATEMENT_PDF',
+  rawStatementText: missingTotalText,
+  accountMeta
+});
+assert.equal(missingTotalPreview.ok, true, missingTotalPreview.error || 'M1 missing total preview failed');
+assert.equal(missingTotalPreview.normalized.statementParseMeta.endingTotalValue, null);
+assert.notEqual(missingTotalPreview.normalized.statementParseMeta.endingTotalValue, 0);
+
+const zeroTotalText = statementFixture.replace('$10,000.00 / $500.00 [5.26%]', '$0.00 / $0.00 [0.00%]');
+const zeroTotalParsed = context.investmentM1ParseStatementPdfText_(zeroTotalText);
+assert.equal(zeroTotalParsed.preamble.totalAccountValue, 0);
+const zeroTotalPreview = context.investmentAdapterPreviewM1StatementPdf_({
+  source: 'M1_STATEMENT_PDF',
+  rawStatementText: zeroTotalText,
+  accountMeta
+});
+assert.equal(zeroTotalPreview.ok, true, zeroTotalPreview.error || 'M1 $0 preview failed');
+assert.equal(zeroTotalPreview.normalized.accountSnapshots[0].marketValue, 0);
+assert.equal(zeroTotalPreview.normalized.capabilities.accountSnapshot, true);
+assert.equal(zeroTotalPreview.normalized.statementParseMeta.endingTotalValue, 0);
+
+const blankHoldingPriceText = statementFixture.replace(
+  'SYNA | 57.65199 | $100.00 | $5,765.20 | $2,000.00 | $3,765.20',
+  'SYNA | 57.65199 |  | $5,765.20 | $2,000.00 | $3,765.20'
+);
+const blankHoldingPriceParsed = context.investmentM1ParseStatementPdfText_(blankHoldingPriceText);
+assert.ok(blankHoldingPriceParsed.excluded.some((row) =>
+  row.reason === 'MALFORMED_HOLDING' && row.symbol === 'SYNA'));
+assert.ok(!blankHoldingPriceParsed.holdings.some((row) => row.symbol === 'SYNA'));
+assert.ok(!blankHoldingPriceParsed.holdings.some((row) => row.symbol === 'SYNA' && row.price === 0));
+
+const blankHoldingValueText = statementFixture.replace(
+  'SYNA | 57.65199 | $100.00 | $5,765.20 | $2,000.00 | $3,765.20',
+  'SYNA | 57.65199 | $100.00 |  | $2,000.00 | $3,765.20'
+);
+const blankHoldingValueParsed = context.investmentM1ParseStatementPdfText_(blankHoldingValueText);
+assert.ok(blankHoldingValueParsed.excluded.some((row) =>
+  row.reason === 'MALFORMED_HOLDING' && row.symbol === 'SYNA'));
+assert.ok(!blankHoldingValueParsed.holdings.some((row) => row.symbol === 'SYNA'));
+
+const explicitZeroHoldingText = statementFixture.replace(
+  'SYNA | 57.65199 | $100.00 | $5,765.20 | $2,000.00 | $3,765.20',
+  'SYNA | 57.65199 | $0.00 | $0.00 | $2,000.00 | $3,765.20'
+);
+const explicitZeroHoldingParsed = context.investmentM1ParseStatementPdfText_(explicitZeroHoldingText);
+const zeroSyna = explicitZeroHoldingParsed.holdings.find((row) => row.symbol === 'SYNA');
+assert.ok(zeroSyna, 'Explicit $0.00 holding price and market value must remain valid');
+assert.equal(zeroSyna.price, 0);
+assert.equal(zeroSyna.marketValue, 0);
+assert.ok(!isFinite(context.investmentM1SafeParseMoney_('')));
+assert.equal(context.investmentM1SafeParseMoney_('$0.00'), 0);
+assert.equal(context.investmentM1SafeParseMoney_('0'), 0);
+
 console.log('M1 Statement PDF regressions passed.');

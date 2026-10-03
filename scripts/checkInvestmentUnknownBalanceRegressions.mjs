@@ -21,9 +21,13 @@ assert.doesNotMatch(investmentsSource, /leave month empty for 0/);
 assert.match(body, /id="inv_add_balance_unknown"/);
 assert.match(body, /Balance is unknown \/ not available yet/);
 assert.match(body, /\$0\.00<\/strong> only when you have confirmed the balance is actually zero/);
+assert.match(body, /A blank value is not saved as \$0/);
 assert.match(help, /Planning does not treat it as a verified zero/);
+assert.match(help, /A blank Update is not saved as \$0/);
 assert.match(sidebar, /id="inv_add_balance_unknown"/);
 assert.match(sidebar, /startingBalanceUnknown\s*=\s*true/);
+assert.match(sidebar, /A blank value is not saved as \$0/);
+assert.match(legacySidebar, /A blank value is not saved as \$0/);
 assert.match(investmentsSource,
   /function updateInvestmentValueByDate\(payload\)[\s\S]*?changed-column fit[\s\S]*?function addInvestmentAccountFromDashboard\(payload\)[\s\S]*?fitContentColumnsToContents_\(\[[\s\S]*?balanceCol/);
 assert.match(investmentsSource, /if \(!starting\.unknown\) \{\s*updateInvestmentHistory_\(accountName, currentYear, startDate, starting\.amount\);/);
@@ -32,9 +36,14 @@ assert.match(client, /function saveInvestment\(\)[\s\S]*Enter a value, including
 assert.match(sidebar, /function saveInvestment\(\)[\s\S]*Enter a value, including \$0\.00 if the investment is actually at zero/);
 assert.match(legacySidebar, /function save\(\)[\s\S]*Enter a value, including \$0\.00 if the investment is actually at zero/);
 assert.match(investmentsSource, /Enter a value, including 0\.00 if the investment is actually at zero/);
+assert.match(investmentsSource, /function resolveInvestmentMonthlyValue_/);
 assert.match(
   investmentsSource,
-  /function updateInvestmentValueByDate\(payload\)[\s\S]*?investmentNumericEvidencePresent_\(rawValue\)[\s\S]*?String\(rawValue\)\.trim\(\) === ''/
+  /function updateInvestmentValueByDate\(payload\)[\s\S]*?resolveInvestmentMonthlyValue_\(payload \? payload\.currentValue : undefined\)/
+);
+assert.doesNotMatch(
+  investmentsSource,
+  /function updateInvestmentValueByDate\(payload\)[\s\S]*?const currentValue = toNumber_\(/
 );
 assert.doesNotMatch(
   investmentsSource,
@@ -424,6 +433,34 @@ assert.equal(JSON.stringify(rowByName(assets, 'Existing Brokerage')), blankUpdat
   'a rejected blank Update must not rewrite another SYS asset');
 assert.equal(activity.length, activityBeforeBlankUpdate,
   'a rejected blank Update must not write an activity log row');
+
+const existingBeforeSelfBlank = JSON.stringify(rowByName(investments, 'Existing Brokerage'));
+const existingAssetBeforeSelfBlank = JSON.stringify(rowByName(assets, 'Existing Brokerage'));
+assert.throws(() => context.updateInvestmentValueByDate({
+  accountName: 'Existing Brokerage',
+  balanceDate: isoDate,
+  currentValue: ''
+}), /actually at zero/);
+assert.throws(() => context.updateInvestmentValueByDate({
+  accountName: 'Existing Brokerage',
+  balanceDate: isoDate,
+  currentValue: '   '
+}), /actually at zero/);
+assert.throws(() => context.updateInvestmentValueByDate({
+  accountName: 'Existing Brokerage',
+  balanceDate: isoDate
+}), /actually at zero/);
+assert.throws(() => context.updateInvestmentValueByDate({
+  accountName: 'Existing Brokerage',
+  balanceDate: isoDate,
+  currentValue: 'n/a'
+}), /valid number/);
+assert.equal(JSON.stringify(rowByName(investments, 'Existing Brokerage')), existingBeforeSelfBlank,
+  'a blank Investment Update must not overwrite an existing monthly value');
+assert.equal(JSON.stringify(rowByName(assets, 'Existing Brokerage')), existingAssetBeforeSelfBlank,
+  'a blank Investment Update must not write zero into SYS for an existing value');
+assert.equal(rowByName(investments, 'Existing Brokerage')[monthCol], 13000);
+assert.equal(assetBalance('Existing Brokerage'), 13000);
 
 context.updateInvestmentValueByDate({
   accountName: 'Positive IRA',

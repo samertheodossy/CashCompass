@@ -758,7 +758,7 @@
         html += '<p>Target month: <strong>' +
           escapeHtml(monthly.monthLabel || 'this month') + '</strong></p>';
         html += '<p>Statement value: <strong>' +
-          escapeHtml(formatMoney(monthly.proposedValue)) + '</strong></p>';
+          escapeHtml(monthly.proposedValueLabel || formatMoney(monthly.proposedValue)) + '</strong></p>';
         if (monthly.warning) {
           html += '<p><strong>' + escapeHtml(monthly.warning) + '</strong></p>';
         }

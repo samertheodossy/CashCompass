@@ -272,7 +272,9 @@ function buildM1Statement(options = {}) {
   const masked = options.masked || 'XXXX1234';
   const periodStart = options.periodStart || '08/01/2026';
   const periodEnd = options.periodEnd || '08/31/2026';
-  const totalValue = options.totalValue || '10000.00';
+  const totalValue = Object.prototype.hasOwnProperty.call(options, 'totalValue')
+    ? options.totalValue
+    : '10000.00';
   const portfolioTotal = options.portfolioTotal || '9505.00';
   const synaMv = options.synaMv || '5765.20';
   const synbMv = options.synbMv || '3308.91';
@@ -287,8 +289,8 @@ Account title: SYNTHETIC OWNER / JTWROS
 
 Account value
 Total account value / 1-month change
-$${totalValue} / $500.00 [5.26%]
-
+${options.omitTotal ? '' : `$${totalValue} / $500.00 [5.26%]
+`}
 Account breakdown
 Description | Last period | Current period | Change
 07/31/2026 | 08/31/2026
@@ -376,6 +378,7 @@ function loadInvestmentsHelpers(context) {
     }
     ${extractFunction(investmentsSource, 'getAssetsHeaderMap_')}
     ${extractFunction(investmentsSource, 'investmentNumericEvidencePresent_')}
+    ${extractFunction(investmentsSource, 'resolveInvestmentMonthlyValue_')}
     ${extractFunction(investmentsSource, 'isInvestmentDataRowName_')}
     ${extractFunction(investmentsSource, 'getInvestmentsYearBlock_')}
     ${extractFunction(investmentsSource, 'findInvestmentRowInBlock_')}
@@ -664,6 +667,18 @@ assert.match(applyDiffSource, /existingPresent/);
 assert.match(applyDiffSource, /Already matches\. Existing value will be kept\./);
 assert.match(applyDiffSource, /Existing value will remain unchanged unless Replace is selected\./);
 assert.match(applyDiffSource, /Warning: the existing monthly value will be replaced\./);
+assert.match(applyDiffSource, /function boundedHoldingsPreviewApplyBuildMissingStatementValueSkip_/);
+assert.match(applyDiffSource, /Statement value is not provided\. Needs review/);
+assert.match(boundedHtml, /monthly\.proposedValueLabel \|\| formatMoney\(monthly\.proposedValue\)/);
+assert.doesNotMatch(
+  extractFunction(applyDiffSource, 'boundedHoldingsPreviewApplyBuildTrustedMonthlyValueProposal_'),
+  /round2_\(Number\(fields\.proposedValue\)\)/
+);
+assert.match(
+  extractFunction(applySheetSource, 'boundedHoldingsPreviewApplyNullableNumber_'),
+  /value = value\.trim\(\)/
+);
+assert.match(applySource, /Monthly investment value is not provided/);
 assert.doesNotMatch(
   extractFunction(applyDiffSource, 'boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_'),
   /proposal\.warning = proposal\.warning[\s\S]*will be replaced/
@@ -1449,6 +1464,9 @@ const schwabPayload = {
   statementProvider: 'SCHWAB'
 };
 
+const unknownZeroBuilt = buildContext({ workbook: makeSchwabWorkbook() });
+const unknownZeroCtx = unknownZeroBuilt.context;
+
 const skipIdentity = ctx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
   {
     source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
@@ -1495,7 +1513,578 @@ const skipMissingEnding = ctx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentV
 assert.equal(skipMissingEnding.action, 'SKIP');
 assert.equal(skipMissingEnding.reason, 'MISSING_ENDING_TOTAL');
 assert.equal(skipMissingEnding.willWrite, false);
+assert.equal(skipMissingEnding.proposedValue, null);
+assert.equal(skipMissingEnding.comparison, 'MISSING');
+assert.equal(skipMissingEnding.proposedValueLabel, 'Not provided');
+assert.equal(skipMissingEnding.allowedDecisions.length, 0);
+assert.ok(!skipMissingEnding.allowedDecisions.includes('ADD'));
+assert.ok(!skipMissingEnding.allowedDecisions.includes('REPLACE'));
+assert.match(skipMissingEnding.message, /Needs review/);
 assert.notEqual(skipMissingEnding.proposedValue, 12345.67);
+
+const missingStatementCases = [undefined, null, '', '   '];
+missingStatementCases.forEach((endingTotalValue) => {
+  const missingProposal = unknownZeroCtx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+    {
+      source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+      accountName: 'Charles Schwab - Personal',
+      explicitAccountMatch: true,
+      monthlyInvestmentValueDecision: 'ADD'
+    },
+    'SINGLE_ACCOUNT',
+    { accountName: 'Charles Schwab - Personal', investmentId: 'INV-SCHWAB-1' },
+    { asOf: '2026-07-31', reconciliation: { endingTotalValue: endingTotalValue } }
+  );
+  assert.equal(missingProposal.action, 'SKIP', 'missing statement amount must not be applicable');
+  assert.equal(missingProposal.willWrite, false, 'missing statement amount must not reach Apply');
+  assert.equal(missingProposal.proposedValue, null);
+  assert.equal(missingProposal.comparison, 'MISSING');
+  assert.ok(!missingProposal.allowedDecisions.includes('ADD'));
+  assert.ok(!missingProposal.allowedDecisions.includes('REPLACE'));
+});
+
+const explicitZeroProposal = unknownZeroCtx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+  {
+    source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+    accountName: 'Charles Schwab - Personal',
+    explicitAccountMatch: true,
+    monthlyInvestmentValueDecision: 'ADD'
+  },
+  'SINGLE_ACCOUNT',
+  { accountName: 'Charles Schwab - Personal', investmentId: 'INV-SCHWAB-1' },
+  { asOf: '2026-07-31', reconciliation: { endingTotalValue: 0 } }
+);
+assert.equal(explicitZeroProposal.action, 'ADD');
+assert.equal(explicitZeroProposal.willWrite, true);
+assert.equal(explicitZeroProposal.proposedValue, 0);
+assert.equal(explicitZeroProposal.comparison, 'BLANK');
+assert.ok(explicitZeroProposal.allowedDecisions.includes('ADD'));
+
+const explicitZeroStringProposal = unknownZeroCtx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+  {
+    source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+    accountName: 'Charles Schwab - Personal',
+    explicitAccountMatch: true,
+    monthlyInvestmentValueDecision: 'ADD'
+  },
+  'SINGLE_ACCOUNT',
+  { accountName: 'Charles Schwab - Personal', investmentId: 'INV-SCHWAB-1' },
+  { asOf: '2026-07-31', reconciliation: { endingTotalValue: '0' } }
+);
+assert.equal(explicitZeroStringProposal.action, 'ADD');
+assert.equal(explicitZeroStringProposal.willWrite, true);
+assert.equal(explicitZeroStringProposal.proposedValue, 0);
+
+const validNonZeroProposal = unknownZeroCtx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+  {
+    source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+    accountName: 'Charles Schwab - Personal',
+    explicitAccountMatch: true,
+    monthlyInvestmentValueDecision: 'ADD'
+  },
+  'SINGLE_ACCOUNT',
+  { accountName: 'Charles Schwab - Personal', investmentId: 'INV-SCHWAB-1' },
+  { asOf: '2026-07-31', reconciliation: { endingTotalValue: 47778.84 } }
+);
+assert.equal(validNonZeroProposal.action, 'ADD');
+assert.equal(validNonZeroProposal.willWrite, true);
+assert.equal(validNonZeroProposal.proposedValue, 47778.84);
+
+assert.equal(unknownZeroCtx.boundedHoldingsPreviewApplyNullableNumber_(undefined), null);
+assert.equal(unknownZeroCtx.boundedHoldingsPreviewApplyNullableNumber_(null), null);
+assert.equal(unknownZeroCtx.boundedHoldingsPreviewApplyNullableNumber_(''), null);
+assert.equal(unknownZeroCtx.boundedHoldingsPreviewApplyNullableNumber_('   '), null);
+assert.equal(unknownZeroCtx.boundedHoldingsPreviewApplyNullableNumber_(0), 0);
+assert.equal(unknownZeroCtx.boundedHoldingsPreviewApplyNullableNumber_('0'), 0);
+assert.equal(unknownZeroCtx.boundedHoldingsPreviewApplyNullableNumber_(47778.84), 47778.84);
+
+const trustedMissing = unknownZeroCtx.boundedHoldingsPreviewApplyBuildTrustedMonthlyValueProposal_({
+  monthlyInvestmentValueDecision: 'ADD',
+  accountName: 'Charles Schwab - Personal',
+  asOfDate: '2026-07-31',
+  monthLabel: 'July 2026',
+  existingPresent: false,
+  proposedValue: ''
+});
+assert.equal(trustedMissing.willWrite, false);
+assert.equal(trustedMissing.proposedValue, null);
+assert.ok(!trustedMissing.allowedDecisions.includes('ADD'));
+
+const monthlyWrites = [];
+const originalMonthlyWriter = unknownZeroCtx.updateInvestmentValueByDate;
+unknownZeroCtx.updateInvestmentValueByDate = function(payload) {
+  monthlyWrites.push(payload);
+  return { ok: true, message: 'Investment value saved.' };
+};
+assert.throws(() => unknownZeroCtx.boundedHoldingsPreviewApplyWriteMonthlyInvestmentValue_({
+  willWrite: true,
+  accountName: 'Charles Schwab - Personal',
+  asOfDate: '2026-07-31',
+  proposedValue: ''
+}), /not provided/);
+assert.throws(() => unknownZeroCtx.boundedHoldingsPreviewApplyWriteMonthlyInvestmentValue_({
+  willWrite: true,
+  accountName: 'Charles Schwab - Personal',
+  asOfDate: '2026-07-31',
+  proposedValue: null
+}), /not provided/);
+assert.throws(() => unknownZeroCtx.boundedHoldingsPreviewApplyWriteMonthlyInvestmentValue_({
+  willWrite: true,
+  accountName: 'Charles Schwab - Personal',
+  asOfDate: '2026-07-31',
+  proposedValue: '   '
+}), /not provided/);
+assert.equal(monthlyWrites.length, 0, 'missing statement amounts must not reach the Apply writer');
+assert.equal(unknownZeroCtx.boundedHoldingsPreviewApplyWriteMonthlyInvestmentValue_({
+  willWrite: true,
+  accountName: 'Charles Schwab - Personal',
+  asOfDate: '2026-07-31',
+  proposedValue: 0
+}).written, true);
+assert.equal(monthlyWrites[0].currentValue, 0);
+assert.equal(unknownZeroCtx.boundedHoldingsPreviewApplyWriteMonthlyInvestmentValue_({
+  willWrite: true,
+  accountName: 'Charles Schwab - Personal',
+  asOfDate: '2026-07-31',
+  proposedValue: '0'
+}).written, true);
+assert.equal(monthlyWrites[1].currentValue, 0);
+assert.equal(unknownZeroCtx.boundedHoldingsPreviewApplyWriteMonthlyInvestmentValue_({
+  willWrite: true,
+  accountName: 'Charles Schwab - Personal',
+  asOfDate: '2026-07-31',
+  proposedValue: 47778.84
+}).written, true);
+assert.equal(monthlyWrites[2].currentValue, 47778.84);
+unknownZeroCtx.updateInvestmentValueByDate = originalMonthlyWriter;
+
+function assertUnknownMonthlyProposal_(proposal, label) {
+  assert.equal(proposal.action, 'SKIP', `${label}: action`);
+  assert.equal(proposal.willWrite, false, `${label}: must not reach Apply`);
+  assert.equal(proposal.proposedValue, null, `${label}: proposedValue`);
+  assert.equal(proposal.comparison, 'MISSING', `${label}: comparison`);
+  assert.ok(!proposal.allowedDecisions.includes('ADD'), `${label}: no Add`);
+  assert.ok(!proposal.allowedDecisions.includes('REPLACE'), `${label}: no Replace`);
+}
+
+function assertExplicitZeroMonthlyProposal_(proposal, label) {
+  assert.equal(proposal.proposedValue, 0, `${label}: proposedValue`);
+  assert.equal(proposal.action, 'ADD', `${label}: action`);
+  assert.equal(proposal.willWrite, true, `${label}: explicit $0 must be applicable`);
+  assert.ok(proposal.allowedDecisions.includes('ADD'), `${label}: Add allowed`);
+}
+
+function buildParserMonthlyProposal_(source, accountName, investmentId, preview) {
+  return unknownZeroCtx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+    {
+      source: source,
+      accountName: accountName,
+      explicitAccountMatch: true,
+      monthlyInvestmentValueDecision: 'ADD'
+    },
+    'SINGLE_ACCOUNT',
+    { accountName: accountName, investmentId: investmentId },
+    preview
+  );
+}
+
+const originalHistoryReader = unknownZeroCtx.getInvestmentHistoryValueForMonth_;
+unknownZeroCtx.getInvestmentHistoryValueForMonth_ = function() { return ''; };
+
+const schwabMinimalText = fixture('schwab', 'synthetic_schwab_brokerage_statement_minimal.txt');
+const schwabMissingParsed = unknownZeroCtx.investmentSchwabParseBrokerageStatementPdfText_(
+  schwabMinimalText.replace(/Account Value: \$13,000\.00\n/, '')
+);
+assert.equal(schwabMissingParsed.ok, true);
+assert.equal(schwabMissingParsed.preamble.accountValue, null);
+assert.equal(schwabMissingParsed.reconciliation.endingTotalValue, null);
+assert.notEqual(schwabMissingParsed.reconciliation.endingTotalValue, 0);
+assertUnknownMonthlyProposal_(buildParserMonthlyProposal_(
+  'SCHWAB_BROKERAGE_STATEMENT_PDF',
+  'Charles Schwab - Personal',
+  'INV-SCHWAB-1',
+  {
+    asOf: '2026-07-31',
+    reconciliation: schwabMissingParsed.reconciliation
+  }
+), 'Schwab missing ending value');
+
+const schwabZeroParsed = unknownZeroCtx.investmentSchwabParseBrokerageStatementPdfText_(
+  schwabMinimalText.replace('Account Value: $13,000.00', 'Account Value: $0.00')
+);
+assert.equal(schwabZeroParsed.preamble.accountValue, 0);
+assert.equal(schwabZeroParsed.reconciliation.endingTotalValue, 0);
+assertExplicitZeroMonthlyProposal_(buildParserMonthlyProposal_(
+  'SCHWAB_BROKERAGE_STATEMENT_PDF',
+  'Charles Schwab - Personal',
+  'INV-SCHWAB-1',
+  {
+    asOf: '2026-07-31',
+    reconciliation: schwabZeroParsed.reconciliation
+  }
+), 'Schwab explicit $0 ending value');
+
+const schwabNonZeroParsed = unknownZeroCtx.investmentSchwabParseBrokerageStatementPdfText_(schwabMinimalText);
+assert.equal(schwabNonZeroParsed.preamble.accountValue, 13000);
+const schwabNonZeroProposal = buildParserMonthlyProposal_(
+  'SCHWAB_BROKERAGE_STATEMENT_PDF',
+  'Charles Schwab - Personal',
+  'INV-SCHWAB-1',
+  {
+    asOf: '2026-07-31',
+    reconciliation: schwabNonZeroParsed.reconciliation
+  }
+);
+assert.equal(schwabNonZeroProposal.proposedValue, 13000);
+assert.equal(schwabNonZeroProposal.willWrite, true);
+
+const m1Text = fixture('m1', 'synthetic_m1_statement_minimal.txt');
+const m1MissingParsed = unknownZeroCtx.investmentM1ParseStatementPdfText_(
+  m1Text.replace(/\$10,000\.00 \/ \$500\.00 \[5\.26%\]\n/, '')
+);
+assert.equal(m1MissingParsed.ok, true);
+assert.equal(m1MissingParsed.preamble.totalAccountValue, null);
+assertUnknownMonthlyProposal_(buildParserMonthlyProposal_(
+  'M1_STATEMENT_PDF',
+  'M1 Account - Gmail',
+  'INV-M1-GMAIL-1',
+  {
+    asOf: '2026-08-31',
+    totalAccountValue: 9074.11,
+    capabilities: { accountSnapshot: true },
+    statementParseMeta: { endingTotalValue: m1MissingParsed.preamble.totalAccountValue },
+    endingTotalValue: null
+  }
+), 'M1 missing total account value');
+
+const m1ZeroParsed = unknownZeroCtx.investmentM1ParseStatementPdfText_(
+  m1Text.replace('$10,000.00 / $500.00 [5.26%]', '$0.00 / $0.00 [0.00%]')
+);
+assert.equal(m1ZeroParsed.preamble.totalAccountValue, 0);
+const m1ZeroPreview = unknownZeroCtx.investmentAdapterPreviewM1StatementPdf_({
+  source: 'M1_STATEMENT_PDF',
+  rawStatementText: m1Text.replace('$10,000.00 / $500.00 [5.26%]', '$0.00 / $0.00 [0.00%]'),
+  accountMeta: {
+    stableAccountId: 'INV-M1-SYNTH-1',
+    registrationType: 'TAXABLE',
+    accountName: 'Synthetic M1 Taxable',
+    explicitAccountMatch: true
+  }
+});
+assert.equal(m1ZeroPreview.ok, true, m1ZeroPreview.error || 'M1 $0 preview failed');
+assert.equal(m1ZeroPreview.normalized.accountSnapshots[0].marketValue, 0);
+assert.equal(m1ZeroPreview.normalized.capabilities.accountSnapshot, true);
+assert.equal(m1ZeroPreview.normalized.statementParseMeta.endingTotalValue, 0);
+assertExplicitZeroMonthlyProposal_(buildParserMonthlyProposal_(
+  'M1_STATEMENT_PDF',
+  'M1 Account - Gmail',
+  'INV-M1-GMAIL-1',
+  {
+    asOf: '2026-08-31',
+    totalAccountValue: 9074.11,
+    capabilities: { accountSnapshot: true },
+    statementParseMeta: { endingTotalValue: 0 },
+    endingTotalValue: 0
+  }
+), 'M1 explicit $0 total account value');
+
+const m1NonZeroParsed = unknownZeroCtx.investmentM1ParseStatementPdfText_(m1Text);
+assert.equal(m1NonZeroParsed.preamble.totalAccountValue, 10000);
+const m1NonZeroProposal = buildParserMonthlyProposal_(
+  'M1_STATEMENT_PDF',
+  'M1 Account - Gmail',
+  'INV-M1-GMAIL-1',
+  {
+    asOf: '2026-08-31',
+    totalAccountValue: 10000,
+    capabilities: { accountSnapshot: true },
+    statementParseMeta: { endingTotalValue: 10000 },
+    endingTotalValue: 10000
+  }
+);
+assert.equal(m1NonZeroProposal.proposedValue, 10000);
+assert.equal(m1NonZeroProposal.willWrite, true);
+
+const fidelityMainText = fixture('fidelity', 'synthetic_fidelity_401k_statement_main.txt');
+const fidelityMissingText = fixture('fidelity', 'synthetic_fidelity_401k_statement_missing_ending_balance.txt');
+const fidelityMissingParsed = unknownZeroCtx.investmentFidelity401kStatementPreviewFromText_(
+  fidelityMissingText);
+assert.equal(fidelityMissingParsed.ok, false);
+assert.match(String(fidelityMissingParsed.error || ''), /Ending Balance/i);
+assert.notEqual(
+  fidelityMissingParsed.preview && fidelityMissingParsed.preview.endingBalance,
+  0
+);
+assertUnknownMonthlyProposal_(buildParserMonthlyProposal_(
+  'FIDELITY_401K_STATEMENT_PDF',
+  '401K Account',
+  'INV-401K-1',
+  { asOf: '2026-09-10', endingBalance: null }
+), 'Fidelity missing ending balance');
+
+const fidelityZeroParsed = unknownZeroCtx.investmentFidelity401kStatementPreviewFromText_(
+  fidelityMainText.replace(
+    'Ending Balance   $1,918,949.84  Additional Information',
+    'Ending Balance   $0.00  Additional Information'
+  )
+);
+assert.equal(fidelityZeroParsed.ok, true, fidelityZeroParsed.error || 'Fidelity $0 preview failed');
+assert.equal(fidelityZeroParsed.preview.endingBalance, 0);
+const fidelityZeroMonthly = unknownZeroCtx.investmentFidelity401kStatementNormalizeMonthlyPreview_(
+  fidelityZeroParsed);
+assert.equal(fidelityZeroMonthly.endingBalance, 0);
+assertExplicitZeroMonthlyProposal_(buildParserMonthlyProposal_(
+  'FIDELITY_401K_STATEMENT_PDF',
+  '401K Account',
+  'INV-401K-1',
+  { asOf: '2026-09-10', endingBalance: fidelityZeroMonthly.endingBalance }
+), 'Fidelity explicit $0 ending balance');
+
+const fidelityNonZeroParsed = unknownZeroCtx.investmentFidelity401kStatementPreviewFromText_(
+  fidelityMainText);
+assert.equal(fidelityNonZeroParsed.preview.endingBalance, 1918949.84);
+const fidelityNonZeroProposal = buildParserMonthlyProposal_(
+  'FIDELITY_401K_STATEMENT_PDF',
+  '401K Account',
+  'INV-401K-1',
+  { asOf: '2026-09-10', endingBalance: 1918949.84 }
+);
+assert.equal(fidelityNonZeroProposal.proposedValue, 1918949.84);
+assert.equal(fidelityNonZeroProposal.willWrite, true);
+
+const stashMissingParsed = unknownZeroCtx.investmentStashParseBrokerageStatementPdfText_(
+  stashText.replace(/TOTAL PRICED PORTFOLIO(?: \$[\d,]+\.\d{2}| [\d,]+\.\d{2} [\d,]+\.\d{2})/g, 'TOTAL PRICED PORTFOLIO')
+);
+assert.equal(stashMissingParsed.ok, true, stashMissingParsed.error || 'Stash missing total parse failed');
+assert.equal(stashMissingParsed.preamble.accountValue, null);
+assert.equal(stashMissingParsed.reconciliation.endingTotalValue, null);
+assert.notEqual(stashMissingParsed.reconciliation.endingTotalValue, 0);
+assertUnknownMonthlyProposal_(buildParserMonthlyProposal_(
+  'STASH_BROKERAGE_STATEMENT_PDF',
+  'Stash Account',
+  'INV-STASH-1',
+  {
+    asOf: '2026-08-31',
+    reconciliation: stashMissingParsed.reconciliation
+  }
+), 'Stash missing reconciliation ending total');
+
+const stashZeroText = [
+  'STASH CAPITAL',
+  'Apex Clearing Corporation',
+  'August 1, 2026 - August 31, 2026',
+  'ACCOUNT NUMBER XXXX0000',
+  'FDIC Insured Deposits 0.00 0.00',
+  'TOTAL PRICED PORTFOLIO 0.00 0.00',
+  'DESCRIPTION SYMBOL/CUSIP ACCOUNT TYPE QUANTITY PRICE MARKET VALUE LAST PERIOD\'S MARKET VALUE',
+  'FDIC INSURED DEPOSITS',
+  'Total FDIC Insured Deposits $0.00',
+  'EQUITIES / OPTIONS',
+  'Total Equities $0.00',
+  'TOTAL PRICED PORTFOLIO $0.00'
+].join('\n');
+const stashZeroParsed = unknownZeroCtx.investmentStashParseBrokerageStatementPdfText_(stashZeroText);
+assert.equal(stashZeroParsed.ok, true, stashZeroParsed.error || 'Stash $0 parse failed');
+assert.equal(stashZeroParsed.preamble.accountValue, 0);
+assert.equal(stashZeroParsed.reconciliation.endingTotalValue, 0);
+assert.equal(stashZeroParsed.reconciliation.ok, true);
+assertExplicitZeroMonthlyProposal_(buildParserMonthlyProposal_(
+  'STASH_BROKERAGE_STATEMENT_PDF',
+  'Stash Account',
+  'INV-STASH-1',
+  {
+    asOf: '2026-08-31',
+    reconciliation: stashZeroParsed.reconciliation
+  }
+), 'Stash explicit $0 ending total');
+
+const stashNonZeroParsed = unknownZeroCtx.investmentStashParseBrokerageStatementPdfText_(stashText);
+assert.equal(stashNonZeroParsed.preamble.accountValue, 7782.13);
+const stashNonZeroProposal = buildParserMonthlyProposal_(
+  'STASH_BROKERAGE_STATEMENT_PDF',
+  'Stash Account',
+  'INV-STASH-1',
+  {
+    asOf: '2026-08-31',
+    reconciliation: stashNonZeroParsed.reconciliation
+  }
+);
+assert.equal(stashNonZeroProposal.proposedValue, 7782.13);
+assert.equal(stashNonZeroProposal.willWrite, true);
+
+const parserSamerText = fixture('etrade', 'synthetic_etrade_client_statement_samer_brokerage.txt');
+const samerMissingParsed = unknownZeroCtx.investmentEtradeClientStatementParseText_(
+  parserSamerText.replace('Ending Total Value (as of 8/31/26) $7,205.00', 'Ending Total Value (as of 8/31/26)')
+);
+assert.equal(samerMissingParsed.ok, true);
+assert.equal(
+  unknownZeroCtx.investmentEtradeClientStatementHasMoney_(samerMissingParsed.preamble.endingTotalValue),
+  false
+);
+assert.equal(
+  unknownZeroCtx.investmentEtradeCiscoStatementProfileResolveEndingTotal_(samerMissingParsed),
+  null
+);
+const samerMissingValid = unknownZeroCtx.investmentEtradeValidateSamerBrokerageStatement_(
+  samerMissingParsed);
+assert.equal(samerMissingValid.ok, false);
+assertUnknownMonthlyProposal_(buildParserMonthlyProposal_(
+  'ETRADE_CLIENT_STATEMENT_PDF',
+  'Samer Etrade Account',
+  'INV-ET-SAMER-1',
+  {
+    asOf: '2026-08-31',
+    accountName: 'Samer Etrade Account',
+    valueCategory: 'BROKERAGE_ACCOUNT_VALUE',
+    endingTotalValue: null,
+    reconciliation: samerMissingParsed.reconciliation
+  }
+), 'Samer E*TRADE missing ending total');
+
+const samerZeroParsed = unknownZeroCtx.investmentEtradeClientStatementParseText_(
+  parserSamerText.replace('Ending Total Value (as of 8/31/26) $7,205.00', 'Ending Total Value (as of 8/31/26) $0.00')
+);
+assert.equal(samerZeroParsed.preamble.endingTotalValue, 0);
+assert.equal(
+  unknownZeroCtx.investmentEtradeCiscoStatementProfileResolveEndingTotal_(samerZeroParsed),
+  0
+);
+assertExplicitZeroMonthlyProposal_(buildParserMonthlyProposal_(
+  'ETRADE_CLIENT_STATEMENT_PDF',
+  'Samer Etrade Account',
+  'INV-ET-SAMER-1',
+  {
+    asOf: '2026-08-31',
+    accountName: 'Samer Etrade Account',
+    valueCategory: 'BROKERAGE_ACCOUNT_VALUE',
+    endingTotalValue: 0,
+    reconciliation: { ok: true, endingTotalValue: 0 }
+  }
+), 'Samer E*TRADE explicit $0 ending total');
+
+const samerNonZeroParsed = unknownZeroCtx.investmentEtradeClientStatementParseText_(parserSamerText);
+assert.equal(samerNonZeroParsed.preamble.endingTotalValue, 7205);
+const samerNonZeroProposal = buildParserMonthlyProposal_(
+  'ETRADE_CLIENT_STATEMENT_PDF',
+  'Samer Etrade Account',
+  'INV-ET-SAMER-1',
+  {
+    asOf: '2026-08-31',
+    accountName: 'Samer Etrade Account',
+    valueCategory: 'BROKERAGE_ACCOUNT_VALUE',
+    endingTotalValue: 7205,
+    reconciliation: samerNonZeroParsed.reconciliation
+  }
+);
+assert.equal(samerNonZeroProposal.proposedValue, 7205);
+assert.equal(samerNonZeroProposal.willWrite, true);
+
+const parserCiscoText = fixture('etrade', 'synthetic_etrade_client_statement_cisco_future_potential.txt');
+const ciscoMissingEndingParsed = unknownZeroCtx.investmentEtradeClientStatementParseText_(
+  parserCiscoText.replace(
+    'Ending Total Value (as of 8/31/2026) $113,042.10',
+    'Ending Total Value (as of 8/31/2026)'
+  )
+);
+assert.equal(ciscoMissingEndingParsed.ok, true);
+assert.equal(
+  unknownZeroCtx.investmentEtradeCiscoStatementProfileResolveEndingTotal_(ciscoMissingEndingParsed),
+  null
+);
+const ciscoMissingPreview = unknownZeroCtx.investmentEtradeNormalizeCiscoStatementProfilePreview_(
+  ciscoMissingEndingParsed);
+assert.equal(ciscoMissingPreview.ok, false);
+assert.match(String(ciscoMissingPreview.error || ''), /Brokerage ending account value was not found/i);
+
+const ciscoZeroEndingParsed = unknownZeroCtx.investmentEtradeClientStatementParseText_(
+  parserCiscoText.replace(
+    'Ending Total Value (as of 8/31/2026) $113,042.10',
+    'Ending Total Value (as of 8/31/2026) $0.00'
+  )
+);
+assert.equal(ciscoZeroEndingParsed.preamble.endingTotalValue, 0);
+assert.equal(
+  unknownZeroCtx.investmentEtradeCiscoStatementProfileResolveEndingTotal_(ciscoZeroEndingParsed),
+  0
+);
+const ciscoZeroPreview = unknownZeroCtx.investmentEtradeNormalizeCiscoStatementProfilePreview_(
+  ciscoZeroEndingParsed);
+assert.equal(ciscoZeroPreview.ok, true, ciscoZeroPreview.error || 'Cisco $0 ending preview failed');
+assert.equal(ciscoZeroPreview.endingTotalValue, 0);
+assert.equal(ciscoZeroPreview.monthlyLegs[0].proposedValue, 0);
+assert.equal(ciscoZeroPreview.potentialUnvestedStockPlanValue, 846353.40);
+const ciscoZeroBrokerageProposal =
+  unknownZeroCtx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposalForLeg_(
+    {
+      source: 'ETRADE_CLIENT_STATEMENT_PDF',
+      accountName: 'Etrade Cisco - RSU/ESPP',
+      explicitAccountMatch: true,
+      monthlyInvestmentValueDecision: 'ADD'
+    },
+    'SINGLE_ACCOUNT',
+    { accountName: 'Etrade Cisco - RSU/ESPP', investmentId: 'INV-ET-RSU-1' },
+    {
+      asOf: '2026-08-31',
+      endingTotalValue: 0,
+      potentialUnvestedStockPlanValue: 846353.40
+    },
+    ciscoZeroPreview.monthlyLegs[0]
+  );
+assertExplicitZeroMonthlyProposal_(ciscoZeroBrokerageProposal, 'Cisco brokerage explicit $0 ending');
+
+const ciscoNonZeroPreview = unknownZeroCtx.investmentEtradeNormalizeCiscoStatementProfilePreview_(
+  unknownZeroCtx.investmentEtradeClientStatementParseText_(parserCiscoText));
+assert.equal(ciscoNonZeroPreview.endingTotalValue, 113042.10);
+assert.equal(ciscoNonZeroPreview.potentialUnvestedStockPlanValue, 846353.40);
+
+assert.equal(
+  unknownZeroCtx.boundedHoldingsPreviewApplyResolveProviderEndingTotal_(
+    { potentialUnvestedStockPlanValue: null },
+    'ETRADE_CLIENT_STATEMENT_PDF'
+  ).value,
+  null
+);
+assert.equal(
+  unknownZeroCtx.boundedHoldingsPreviewApplyResolveProviderEndingTotal_(
+    { potentialUnvestedStockPlanValue: 0 },
+    'ETRADE_CLIENT_STATEMENT_PDF'
+  ).value,
+  0
+);
+assertUnknownMonthlyProposal_(buildParserMonthlyProposal_(
+  'ETRADE_CLIENT_STATEMENT_PDF',
+  'Etrade Cisco - Future',
+  'INV-ET-FUTURE-1',
+  {
+    asOf: '2026-08-31',
+    accountName: 'Etrade Cisco - Future',
+    potentialUnvestedStockPlanValue: null
+  }
+), 'Cisco Future missing unvested value');
+assertExplicitZeroMonthlyProposal_(buildParserMonthlyProposal_(
+  'ETRADE_CLIENT_STATEMENT_PDF',
+  'Etrade Cisco - Future',
+  'INV-ET-FUTURE-1',
+  {
+    asOf: '2026-08-31',
+    accountName: 'Etrade Cisco - Future',
+    potentialUnvestedStockPlanValue: 0
+  }
+), 'Cisco Future explicit $0 unvested value');
+const ciscoFutureNonZeroProposal = buildParserMonthlyProposal_(
+  'ETRADE_CLIENT_STATEMENT_PDF',
+  'Etrade Cisco - Future',
+  'INV-ET-FUTURE-1',
+  {
+    asOf: '2026-08-31',
+    accountName: 'Etrade Cisco - Future',
+    potentialUnvestedStockPlanValue: 846353.40
+  }
+);
+assert.equal(ciscoFutureNonZeroProposal.proposedValue, 846353.40);
+assert.equal(ciscoFutureNonZeroProposal.willWrite, true);
+
+unknownZeroCtx.getInvestmentHistoryValueForMonth_ = originalHistoryReader;
 
 const skipOutOfYear = ctx.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
   {

@@ -412,6 +412,50 @@ assert.equal(
   missingTotalPreview.normalized.statementParseMeta.reconciliation.blockingReason,
   'MISSING_STATEMENT_TOTAL'
 );
+assert.equal(missingTotalPreview.normalized.statementParseMeta.endingTotalValue, null);
+assert.notEqual(missingTotalPreview.normalized.statementParseMeta.reconciliation.endingTotalValue, 0);
+
+const zeroTotalText = statementFixture.replace('Account Value: $13,000.00', 'Account Value: $0.00');
+context.getCurrentYear_ = function() { return 2026; };
+context.getInvestmentHistoryValueForMonth_ = function() { return ''; };
+const zeroTotalParsed = context.investmentSchwabParseBrokerageStatementPdfText_(zeroTotalText);
+assert.equal(zeroTotalParsed.ok, true, zeroTotalParsed.error || 'Schwab $0 parse failed');
+assert.equal(zeroTotalParsed.preamble.accountValue, 0);
+assert.equal(zeroTotalParsed.reconciliation.endingTotalValue, 0);
+const zeroTotalProposal = context.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+  {
+    source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+    accountName: 'Charles Schwab - Personal',
+    explicitAccountMatch: true,
+    monthlyInvestmentValueDecision: 'ADD'
+  },
+  'SINGLE_ACCOUNT',
+  { accountName: 'Charles Schwab - Personal', investmentId: 'INV-SCHWAB-SYNTH-1' },
+  { asOf: '2026-07-31', reconciliation: zeroTotalParsed.reconciliation }
+);
+assert.equal(zeroTotalProposal.proposedValue, 0);
+assert.notEqual(zeroTotalProposal.comparison, 'MISSING');
+assert.ok(
+  zeroTotalProposal.allowedDecisions.includes('ADD') || zeroTotalProposal.action === 'ADD',
+  'Schwab explicit $0 must remain an Add-capable proposal'
+);
+const missingTotalProposal = context.boundedHoldingsPreviewApplyBuildMonthlyInvestmentValueProposal_(
+  {
+    source: 'SCHWAB_BROKERAGE_STATEMENT_PDF',
+    accountName: 'Charles Schwab - Personal',
+    explicitAccountMatch: true,
+    monthlyInvestmentValueDecision: 'ADD'
+  },
+  'SINGLE_ACCOUNT',
+  { accountName: 'Charles Schwab - Personal', investmentId: 'INV-SCHWAB-SYNTH-1' },
+  {
+    asOf: '2026-07-31',
+    reconciliation: missingTotalPreview.normalized.statementParseMeta.reconciliation
+  }
+);
+assert.equal(missingTotalProposal.proposedValue, null);
+assert.equal(missingTotalProposal.willWrite, false);
+assert.ok(!missingTotalProposal.allowedDecisions.includes('ADD'));
 
 const schwabAccount = { accountName: 'Charles Schwab - Personal', statementProvider: 'SCHWAB' };
 assert.equal(

@@ -290,6 +290,7 @@ function holdingsPreviewLabSanitizePreviewResponse_(preview, identity, source) {
       taxStatus: String(account.taxStatus || '')
     },
     asOf: String(normalized.asOf || snapshot.asOf || snapshot.sourceAsOf || ''),
+    endingTotalValue: holdingsPreviewLabNullableNumber_(statementMeta.endingTotalValue),
     totalAccountValue: totalAccountValue,
     cashBalance: cashBalance,
     holdingsRows: holdingsRows,

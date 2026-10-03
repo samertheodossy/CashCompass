@@ -74,6 +74,19 @@ assert.ok(Array.isArray(preview.preview.fundHoldings));
 const missingEnding = ctx.investmentFidelity401kStatementPreviewFromText_(missingEndingFixture);
 assert.equal(missingEnding.ok, false);
 assert.match(missingEnding.error, /Ending Balance/i);
+assert.notEqual(missingEnding.preview && missingEnding.preview.endingBalance, 0);
+
+const zeroEnding = ctx.investmentFidelity401kStatementPreviewFromText_(
+  mainFixture.replace(
+    'Ending Balance   $1,918,949.84  Additional Information',
+    'Ending Balance   $0.00  Additional Information'
+  )
+);
+assert.equal(zeroEnding.ok, true, zeroEnding.error || 'Fidelity $0 ending preview failed');
+assert.equal(zeroEnding.preview.endingBalance, 0);
+const zeroMonthly = ctx.investmentFidelity401kStatementNormalizeMonthlyPreview_(zeroEnding);
+assert.equal(zeroMonthly.endingBalance, 0);
+assert.notEqual(zeroMonthly.endingBalance, null);
 
 const wrongDocument = ctx.investmentFidelity401kStatementDetect_({ rawDocumentText: wrongDocumentFixture });
 assert.equal(wrongDocument.ok, false);

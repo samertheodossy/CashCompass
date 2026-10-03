@@ -177,6 +177,9 @@ assert.equal(samerParse.holdings.find((row) => row.symbol === 'VTI').marketValue
 assert.equal(samerParse.holdings.find((row) => row.symbol === 'ZERO').quantity, 10);
 assert.equal(samerParse.holdings.find((row) => row.symbol === 'ZERO').marketValue, 0);
 assert.equal(samerParse.holdings.find((row) => row.symbol === 'ZERO').sharePrice, 0);
+assert.ok(!isFinite(ctx.investmentEtradeClientStatementSafeParseMoney_('')));
+assert.equal(ctx.investmentEtradeClientStatementSafeParseMoney_('$0.00'), 0);
+assert.equal(ctx.investmentEtradeClientStatementSafeParseMoney_('0'), 0);
 assert.ok(samerParse.excluded.some((row) => row.reason === 'PURCHASES_OR_REINVESTMENT_ROW' && row.symbol === 'SYNA'));
 assert.equal(samerParse.reconciliation.ok, true);
 assert.equal(samerParse.reconciliation.endingTotalValue, 7205);
@@ -740,6 +743,52 @@ const explicitZeroPreview = ctx.investmentEtradeNormalizeCiscoStatementProfilePr
 assert.equal(explicitZeroPreview.ok, true, explicitZeroPreview.error || 'explicit $0 preview failed');
 assertFutureProposal_(explicitZeroPreview, 0, 'explicit potential $0');
 assert.notEqual(explicitZeroPreview.ok, missingPotentialPreview.ok);
+
+const missingBrokerageEndingParse = ctx.investmentEtradeClientStatementParseText_(
+  futureFixture.replace(
+    'Ending Total Value (as of 8/31/2026) $113,042.10',
+    'Ending Total Value (as of 8/31/2026)'
+  )
+);
+assert.equal(missingBrokerageEndingParse.ok, true);
+assert.equal(ctx.investmentEtradeCiscoStatementProfileResolveEndingTotal_(missingBrokerageEndingParse), null);
+const missingBrokeragePreview = ctx.investmentEtradeNormalizeCiscoStatementProfilePreview_(
+  missingBrokerageEndingParse);
+assert.equal(missingBrokeragePreview.ok, false);
+assert.match(String(missingBrokeragePreview.error || ''), /Brokerage ending account value was not found/i);
+
+const zeroBrokerageEndingParse = ctx.investmentEtradeClientStatementParseText_(
+  futureFixture.replace(
+    'Ending Total Value (as of 8/31/2026) $113,042.10',
+    'Ending Total Value (as of 8/31/2026) $0.00'
+  )
+);
+assert.equal(zeroBrokerageEndingParse.preamble.endingTotalValue, 0);
+assert.equal(ctx.investmentEtradeCiscoStatementProfileResolveEndingTotal_(zeroBrokerageEndingParse), 0);
+const zeroBrokeragePreview = ctx.investmentEtradeNormalizeCiscoStatementProfilePreview_(
+  zeroBrokerageEndingParse);
+assert.equal(zeroBrokeragePreview.ok, true, zeroBrokeragePreview.error || 'Cisco $0 ending preview failed');
+assert.equal(zeroBrokeragePreview.endingTotalValue, 0);
+assert.equal(zeroBrokeragePreview.monthlyLegs[0].proposedValue, 0);
+assert.equal(zeroBrokeragePreview.monthlyLegs[0].accountName, 'Etrade Cisco - RSU/ESPP');
+assert.equal(zeroBrokeragePreview.potentialUnvestedStockPlanValue, 846353.40);
+
+const missingSamerEndingParse = ctx.investmentEtradeClientStatementParseText_(
+  samerBrokerageFixture.replace(
+    'Ending Total Value (as of 8/31/26) $7,205.00',
+    'Ending Total Value (as of 8/31/26)'
+  )
+);
+assert.equal(ctx.investmentEtradeCiscoStatementProfileResolveEndingTotal_(missingSamerEndingParse), null);
+assert.equal(ctx.investmentEtradeValidateSamerBrokerageStatement_(missingSamerEndingParse).ok, false);
+const zeroSamerEndingParse = ctx.investmentEtradeClientStatementParseText_(
+  samerBrokerageFixture.replace(
+    'Ending Total Value (as of 8/31/26) $7,205.00',
+    'Ending Total Value (as of 8/31/26) $0.00'
+  )
+);
+assert.equal(zeroSamerEndingParse.preamble.endingTotalValue, 0);
+assert.equal(ctx.investmentEtradeCiscoStatementProfileResolveEndingTotal_(zeroSamerEndingParse), 0);
 
 const ambiguousPotentialText = futureFixture.replace(
   'TOTAL VALUE         —                 $846,353.40  $846,353.40',

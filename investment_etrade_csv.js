@@ -74,7 +74,8 @@ function investmentEtradeParsePreamble_(lines, headerIndex) {
     var text = String(line || '').trim();
     if (!text) return;
     if (/^total:/i.test(text)) {
-      total = parseInvestmentImportMoney_(text.replace(/^total:\s*/i, ''));
+      total = investmentEtradeParseOptionalNumber_(
+        text.replace(/^total:\s*/i, ''), parseInvestmentImportMoney_);
       return;
     }
     if (/^all transactions/i.test(text)) return;
@@ -198,7 +199,16 @@ function investmentEtradeNormalizeParsedRow_(parsed, context) {
       parsed.activityTradeDate, 'Activity/Trade Date', false);
     var settleDate = normalizeInvestmentImportDate_(
       parsed.settlementDate, 'Settlement Date', true);
-    var amount = parseInvestmentImportMoney_(parsed.amount);
+    var amount = investmentEtradeParseOptionalNumber_(
+      parsed.amount, parseInvestmentImportMoney_);
+    if (amount === null) {
+      return {
+        ok: false,
+        reason: 'MISSING_AMOUNT',
+        rowIndex: parsed.rowIndex,
+        activityType: parsed.activityType
+      };
+    }
     var quantity = investmentEtradeParseOptionalNumber_(
       parsed.quantity, parseInvestmentImportNumber_);
     var price = investmentEtradeParseOptionalNumber_(

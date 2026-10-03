@@ -321,7 +321,7 @@ function invDrawerM1RenderMonthlyInvestmentValueHtml_(monthly) {
   html += '<p>Target month: <strong>' +
     invDrawerM1Escape_(monthly.monthLabel || 'this month') + '</strong></p>';
   html += '<p>Statement value: <strong>' +
-    invDrawerM1Escape_(invDrawerM1FormatMoney_(monthly.proposedValue)) + '</strong></p>';
+    invDrawerM1Escape_(monthly.proposedValueLabel || invDrawerM1FormatMoney_(monthly.proposedValue)) + '</strong></p>';
   if (comparison === 'BLANK') {
     html += '<label class="investment-plan-active-row" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;">' +
       '<input type="radio" name="inv_m1_monthly_decision" value="ADD"' +

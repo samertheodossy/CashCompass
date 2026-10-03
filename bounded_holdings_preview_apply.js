@@ -798,13 +798,19 @@ function boundedHoldingsPreviewApplyExecute_(ss, payload, mode) {
 function boundedHoldingsPreviewApplyWriteMonthlyInvestmentValue_(proposal) {
   proposal = proposal || {};
   if (!proposal.willWrite) return { ok: true, written: false };
+  var amount = typeof boundedHoldingsPreviewApplyNullableNumber_ === 'function'
+    ? boundedHoldingsPreviewApplyNullableNumber_(proposal.proposedValue)
+    : null;
+  if (amount === null) {
+    throw new Error('Monthly investment value is not provided.');
+  }
   if (typeof updateInvestmentValueByDate !== 'function') {
     throw new Error('Investment value writer is unavailable.');
   }
   var result = updateInvestmentValueByDate({
     accountName: proposal.accountName,
     balanceDate: proposal.asOfDate,
-    currentValue: proposal.proposedValue,
+    currentValue: amount,
     skipActivityLog: true
   });
   if (result && result.ok === false) {
