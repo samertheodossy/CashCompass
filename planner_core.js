@@ -269,7 +269,14 @@ function normalizeDebts_(rows, aliasMap) {
     .filter(function(r) { return String(r['Account Name']).trim().toUpperCase() !== 'TOTAL DEBT'; })
     .map(function(r) {
       const balance = toNumber_(r['Account Balance']);
-      const minPayment = round2_(toNumber_(r['Minimum Payment']));
+      const minPaymentRaw = Object.prototype.hasOwnProperty.call(r, 'Minimum Payment')
+        ? r['Minimum Payment']
+        : '';
+      const minPaymentDisplay = Object.prototype.hasOwnProperty.call(r, '__display__Minimum Payment')
+        ? r['__display__Minimum Payment']
+        : minPaymentRaw;
+      const minimumPaymentKnown = debtMinimumPaymentCellIsKnown_(minPaymentRaw, minPaymentDisplay);
+      const minPayment = round2_(toNumber_(minPaymentRaw));
       // INPUT - Debts stores a day-of-month under the legacy "Due Date"
       // header. Prefer the displayed day so a number-formatted cell does not
       // arrive here as a Date object, and accept "Due Day" as the additive
@@ -314,11 +321,25 @@ function normalizeDebts_(rows, aliasMap) {
         creditLimit: round2_(creditLimit),
         creditLeft: round2_(creditLeft),
         minimumPayment: minPayment,
+        minimumPaymentKnown: minimumPaymentKnown,
         interestRate: round2_(rate),
         active: active,
         priorityClass: priorityClass
       };
     });
+}
+
+/**
+ * True when INPUT - Debts actually stored a minimum, including explicit 0.
+ * Blank, null, and whitespace are unknown. Shared numeric fallbacks still
+ * coerce unknown cells to 0; This Week uses this flag instead of that 0.
+ */
+function debtMinimumPaymentCellIsKnown_(raw, display) {
+  if (typeof raw === 'number' && isFinite(raw)) return true;
+  const displayText = String(display == null ? '' : display).replace(/\u00A0/g, ' ').trim();
+  if (displayText) return true;
+  const rawText = String(raw == null ? '' : raw).replace(/\u00A0/g, ' ').trim();
+  return !!rawText;
 }
 
 function normalizeAccounts_(rows) {

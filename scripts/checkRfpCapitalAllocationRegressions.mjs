@@ -88,6 +88,15 @@ assert.match(source, /PROTECT_90_DAY_OPERATING_RESERVE[\s\S]*?FUND_SAMER_ROBINHO
 assert.match(dashboardData, /function generateOccurrences_\(rule, todayOnly, effectiveDate, horizonEnd\)/);
 assert.match(plannerCore, /dueDayKnown:\s*dueDayKnown/,
   'normalized debts must retain whether the source actually supplied a valid recurring due day');
+assert.match(plannerCore, /minimumPaymentKnown:\s*minimumPaymentKnown/,
+  'normalized debts must retain whether INPUT - Debts actually stored a minimum payment');
+assert.match(plannerCore, /const dueDay = dueDayKnown \? dueDayParsed : 1/,
+  'shared consumers may still default an unknown due day to 1');
+assert.match(plannerCore,
+  /function buildUpcomingPayments_\([\s\S]*?d\.active && d\.minimumPayment > 0[\s\S]*?getNextDueDate_\(today, d\.dueDay\)/,
+  'Pay Now / Bills Due still treat blank minimums as 0 and unknown due days via getNextDueDate_');
+assert.doesNotMatch(dashboardData, /minimumPaymentKnown/,
+  'Bills Due must not start branching on the This Week known-minimum flag');
 assert.match(body, /planning-primary-tools[\s\S]*?class="tab-btn active"[\s\S]*?data-tab="capitalAllocationPreview"[\s\S]*?This week[\s\S]*?data-tab="rollingDebtPayoff"[\s\S]*?data-tab="debtPayoff"[\s\S]*?data-tab="retirement"[\s\S]*?data-tab="purchase"[\s\S]*?data-tab="education"/);
 assert.doesNotMatch(body, /planning-next-actions-feature|planning-tool-group--do-now|planning-tool-group--explore|data-tab="nextActions"/);
 assert.match(body, /id="nextActions" class="panel"/);
@@ -253,6 +262,38 @@ const upcomingUnpaid = monthlyEvidence_([], new Date(2026, 7, 5));
 assert.equal(upcomingUnpaid.status, 'UPCOMING');
 const pastDueUnpaid = monthlyEvidence_([]);
 assert.equal(pastDueUnpaid.status, 'PAST_DUE_UNPAID');
+const unknownMinimumEvidence = context.capitalAllocationBuildMonthlyDebtEvidence_([{
+  name: 'Blank Min', originalName: 'Blank Min', active: true, balance: 4000,
+  minimumPayment: 0, minimumPaymentKnown: false, dueDay: 20, dueDayKnown: true
+}], [], new Date(2026, 7, 18))[0];
+assert.equal(unknownMinimumEvidence.status, 'AMOUNT_UNKNOWN');
+assert.equal(unknownMinimumEvidence.obligationAmount, null);
+assert.equal(unknownMinimumEvidence.remainingRequiredAmount, null);
+assert.equal(unknownMinimumEvidence.dueDate, '2026-08-20');
+assert.notEqual(unknownMinimumEvidence.obligationAmount, 0,
+  'an unknown minimum must not be emitted as a $0 obligation');
+const explicitZeroEvidence = context.capitalAllocationBuildMonthlyDebtEvidence_([{
+  name: 'Zero Min', originalName: 'Zero Min', active: true, balance: 4000,
+  minimumPayment: 0, minimumPaymentKnown: true, dueDay: 20, dueDayKnown: true
+}], [], new Date(2026, 7, 18))[0];
+assert.equal(explicitZeroEvidence.status, 'NO_PAYMENT_DUE');
+assert.equal(explicitZeroEvidence.obligationAmount, 0);
+assert.equal(explicitZeroEvidence.remainingRequiredAmount, 0);
+const unknownDueDayEvidence = context.capitalAllocationBuildMonthlyDebtEvidence_([{
+  name: 'Missing Day', originalName: 'Missing Day', active: true, balance: 4000,
+  minimumPayment: 175, minimumPaymentKnown: true, dueDay: 1, dueDayKnown: false
+}], [], new Date(2026, 7, 18))[0];
+assert.equal(unknownDueDayEvidence.status, 'DATE_UNKNOWN');
+assert.equal(unknownDueDayEvidence.dueDate, '');
+assert.equal(unknownDueDayEvidence.remainingRequiredAmount, 175);
+assert.notEqual(unknownDueDayEvidence.status, 'PAST_DUE_UNPAID',
+  'an unknown due day must not be invented as day 1 and marked past due');
+const explicitDueDayOneEvidence = context.capitalAllocationBuildMonthlyDebtEvidence_([{
+  name: 'Day One', originalName: 'Day One', active: true, balance: 4000,
+  minimumPayment: 175, minimumPaymentKnown: true, dueDay: 1, dueDayKnown: true
+}], [], new Date(2026, 7, 18))[0];
+assert.equal(explicitDueDayOneEvidence.status, 'PAST_DUE_UNPAID');
+assert.equal(explicitDueDayOneEvidence.dueDate, '2026-08-01');
 const duplicateEvidence = monthlyEvidence_([
   { evidenceId: 'same', accountName: 'Credit Card - Marriott', amount: 100,
     paymentDate: '2026-08-09', evidenceClass: 'RECORDED_CASH_FLOW' },
@@ -478,6 +519,27 @@ assert.equal(partiallyPaidFutureMinimums.rows[0].amount, 140,
   'the current cycle forecast must protect only the remaining partially paid obligation');
 assert.equal(partiallyPaidFutureMinimums.total, 620,
   'later cycles retain their full minimum while the current cycle uses its reconciled remainder');
+const unknownMinimumFuture = context.readCapitalAllocationFutureDebtMinimums_([{
+  name: 'Blank Min', originalName: 'Blank Min', active: true, balance: 4000,
+  minimumPayment: 0, minimumPaymentKnown: false, dueDay: 20, dueDayKnown: true
+}], new Date(2026, 7, 14), new Date(2026, 10, 11), {});
+assert.equal(unknownMinimumFuture.rows.length, 0,
+  'an unknown minimum must not enter the 90-day reserve as $0');
+assert.equal(unknownMinimumFuture.reserveComplete, false);
+const unknownDueDayFuture = context.readCapitalAllocationFutureDebtMinimums_([{
+  name: 'Missing Day', originalName: 'Missing Day', active: true, balance: 4000,
+  minimumPayment: 300, minimumPaymentKnown: true, dueDay: 1, dueDayKnown: false
+}], new Date(2026, 7, 14), new Date(2026, 10, 11), {});
+assert.equal(unknownDueDayFuture.rows.length, 0,
+  'an unknown due day must not invent a dated reserve series on day 1');
+assert.equal(unknownDueDayFuture.reserveComplete, true);
+const explicitDueDayOneFuture = context.readCapitalAllocationFutureDebtMinimums_([{
+  name: 'Day One', originalName: 'Day One', active: true, balance: 4000,
+  minimumPayment: 300, minimumPaymentKnown: true, dueDay: 1, dueDayKnown: true
+}], new Date(2026, 7, 14), new Date(2026, 10, 11), {});
+assert.equal(explicitDueDayOneFuture.rows.every(row => String(row.dueDate).endsWith('-01')), true,
+  'an explicit due day of 1 must still generate dated future minimums');
+assert.ok(explicitDueDayOneFuture.rows.length > 0);
 const reserveWithHighIncome = context.capitalAllocationReserve90_(12000, 30000);
 assert.equal(reserveWithHighIncome.minimumOperatingFloorAmount, 4000);
 assert.equal(reserveWithHighIncome.requiredReserveAmount, 4000,
@@ -1517,10 +1579,16 @@ assert.ok(boundedClosureRequired.indexOf('Southwest') < boundedClosureRequired.i
 const missingAmountPlan = JSON.parse(JSON.stringify(unknownDebtPlan));
 const missingAmountFact = missingAmountPlan.queue.facts.debts.find(row => /United/i.test(row.name));
 missingAmountFact.minimumPayment = 0;
+missingAmountFact.minimumPaymentKnown = false;
 const missingAmountHtml = clientContext.capitalAllocationDebtViewHtml_(missingAmountPlan);
 assert.match(missingAmountHtml,
   /Payment amount needs updating[\s\S]*?United[\s\S]*?Aug 29, 2026[\s\S]*?Required payment[\s\S]*?Not recorded/,
   'known due day plus missing amount must request a payment-amount update specifically');
+const missingAmountUnitedCard = missingAmountHtml.slice(
+  missingAmountHtml.indexOf('Payment amount needs updating'),
+  missingAmountHtml.indexOf('Extra payoff recommendation'));
+assert.doesNotMatch(missingAmountUnitedCard, /\$0\.00/,
+  'an unknown minimum must not render as a $0 payment');
 
 const missingDetailsPlan = JSON.parse(JSON.stringify(missingAmountPlan));
 const missingDetailsFact = missingDetailsPlan.queue.facts.debts.find(row => /United/i.test(row.name));
@@ -1528,6 +1596,31 @@ missingDetailsFact.dueDayKnown = false;
 assert.match(clientContext.capitalAllocationDebtViewHtml_(missingDetailsPlan),
   /Payment details need updating[\s\S]*?United/,
   'missing amount and date must request payment details without inventing zero or a date');
+
+const explicitZeroMinPlan = JSON.parse(JSON.stringify(unknownDebtPlan));
+explicitZeroMinPlan.monthlyDebtEvidence = (explicitZeroMinPlan.monthlyDebtEvidence || [])
+  .filter(row => !/United/i.test(row.name));
+const explicitZeroMinFact = explicitZeroMinPlan.queue.facts.debts.find(row => /United/i.test(row.name));
+explicitZeroMinFact.minimumPayment = 0;
+explicitZeroMinFact.minimumPaymentKnown = true;
+explicitZeroMinFact.dueDayKnown = true;
+assert.match(clientContext.capitalAllocationDebtViewHtml_(explicitZeroMinPlan),
+  /No required payment due this month[\s\S]*?United/,
+  'an explicit $0 minimum is a known no-payment state, not a missing amount');
+
+const explicitDueDayOnePlan = JSON.parse(JSON.stringify(unknownDebtPlan));
+explicitDueDayOnePlan.monthlyDebtEvidence = (explicitDueDayOnePlan.monthlyDebtEvidence || [])
+  .filter(row => !/United/i.test(row.name));
+explicitDueDayOnePlan.forecast90.futureDebtMinimums = (explicitDueDayOnePlan.forecast90.futureDebtMinimums || [])
+  .filter(row => !/United/i.test(row.name));
+explicitDueDayOnePlan.forecast90.futureBills = (explicitDueDayOnePlan.forecast90.futureBills || [])
+  .filter(row => !/United/i.test(row.name));
+const explicitDueDayOneFact = explicitDueDayOnePlan.queue.facts.debts.find(row => /United/i.test(row.name));
+explicitDueDayOneFact.dueDay = 1;
+explicitDueDayOneFact.dueDayKnown = true;
+assert.match(clientContext.capitalAllocationDebtViewHtml_(explicitDueDayOnePlan),
+  /United[\s\S]*?Aug 1, 2026/,
+  'an explicit due day of 1 must remain visible as August 1');
 
 const explicitNoPaymentPlan = JSON.parse(JSON.stringify(missingDatePlan));
 explicitNoPaymentPlan.monthlyDebtEvidence = [
@@ -2210,5 +2303,150 @@ assert.equal(etradeFuture.investmentId === etradeRsu.investmentId, false,
 const retirementFoundation = brokerageFoundation.find(row => row.accountName === '401K Account');
 assert.equal(retirementFoundation.actionableSource, false);
 assert.equal(retirementFoundation.assetClass, 'RETIREMENT_OR_RESTRICTED');
+
+const debtNormContext = {
+  toNumber_(value) { return Number(String(value == null ? '' : value).replace(/[$,]/g, '')) || 0; },
+  round2_(value) { return Math.round((Number(value) || 0) * 100) / 100; },
+  normalizeName_(value) { return String(value || '').trim(); },
+  isDebtInactive_() { return false; },
+  DEBT_LEGACY_FALLBACK_: { BALANCE_OR_MIN: 'BALANCE_OR_MIN' }
+};
+vm.createContext(debtNormContext);
+vm.runInContext(plannerCore.slice(
+  plannerCore.indexOf('function normalizeDebts_'),
+  plannerCore.indexOf('function normalizeAccounts_')
+), debtNormContext, { filename: 'planner_core.js' });
+function debtInputRow_(minimumRaw, minimumDisplay, dueRaw) {
+  return {
+    'Account Name': 'Test Card',
+    'Account Balance': 2500,
+    'Minimum Payment': minimumRaw,
+    '__display__Minimum Payment': minimumDisplay,
+    'Due Date': dueRaw,
+    '__display__Due Date': dueRaw,
+    'Int Rate': 21.99,
+    'Type': 'Credit Card',
+    'Active': 'Yes',
+    '__display__Active': 'Yes'
+  };
+}
+const blankMinDebt = debtNormContext.normalizeDebts_([debtInputRow_('', '', '12')], {})[0];
+const nullMinDebt = debtNormContext.normalizeDebts_([debtInputRow_(null, null, '12')], {})[0];
+const whitespaceMinDebt = debtNormContext.normalizeDebts_([debtInputRow_('  ', ' \t', '12')], {})[0];
+const explicitZeroMinDebt = debtNormContext.normalizeDebts_([debtInputRow_(0, '0.00', '12')], {})[0];
+const unknownDueDayDebt = debtNormContext.normalizeDebts_([debtInputRow_(125, '$125.00', '')], {})[0];
+const explicitDueDayOneDebt = debtNormContext.normalizeDebts_([debtInputRow_(125, '$125.00', '1')], {})[0];
+assert.equal(blankMinDebt.minimumPaymentKnown, false);
+assert.equal(nullMinDebt.minimumPaymentKnown, false);
+assert.equal(whitespaceMinDebt.minimumPaymentKnown, false);
+assert.equal(explicitZeroMinDebt.minimumPaymentKnown, true);
+assert.equal(explicitZeroMinDebt.minimumPayment, 0);
+assert.equal(unknownDueDayDebt.dueDayKnown, false);
+assert.equal(unknownDueDayDebt.dueDay, 1,
+  'shared numeric fallback still stores day 1; This Week must use dueDayKnown instead');
+assert.equal(explicitDueDayOneDebt.dueDayKnown, true);
+assert.equal(explicitDueDayOneDebt.dueDay, 1);
+
+context.Session = context.Session || { getScriptTimeZone() { return 'America/Los_Angeles'; } };
+context.getInputBillsDueRows_ = () => [];
+const obligationSs = { getSheetByName() { return null; } };
+const unknownDateObligations = context.readCapitalAllocationObligations_(
+  obligationSs, new Date(2026, 7, 18), [], [], [{
+    name: 'Credit Card - Southwest', originalName: 'Credit Card - SW',
+    status: 'DATE_UNKNOWN', dueDate: '', obligationAmount: 988.41,
+    remainingRequiredAmount: 988.41, dueDayKnown: false, minimumPaymentKnown: true
+  }]).required;
+assert.equal(unknownDateObligations.length, 1);
+assert.equal(unknownDateObligations[0].amount, 988.41);
+assert.equal(unknownDateObligations[0].dueDate, '');
+assert.match(unknownDateObligations[0].reason, /due now/i);
+assert.doesNotMatch(unknownDateObligations[0].reason, /overdue/i);
+const unknownAmountObligations = context.readCapitalAllocationObligations_(
+  obligationSs, new Date(2026, 7, 18), [], [], [{
+    name: 'Credit Card - Blank Min', originalName: 'Blank Min',
+    status: 'AMOUNT_UNKNOWN', dueDate: '2026-08-20', obligationAmount: null,
+    remainingRequiredAmount: null, dueDayKnown: true, minimumPaymentKnown: false
+  }]).required;
+assert.equal(unknownAmountObligations.some(row => /Blank Min/i.test(row.name)), false,
+  'an unknown minimum must not create a $0 PAY_DEBT_MINIMUM');
+
+const unknownMinFacts = JSON.parse(JSON.stringify(householdFacts));
+unknownMinFacts.debts.push({
+  name: 'Credit Card - Blank Min', originalName: 'Blank Min', type: 'Credit Card',
+  active: true, balance: 5000, minimumPayment: 0, minimumPaymentKnown: false,
+  interestRate: 22.99, dueDay: 15, dueDayKnown: true
+});
+unknownMinFacts.incomeProducingAccounts[0].requestedWeeklyPace = 800;
+const unknownMinPlan = context.buildCapitalAllocationPlan_(unknownMinFacts);
+assert.equal(unknownMinPlan.summary.reserveComplete, false);
+assert.notEqual(unknownMinPlan.allocationStatus, 'BLOCKED');
+assert.equal(unknownMinPlan.weeklyActions.some(row =>
+  row.actionType === 'PAY_DEBT_MINIMUM' && /Southwest/i.test(row.targetName) &&
+  row.amount === 988.41), true, 'known obligations stay visible and funded first');
+assert.equal(unknownMinPlan.weeklyActions.some(row =>
+  row.actionType === 'PAY_TRACKED_BILL' && row.amount === 1082.93), true);
+assert.equal(unknownMinPlan.weeklyActions.some(row =>
+  row.actionType === 'FUND_INCOME_PRODUCING_MINIMUM' && row.amount === 500), true);
+assert.equal(unknownMinPlan.weeklyActions.some(row => row.actionType === 'PAY_EXTRA_DEBT'), false,
+  'unknown minimums suppress discretionary extra payoff');
+assert.equal(unknownMinPlan.rankedCandidates.filter(row =>
+  row.actionType === 'PAY_EXTRA_DEBT').every(row => Number(row.allocatedAmount || 0) === 0), true);
+assert.equal(unknownMinPlan.weeklyActions.some(row =>
+  row.actionType === 'FUND_INCOME_PRODUCING_ACCOUNT'), false,
+  'unknown minimums suppress discretionary extra investing');
+assert.equal(unknownMinPlan.rankedCandidates.some(row =>
+  row.actionType === 'FUND_INCOME_PRODUCING_ACCOUNT' &&
+  /minimum is recorded/.test(row.reason || '')), true);
+assert.equal(unknownMinPlan.weeklyActions.some(row =>
+  row.actionType === 'PAY_DEBT_MINIMUM' && /Blank Min/i.test(row.targetName)), false);
+assert.equal(unknownMinPlan.dataQuality.some(row =>
+  String(row.findingId).startsWith('OBLIGATION_AMOUNT_UNKNOWN:') && row.blocksAllocation === false), true);
+assert.equal(unknownMinPlan.weeklyActions.some(row =>
+  row.actionType === 'PROTECT_90_DAY_OPERATING_RESERVE'), true);
+const unknownMinHtml = clientContext.capitalAllocationDebtViewHtml_(unknownMinPlan);
+assert.match(unknownMinHtml, /Still to pay this month[\s\S]*?Blank Min/,
+  'the unknown-minimum card remains visible in required rows');
+assert.match(unknownMinHtml, /Payment amount needs updating[\s\S]*?Blank Min|Blank Min[\s\S]*?Payment amount needs updating/);
+assert.match(unknownMinHtml, /Extra payoff waits until every required debt minimum is recorded/);
+assert.match(clientContext.capitalAllocationProgressHtml_(unknownMinPlan),
+  /Cash reserve[\s\S]*?Needs review[\s\S]*?incomplete floor/);
+assert.match(clientContext.capitalAllocationPlanGroupsHtml_(unknownMinPlan, 0),
+  /Incomplete until every required debt minimum is recorded/);
+
+const unknownDueFacts = JSON.parse(JSON.stringify(householdFacts));
+unknownDueFacts.debts.forEach(row => {
+  if (/Southwest/i.test(row.name)) row.dueDayKnown = false;
+});
+unknownDueFacts.obligations = unknownDueFacts.obligations.map(row => {
+  if (!/Southwest/i.test(row.name)) return row;
+  return Object.assign({}, row, { dueDate: '' });
+});
+const unknownDuePlan = context.buildCapitalAllocationPlan_(unknownDueFacts);
+assert.equal(unknownDuePlan.summary.reserveComplete, true,
+  'a known minimum with an unknown due day still completes the reserve floor');
+assert.equal(unknownDuePlan.weeklyActions.some(row =>
+  row.actionType === 'PAY_DEBT_MINIMUM' && /Southwest/i.test(row.targetName) &&
+  row.amount === 988.41), true, 'the known minimum is reserved as due now');
+assert.equal(unknownDuePlan.weeklyActions.some(row => row.actionType === 'PAY_EXTRA_DEBT'), true,
+  'discretionary ranking continues after reserving a known minimum with an unknown due day');
+const unknownDueHtml = clientContext.capitalAllocationDebtViewHtml_(unknownDuePlan);
+assert.match(unknownDueHtml, /Due date needs updating[\s\S]*?Southwest/,
+  'known amount plus unknown due day shows MISSING_DATE');
+assert.doesNotMatch(unknownDueHtml, /Past due[\s\S]*?Southwest/,
+  'unknown due day must not invent PAST_DUE from day 1');
+
+for (const [label, relative] of [
+  ['Bills Due / Overview Pay Now', '../dashboard_data.js'],
+  ['Next Actions', '../next_actions.js'],
+  ['Rolling Debt', '../rolling_debt_payoff.js'],
+  ['Debt Overview', '../code.js'],
+  ['planner email', '../planner_output.js'],
+  ['Monthly Review', '../monthly_checkin.js'],
+  ['Plaid Apply', '../plaid_import_bridge.js']
+]) {
+  const consumer = fs.readFileSync(new URL(relative, import.meta.url), 'utf8');
+  assert.doesNotMatch(consumer, /minimumPaymentKnown/,
+    `${label} must keep current behavior and ignore the This Week known-minimum flag`);
+}
 
 console.log('RFP Capital Allocation and Planning Preview regressions passed.');

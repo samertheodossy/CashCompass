@@ -60,6 +60,7 @@ function getCapitalAllocationPlanForSpreadsheet_(ss, payload) {
 function buildCapitalAllocationPlan_(facts) {
   var queue = buildCapitalAllocationQueue_(facts);
   var blockers = queue.dataQuality.filter(function(row) { return row.blocksAllocation; });
+  var reserveIncomplete = capitalAllocationReserveIncomplete_(facts);
   var openingCash = capitalAllocationMoney_(queue.totals.cashToUse);
   var plan = {
     schemaVersion: CAPITAL_ALLOCATION_PLAN_SCHEMA_VERSION_,
@@ -110,7 +111,8 @@ function buildCapitalAllocationPlan_(facts) {
       availableForGoals: 0,
       recommendedUses: 0,
       endingCash: openingCash,
-      blockingFindingCount: blockers.length
+      blockingFindingCount: blockers.length,
+      reserveComplete: !reserveIncomplete
     },
     weeklyActions: [],
     rankedCandidates: [],
@@ -201,6 +203,11 @@ function buildCapitalAllocationPlan_(facts) {
 
   plan.summary.deployableAfterRequired = remaining;
 
+  if (reserveIncomplete) {
+    plan.summary.reserveComplete = false;
+    plan.summary.availableForGoals = 0;
+  }
+
   if (blockers.length) {
     plan.summary.availableForGoals = 0;
     plan.summary.recommendedUses = 0;
@@ -233,13 +240,19 @@ function buildCapitalAllocationPlan_(facts) {
   plan.summary.intentionallyRetainedLiquidity = intentionallyRetainedAboveHardFloor;
   plan.summary.acceleratedDeploymentBudget = allocatable;
   plan.summary.acceleratedDeploymentStatus = deploymentPace.acceleratedDeploymentStatus;
+  if (reserveIncomplete) {
+    plan.summary.availableForGoals = 0;
+    plan.summary.acceleratedDeploymentBudget = 0;
+  }
   if (requested90DayReserve > 0) {
     plan.weeklyActions.push(capitalAllocationWeeklyAction_(++sequence, {
       candidateId: 'PROTECT_90_DAY_OPERATING_RESERVE',
       actionClass: 'HARD_CONSTRAINT',
       actionType: 'PROTECT_90_DAY_OPERATING_RESERVE',
       targetName: 'Next 90 days',
-      reason: 'Keep cash available for forecast operating bills, debt minimums, Upcoming expenses, and unscheduled property costs after estimated income. Normal investment-policy contributions remain visible but do not inflate the operating floor.',
+      reason: reserveIncomplete
+        ? 'Known obligations stay protected, but this 90-day reserve is incomplete until every required debt minimum is recorded.'
+        : 'Keep cash available for forecast operating bills, debt minimums, Upcoming expenses, and unscheduled property costs after estimated income. Normal investment-policy contributions remain visible but do not inflate the operating floor.',
       provenance: 'INPUT - Bills / INPUT - Debts / INPUT - Upcoming Expenses / INPUT - Cash Flow / HOUSES - *'
     }, held90DayReserve, allocatable,
     held90DayReserve + 0.005 >= requested90DayReserve ? 'PROTECTED' : 'PARTIAL'));
@@ -303,6 +316,11 @@ function buildCapitalAllocationPlan_(facts) {
         }, 0);
         requested = Math.max(0, capitalAllocationMoney_(requested - minimumAlreadyPlanned));
       }
+      if (reserveIncomplete &&
+          (copy.actionType === 'PAY_EXTRA_DEBT' ||
+           copy.actionType === 'FUND_INCOME_PRODUCING_ACCOUNT')) {
+        requested = 0;
+      }
       var allocated = Math.min(allocatable, requested);
       // Optional transfers below one dollar are not actionable financial
       // instructions. Keep a sub-dollar remainder in cash instead of leaking
@@ -365,10 +383,14 @@ function buildCapitalAllocationDeploymentPace_(facts, plan, inputs) {
   var normalizedMonthlyOutflows = capitalAllocationMoney_(
     Number(forecast.futureOperatingOutflowsAmount || 0) / 3);
   var monthlyDebtService = capitalAllocationMoney_((facts && facts.debts || [])
-    .filter(function(row) { return row.active && Number(row.balance || 0) > 0; })
+    .filter(function(row) {
+      return row.active && Number(row.balance || 0) > 0 && capitalAllocationDebtMinimumKnown_(row);
+    })
     .reduce(function(sum, row) { return sum + Number(row.minimumPayment || 0); }, 0));
   var largestDebtMinimum = capitalAllocationMoney_((facts && facts.debts || [])
-    .filter(function(row) { return row.active && Number(row.balance || 0) > 0; })
+    .filter(function(row) {
+      return row.active && Number(row.balance || 0) > 0 && capitalAllocationDebtMinimumKnown_(row);
+    })
     .reduce(function(maximum, row) {
       return Math.max(maximum, Number(row.minimumPayment || 0));
     }, 0));
@@ -576,7 +598,9 @@ function capitalAllocationDeploymentScenario_(label, preference, facts, cashAfte
     awaitingConfirmation, hasSafeBalancedCushion, explicitPeriodLimit,
     hasExplicitPeriodLimit, gross90DayOutflows) {
   var largestDebtMinimum = capitalAllocationMoney_((facts && facts.debts || [])
-    .filter(function(row) { return row.active && Number(row.balance || 0) > 0; })
+    .filter(function(row) {
+      return row.active && Number(row.balance || 0) > 0 && capitalAllocationDebtMinimumKnown_(row);
+    })
     .reduce(function(maximum, row) {
       return Math.max(maximum, Number(row.minimumPayment || 0));
     }, 0));
@@ -1133,7 +1157,8 @@ function buildCapitalAllocationAfterAction_(facts, plan) {
       projectedEndingBalance: ending, estimatedAnnualInterestBefore: annualBefore,
       projectedAnnualInterestAfter: annualAfter,
       projectedAnnualInterestAvoided: capitalAllocationMoney_(annualBefore - annualAfter),
-      projectedMonthlyMinimumReleased: ending <= 0.005 ? capitalAllocationMoney_(debt.minimumPayment) : 0,
+      projectedMonthlyMinimumReleased: ending <= 0.005 && capitalAllocationDebtMinimumKnown_(debt)
+        ? capitalAllocationMoney_(debt.minimumPayment) : 0,
       recommendationState: 'PROPOSED',
       effectState: payment > 0 ? 'AWAITING_CONFIRMATION' : 'CONFIRMED' };
   });
@@ -1359,6 +1384,11 @@ function capitalAllocationCandidateConfidence_(candidate) {
 }
 
 function capitalAllocationWaitReason_(candidate, facts) {
+  if (capitalAllocationReserveIncomplete_(facts) &&
+      (candidate.actionType === 'PAY_EXTRA_DEBT' ||
+       candidate.actionType === 'FUND_INCOME_PRODUCING_ACCOUNT')) {
+    return 'Extra uses wait until every required debt minimum is recorded.';
+  }
   if (candidate.actionType === 'FUND_INCOME_PRODUCING_ACCOUNT' &&
       !(Number(candidate.requestedAmount) > 0)) {
     return 'No active recurring plan sizes this account, so no contribution is recommended.';
@@ -1454,6 +1484,10 @@ function buildCapitalAllocationQueue_(facts) {
 
   (facts.obligations || []).forEach(function(item) {
     if (!item.requiredThisWeek || Number(item.amount || 0) <= 0) return;
+    if ((item.actionType === 'PAY_DEBT_MINIMUM' || item.sourceType === 'debt_minimum') &&
+        !capitalAllocationDebtMinimumKnown_(capitalAllocationDebtForName_(facts, item.name) || item)) {
+      return;
+    }
     var action = capitalAllocationAction_(
       'REQUIRED:' + capitalAllocationKey_(item.sourceType + ':' + item.sourceId),
       'REQUIRED_ACTION', item.actionType || 'PAY_OBLIGATION', item.name,
@@ -1491,6 +1525,14 @@ function buildCapitalAllocationQueue_(facts) {
       'MAXIMUM_BALANCE',
       'Every active positive-balance debt remains eligible; APR affects later ordering only.',
       'INPUT - Debts'));
+    if (!capitalAllocationDebtMinimumKnown_(debt)) {
+      findings.push(capitalAllocationFinding_(
+        'OBLIGATION_AMOUNT_UNKNOWN:' + capitalAllocationKey_(debt.originalName || debt.name),
+        'ERROR', false,
+        debt.name +
+          ' has no contractual minimum. Extra payoff and extra investing stay paused until the minimum is entered.',
+        'INPUT - Debts'));
+    }
     if (!Number(debt.interestRate || 0)) {
       findings.push(capitalAllocationFinding_(
         'MISSING_DEBT_APR:' + capitalAllocationKey_(debt.originalName || debt.name),
@@ -1852,31 +1894,40 @@ function capitalAllocationBuildMonthlyDebtEvidenceResult_(debts, paymentRows, as
     var ambiguous = matches.some(function(row) {
       return !!row.ambiguous || Number(row.__matchedDebtCount || 0) !== 1;
     });
-    var required = Math.max(0, capitalAllocationMoney_(debt.minimumPayment || 0));
+    var minimumKnown = capitalAllocationDebtMinimumKnown_(debt);
+    var dueDayKnown = capitalAllocationDebtDueDayKnown_(debt);
+    var required = minimumKnown ? Math.max(0, capitalAllocationMoney_(debt.minimumPayment || 0)) : null;
     var recorded = ambiguous ? 0 : capitalAllocationMoney_(matches.reduce(function(sum, row) {
       return sum + Math.max(0, Number(row.amount || 0));
     }, 0));
-    var remaining = ambiguous ? required : Math.max(0,
+    var remaining = !minimumKnown ? null : ambiguous ? required : Math.max(0,
       capitalAllocationMoney_(required - recorded));
-    var dueDay = Math.max(1, Number(debt.dueDay || 1));
+    var dueDay = dueDayKnown ? Math.max(1, Number(debt.dueDay || 1)) : 0;
     var lastDay = new Date(asOfDate.getFullYear(), asOfDate.getMonth() + 1, 0).getDate();
-    var due = new Date(asOfDate.getFullYear(), asOfDate.getMonth(), Math.min(dueDay, lastDay));
-    var status = ambiguous ? 'PAYMENT_STATUS_UNKNOWN' :
-      recorded > 0 && remaining <= 0.005 ?
+    var due = dueDayKnown
+      ? new Date(asOfDate.getFullYear(), asOfDate.getMonth(), Math.min(dueDay, lastDay))
+      : null;
+    var paidClosed = minimumKnown && recorded > 0 && remaining <= 0.005;
+    var status = !minimumKnown ? 'AMOUNT_UNKNOWN' :
+      ambiguous ? 'PAYMENT_STATUS_UNKNOWN' :
+      paidClosed ?
         (matches.some(function(row) { return row.evidenceClass === 'AUTHORITATIVE_IMPORTED'; })
           ? 'CONFIRMED_PAID' : 'RECORDED_PAID') :
       recorded > 0 ? 'PARTIALLY_PAID' :
+      required <= 0.005 ? 'NO_PAYMENT_DUE' :
+      !dueDayKnown ? 'DATE_UNKNOWN' :
       due.getTime() < stripTime_(asOfDate).getTime() ? 'PAST_DUE_UNPAID' : 'UPCOMING';
     var paymentDates = matches.map(function(row) { return String(row.paymentDate || ''); })
       .filter(Boolean).sort();
     return { name: debt.name, originalName: debt.originalName || '',
-      status: status, dueDate: capitalAllocationIso_(due),
+      status: status, dueDate: due ? capitalAllocationIso_(due) : '',
       obligationAmount: required, recordedPaymentAmount: recorded,
-      reconciledPaymentAmount: Math.min(required, recorded),
+      reconciledPaymentAmount: minimumKnown ? Math.min(required, recorded) : 0,
       remainingRequiredAmount: remaining,
       paymentDate: paymentDates.length ? paymentDates[paymentDates.length - 1] : '',
       evidenceCount: matches.length, evidenceClass: ambiguous ? 'AMBIGUOUS' :
         matches.length ? String(matches[0].evidenceClass || 'RECORDED') : 'NONE',
+      minimumPaymentKnown: minimumKnown, dueDayKnown: dueDayKnown,
       provenance: matches.map(function(row) { return row.provenance || ''; }).filter(Boolean).join(' / ') };
   });
   var unmatchedEvidenceCount = uniquePayments.filter(function(row) {
@@ -1960,13 +2011,15 @@ function readCapitalAllocationObligations_(ss, asOfDate, findings, incomeProduci
     debtEvidenceByName[normalizeBillName_(row.originalName)] = row;
   });
   var debtRows = (monthlyDebtEvidence || []).filter(function(row) {
-    return Number(row.remainingRequiredAmount || 0) > 0;
+    return row.status !== 'AMOUNT_UNKNOWN' && Number(row.remainingRequiredAmount || 0) > 0;
   }).map(function(row) {
-    return { id: 'DEBT_CYCLE:' + row.name + ':' + row.dueDate,
+    return { id: 'DEBT_CYCLE:' + row.name + ':' + (row.dueDate || 'UNKNOWN'),
       payee: row.name, name: row.name, amount: row.remainingRequiredAmount,
       dueDate: row.dueDate, sourceType: 'debt', matchedToDebt: true,
       minimumPayment: row.obligationAmount, paymentStatus: row.status,
-      recordedPaymentAmount: row.recordedPaymentAmount };
+      recordedPaymentAmount: row.recordedPaymentAmount,
+      dueDayKnown: row.dueDayKnown !== false,
+      minimumPaymentKnown: row.minimumPaymentKnown !== false };
   });
   var billRows = getInputBillsDueRows_(ss, asOfDate, tz, { readOnly: true });
   var investmentContributions = [];
@@ -2022,22 +2075,24 @@ function readCapitalAllocationObligations_(ss, asOfDate, findings, incomeProduci
     return !debtOwned && !capitalAllocationClassifyInvestmentContribution_(
       row, incomeProducingAccounts || []).isInvestmentContribution;
   })).filter(function(row) {
-    var due = capitalAllocationDate_(row.dueDate);
-    var days = due ? daysBetween_(stripTime_(asOfDate), due) : 9999;
-    return days <= 7 && Number(row.amount || 0) > 0;
+    return capitalAllocationObligationIsDueThisWeek_(row, asOfDate);
   }).map(function(row) {
     var debt = row.sourceType === 'debt' || row.matchedToDebt;
     var estimatedVariableBill = !debt && String(row.varies || '').toLowerCase() === 'yes';
+    var due = capitalAllocationDate_(row.dueDate);
+    var unknownDueDay = debt && !due;
     return { sourceType: debt ? 'debt_minimum' : 'tracked_bill',
       sourceId: row.id || (row.payee + ':' + row.dueDate), name: row.payee || row.name,
       actionType: debt ? 'PAY_DEBT_MINIMUM' : 'PAY_TRACKED_BILL',
-      amount: capitalAllocationMoney_(row.amount), dueDate: row.dueDate,
+      amount: capitalAllocationMoney_(row.amount), dueDate: row.dueDate || '',
       requiredThisWeek: true, amountBasis: debt ? 'MINIMUM_PAYMENT' :
         (estimatedVariableBill ? 'SAVED_ESTIMATED_AMOUNT' : 'DEFAULT_AMOUNT'),
-      reason: capitalAllocationDate_(row.dueDate) < stripTime_(asOfDate)
-        ? 'Required payment is overdue.' : estimatedVariableBill
-          ? 'Variable bill is due within the next seven days; its saved estimate is protected.'
-          : 'Required payment is due within the next seven days.',
+      reason: unknownDueDay
+        ? 'Required payment is reserved as due now until a due day is recorded.'
+        : due && due.getTime() < stripTime_(asOfDate).getTime()
+          ? 'Required payment is overdue.' : estimatedVariableBill
+            ? 'Variable bill is due within the next seven days; its saved estimate is protected.'
+            : 'Required payment is due within the next seven days.',
       provenance: debt ? 'INPUT - Debts / INPUT - Cash Flow' : 'INPUT - Bills / INPUT - Cash Flow / Activity Log' };
   });
 
@@ -2203,6 +2258,8 @@ function readCapitalAllocationForecast90_(ss, asOfDate, findings, context) {
       cashFlow: 'Current-month Cash Flow supplies recorded payment evidence, not a second future obligation',
       investmentPolicy: 'Robinhood policy commitments remain separate from gross operating obligations'
     },
+    reserveComplete: futureDebtMinimums.reserveComplete !== false &&
+      !capitalAllocationHasUnknownDebtMinimum_({ debts: context.debts }),
     provenance: 'INPUT - Bills / INPUT - Debts / INPUT - Upcoming Expenses / INPUT - Cash Flow / SYS - Assets / HOUSES - *'
   };
 }
@@ -2433,8 +2490,15 @@ function readCapitalAllocationFutureDebtMinimums_(debts, asOfDate, horizonEnd, a
     evidenceByName[normalizeBillName_(row.name)] = row;
     evidenceByName[normalizeBillName_(row.originalName)] = row;
   });
+  var reserveComplete = true;
   (debts || []).forEach(function(debt) {
-    if (!debt.active || !(Number(debt.balance || 0) > 0) || !(Number(debt.minimumPayment || 0) > 0)) return;
+    if (!debt.active || !(Number(debt.balance || 0) > 0)) return;
+    if (!capitalAllocationDebtMinimumKnown_(debt)) {
+      reserveComplete = false;
+      return;
+    }
+    if (!(Number(debt.minimumPayment || 0) > 0)) return;
+    if (!capitalAllocationDebtDueDayKnown_(debt)) return;
     for (var offset = 0; offset <= 3; offset++) {
       var monthDate = new Date(asOfDate.getFullYear(), asOfDate.getMonth() + offset, 1);
       var lastDay = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
@@ -2455,7 +2519,7 @@ function readCapitalAllocationFutureDebtMinimums_(debts, asOfDate, horizonEnd, a
   });
   return { total: capitalAllocationMoney_(rows.reduce(function(sum, row) {
     return sum + row.amount;
-  }, 0)), rows: rows };
+  }, 0)), rows: rows, reserveComplete: reserveComplete };
 }
 
 function readCapitalAllocationFutureUpcoming_(ss, asOfDate, horizonEnd) {
@@ -2631,4 +2695,33 @@ function capitalAllocationDate_(value) {
 }
 function capitalAllocationAsOfDate_(value) {
   return capitalAllocationDate_(value) || stripTime_(new Date());
+}
+
+function capitalAllocationDebtMinimumKnown_(debt) {
+  return !(debt && debt.minimumPaymentKnown === false);
+}
+
+function capitalAllocationDebtDueDayKnown_(debt) {
+  return !(debt && debt.dueDayKnown === false);
+}
+
+function capitalAllocationHasUnknownDebtMinimum_(facts) {
+  return (facts && facts.debts || []).some(function(debt) {
+    return debt && debt.active !== false && Number(debt.balance || 0) > 0 &&
+      !capitalAllocationDebtMinimumKnown_(debt);
+  });
+}
+
+function capitalAllocationReserveIncomplete_(facts) {
+  return (facts && facts.forecast90 && facts.forecast90.reserveComplete === false) ||
+    capitalAllocationHasUnknownDebtMinimum_(facts);
+}
+
+function capitalAllocationObligationIsDueThisWeek_(row, asOfDate) {
+  if (!(Number(row && row.amount || 0) > 0)) return false;
+  var due = capitalAllocationDate_(row && row.dueDate);
+  var debt = row && (row.sourceType === 'debt' || row.matchedToDebt);
+  if (debt && !due) return true;
+  var days = due ? daysBetween_(stripTime_(asOfDate), due) : 9999;
+  return days <= 7;
 }

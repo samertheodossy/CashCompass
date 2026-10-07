@@ -126,7 +126,9 @@ function capitalAllocationProgressHtml_(plan) {
   }).reduce(function(sum, row) {
     return sum + Number(row.projectedEndingBalance || 0);
   }, 0);
-  var reserveCovered = Number(summary.endingCash || 0) + 0.005 >= Number(summary.reserve90Days || 0);
+  var reserveIncomplete = summary.reserveComplete === false;
+  var reserveCovered = !reserveIncomplete &&
+    Number(summary.endingCash || 0) + 0.005 >= Number(summary.reserve90Days || 0);
   var robinhoodValue = Number(after.robinhoodBalanceBefore || 0);
   var projectedFreed = Number(after.projectedReleasedMonthlyMinimums || 0);
   var confirmedFreed = Number(after.confirmedReleasedMonthlyMinimums || 0);
@@ -137,7 +139,11 @@ function capitalAllocationProgressHtml_(plan) {
       'After this week\'s recommended actions',
       next.destination ? 'Next target: ' + capitalAllocationCustomerActionName_(next.destination) : '') +
     capitalAllocationProgressCardHtml_('Cash reserve', reserveCovered ? 'Covered' : 'Needs review',
-      formatCapitalAllocationMoney_(summary.reserve90Days) + ' target', '') +
+      formatCapitalAllocationMoney_(summary.reserve90Days) +
+        (reserveIncomplete ? ' incomplete floor' : ' target'),
+      reserveIncomplete
+        ? 'A required debt minimum is missing, so this 90-day reserve is incomplete.'
+        : '') +
     capitalAllocationProgressCardHtml_('Income portfolio', formatCapitalAllocationMoney_(robinhoodValue),
       'Current value', '+' + formatCapitalAllocationMoney_(after.proposedRobinhoodFundingThisWeek) + ' this week') +
     capitalAllocationProgressCardHtml_('Monthly cash freed',
@@ -362,11 +368,12 @@ function capitalAllocationMonthlyDebtPlanModel_(plan, decision) {
   (forecast.futureBills || []).forEach(function(row) { addRequired_(row, 1); });
 
   function currentMonthDueDate_(fact, evidence) {
+    var dueDayKnown = fact && fact.dueDayKnown;
+    if (dueDayKnown === false || (evidence && evidence.dueDayKnown === false)) return '';
     var explicitDate = String(evidence && evidence.dueDate || '');
     if (explicitDate) return explicitDate;
     var dueDay = Number(fact && fact.dueDay || 0);
-    var dueDayKnown = fact && fact.dueDayKnown;
-    if (!start || dueDayKnown === false || !(dueDay >= 1 && dueDay <= 31)) return '';
+    if (!start || !(dueDay >= 1 && dueDay <= 31)) return '';
     var lastDay = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)).getUTCDate();
     var resolved = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(),
       Math.min(dueDay, lastDay)));
@@ -397,24 +404,39 @@ function capitalAllocationMonthlyDebtPlanModel_(plan, decision) {
     var fact = factByName[key] || {};
     var extra = Number(extraByName[key] || 0);
     var evidenceStatus = String(evidence.status || '').toUpperCase();
+    if (evidenceStatus === 'AMOUNT_UNKNOWN') evidenceStatus = 'MISSING_AMOUNT';
+    if (evidenceStatus === 'DATE_UNKNOWN') evidenceStatus = 'MISSING_DATE';
     var knownNoPayment = evidenceStatus === 'SATISFIED' || evidenceStatus === 'NO_PAYMENT_DUE' ||
       evidenceStatus === 'RECORDED_PAID' || evidenceStatus === 'CONFIRMED_PAID';
-    var minimumPayment = Number(fact.minimumPayment || evidence.minimumPayment || 0);
+    var minimumUnknown = fact.minimumPaymentKnown === false ||
+      evidence.minimumPaymentKnown === false;
+    var dueDayUnknown = fact.dueDayKnown === false || evidence.dueDayKnown === false;
+    var minimumPayment = minimumUnknown ? 0 :
+      Number(fact.minimumPayment || evidence.minimumPayment || 0);
     // A required action can legitimately omit the calendar date even when the
     // normalized debt fact still carries a trustworthy due day. Preserve that
     // source evidence instead of turning a known date into an update request.
     var dueDate = required && required.dueDate
       ? required.dueDate : currentMonthDueDate_(fact, evidence);
     var hasReconciledAmount = Object.prototype.hasOwnProperty.call(evidence,
-      'remainingRequiredAmount');
-    var requiredAmount = hasReconciledAmount ? Number(evidence.remainingRequiredAmount || 0) :
+      'remainingRequiredAmount') && evidence.remainingRequiredAmount != null;
+    var requiredAmount = minimumUnknown ? 0 :
+      hasReconciledAmount ? Number(evidence.remainingRequiredAmount || 0) :
       knownNoPayment ? 0 : required ? Number(required.amount || 0) : minimumPayment;
-    var status = /^(RECORDED_PAID|CONFIRMED_PAID|PARTIALLY_PAID|PAST_DUE_UNPAID|PAYMENT_STATUS_UNKNOWN|UPCOMING)$/.test(evidenceStatus)
-      ? evidenceStatus : evidenceStatus === 'SATISFIED' ? 'SATISFIED' :
-      evidenceStatus === 'NO_PAYMENT_DUE' ? 'NO_PAYMENT_DUE' :
+    var dateUnknown = dueDayUnknown && !dueDate;
+    var settledStatus = /^(RECORDED_PAID|CONFIRMED_PAID|PARTIALLY_PAID|SATISFIED|NO_PAYMENT_DUE|PAYMENT_STATUS_UNKNOWN)$/.test(evidenceStatus);
+    var datedEvidenceStatus = !minimumUnknown && !dateUnknown &&
+      /^(PAST_DUE_UNPAID|UPCOMING)$/.test(evidenceStatus);
+    var status = settledStatus ? (evidenceStatus === 'SATISFIED' ? 'SATISFIED' : evidenceStatus) :
+      datedEvidenceStatus ? evidenceStatus :
+      minimumUnknown && dateUnknown ? 'MISSING_DETAILS' :
+      minimumUnknown ? 'MISSING_AMOUNT' :
+      dateUnknown && requiredAmount > 0 ? 'MISSING_DATE' :
+      dateUnknown && fact.minimumPaymentKnown === true ? 'NO_PAYMENT_DUE' :
       required && required.overdue ? 'PAST_DUE' :
       requiredAmount > 0 && dueDate ? 'REQUIRED_DUE' :
       requiredAmount > 0 ? 'MISSING_DATE' :
+      fact.minimumPaymentKnown === true && requiredAmount <= 0 ? 'NO_PAYMENT_DUE' :
       dueDate ? 'MISSING_AMOUNT' : 'MISSING_DETAILS';
     var proposedPayment = Number(debt.proposedPayment || 0);
     var fullPayoff = proposedPayment > 0.005 && Number(debt.projectedEndingBalance || 0) <= 0.005;
@@ -431,7 +453,8 @@ function capitalAllocationMonthlyDebtPlanModel_(plan, decision) {
         ? debt.startingBalance || 0 : debt.projectedEndingBalance),
       apr: Number(debt.apr || 0), requiredPayment: requiredAmount,
       minimumPayment: minimumPayment, dueDate: dueDate,
-      obligationAmount: hasReconciledAmount ? Number(evidence.obligationAmount || minimumPayment) : minimumPayment,
+      obligationAmount: minimumUnknown ? 0 :
+        hasReconciledAmount ? Number(evidence.obligationAmount || minimumPayment) : minimumPayment,
       recordedPaymentAmount: Number(evidence.recordedPaymentAmount || 0),
       paymentDate: String(evidence.paymentDate || ''),
       extraPayment: extra, proposedPayment: proposedPayment, plannedPayment: plannedPayment,
@@ -477,6 +500,7 @@ function capitalAllocationMonthlyDebtPlanModel_(plan, decision) {
     totalPlanned: money_(rows.reduce(function(sum, row) { return sum + row.plannedPayment; }, 0)),
     unresolvedCount: unresolvedCount, currentDebt: currentDebt,
     pacingRequired: capitalAllocationPacingAuthorityMissing_(pace),
+    reserveComplete: !(plan && plan.summary && plan.summary.reserveComplete === false),
     potentialExcessCapital: Number(pace.potentialExcessCapital == null
       ? pace.capitalAbovePreferredLiquidity || 0 : pace.potentialExcessCapital),
     recommendedAcceleratedDeployment: Number(pace.recommendedAcceleratedDeployment || 0),
@@ -495,12 +519,15 @@ function capitalAllocationMonthlyDebtSummaryHtml_(monthly) {
       formatCapitalAllocationMoney_(Math.max(0, Number(monthly.recordedTotal || 0))) +
       '</strong></div>' : '';
   var pacingRequired = !!monthly.pacingRequired;
+  var reserveIncomplete = monthly.reserveComplete === false;
+  var extraAmountLabel = pacingRequired || reserveIncomplete
+    ? 'Not calculated yet' : formatCapitalAllocationMoney_(monthly.extraTotal);
   return '<div class="capital-allocation-debt-month-summary"><div><span>Required payments this month</span><strong>' +
     formatCapitalAllocationMoney_(monthly.obligationTotal) + '</strong></div>' + recorded +
     '<div><span>Required payments still to cover</span><strong>' +
     formatCapitalAllocationMoney_(Math.max(0, Number(monthly.requiredTotal || 0))) +
     '</strong></div><div><span>Extra payoff</span><strong>' +
-    (pacingRequired ? 'Not calculated yet' : formatCapitalAllocationMoney_(monthly.extraTotal)) + '</strong></div>' + coveredByPayoff +
+    extraAmountLabel + '</strong></div>' + coveredByPayoff +
     '<div><span>Remaining debt payments this month</span><strong>' +
     formatCapitalAllocationMoney_(monthly.totalPlanned) + '</strong></div><div><span>Credit-card debt now</span><strong>' +
     formatCapitalAllocationMoney_(monthly.currentDebt) + '</strong></div><div><span>Expected credit-card debt after current recommendations</span><strong>' +
@@ -637,7 +664,9 @@ function capitalAllocationMonthlyDebtCardsHtml_(monthly, lifecycleState) {
   }
   var pacing = monthly.pacingRequired
     ? '<p class="muted">Extra payoff is not calculated until the current-period spending limit is available.</p>'
-    : '<div class="capital-allocation-debt-pacing capital-allocation-debt-month-summary"><div><span>Potentially available over time</span><strong>' +
+    : monthly.reserveComplete === false
+      ? '<p class="muted">Extra payoff waits until every required debt minimum is recorded.</p>'
+      : '<div class="capital-allocation-debt-pacing capital-allocation-debt-month-summary"><div><span>Potentially available over time</span><strong>' +
       formatCapitalAllocationMoney_(monthly.potentialExcessCapital) + '</strong></div>' +
       '<div><span>Recommended extra now</span><strong>' +
       formatCapitalAllocationMoney_(monthly.recommendedAcceleratedDeployment) + '</strong></div>' +
@@ -790,16 +819,21 @@ function capitalAllocationForecastSummaryHtml_(plan) {
   var forecast = plan.forecast90 || {};
   var pace = plan.deploymentPace || {};
   var investmentPolicy = plan.investmentPolicy || {};
-  var extraDebtCard = capitalAllocationPacingAuthorityMissing_(pace)
+  var extraDebtCard = capitalAllocationPacingAuthorityMissing_(pace) ||
+    (plan.summary && plan.summary.reserveComplete === false)
     ? capitalAllocationSummaryTextCardHtml_('Extra payoff', 'Not calculated yet',
-      'A current-period spending limit is still needed')
+      plan.summary && plan.summary.reserveComplete === false
+        ? 'A required debt minimum is missing'
+        : 'A current-period spending limit is still needed')
     : capitalAllocationSummaryCardHtml_('Extra debt planned this week', pace.recommendedAcceleratedDeployment,
       'Recommended above required payments');
   return '<section class="capital-allocation-forecast-summary"><div class="capital-allocation-summary">' +
     capitalAllocationSummaryCardHtml_('Required commitments', forecast.totalOutflows,
       'Scheduled through ' + (forecast.endDate || 'the next 90 days')) +
     capitalAllocationSummaryCardHtml_('Protected reserve', forecast.requiredReserveAmount,
-      'Cash kept for the next 90 days') +
+      plan.summary && plan.summary.reserveComplete === false
+        ? 'Incomplete 90-day floor until required debt minimums are recorded'
+        : 'Cash kept for the next 90 days') +
     capitalAllocationSummaryCardHtml_('Preferred extra cushion',
       Math.max(0, Number(pace.preferredLiquidityTarget || 0) - Number(pace.hardOperatingFloor || 0)),
       'Kept above the hard reserve') +
@@ -1729,7 +1763,11 @@ function capitalAllocationForecast90Html_(forecast) {
     '</div><div class="capital-allocation-forecast-total"><span>Cash protected for the next 90 days</span><strong>' +
     formatCapitalAllocationMoney_(forecast.requiredReserveAmount) + '</strong></div>' +
     capitalAllocationPropertyContingencyHtml_(forecast) +
-    '<p class="muted">Income reduces the reserve forecast but is not treated as cash available today. Existing account buffers and Do Not Touch cash remain protected separately.</p>' +
+    '<p class="muted">' +
+      (forecast.reserveComplete === false
+        ? 'This 90-day reserve is incomplete until every required debt minimum is recorded. Known obligations stay protected first.'
+        : 'Income reduces the reserve forecast but is not treated as cash available today. Existing account buffers and Do Not Touch cash remain protected separately.') +
+    '</p>' +
     '</details>';
 }
 
@@ -1817,7 +1855,11 @@ function capitalAllocationPlanGroupsHtml_(plan, estimatedBillCount) {
   html += '<div class="capital-allocation-group-card capital-allocation-group-card--hold">' +
     '<div class="capital-allocation-group-label">Protected for the next 90 days</div>' +
     '<div class="capital-allocation-group-value">' + formatCapitalAllocationMoney_(operatingReserve) + '</div>' +
-    '<div class="capital-allocation-card-reason">Kept available for forecast operating bills, debt minimums, Upcoming expenses, and uncertainty</div></div>';
+    '<div class="capital-allocation-card-reason">' +
+      (plan.summary && plan.summary.reserveComplete === false
+        ? 'Incomplete until every required debt minimum is recorded. Known obligations stay protected first.'
+        : 'Kept available for forecast operating bills, debt minimums, Upcoming expenses, and uncertainty') +
+    '</div></div>';
   html += '<div class="capital-allocation-group-card capital-allocation-group-card--hold">' +
     '<div class="capital-allocation-group-label">Preferred liquidity retained</div>' +
     '<div class="capital-allocation-group-value">' + formatCapitalAllocationMoney_(unassignedCash) + '</div>' +
