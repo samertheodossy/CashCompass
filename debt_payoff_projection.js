@@ -1,6 +1,8 @@
 /**
  * Debt payoff projection — read-only views from INPUT - Debts + INPUT - Cash Flow.
- * Simulation / what-if lives in future phases.
+ * Household strategy comparison (minimum-only / avalanche / snowball) is a
+ * hypothetical, non-writing overlay on Debt Overview. It does not change
+ * This Week or Rolling Debt Payoff.
  */
 
 /**
@@ -96,7 +98,9 @@ function getDebtPayoffReadData() {
         active: d.active,
         cashFlowPaid: totalPaid,
         estimatedPayoffMonths: est,
-        payoffEstimateMethod: isLoanTypeForAmortization_(d.type) ? 'amortization' : 'simple'
+        payoffEstimateMethod: isLoanTypeForAmortization_(d.type) ? 'amortization' : 'simple',
+        minimumPaymentKnown: d.minimumPaymentKnown !== false,
+        interestRateKnown: d.interestRateKnown !== false
       };
     });
 
@@ -371,4 +375,346 @@ function sumExpensePaymentsForDebtPayee_(ss, debtName, years, aliasMap, missingO
   });
 
   return round2_(totalPaid);
+}
+
+/** Months of hypothetical extra-payoff forecast. Same cap as Overview amortization. */
+var DEBT_PAYOFF_SCENARIO_HORIZON_MONTHS_ = 600;
+var DEBT_PAYOFF_SCENARIO_ZERO_BAL_ = 0.005;
+
+/**
+ * Read-only household strategy comparison from current INPUT - Debts.
+ * payload.monthlyExtra is the only extra input. It is never inferred from
+ * This Week, never persisted, and is not an affordability proof.
+ */
+var DEBT_PAYOFF_SCENARIO_EXTRA_INVALID_ =
+  'Enter a valid monthly extra of $0.00 or more. Negative and non-numeric amounts are not used.';
+
+function getDebtPayoffStrategyComparison(payload) {
+  payload = payload || {};
+  const parsed = parseDebtPayoffScenarioMonthlyExtra_(payload.monthlyExtra);
+  if (!parsed.ok) {
+    throw new Error(parsed.error);
+  }
+  const monthlyExtra = parsed.amount;
+  const today = new Date();
+  const ss = getUserSpreadsheet_();
+  const sheetNames = getSheetNames_();
+  if (!ss.getSheetByName(sheetNames.DEBTS)) {
+    return compareDebtPayoffStrategies_([], monthlyExtra, { asOfDate: today });
+  }
+  const debtRows = readSheetAsObjects_(ss, 'DEBTS');
+  const aliasMap = getAliasMap_();
+  const debts = normalizeDebts_(debtRows, aliasMap);
+  return compareDebtPayoffStrategies_(debts, monthlyExtra, { asOfDate: today });
+}
+
+function parseDebtPayoffScenarioMonthlyExtra_(value) {
+  const invalid = {
+    ok: false,
+    amount: null,
+    error: DEBT_PAYOFF_SCENARIO_EXTRA_INVALID_
+  };
+  const valid = function(amount) {
+    return { ok: true, amount: round2_(amount), error: '' };
+  };
+  if (value == null || value === '') return valid(0);
+  if (typeof value === 'number') {
+    if (!isFinite(value) || value < 0) return invalid;
+    return valid(value);
+  }
+  if (typeof value !== 'string') return invalid;
+  const text = String(value).replace(/\u00A0/g, ' ').trim();
+  if (!text) return valid(0);
+  const normalized = text.replace(/\$/g, '').replace(/,/g, '').trim();
+  if (!normalized ||
+      (!/^[0-9]*\.?[0-9]+$/.test(normalized) && !/^[0-9]+\.$/.test(normalized))) {
+    return invalid;
+  }
+  const n = Number(normalized);
+  if (!isFinite(n) || n < 0) return invalid;
+  return valid(n);
+}
+
+function debtPayoffScenarioInputState_(debt) {
+  if (!debt || debt.active === false) return 'INACTIVE';
+  const balance = Number(debt.balance);
+  if (!isFinite(balance) || balance <= DEBT_PAYOFF_SCENARIO_ZERO_BAL_) return 'NO_BALANCE';
+  if (debt.minimumPaymentKnown === false) return 'MINIMUM_UNKNOWN';
+  const minPay = Number(debt.minimumPayment);
+  if (!isFinite(minPay) || minPay < 0) return 'MINIMUM_INVALID';
+  if (debt.interestRateKnown === false) return 'APR_UNKNOWN';
+  const apr = Number(debt.interestRate);
+  if (!isFinite(apr) || apr < 0) return 'APR_INVALID';
+  return 'USABLE';
+}
+
+function debtPayoffScenarioBlockerMessage_(state) {
+  if (state === 'MINIMUM_UNKNOWN' || state === 'MINIMUM_INVALID') {
+    return 'minimum payment is missing or not a usable amount';
+  }
+  if (state === 'APR_UNKNOWN' || state === 'APR_INVALID') {
+    return 'APR is missing or not a usable rate';
+  }
+  return 'required payoff inputs are not usable';
+}
+
+function classifyDebtPayoffScenarioDebts_(debts) {
+  const modeled = [];
+  const blockers = [];
+  (debts || []).forEach(function(debt) {
+    const state = debtPayoffScenarioInputState_(debt);
+    if (state === 'INACTIVE' || state === 'NO_BALANCE') return;
+    if (state === 'USABLE') {
+      modeled.push(debt);
+      return;
+    }
+    blockers.push({
+      name: String(debt && debt.name || ''),
+      state: state,
+      reason: debtPayoffScenarioBlockerMessage_(state)
+    });
+  });
+  return { modeled: modeled, blockers: blockers };
+}
+
+function debtPayoffScenarioCannotAmortizeAtMinimum_(debt) {
+  const balance = Number(debt.balance) || 0;
+  const minPay = Number(debt.minimumPayment) || 0;
+  const interest = debtPayoffScenarioMonthlyInterest_(balance, debt.interestRate);
+  return minPay <= interest + DEBT_PAYOFF_SCENARIO_ZERO_BAL_;
+}
+
+function debtPayoffScenarioMonthlyInterest_(balance, aprPct) {
+  const r = (Number(aprPct) || 0) / 100 / 12;
+  return round2_((Number(balance) || 0) * r);
+}
+
+function debtPayoffScenarioMonthKey_(asOfDate, monthIndex) {
+  const asOf = asOfDate instanceof Date && !isNaN(asOfDate.getTime())
+    ? asOfDate
+    : new Date();
+  const d = new Date(asOf.getFullYear(), asOf.getMonth() + (monthIndex - 1), 1);
+  const month = String(d.getMonth() + 1);
+  return d.getFullYear() + '-' + (month.length < 2 ? '0' + month : month);
+}
+
+function debtPayoffScenarioSortTargets_(debts, strategy) {
+  const rows = (debts || []).slice();
+  rows.sort(function(a, b) {
+    if (strategy === 'snowball') {
+      const bal = (Number(a.balance) || 0) - (Number(b.balance) || 0);
+      if (Math.abs(bal) > DEBT_PAYOFF_SCENARIO_ZERO_BAL_) return bal;
+      const apr = (Number(b.interestRate) || 0) - (Number(a.interestRate) || 0);
+      if (apr !== 0) return apr;
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    }
+    const apr = (Number(b.interestRate) || 0) - (Number(a.interestRate) || 0);
+    if (apr !== 0) return apr;
+    const bal = (Number(b.balance) || 0) - (Number(a.balance) || 0);
+    if (Math.abs(bal) > DEBT_PAYOFF_SCENARIO_ZERO_BAL_) return bal;
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
+  return rows;
+}
+
+function debtPayoffScenarioAssumptions_(monthlyExtra, horizonMonths) {
+  return [
+    'This is a hypothetical scenario. The extra amount is not saved, is not a payment, and is not proof that the extra is affordable.',
+    'Monthly extra applied to avalanche and snowball: ' +
+      fmtCurrency_(monthlyExtra) +
+      '. Minimum-only uses $0.00 extra.',
+    'The comparison does not model future income, expenses, cash reserves, or changing rates.',
+    'Contractual minimums are held at the current recorded amount for every forecast month (estimate).',
+    'Interest each month is remaining balance × (APR ÷ 100 ÷ 12), rounded to cents, then payments apply.',
+    'Forecast horizon is ' +
+      horizonMonths +
+      ' months. A household that still has a balance after that is reported as not within the forecast horizon.',
+    'Only debts with a remaining balance and usable APR and minimum-payment inputs are modeled.'
+  ];
+}
+
+function copyDebtPayoffScenarioWorkingDebts_(debts) {
+  return (debts || []).map(function(debt) {
+    return {
+      name: String(debt.name || ''),
+      type: String(debt.type || ''),
+      balance: round2_(debt.balance),
+      minimumPayment: round2_(debt.minimumPayment),
+      interestRate: round2_(debt.interestRate)
+    };
+  });
+}
+
+/**
+ * Month-loop payoff path. strategy: 'minimum_only' | 'avalanche' | 'snowball'.
+ * Extra is applied only after every modeled debt receives its current minimum.
+ */
+function simulateDebtPayoffSchedule_(normalizedDebts, monthlyTotalToExtra, strategy, options) {
+  options = options || {};
+  const horizon = Number(options.horizonMonths) > 0
+    ? Number(options.horizonMonths)
+    : DEBT_PAYOFF_SCENARIO_HORIZON_MONTHS_;
+  const extra = strategy === 'minimum_only'
+    ? 0
+    : Math.max(0, round2_(monthlyTotalToExtra));
+  const asOfDate = options.asOfDate;
+  const working = copyDebtPayoffScenarioWorkingDebts_(normalizedDebts);
+  const extraPriorityOrder = strategy === 'minimum_only'
+    ? []
+    : debtPayoffScenarioSortTargets_(working, strategy).map(function(row) {
+        return row.name;
+      });
+  const cannotAmortizeAtMinimum = working.filter(debtPayoffScenarioCannotAmortizeAtMinimum_)
+    .map(function(row) { return row.name; });
+  const emptyResult = {
+    strategy: strategy,
+    monthlyExtra: extra,
+    debtFreeWithinHorizon: false,
+    debtFreeMonthIndex: null,
+    debtFreeMonthKey: null,
+    totalInterest: 0,
+    payoffOrder: [],
+    extraPriorityOrder: extraPriorityOrder,
+    cannotAmortizeAtMinimum: cannotAmortizeAtMinimum,
+    remainingBalance: 0,
+    remainingDebtNames: []
+  };
+  if (!working.length) return emptyResult;
+  const payoffOrder = [];
+  let totalInterest = 0;
+  let remaining = working.slice();
+
+  for (let m = 1; m <= horizon; m++) {
+    remaining.forEach(function(d) {
+      const interest = debtPayoffScenarioMonthlyInterest_(d.balance, d.interestRate);
+      totalInterest = round2_(totalInterest + interest);
+      d.balance = round2_(d.balance + interest);
+    });
+
+    remaining.forEach(function(d) {
+      const pay = Math.min(Math.max(0, Number(d.minimumPayment) || 0), d.balance);
+      d.balance = round2_(d.balance - pay);
+    });
+
+    if (extra > DEBT_PAYOFF_SCENARIO_ZERO_BAL_) {
+      let leftover = extra;
+      const targets = debtPayoffScenarioSortTargets_(
+        remaining.filter(function(d) { return d.balance > DEBT_PAYOFF_SCENARIO_ZERO_BAL_; }),
+        strategy
+      );
+      for (let t = 0; t < targets.length && leftover > DEBT_PAYOFF_SCENARIO_ZERO_BAL_; t++) {
+        const pay = Math.min(leftover, targets[t].balance);
+        targets[t].balance = round2_(targets[t].balance - pay);
+        leftover = round2_(leftover - pay);
+      }
+    }
+
+    const stillOpen = [];
+    remaining.forEach(function(d) {
+      if (d.balance <= DEBT_PAYOFF_SCENARIO_ZERO_BAL_) {
+        d.balance = 0;
+        payoffOrder.push({
+          name: d.name,
+          monthIndex: m,
+          monthKey: debtPayoffScenarioMonthKey_(asOfDate, m)
+        });
+        return;
+      }
+      stillOpen.push(d);
+    });
+    remaining = stillOpen;
+    if (!remaining.length) {
+      return {
+        strategy: strategy,
+        monthlyExtra: extra,
+        debtFreeWithinHorizon: true,
+        debtFreeMonthIndex: m,
+        debtFreeMonthKey: debtPayoffScenarioMonthKey_(asOfDate, m),
+        totalInterest: round2_(totalInterest),
+        payoffOrder: payoffOrder,
+        extraPriorityOrder: extraPriorityOrder,
+        cannotAmortizeAtMinimum: cannotAmortizeAtMinimum,
+        remainingBalance: 0,
+        remainingDebtNames: []
+      };
+    }
+  }
+
+  return {
+    strategy: strategy,
+    monthlyExtra: extra,
+    debtFreeWithinHorizon: false,
+    debtFreeMonthIndex: null,
+    debtFreeMonthKey: null,
+    totalInterest: round2_(totalInterest),
+    payoffOrder: payoffOrder,
+    extraPriorityOrder: extraPriorityOrder,
+    cannotAmortizeAtMinimum: cannotAmortizeAtMinimum,
+    remainingBalance: round2_(remaining.reduce(function(sum, d) {
+      return sum + Number(d.balance || 0);
+    }, 0)),
+    remainingDebtNames: remaining.map(function(d) { return d.name; })
+  };
+}
+
+function summarizeDebtPayoffScenario_(result, minOnlyInterest) {
+  const interestSaved = result.strategy === 'minimum_only'
+    ? 0
+    : round2_(Math.max(0, Number(minOnlyInterest || 0) - Number(result.totalInterest || 0)));
+  return {
+    strategy: result.strategy,
+    monthlyExtra: result.monthlyExtra,
+    payoffOrder: result.payoffOrder,
+    extraPriorityOrder: result.extraPriorityOrder,
+    debtFreeWithinHorizon: result.debtFreeWithinHorizon,
+    debtFreeMonthIndex: result.debtFreeMonthIndex,
+    debtFreeMonthKey: result.debtFreeMonthKey,
+    totalInterest: result.totalInterest,
+    interestSavedVsMinimumOnly: interestSaved,
+    cannotAmortizeAtMinimum: result.cannotAmortizeAtMinimum,
+    remainingBalance: result.remainingBalance,
+    remainingDebtNames: result.remainingDebtNames
+  };
+}
+
+function compareDebtPayoffStrategies_(normalizedDebts, monthlyExtra, options) {
+  options = options || {};
+  const parsed = parseDebtPayoffScenarioMonthlyExtra_(monthlyExtra);
+  if (!parsed.ok) {
+    throw new Error(parsed.error);
+  }
+  const extra = parsed.amount;
+  const horizonMonths = Number(options.horizonMonths) > 0
+    ? Number(options.horizonMonths)
+    : DEBT_PAYOFF_SCENARIO_HORIZON_MONTHS_;
+  const classified = classifyDebtPayoffScenarioDebts_(normalizedDebts);
+  const simOptions = {
+    asOfDate: options.asOfDate,
+    horizonMonths: horizonMonths
+  };
+  const minOnly = simulateDebtPayoffSchedule_(
+    classified.modeled, extra, 'minimum_only', simOptions);
+  const avalanche = simulateDebtPayoffSchedule_(
+    classified.modeled, extra, 'avalanche', simOptions);
+  const snowball = simulateDebtPayoffSchedule_(
+    classified.modeled, extra, 'snowball', simOptions);
+
+  return {
+    recommendationState: 'HYPOTHETICAL',
+    persisted: false,
+    extraIsAffordable: null,
+    reserveModeled: false,
+    householdComparisonComplete: classified.blockers.length === 0 && classified.modeled.length > 0,
+    monthlyExtra: extra,
+    horizonMonths: horizonMonths,
+    asOfMonthKey: debtPayoffScenarioMonthKey_(options.asOfDate, 1),
+    modeledDebtNames: classified.modeled.map(function(d) { return d.name; }),
+    blockers: classified.blockers,
+    assumptions: debtPayoffScenarioAssumptions_(extra, horizonMonths),
+    strategies: {
+      minimum_only: summarizeDebtPayoffScenario_(minOnly, minOnly.totalInterest),
+      avalanche: summarizeDebtPayoffScenario_(avalanche, minOnly.totalInterest),
+      snowball: summarizeDebtPayoffScenario_(snowball, minOnly.totalInterest)
+    }
+  };
 }

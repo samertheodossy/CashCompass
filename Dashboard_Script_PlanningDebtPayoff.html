@@ -19,6 +19,8 @@ function loadDebtPayoffReadSection() {
   if (filterNote) filterNote.textContent = '';
   var chartWrap = document.getElementById('debt_payoff_read_chart_wrap');
   if (chartWrap) chartWrap.innerHTML = '';
+  var strategyResults = document.getElementById('debt_payoff_strategy_results');
+  if (strategyResults) strategyResults.innerHTML = '';
   if (wrap) {
     wrap.innerHTML =
       typeof loadingIndicatorHtml === 'function'
@@ -293,10 +295,10 @@ function renderDebtPayoffTable_(data, yLabel) {
       fmtCurrency(d.balance) +
       '</td>' +
       '<td>' +
-      fmtCurrency(d.minimumPayment) +
+      (d.minimumPaymentKnown === false ? '—' : fmtCurrency(d.minimumPayment)) +
       '</td>' +
       '<td>' +
-      fmtPercent(d.interestRate) +
+      (d.interestRateKnown === false ? '—' : fmtPercent(d.interestRate)) +
       '</td>' +
       '<td>' +
       cfPaid +
@@ -382,4 +384,169 @@ function renderDebtPayoffReadData_(data) {
   }
 
   renderDebtPayoffTable_(data, yLabel);
+  runDebtPayoffStrategyComparison();
+}
+
+function parseDebtPayoffScenarioExtraFromInput_() {
+  var el = document.getElementById('debt_payoff_scenario_extra');
+  var raw = el ? el.value : '';
+  return parseDebtPayoffScenarioExtraText_(raw);
+}
+
+function parseDebtPayoffScenarioExtraText_(raw) {
+  var invalid = {
+    ok: false,
+    amount: null,
+    error: 'Enter a valid monthly extra of $0.00 or more. Negative and non-numeric amounts are not used.'
+  };
+  if (raw == null) return { ok: true, amount: 0, error: '' };
+  var text = String(raw).replace(/\u00A0/g, ' ').trim();
+  if (!text) return { ok: true, amount: 0, error: '' };
+  var normalized = text.replace(/\$/g, '').replace(/,/g, '').trim();
+  if (!normalized ||
+      (!/^[0-9]*\.?[0-9]+$/.test(normalized) && !/^[0-9]+\.$/.test(normalized))) {
+    return invalid;
+  }
+  var n = Number(normalized);
+  if (!isFinite(n) || n < 0) return invalid;
+  return { ok: true, amount: n, error: '' };
+}
+
+function debtPayoffStrategyTitle_(key) {
+  if (key === 'avalanche') return 'Avalanche (highest APR first)';
+  if (key === 'snowball') return 'Snowball (smallest balance first)';
+  return 'Minimum payments only';
+}
+
+function formatDebtPayoffStrategyDate_(row) {
+  if (!row || !row.debtFreeWithinHorizon || !row.debtFreeMonthKey) {
+    return 'Not within forecast horizon';
+  }
+  return row.debtFreeMonthKey + ' (month ' + row.debtFreeMonthIndex + ')';
+}
+
+function formatDebtPayoffStrategyOrder_(items) {
+  if (!items || !items.length) return '<li>None paid off within the forecast horizon.</li>';
+  return items.map(function(item) {
+    var name = escapeHtml(item.name || '');
+    var when = item.monthKey
+      ? escapeHtml(item.monthKey) + ' (month ' + escapeHtml(String(item.monthIndex)) + ')'
+      : 'month ' + escapeHtml(String(item.monthIndex));
+    return '<li>' + name + ' — ' + when + '</li>';
+  }).join('');
+}
+
+function formatDebtPayoffPriority_(names) {
+  if (!names || !names.length) return 'Not used (no extra).';
+  return names.map(function(name) { return escapeHtml(name); }).join(' → ');
+}
+
+function renderDebtPayoffStrategyCard_(row) {
+  var leftover = '';
+  if (!row.debtFreeWithinHorizon && row.remainingDebtNames && row.remainingDebtNames.length) {
+    leftover =
+      '<li>Still remaining: ' +
+      row.remainingDebtNames.map(function(name) { return escapeHtml(name); }).join(', ') +
+      '</li>';
+  }
+  var cannot = '';
+  if (row.cannotAmortizeAtMinimum && row.cannotAmortizeAtMinimum.length) {
+    cannot =
+      '<li>Cannot amortize at the current minimum alone: ' +
+      row.cannotAmortizeAtMinimum.map(function(name) { return escapeHtml(name); }).join(', ') +
+      '</li>';
+  }
+  return (
+    '<article class="debt-payoff-strategy-card">' +
+    '<h3>' + escapeHtml(debtPayoffStrategyTitle_(row.strategy)) + '</h3>' +
+    '<p class="muted" style="margin:0 0 6px 0;">Payoff order</p>' +
+    '<ol class="debt-payoff-strategy-order">' +
+    formatDebtPayoffStrategyOrder_(row.payoffOrder) +
+    '</ol>' +
+    '<ul>' +
+    (row.strategy === 'minimum_only'
+      ? ''
+      : '<li>Extra applied first: ' + formatDebtPayoffPriority_(row.extraPriorityOrder) + '</li>') +
+    '<li>Estimated debt-free: ' + escapeHtml(formatDebtPayoffStrategyDate_(row)) + '</li>' +
+    '<li>Modeled total interest: ' + fmtCurrency(row.totalInterest) + '</li>' +
+    '<li>Interest saved vs minimum-only: ' + fmtCurrency(row.interestSavedVsMinimumOnly) + '</li>' +
+    '<li>Monthly extra in this scenario: ' + fmtCurrency(row.monthlyExtra) + '</li>' +
+    leftover +
+    cannot +
+    '</ul></article>'
+  );
+}
+
+function renderDebtPayoffStrategyComparison_(data) {
+  var wrap = document.getElementById('debt_payoff_strategy_results');
+  if (!wrap) return;
+  if (!data) {
+    wrap.innerHTML = '';
+    return;
+  }
+
+  var parts = [];
+  if (!data.householdComparisonComplete) {
+    parts.push('<div class="debt-payoff-strategy-blockers"><strong>Not a complete household comparison.</strong> ');
+    if (data.blockers && data.blockers.length) {
+      parts.push(
+        'These debts are missing a usable APR or minimum and were not modeled: ' +
+        data.blockers.map(function(row) {
+          return escapeHtml(row.name) + ' (' + escapeHtml(row.reason) + ')';
+        }).join('; ') +
+        '.'
+      );
+    } else {
+      parts.push('No debts currently have a usable balance, APR, and minimum together.');
+    }
+    parts.push(' Missing values were not replaced with $0 or 0%.</div>');
+  }
+
+  var strategies = data.strategies || {};
+  parts.push('<div class="debt-payoff-strategy-grid">');
+  ['minimum_only', 'avalanche', 'snowball'].forEach(function(key) {
+    if (strategies[key]) parts.push(renderDebtPayoffStrategyCard_(strategies[key]));
+  });
+  parts.push('</div>');
+
+  if (data.assumptions && data.assumptions.length) {
+    parts.push('<div class="debt-payoff-strategy-assumptions">');
+    parts.push('<strong>Calculation assumptions</strong>');
+    parts.push('<ul>');
+    data.assumptions.forEach(function(line) {
+      parts.push('<li>' + escapeHtml(line) + '</li>');
+    });
+    parts.push('</ul></div>');
+  }
+
+  wrap.innerHTML = parts.join('');
+}
+
+function runDebtPayoffStrategyComparison() {
+  var statusId = 'debt_payoff_strategy_status';
+  var wrap = document.getElementById('debt_payoff_strategy_results');
+  var parsed = parseDebtPayoffScenarioExtraFromInput_();
+  if (!parsed.ok) {
+    if (wrap) wrap.innerHTML = '';
+    setStatus(statusId, parsed.error, true);
+    return;
+  }
+  if (wrap) {
+    wrap.innerHTML =
+      typeof loadingIndicatorHtml === 'function'
+        ? loadingIndicatorHtml('Comparing strategies…')
+        : '<p class="muted">Comparing strategies…</p>';
+  }
+  setStatus(statusId, '', false);
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      setStatus(statusId, '', false);
+      renderDebtPayoffStrategyComparison_(data);
+    })
+    .withFailureHandler(function(err) {
+      if (wrap) wrap.innerHTML = '';
+      setStatus(statusId, (err && err.message) || String(err), true);
+    })
+    .getDebtPayoffStrategyComparison({ monthlyExtra: parsed.amount });
 }

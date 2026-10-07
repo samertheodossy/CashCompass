@@ -2790,6 +2790,31 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div id="debt_payoff_read_filter_note" class="muted" style="margin-bottom:8px;"></div>
       <div id="debt_payoff_read_chart_wrap" class="debt-payoff-chart-panel" aria-live="polite"></div>
       <div id="debt_payoff_read_table_wrap" class="activity-table-wrap"></div>
+      <div id="debt_payoff_strategy_wrap" class="debt-payoff-strategy info">
+        <div class="debt-payoff-overall-head">Household strategy comparison</div>
+        <p>
+          Hypothetical extra-payment scenario using current balances, APRs, and
+          recorded minimums. It is not a payment, is not saved, and does not
+          prove the extra amount is affordable.
+        </p>
+        <p class="muted">
+          Avalanche and snowball use the same monthly extra you enter here.
+          That amount is not taken from This Week and is not assumed to recur
+          from future income. The forecast does not model a cash reserve,
+          future expenses, or changing rates.
+        </p>
+        <div class="debt-payoff-strategy-controls">
+          <label for="debt_payoff_scenario_extra">Monthly extra (scenario only)</label>
+          <input id="debt_payoff_scenario_extra" type="text" inputmode="decimal"
+                 placeholder="0.00" aria-describedby="debt_payoff_scenario_extra_hint">
+          <button type="button" onclick="runDebtPayoffStrategyComparison()">Compare strategies</button>
+        </div>
+        <p id="debt_payoff_scenario_extra_hint" class="muted">
+          Leave blank for $0.00 extra. Negative or non-numeric amounts are rejected and not compared. Changing this value does not write to your accounts.
+        </p>
+        <div id="debt_payoff_strategy_status" class="status"></div>
+        <div id="debt_payoff_strategy_results" aria-live="polite"></div>
+      </div>
       <!--
         Decision-layer "Notes / recommendations" block intentionally removed.
         Cash snapshot, safe-to-use vs minimums, projected cash flow, highest-APR

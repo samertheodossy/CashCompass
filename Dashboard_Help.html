@@ -210,7 +210,7 @@
         </ul>
         <ul class="help-list">
           <li><strong>This Week</strong> is the primary read-only plan that reconciles current available cash across required payments, the 90-day operating floor, Samer Robinhood&rsquo;s normal $500 weekly policy, account-buffer restoration, highest-APR debt, and money that should wait.</li>
-          <li><strong>Debt Overview</strong> is a read-only comparison of current balances, minimums, and payoff outlook.</li>
+          <li><strong>Debt Overview</strong> is a read-only comparison of current balances, minimums, and payoff outlook, including a hypothetical avalanche vs snowball extra-payment scenario that is not saved and does not make a payment.</li>
           <li><strong>Rolling Debt Payoff</strong> turns those current balances into a month-by-month action plan.</li>
           <li>To change a balance, rate, minimum, due date, tracking status, or optional Loan/HELOC property link, use <strong>Assets &amp; Liabilities → Debt accounts</strong>.</li>
           <li><strong>Retirement</strong> evaluates your selected assumptions and scenarios. Current investable assets exclude accounts typed Education or 529; other investment types stay in the total.</li>
@@ -272,6 +272,14 @@
       <section id="help-payoff-path" class="help-section">
         <h3>Debt overview</h3>
         <p>Debt Overview compares balances, required payments, payoff timing, and interest impact. It is a planning view, not a promise of future results.</p>
+        <p>The household strategy comparison is a hypothetical overlay on this same view. It compares minimum payments only, avalanche (highest APR first), and snowball (smallest balance first) using one extra amount you type for the scenario.</p>
+        <ul class="help-list">
+          <li>Avalanche and snowball use the same monthly extra. Leave the extra blank for $0.00. Negative or non-numeric amounts are rejected and are not compared as $0. That extra is not inferred from This Week and is not saved.</li>
+          <li>The comparison does not prove the extra is affordable, does not model future income or expenses, and does not preserve a cash reserve.</li>
+          <li>Minimums stay at the current recorded amount for the forecast (an estimate). Interest each month is remaining balance × (APR ÷ 100 ÷ 12).</li>
+          <li>Debts missing a usable APR or minimum are listed as blocking a complete household result. Blank is not treated as $0 or 0%.</li>
+          <li>This view does not make payments or change Rolling Debt Payoff.</li>
+        </ul>
         <p class="muted">Update balances and interest rates under <strong>Assets &amp; Liabilities → Debt accounts</strong>, then refresh the Financial Plan before making a major payoff decision.</p>
       </section>
 

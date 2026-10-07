@@ -2026,6 +2026,72 @@
     margin-bottom: 0.4rem;
   }
 
+  .debt-payoff-strategy {
+    margin-top: 16px;
+  }
+  .debt-payoff-strategy .debt-payoff-overall-head {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 0 0 0.5rem 0;
+    color: #0f172a;
+  }
+  .debt-payoff-strategy-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0 6px;
+  }
+  .debt-payoff-strategy-controls label {
+    margin: 0;
+    font-weight: 600;
+  }
+  .debt-payoff-strategy-controls input {
+    min-width: 140px;
+    max-width: 180px;
+  }
+  .debt-payoff-strategy-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .debt-payoff-strategy-card {
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    background: #ffffff;
+    padding: 12px 14px;
+  }
+  .debt-payoff-strategy-card h3 {
+    margin: 0 0 8px 0;
+    font-size: 15px;
+  }
+  .debt-payoff-strategy-card ul {
+    margin: 0;
+    padding-left: 1.15rem;
+  }
+  .debt-payoff-strategy-card li {
+    margin-bottom: 0.35rem;
+    font-size: 13px;
+  }
+  .debt-payoff-strategy-order {
+    margin: 0 0 8px 0;
+    padding-left: 1.2rem;
+    font-size: 13px;
+  }
+  .debt-payoff-strategy-assumptions {
+    margin-top: 12px;
+  }
+  .debt-payoff-strategy-blockers {
+    margin-top: 10px;
+    color: #9a3412;
+  }
+  @media (max-width: 900px) {
+    .debt-payoff-strategy-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
   .rolling-dp-tables {
     margin-bottom: 16px;
   }

@@ -290,7 +290,14 @@ function normalizeDebts_(rows, aliasMap) {
       const dueDay = dueDayKnown ? dueDayParsed : 1;
       const creditLimit = toNumber_(r['Credit Limit']);
       const creditLeft = toNumber_(r['Credit Left']);
-      const rate = toNumber_(r['Int Rate']);
+      const rateRaw = Object.prototype.hasOwnProperty.call(r, 'Int Rate')
+        ? r['Int Rate']
+        : '';
+      const rateDisplay = Object.prototype.hasOwnProperty.call(r, '__display__Int Rate')
+        ? r['__display__Int Rate']
+        : rateRaw;
+      const interestRateKnown = debtInterestRateCellIsKnown_(rateRaw, rateDisplay);
+      const rate = round2_(toNumber_(rateRaw));
       const type = String(r['Type'] || '').trim();
       const originalName = String(r['Account Name'] || '').trim();
       const priorityClass =
@@ -323,6 +330,7 @@ function normalizeDebts_(rows, aliasMap) {
         minimumPayment: minPayment,
         minimumPaymentKnown: minimumPaymentKnown,
         interestRate: round2_(rate),
+        interestRateKnown: interestRateKnown,
         active: active,
         priorityClass: priorityClass
       };
@@ -340,6 +348,24 @@ function debtMinimumPaymentCellIsKnown_(raw, display) {
   if (displayText) return true;
   const rawText = String(raw == null ? '' : raw).replace(/\u00A0/g, ' ').trim();
   return !!rawText;
+}
+
+/**
+ * True when INPUT - Debts stored a numeric APR, including explicit 0.
+ * Blank cells are unknown. Non-numeric placeholders are unknown so callers
+ * never treat coerced 0% as a recorded rate.
+ */
+function debtInterestRateCellIsKnown_(raw, display) {
+  if (typeof raw === 'number' && isFinite(raw)) return true;
+  const text = String(
+    display == null || String(display).replace(/\u00A0/g, ' ').trim() === ''
+      ? (raw == null ? '' : raw)
+      : display
+  ).replace(/\u00A0/g, ' ').trim();
+  if (!text) return false;
+  const normalized = text.replace(/\$/g, '').replace(/,/g, '').replace(/%/g, '').trim();
+  if (!normalized) return false;
+  return isFinite(Number(normalized));
 }
 
 function normalizeAccounts_(rows) {
