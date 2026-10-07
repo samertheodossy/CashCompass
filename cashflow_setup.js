@@ -1046,6 +1046,46 @@ function applyCashFlowRowTypeFontColor_(sheet, row, col) {
 }
 
 /**
+ * Skip stamps a true zero. Expense negatives on the same row get their red
+ * from the [Red] number-format section, which does not apply to 0, so a
+ * copied or explicit font left skip $0.00 a different color from -$86.98.
+ * Paint the zero with the same [Red] currency mask and clear copied font so
+ * the format color is visible. Income skips keep Type green.
+ */
+function applyCashFlowSkippedZeroAppearance_(sheet, row, col) {
+  const cell = sheet.getRange(row, col);
+  applyCashFlowMoneyFormat_(cell);
+  if (!sheet || !row || !col) return;
+  try {
+    if (!isCashFlowInputSheet_(sheet)) return;
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+    const layout = detectCashFlowLayout_(headers);
+    if (!layout || !(layout.firstMonthCol1 > 0) || !(layout.lastMonthCol1 >= layout.firstMonthCol1)) {
+      return;
+    }
+    if (col < layout.firstMonthCol1 || col > layout.lastMonthCol1) return;
+    const type = String(sheet.getRange(row, layout.typeCol1).getDisplayValue() || '').trim();
+    if (type === 'Expense') {
+      cell.setNumberFormat(
+        typeof CASH_FLOW_EXPENSE_ZERO_MONEY_FORMAT_ === 'string'
+          ? CASH_FLOW_EXPENSE_ZERO_MONEY_FORMAT_
+          : '$#,##0.00;[Red]-$#,##0.00;[Red]$#,##0.00'
+      );
+      try { cell.setFontColor(null); } catch (_resetErr) {
+        try { cell.setFontColor(''); } catch (_resetErr2) { /* cosmetic */ }
+      }
+    } else if (type === 'Income') {
+      cell.setFontColor(CASH_FLOW_HEALTH_COLOR_POSITIVE_);
+    }
+  } catch (_appearErr) { /* cosmetic only */ }
+}
+
+function writeCashFlowSkippedMonthZero_(sheet, row, col) {
+  sheet.getRange(row, col).setValue(0);
+  applyCashFlowSkippedZeroAppearance_(sheet, row, col);
+}
+
+/**
  * Apply the Summary-row financial-health text colors — positive net → green,
  * negative net → red, zero → neutral (default black) — via CONDITIONAL
  * FORMATTING, matching the Income/Expense color language EXACTLY (shared

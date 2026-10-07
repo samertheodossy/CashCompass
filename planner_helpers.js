@@ -372,6 +372,11 @@ function addCurrencyToCellPreserveRowFormat_(sheet, row, col, amount, firstDataC
  * number format differs from the shared helpers.
  */
 var CASH_FLOW_MONEY_FORMAT_ = '$#,##0.00;[Red]-$#,##0.00';
+// Skip writes $0.00. The two-section mask only paints negatives [Red], so a
+// skipped expense zero looked black or a different red from -$86.98 on the
+// same row. The zero section keeps skip $0.00 in the same [Red] as expense
+// negatives. Income skips keep the two-section mask.
+var CASH_FLOW_EXPENSE_ZERO_MONEY_FORMAT_ = '$#,##0.00;[Red]-$#,##0.00;[Red]$#,##0.00';
 
 function isCashFlowInputSheet_(sheet) {
   try {
@@ -383,6 +388,15 @@ function isCashFlowInputSheet_(sheet) {
 
 function applyCashFlowMoneyFormat_(range) {
   range.setNumberFormat(CASH_FLOW_MONEY_FORMAT_);
+}
+
+function cashFlowMoneyFormatLooksCanonical_(fmt) {
+  const s = String(fmt || '').replace(/\u00A0/g, ' ').trim();
+  if (!s || /^general$/i.test(s) || s === '0' || s === '@' || s === '@STRING@') {
+    return false;
+  }
+  if (s === CASH_FLOW_MONEY_FORMAT_) return true;
+  return s.indexOf('$') !== -1 && /#,##0(?:\.00)?/.test(s);
 }
 
 function setCashFlowMoneyCellPreserveRowFormat_(sheet, row, col, value, firstDataCol) {

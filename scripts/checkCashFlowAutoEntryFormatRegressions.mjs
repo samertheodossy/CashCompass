@@ -20,12 +20,18 @@ assert.match(plannerHelpers,
   'Cash Flow money format must keep red-negative currency');
 assert.match(plannerHelpers, /function isCashFlowInputSheet_/,
   'Cash Flow sheet guard must exist for restore formatting');
+assert.match(plannerHelpers,
+  /function cashFlowMoneyFormatLooksCanonical_[\s\S]*?\/\^general\$\/i/,
+  'Canonical format check must reject General and accept currency masks');
 assert.match(dashboardData,
-  /function writeDashboardBillValuePreserveFormat_[\s\S]*?applyCashFlowMoneyFormat_\(cell\)/,
-  'AutoPay value writer must finish with canonical Cash Flow money format');
+  /function writeDashboardBillValuePreserveFormat_[\s\S]*?copyNearestAmountFormatInRow_[\s\S]*?applyCashFlowMoneyFormat_\(cell\)[\s\S]*?applyCashFlowRowTypeFontColor_/,
+  'AutoPay value writer must copy a sibling month format then finish with canonical Cash Flow money format');
+assert.doesNotMatch(dashboardData,
+  /function writeDashboardBillValuePreserveFormat_[\s\S]*?const numberFormat = cell\.getNumberFormat\(\)[\s\S]*?cell\.setValue\(value\)[\s\S]*?setNumberFormat\(numberFormat\)/,
+  'AutoPay must not restore a blank cell General format after writing the amount');
 assert.match(dashboardData,
-  /function writeVerifiedBillAutopay_[\s\S]*?applyCashFlowMoneyFormat_\(cell\)/,
-  'Verified AutoPay writer must apply canonical Cash Flow money format');
+  /function writeVerifiedBillAutopay_[\s\S]*?applyCashFlowMoneyFormat_\(cell\)[\s\S]*?cashFlowMoneyFormatLooksCanonical_/,
+  'Verified AutoPay writer must apply canonical Cash Flow money format without requiring an exact Sheets format string');
 assert.match(quickAdd,
   /addCashFlowMoneyToCellPreserveRowFormat_\(sheet,\s*rowInfo\.row,\s*monthCol,\s*signedAmount,\s*3\)/,
   'Quick Add must use Cash Flow money formatting for month writes');
@@ -42,11 +48,14 @@ assert.doesNotMatch(dashboardData,
   /skipDashboardBill[\s\S]*?setNumberFormat\('\$#,##0\.00;-\$#,##0\.00'\)/,
   'Bill Skip must not fall back to black-negative currency on Cash Flow');
 assert.match(dashboardData,
-  /skipDashboardBill[\s\S]*?applyCashFlowMoneyFormat_\(cell\)[\s\S]*?applyCashFlowRowTypeFontColor_/,
-  'Bill Skip zero write must re-apply row Type font color after money format');
-assert.match(dashboardData,
-  /copyNearestAmountFormatInRow_[\s\S]*?firstMonthCol[\s\S]*?lastMonthCol/,
-  'Skip format copy must search month columns only, not Total/metadata');
+  /skipDashboardBill[\s\S]*?writeCashFlowSkippedMonthZero_\(info\.sheet, info\.row, info\.col\)/,
+  'Bill Skip zero write must use the shared skipped-month appearance helper');
+assert.match(plannerHelpers,
+  /CASH_FLOW_EXPENSE_ZERO_MONEY_FORMAT_\s*=\s*'\$#,##0\.00;\[Red\]-\$#,##0\.00;\[Red\]\$#,##0\.00'/,
+  'Skipped expense zeros must use the [Red] zero section so $0.00 matches -$86.98');
+assert.match(cashflowSetup,
+  /function writeCashFlowSkippedMonthZero_[\s\S]*?applyCashFlowSkippedZeroAppearance_/,
+  'Skip writer must apply skipped-zero appearance after writing 0');
 
 class FakeRange {
   constructor(sheet, row, col, numRows = 1, numCols = 1) {
@@ -114,6 +123,37 @@ class FakeRange {
   setHorizontalAlignment(v) { this.horizontalAlignment = v; return this; }
   setVerticalAlignment(v) { this.verticalAlignment = v; return this; }
   setWrap(v) { this.wrap = v; return this; }
+  getValues() {
+    const out = [];
+    for (let r = 0; r < this.numRows; r++) {
+      const row = [];
+      for (let c = 0; c < this.numCols; c++) {
+        row.push(this.sheet.values[this.row - 1 + r]?.[this.col - 1 + c] ?? '');
+      }
+      out.push(row);
+    }
+    return out;
+  }
+  getFormula() { return ''; }
+  clearContent() {
+    this.setValue('');
+    return this;
+  }
+  copyTo(destination, copyPasteType) {
+    if (copyPasteType !== 'PASTE_FORMAT') return this;
+    destination.numberFormat = this.numberFormat;
+    destination.fontColor = this.fontColor;
+    destination.fontSize = this.fontSize;
+    destination.fontWeight = this.fontWeight;
+    destination.fontStyle = this.fontStyle;
+    destination.fontLine = this.fontLine;
+    destination.fontFamily = this.fontFamily;
+    destination.background = this.background;
+    destination.horizontalAlignment = this.horizontalAlignment;
+    destination.verticalAlignment = this.verticalAlignment;
+    destination.wrap = this.wrap;
+    return this;
+  }
 }
 
 class FakeSheet {
@@ -140,28 +180,33 @@ class FakeSheet {
 
 const ctx = {
   console,
+  SpreadsheetApp: { CopyPasteType: { PASTE_FORMAT: 'PASTE_FORMAT' } },
   round2_: (n) => Math.round(Number(n) * 100) / 100,
   toNumber_: (v) => {
     if (v === '' || v === null || v === undefined) return 0;
     const n = Number(v);
     return Number.isFinite(n) ? n : 0;
   },
-  copyNeighborFormatInRow_() { return false; },
-  copyNearestAmountFormatInRow_() { return false; }
+  copyNeighborFormatInRow_() { return false; }
 };
 
 vm.createContext(ctx);
 vm.runInContext([
   "var CASH_FLOW_MONEY_FORMAT_ = '$#,##0.00;[Red]-$#,##0.00';",
+  "var CASH_FLOW_EXPENSE_ZERO_MONEY_FORMAT_ = '$#,##0.00;[Red]-$#,##0.00;[Red]$#,##0.00';",
   "var CASH_FLOW_HEALTH_COLOR_NEGATIVE_ = '#cc0000';",
   "var CASH_FLOW_HEALTH_COLOR_POSITIVE_ = '#38761d';",
   sliceFunction(plannerHelpers, 'parseMonthHeader_'),
   sliceFunction(plannerHelpers, 'isCashFlowInputSheet_'),
   sliceFunction(plannerHelpers, 'applyCashFlowMoneyFormat_'),
+  sliceFunction(plannerHelpers, 'cashFlowMoneyFormatLooksCanonical_'),
   sliceFunction(plannerHelpers, 'addCashFlowMoneyToCellPreserveRowFormat_'),
   sliceFunction(plannerHelpers, 'setCashFlowMoneyCellPreserveRowFormat_'),
   sliceFunction(cashflowSetup, 'detectCashFlowLayout_'),
   sliceFunction(cashflowSetup, 'applyCashFlowRowTypeFontColor_'),
+  sliceFunction(cashflowSetup, 'applyCashFlowSkippedZeroAppearance_'),
+  sliceFunction(cashflowSetup, 'writeCashFlowSkippedMonthZero_'),
+  sliceFunction(dashboardData, 'copyNearestAmountFormatInRow_'),
   sliceFunction(dashboardData, 'writeDashboardBillValuePreserveFormat_')
 ].join('\n'), ctx, { filename: 'cash_flow_format_slice.js' });
 
@@ -177,6 +222,30 @@ const autopayCell = sheet.getRange(row, monthCol);
 assert.equal(autopayCell.getValue(), -75, 'AutoPay must preserve numeric -75');
 assert.equal(autopayCell.getNumberFormat(), '$#,##0.00;[Red]-$#,##0.00',
   'AutoPay must finish with canonical Cash Flow money format');
+assert.equal(autopayCell.getFontColor(), '#cc0000',
+  'AutoPay expense write must use Expense row font color');
+
+assert.equal(ctx.cashFlowMoneyFormatLooksCanonical_('General'), false);
+assert.equal(ctx.cashFlowMoneyFormatLooksCanonical_('$#,##0.00;[Red]-$#,##0.00'), true);
+assert.equal(ctx.cashFlowMoneyFormatLooksCanonical_('$#,##0.00;($#,##0.00)'), true);
+
+const lutfiSheet = new FakeSheet('INPUT - Cash Flow 2026', [
+  ['Type', 'Flow Source', 'Active', 'Payee', 'Sep-26', 'Oct-26', 'Totals'],
+  ['Expense', 'CASH', 'YES', 'Lutfi Allowance', -375, '', -1800]
+]);
+const sepCell = lutfiSheet.getRange(2, 5);
+sepCell.numberFormat = '$#,##0.00;[Red]-$#,##0.00';
+sepCell.fontColor = '#cc0000';
+const octCell = lutfiSheet.getRange(2, 6);
+assert.equal(octCell.getNumberFormat(), 'General', 'October starts as a blank General cell');
+ctx.writeDashboardBillValuePreserveFormat_(lutfiSheet, 2, 6, -75);
+assert.equal(octCell.getValue(), -75, 'Weekly AutoPay first October week must write numeric -75');
+assert.notEqual(octCell.getNumberFormat(), 'General',
+  'Weekly AutoPay must not leave October as General -75');
+assert.equal(octCell.getNumberFormat(), '$#,##0.00;[Red]-$#,##0.00',
+  'Weekly AutoPay must use canonical -$75.00 format copied from September then re-asserted');
+assert.equal(octCell.getFontColor(), '#cc0000',
+  'Weekly AutoPay expense write must stay red like the rest of the row');
 
 ctx.addCashFlowMoneyToCellPreserveRowFormat_(sheet, row, monthCol, -75, 3);
 const accumulatedCell = sheet.getRange(row, monthCol);
@@ -200,14 +269,23 @@ assert.equal(ctx.isCashFlowInputSheet_({ getName() { return 'INPUT - Debts'; } }
   'Cash Flow input sheet guard must not match non-Cash-Flow sheets');
 
 const skipSheet = new FakeSheet('INPUT - Cash Flow 2026', [
-  ['Type', 'Flow Source', 'Active', 'Payee', 'Mar-26', 'Apr-26', 'Sep-26', 'Total'],
-  ['Expense', 'CREDIT_CARD', 'YES', 'Credit Card - Corporate AMEX', '', '', '', 0]
+  ['Type', 'Flow Source', 'Active', 'Payee',
+    'Jan-26', 'Feb-26', 'Mar-26', 'Apr-26', 'May-26', 'Jun-26',
+    'Jul-26', 'Aug-26', 'Sep-26', 'Oct-26', 'Totals'],
+  ['Expense', 'CASH', 'YES', 'Credit Card - Home Depot Luma',
+    0, 0, 0, -86.98, 0, 0, 0, 0, 0, '', -86.98]
 ]);
-const skipCell = skipSheet.getRange(2, 7);
-skipCell.setValue(0);
-ctx.applyCashFlowMoneyFormat_(skipCell);
-ctx.applyCashFlowRowTypeFontColor_(skipSheet, 2, 7);
-assert.equal(skipCell.getFontColor(), '#cc0000',
-  'Skipped expense zero must render with expense-row red font color');
+const paidCell = skipSheet.getRange(2, 8);
+paidCell.numberFormat = '$#,##0.00;[Red]-$#,##0.00';
+paidCell.fontColor = '#000000';
+const skipCell = skipSheet.getRange(2, 14);
+skipCell.numberFormat = 'General';
+skipCell.fontColor = '#000000';
+ctx.writeCashFlowSkippedMonthZero_(skipSheet, 2, 14);
+assert.equal(skipCell.getValue(), 0, 'Skip must stamp a numeric zero');
+assert.equal(skipCell.getNumberFormat(), '$#,##0.00;[Red]-$#,##0.00;[Red]$#,##0.00',
+  'Skip $0.00 must use the [Red] zero section so it matches -$86.98 on the same expense row');
+assert.equal(skipCell.getFontColor(), null,
+  'Skip must not leave an explicit font color that paints $0.00 a different red from [Red]');
 
 console.log('Cash Flow auto-entry format regressions passed.');

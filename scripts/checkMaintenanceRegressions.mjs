@@ -425,7 +425,13 @@ assert.match(files['quick_add_payment.js'],
   /restoreQuickAddPaymentWriteInSpreadsheet_[\s\S]*?isCashFlowInputSheet_\([\s\S]*?applyCashFlowMoneyFormat_\(restoreCell\)/,
   'Quick Add restore must reapply canonical Cash Flow money format');
 assert.match(files['dashboard_data.js'],
-  /function writeDashboardBillValuePreserveFormat_[\s\S]*?applyCashFlowMoneyFormat_\(cell\)/,
-  'AutoPay value writer must finish with canonical Cash Flow money format');
+  /function writeDashboardBillValuePreserveFormat_[\s\S]*?copyNearestAmountFormatInRow_[\s\S]*?applyCashFlowMoneyFormat_\(cell\)/,
+  'AutoPay value writer must copy a sibling month format then finish with canonical Cash Flow money format');
+assert.match(files['dashboard_data.js'],
+  /function writeVerifiedBillAutopay_[\s\S]*?cashFlowMoneyFormatLooksCanonical_/,
+  'Verified AutoPay writer must accept canonical-looking currency formats from Sheets');
+assert.match(files['planner_helpers.js'],
+  /function cashFlowMoneyFormatLooksCanonical_/,
+  'Canonical Cash Flow format check must exist for AutoPay verification');
 
 console.log('Maintenance regression checks passed.');

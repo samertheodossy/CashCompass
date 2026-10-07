@@ -3843,38 +3843,23 @@ function billAppliesInMonth_(frequency, startMonth, monthNumber1to12) {
 
 function writeDashboardBillValuePreserveFormat_(sheet, row, col, value) {
   const cell = sheet.getRange(row, col);
-
-  const fontColor = cell.getFontColor();
-  const fontSize = cell.getFontSize();
-  const fontWeight = cell.getFontWeight();
-  const fontStyle = cell.getFontStyle();
-  const fontLine = cell.getFontLine();
-  const fontFamily = cell.getFontFamily();
-  const background = cell.getBackground();
-  const numberFormat = cell.getNumberFormat();
-  const horizontalAlignment = cell.getHorizontalAlignment();
-  const verticalAlignment = cell.getVerticalAlignment();
-  const wrap = cell.getWrap();
-
   cell.setValue(value);
 
-  cell
-    .setFontColor(fontColor)
-    .setFontSize(fontSize)
-    .setFontWeight(fontWeight)
-    .setFontStyle(fontStyle)
-    .setFontLine(fontLine)
-    .setFontFamily(fontFamily)
-    .setBackground(background)
-    .setNumberFormat(numberFormat)
-    .setHorizontalAlignment(horizontalAlignment)
-    .setVerticalAlignment(verticalAlignment)
-    .setWrap(wrap);
-
-  // AutoPay is the sole caller. Blank month cells carry General formatting, so
-  // preserving their number format would leave bare values like -75. Finish
-  // with the canonical Cash Flow red-negative currency mask every time.
+  // Blank month cells are General. Restoring that format left AutoPay as a
+  // bare -75 (same class as the old Skip $0 bug). Copy a populated sibling
+  // month in this row when one exists, then re-assert the canonical Cash Flow
+  // currency mask and Type color.
+  try {
+    if (typeof copyNearestAmountFormatInRow_ === 'function') {
+      copyNearestAmountFormatInRow_(sheet, row, col);
+    }
+  } catch (_copyErr) { /* canonical format below is the contract */ }
   applyCashFlowMoneyFormat_(cell);
+  try {
+    if (typeof applyCashFlowRowTypeFontColor_ === 'function') {
+      applyCashFlowRowTypeFontColor_(sheet, row, col);
+    }
+  } catch (_colorErr) { /* cosmetic */ }
 }
 
 /**
@@ -3908,8 +3893,16 @@ function writeVerifiedBillAutopay_(ss, options) {
 
     var actualValue = round2_(toNumber_(cell.getValue()));
     var actualFormat = cell.getNumberFormat();
-    if (actualValue !== expectedValue || actualFormat !== CASH_FLOW_MONEY_FORMAT_) {
+    if (actualValue !== expectedValue) {
       throw new Error('Cash Flow AutoPay write verification failed.');
+    }
+    if (!cashFlowMoneyFormatLooksCanonical_(actualFormat)) {
+      applyCashFlowMoneyFormat_(cell);
+      SpreadsheetApp.flush();
+      actualFormat = cell.getNumberFormat();
+      if (!cashFlowMoneyFormatLooksCanonical_(actualFormat)) {
+        throw new Error('Cash Flow AutoPay write verification failed.');
+      }
     }
 
     wroteMarker = appendActivityLog_(ss, options.activity || {});
@@ -3928,8 +3921,13 @@ function writeVerifiedBillAutopay_(ss, options) {
     return true;
   } catch (autopayErr) {
     try {
-      if (priorFormula) cell.setFormula(priorFormula);
-      else cell.setValue(priorValue);
+      if (priorFormula) {
+        cell.setFormula(priorFormula);
+      } else if (priorValue === '' || priorValue === null || typeof priorValue === 'undefined') {
+        cell.clearContent();
+      } else {
+        cell.setValue(priorValue);
+      }
       cell.setNumberFormat(priorNumberFormat);
       SpreadsheetApp.flush();
 
@@ -4213,27 +4211,7 @@ function skipDashboardBill(skipKey) {
     // genuinely empty month cell so we never clobber a real (manual or
     // accumulated) amount.
     if (isBlank) {
-      cell.setValue(0);
-
-      // Make the freshly-written $0 look identical to the rest of its row.
-      // A blank month cell carries the sheet's default "General"/black
-      // formatting, so preserving *its* look produced a bare, unstyled "0".
-      // Expense rows style their amounts in red (income rows use the default
-      // color), and every amount cell uses the sheet's currency number
-      // format — all of which live on the row's *populated* cells, not the
-      // blank one. Copy the format of the nearest month cell in this row that
-      // already holds a numeric value (typically the prior month) so the
-      // skipped $0 inherits the row's red/currency styling. Fall back to the
-      // canonical currency format only when the row has no populated sibling
-      // yet (e.g. a brand-new row).
-      if (!copyNearestAmountFormatInRow_(info.sheet, info.row, info.col)) {
-        // Fall through to canonical Cash Flow money format below.
-      }
-      applyCashFlowMoneyFormat_(cell);
-      // PASTE_FORMAT can copy explicit black (for example from the Total
-      // column before month-only scoping, or from a blank neighbor). Re-apply
-      // the row Type color so expense skips render red $0.00 like the row.
-      applyCashFlowRowTypeFontColor_(info.sheet, info.row, info.col);
+      writeCashFlowSkippedMonthZero_(info.sheet, info.row, info.col);
     }
   }
 
