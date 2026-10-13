@@ -14,6 +14,10 @@ const rollingClient = fs.readFileSync(
 const rolling = fs.readFileSync(new URL('../rolling_debt_payoff.js', import.meta.url), 'utf8');
 const capital = fs.readFileSync(new URL('../capital_allocation.js', import.meta.url), 'utf8');
 const help = fs.readFileSync(new URL('../Dashboard_Help.html', import.meta.url), 'utf8');
+const dashboardData = fs.readFileSync(new URL('../dashboard_data.js', import.meta.url), 'utf8');
+const cashflowSetup = fs.readFileSync(new URL('../cashflow_setup.js', import.meta.url), 'utf8');
+const incomeSources = fs.readFileSync(new URL('../income_sources.js', import.meta.url), 'utf8');
+const incomeClient = fs.readFileSync(new URL('../Dashboard_Script_Income.html', import.meta.url), 'utf8');
 
 function sliceFunction(source, name) {
   const start = source.indexOf(`function ${name}`);
@@ -81,6 +85,19 @@ assert.doesNotMatch(comparisonSource, /ROLLING_DP_|CitiAA|Southwest|Marriott|100
 assert.doesNotMatch(comparisonSource, /getCapitalAllocation|getRollingDebtPayoffPlan|HELOC/);
 assert.doesNotMatch(comparisonSource, /\.setValue\(|\.appendRow\(|PropertiesService|CacheService/);
 assert.doesNotMatch(comparisonSource, /payload\.weeklyExtra|weeklyActions|\*\s*4/);
+assert.match(comparisonSource, /function buildDebtPayoffSupportedMonthlyExtra_/);
+assert.match(comparisonSource, /\*\s*52\s*\/\s*12/);
+assert.doesNotMatch(comparisonSource, /buildCapitalAllocationPlan_/);
+assert.doesNotMatch(comparisonSource, /classifyIncomeGroupsInSheet_/);
+assert.doesNotMatch(comparisonSource, /three months of recurring bills/);
+assert.match(comparisonSource, /readCapitalAllocationFacts_/);
+assert.match(comparisonSource, /futureUpcomingAmount/);
+assert.match(comparisonSource, /propertyContingencyAmount/);
+assert.match(help, /canonical reserve[\s\S]*?upcoming expenses and property contingency/);
+assert.match(debtOverview, /id="debt_payoff_supported_extra"/);
+assert.match(client, /Use this amount in the scenario/);
+assert.match(client, /function useDebtPayoffSupportedMonthlyExtra_/);
+assert.match(help, /estimated recurring monthly extra[\s\S]*?Use this amount in the scenario/);
 assert.match(projection,
   /function getDebtPayoffStrategyComparison\(payload\)[\s\S]*?parseDebtPayoffScenarioMonthlyExtra_\(payload\.monthlyExtra\)/);
 assert.match(projection, /recommendationState: 'HYPOTHETICAL'/);
@@ -114,6 +131,21 @@ vm.runInContext(
   sliceFunction(plannerHelpers, 'toNumber_') +
   '\n' + sliceFunction(plannerHelpers, 'fmtCurrency_') +
   '\n' + sliceFunction(plannerHelpers, 'round2_') +
+  '\n' + sliceFunction(plannerHelpers, 'parseMonthHeader_') +
+  '\n' + sliceFunction(plannerCore, 'debtMinimumPaymentCellIsKnown_') +
+  '\n' + sliceFunction(dashboardData, 'normalizeYesNo_') +
+  '\n' + sliceFunction(dashboardData, 'normalizeFrequency_') +
+  '\n' + sliceFrom(incomeSources, 'var CISCO_MID_YEAR_BONUS_PAYEE_', '\nfunction incomeIsExcludedName_') +
+  '\n' + sliceFunction(incomeSources, 'incomeIsExcludedName_') +
+  '\n' + sliceFunction(incomeSources, 'parseIncomeRecurringStatusFromDashboard_') +
+  '\n' + sliceFunction(incomeSources, 'parseIncomeFrequencyFromDashboard_') +
+  '\n' + sliceFunction(incomeSources, 'parseIncomeExpectedAmountFromDashboard_') +
+  '\n' + sliceFunction(incomeSources, 'applyIncomeForecastFieldsToRow_') +
+  '\n' + sliceFrom(incomeSources, 'function ciscoBonusHistoryValueIsFormula_', '\nfunction listCiscoBonusIncomeEntries_') +
+  '\n' + sliceFunction(cashflowSetup, 'detectCashFlowLayout_') +
+  '\n' + sliceFunction(cashflowSetup, 'cashFlowIsSummaryHeader_') +
+  '\n' + sliceFunction(cashflowSetup, 'cashFlowLastSummaryColumnIndex_') +
+  '\n' + sliceFrom(cashflowSetup, 'var CASH_FLOW_INCOME_FORECAST_HEADERS_', '\nfunction ensureCashFlowIncomeForecastSchema_') +
   '\n' + sliceFrom(projection, 'var DEBT_PAYOFF_SCENARIO_HORIZON_MONTHS_', ''),
   context
 );
@@ -406,5 +438,1155 @@ const normalizedZeroApr = rateContext.normalizeDebts_([{
 }], {});
 assert.equal(normalizedZeroApr[0].interestRateKnown, true);
 assert.equal(normalizedZeroApr[0].interestRate, 0);
+
+const renderSupported = sliceFunction(client, 'renderDebtPayoffSupportedMonthlyExtra_');
+assert.doesNotMatch(renderSupported, /debt_payoff_scenario_extra/,
+  'the estimate must not auto-fill the hypothetical extra field');
+const useSupported = sliceFunction(client, 'useDebtPayoffSupportedMonthlyExtra_');
+assert.match(useSupported, /el\.value = amount\.toFixed\(2\)/);
+assert.doesNotMatch(useSupported, /runDebtPayoffStrategyComparison|google\.script\.run/,
+  'using the estimate copies the field only and does not run Compare or write');
+
+function confirmedIncome(name, monthlyAmount) {
+  return {
+    rawPayee: name,
+    name: name,
+    recurringConfirmed: true,
+    cadenceKnown: true,
+    frequency: 'monthly',
+    expectedAmount: monthlyAmount,
+    amountKnown: true
+  };
+}
+
+const baseSupported = {
+  recurringIncomeSources: [confirmedIncome('Salary', 4000)],
+  incomeUnavailable: false,
+  debts: [{
+    name: 'Card', active: true, balance: 800, minimumPayment: 500,
+    minimumPaymentKnown: true
+  }],
+  bills: [{
+    payee: 'Rent', amount: 1000, amountKnown: true, frequency: 'monthly',
+    active: true, varies: 'No'
+  }],
+  policyFloors: [],
+  usableCashAfterBuffers: 5000,
+  usableCashKnown: true,
+  reserveKnown: true,
+  requiredReserveAmount: 1000
+};
+
+const surplus = context.buildDebtPayoffSupportedMonthlyExtra_(baseSupported);
+assert.equal(surplus.available, true);
+assert.equal(surplus.amount, 2500);
+assert.equal(surplus.label, 'Estimate');
+assert.equal(surplus.persisted, false);
+assert.equal(surplus.extraIsAffordable, null);
+assert.equal(surplus.deficit, false);
+assert.equal(surplus.reserveProtects, false);
+assert.notEqual(surplus.amount, 1000 * 4,
+  'must not invent extra by multiplying a weekly figure by four');
+
+const deficit = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  recurringIncomeSources: [confirmedIncome('Salary', 1200)]
+}));
+assert.equal(deficit.available, true);
+assert.equal(deficit.deficit, true);
+assert.equal(deficit.amount, 0);
+
+const missingIncome = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  recurringIncomeSources: [],
+  incomeUnavailable: true
+}));
+assert.equal(missingIncome.available, false);
+assert.equal(missingIncome.amount, null);
+assert.equal(missingIncome.blockers[0].code, 'INCOME_UNAVAILABLE');
+
+const unknownMin = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  debts: [{
+    name: 'Blank Min Card', active: true, balance: 900, minimumPayment: 0,
+    minimumPaymentKnown: false
+  }]
+}));
+assert.equal(unknownMin.available, false);
+assert.equal(unknownMin.amount, null);
+assert.equal(unknownMin.blockers.some(function(row) { return row.code === 'MINIMUM_UNKNOWN'; }), true);
+
+const unknownFrequency = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  bills: [{
+    payee: 'Utility', amount: 80, amountKnown: true, frequency: 'unknown',
+    active: true
+  }]
+}));
+assert.equal(unknownFrequency.available, false);
+assert.equal(unknownFrequency.amount, null);
+assert.equal(unknownFrequency.blockers.some(function(row) {
+  return row.code === 'BILL_FREQUENCY_UNKNOWN';
+}), true);
+
+const reserveProtected = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  usableCashAfterBuffers: 1000,
+  requiredReserveAmount: 4000
+}));
+assert.equal(reserveProtected.available, true);
+assert.equal(reserveProtected.reserveProtects, true);
+assert.equal(reserveProtected.amount, 0);
+assert.ok(reserveProtected.recurringSurplusBeforeReserve > 0);
+
+const weeklyFloor = context.debtPayoffScenarioWeeklyToMonthly_(500);
+assert.equal(weeklyFloor, 2166.67);
+assert.notEqual(weeklyFloor, 2000);
+
+const doubleCount = context.buildDebtPayoffSupportedMonthlyExtra_({
+  recurringIncomeSources: [confirmedIncome('Salary', 5000)],
+  reserveKnown: true,
+  requiredReserveAmount: 500,
+  debts: [{
+    name: 'Visa', active: true, balance: 1200, minimumPayment: 200,
+    minimumPaymentKnown: true
+  }],
+  bills: [
+    { payee: 'Visa', amount: 500, amountKnown: true, frequency: 'monthly', active: true },
+    { payee: 'Rent', amount: 1000, amountKnown: true, frequency: 'monthly', active: true },
+    {
+      payee: 'Samer Robinhood', amount: 500, amountKnown: true, frequency: 'weekly',
+      active: true, isInvestmentContribution: true,
+      matchedInvestmentAccount: 'Samer Robinhood'
+    },
+    {
+      payee: 'Other IRA', amount: 300, amountKnown: true, frequency: 'monthly',
+      active: true, isInvestmentContribution: true, matchedInvestmentAccount: ''
+    }
+  ],
+  policyFloors: [{ accountName: 'Samer Robinhood', weeklyAmount: 500 }],
+  usableCashAfterBuffers: 20000,
+  usableCashKnown: true
+});
+assert.equal(doubleCount.available, true);
+assert.equal(doubleCount.components.debtMinimumsMonthly, 200);
+assert.equal(doubleCount.components.recurringBillsMonthly, 1000);
+assert.equal(doubleCount.components.policyFloorMonthly, 2166.67);
+assert.equal(doubleCount.components.unmatchedInvestmentBillsMonthly, 300);
+assert.notEqual(doubleCount.components.recurringBillsMonthly, 1700,
+  'debt-named bills must not be added on top of the contractual minimum');
+assert.notEqual(doubleCount.components.policyFloorMonthly, 4333.34,
+  'a matching policy-floor bill must not be counted twice');
+assert.equal(doubleCount.amount, 1333.33);
+
+const oneTimeIncome = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  recurringIncomeSources: [{
+    rawPayee: 'Freelance Project',
+    name: 'Freelance Project',
+    recurringConfirmed: false,
+    expectedAmount: 4000,
+    frequency: 'monthly'
+  }]
+}));
+assert.equal(oneTimeIncome.available, false);
+assert.equal(oneTimeIncome.amount, null);
+assert.equal(oneTimeIncome.blockers.some(function(row) {
+  return row.code === 'INCOME_CADENCE_UNCONFIRMED';
+}), true);
+
+const irregularIncome = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  recurringIncomeSources: [{
+    rawPayee: 'Salary',
+    name: 'Salary',
+    recurringConfirmed: true,
+    cadenceKnown: true,
+    frequency: 'monthly',
+    expectedAmount: 4000,
+    inferredFromPositiveMonths: true,
+    dropsZeroMonths: true
+  }]
+}));
+assert.equal(irregularIncome.available, false);
+assert.equal(irregularIncome.amount, null);
+assert.equal(irregularIncome.blockers.some(function(row) {
+  return row.code === 'INCOME_CADENCE_UNCONFIRMED';
+}), true);
+
+const hiddenRsu = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  recurringIncomeSources: [{
+    name: 'Cisco Salary',
+    rawPayees: ['Cisco Pay 1', 'Cisco Pay 3 (RSU)'],
+    recurringConfirmed: true,
+    cadenceKnown: true,
+    frequency: 'monthly',
+    expectedAmount: 4000
+  }]
+}));
+assert.equal(hiddenRsu.available, false);
+assert.equal(hiddenRsu.amount, null);
+assert.equal(hiddenRsu.blockers.some(function(row) {
+  return row.code === 'INCOME_EXCLUDED_IDENTITY_MIXED';
+}), true);
+assert.equal(context.debtPayoffRawIncomeIsExcluded_('Cisco Pay 3 (RSU)'), true);
+assert.equal(context.debtPayoffRawIncomeIsExcluded_('Cisco Pay 1'), false);
+
+const missingFloorHelpers = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  investmentsUnavailable: true
+}));
+assert.equal(missingFloorHelpers.available, false);
+assert.equal(missingFloorHelpers.amount, null);
+assert.equal(missingFloorHelpers.blockers.some(function(row) {
+  return row.code === 'INVESTMENTS_UNAVAILABLE';
+}), true);
+
+const missingVaries = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  billsUnavailable: true,
+  billsUnavailableReason: 'INPUT - Bills is missing the Varies column, so variable bills were not treated as fixed.'
+}));
+assert.equal(missingVaries.available, false);
+assert.equal(missingVaries.amount, null);
+assert.equal(missingVaries.blockers.some(function(row) {
+  return row.code === 'BILLS_UNAVAILABLE';
+}), true);
+
+const missingCadenceHeaders = context.debtPayoffParseConfirmedCashFlowIncome_([
+  ['Type', 'Payee', 'Active', 'Jan-26'],
+  ['Income', 'Salary', 'Yes', '4000']
+]);
+assert.equal(missingCadenceHeaders.cadenceUnconfirmed, true);
+assert.match(String(missingCadenceHeaders.reason), /Recurring, Frequency, and Expected Amount/);
+assert.equal(missingCadenceHeaders.sources.length, 0);
+assert.equal(missingCadenceHeaders.incompleteRows.length, 1);
+assert.equal(missingCadenceHeaders.incompleteRows[0].payee, 'Salary');
+assert.equal(missingCadenceHeaders.incompleteRows[0].sheetRow, 2);
+
+const confirmedCashFlow = context.debtPayoffParseConfirmedCashFlowIncome_([
+  ['Type', 'Payee', 'Active', 'Recurring', 'Frequency', 'Expected Amount'],
+  ['Income', 'Salary', 'Yes', 'Yes', 'Monthly', '4000'],
+  ['Income', 'Cisco Pay 3 (RSU)', 'Yes', 'Yes', 'Monthly', '2000'],
+  ['Income', 'One-time bonus', 'Yes', 'Yes', 'Monthly', '800']
+], [
+  ['Type', 'Payee', 'Active', 'Recurring', 'Frequency', 'Expected Amount'],
+  ['Income', 'Salary', 'Yes', 'Yes', 'Monthly', 4000],
+  ['Income', 'Cisco Pay 3 (RSU)', 'Yes', 'Yes', 'Monthly', 2000],
+  ['Income', 'One-time bonus', 'Yes', 'Yes', 'Monthly', 800]
+]);
+assert.equal(confirmedCashFlow.cadenceUnconfirmed, false);
+assert.equal(confirmedCashFlow.sources.length, 1);
+assert.equal(confirmedCashFlow.sources[0].rawPayee, 'Salary');
+
+const canonicalReserve = context.debtPayoffReserveFromCanonicalForecast_({
+  requiredReserveAmount: 4200,
+  futureUpcomingAmount: 600,
+  propertyContingencyAmount: 200,
+  futureBillsAmount: 2500,
+  futureDebtMinimumsAmount: 900
+});
+assert.equal(canonicalReserve.ok, true);
+assert.equal(canonicalReserve.amount, 4200);
+assert.equal(canonicalReserve.breakdown.futureUpcomingAmount, 600);
+assert.equal(canonicalReserve.breakdown.propertyContingencyAmount, 200);
+assert.notEqual(canonicalReserve.amount, (1000 + 500) * 3);
+
+const billsOnlyProxy = context.debtPayoffReserveFromCanonicalForecast_({
+  requiredReserveAmount: 4500,
+  futureBillsAmount: 3000,
+  futureDebtMinimumsAmount: 1500
+});
+assert.equal(billsOnlyProxy.ok, false);
+assert.match(String(billsOnlyProxy.reason), /upcoming expenses or property contingency/);
+
+const missingReserve = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  reserveKnown: false,
+  requiredReserveAmount: null,
+  reserveUnavailableReason: 'This Week’s canonical reserve, including upcoming expenses and property contingency, could not be proven.'
+}));
+assert.equal(missingReserve.available, false);
+assert.equal(missingReserve.amount, null);
+assert.equal(missingReserve.blockers.some(function(row) {
+  return row.code === 'RESERVE_UNAVAILABLE';
+}), true);
+
+const incomeReader = sliceFunction(projection, 'readDebtPayoffSupportedMonthlyExtraIncome_');
+assert.doesNotMatch(incomeReader, /ensureCashFlowIncomeForecastSchema_|setValue\(|insertColumn/);
+assert.match(incomeReader, /Read-only\. Never self-heal schema here/);
+assert.match(cashflowSetup,
+  /concat\(\['Total'\]\)\s*\.concat\(CASH_FLOW_INCOME_FORECAST_HEADERS_\)/);
+assert.match(cashflowSetup, /function ensureCashFlowIncomeForecastSchema_/);
+assert.match(cashflowSetup, /function cashFlowIncomeForecastHeadersToAppend_/);
+assert.doesNotMatch(cashflowSetup, /CASH_FLOW_REQUIRED_HEADERS_ = \[[^\]]*Recurring/);
+assert.doesNotMatch(sliceFunction(incomeSources, 'addIncomeSourceFromDashboard'), /ensureCashFlowIncomeForecastSchema_/);
+assert.doesNotMatch(sliceFunction(incomeSources, 'updateIncomeForecastFieldsFromDashboard'), /ensureCashFlowIncomeForecastSchema_/);
+assert.match(incomeSources, /function addIncomeForecastColumnsFromDashboard/);
+assert.doesNotMatch(sliceFunction(incomeSources, 'addIncomeForecastColumnsFromDashboard'),
+  /insertCashFlowRow_|getMonthColumnByDate_|setCashFlowMoneyCellPreserveRowFormat_/);
+assert.match(body, /id="income_forecast_schema_btn"/);
+assert.match(body, /id="income_forecast_format_btn"/);
+assert.match(incomeClient, /addIncomeForecastColumnsFromDashboard/);
+assert.match(incomeClient, /function confirmAddIncomeForecastColumns_/);
+assert.match(incomeClient, /function confirmFormatIncomeForecastColumns_/);
+assert.match(incomeClient, /formatIncomeForecastColumnsFromDashboard/);
+assert.match(incomeClient, /schema\.present === true && schema\.needsFormat !== true[\s\S]*?wrap\.style\.display = 'none'/);
+assert.match(incomeClient, /schema\.present === true[\s\S]*?formatBtn\.style\.display = ''/);
+assert.match(cashflowSetup, /function formatCashFlowIncomeForecastColumns_/);
+assert.match(incomeSources, /function formatIncomeForecastColumnsFromDashboard/);
+assert.doesNotMatch(sliceFunction(incomeSources, 'formatIncomeForecastColumnsFromDashboard'),
+  /ensureCashFlowIncomeForecastSchema_|insertColumn|insertCashFlowRow_|setValue\(/);
+assert.doesNotMatch(sliceFunction(cashflowSetup, 'formatCashFlowIncomeForecastColumns_'),
+  /setValue\(|insertColumn|applyCashFlowSheetStyling_/);
+assert.match(help, /separate Format action/);
+assert.match(incomeSources, /headerMap\.recurringCol > 0 && recurring[\s\S]*?headerMap\.frequencyCol > 0 && frequency[\s\S]*?headerMap\.expectedAmountCol > 0 && expected\.known/);
+assert.match(incomeSources, /function parseIncomeRecurringStatusFromDashboard_/);
+assert.doesNotMatch(sliceFunction(incomeSources, 'parseIncomeRecurringStatusFromDashboard_'), /normalizeYesNo_/);
+assert.doesNotMatch(sliceFunction(incomeSources, 'getIncomeSourcesForManagementFromDashboard'), /frequency: 'Monthly'/);
+assert.match(body, /id="income_add_recurring"[\s\S]*?id="income_add_frequency"[\s\S]*?id="income_add_expected"/);
+assert.match(body, /<option value="" selected>Unknown<\/option>[\s\S]*?<option value="Yes">Yes<\/option>[\s\S]*?<option value="No">No<\/option>/);
+assert.match(incomeClient, /recurring: recurring[\s\S]*?frequency: frequency[\s\S]*?expectedAmount: expectedAmount/);
+assert.match(incomeClient, /Expected amount is required when Recurring is Yes/);
+assert.match(help, /Recurring \(Yes \/ No \/ unknown\), Frequency, and Expected amount/);
+assert.doesNotMatch(body, /id="income_add_expected_month"|id="income_expected_month_schema_wrap"/);
+assert.match(incomeClient, /updateCiscoBonusForecastFieldsFromDashboard/);
+assert.match(incomeClient, /splitCiscoBonusIncomeRowsFromDashboard/);
+assert.match(incomeClient, /Split into Cisco Mid Year Bonus and Cisco End Year Bonus/);
+assert.match(incomeClient, /first bonus payment of the year/);
+assert.match(incomeClient, /confirmProposal: true/);
+assert.doesNotMatch(incomeClient, /February history can be assigned/);
+assert.match(incomeClient, /kind === 'cisco_annual_bonus'/);
+assert.match(sliceFunction(incomeClient, 'renderCiscoBonusOverview_'),
+  /Annual income[\s\S]*?income-overview-table[\s\S]*?Expected Amount per year/);
+assert.doesNotMatch(sliceFunction(incomeClient, 'renderCiscoBonusOverview_'),
+  /income-bonus-review|Stop tracking|recurring monthly income/);
+assert.match(sliceFunction(incomeClient, 'renderScheduledBonusSources_'),
+  /Stop tracking[\s\S]*?income-manage-table/);
+assert.match(sliceFunction(incomeClient, 'renderScheduledBonusSources_'),
+  /split\.alreadySplit !== true/);
+assert.doesNotMatch(incomeClient, /income-bonus-review/);
+assert.doesNotMatch(incomeClient, /addCiscoBonusIncomeEntryFromDashboard|openCiscoBonusAddForm_/);
+assert.doesNotMatch(sliceFunction(incomeClient, 'openCiscoBonusEditForm_'), /avgNonZero|src\.amount\b|februaryAmount|expectedMonth/);
+assert.match(incomeSources, /function updateCiscoBonusForecastFieldsFromDashboard/);
+assert.match(incomeSources, /function splitCiscoBonusIncomeRowsFromDashboard/);
+assert.doesNotMatch(sliceFunction(incomeSources, 'updateCiscoBonusForecastFieldsFromDashboard'),
+  /getMonthColumnByDate_|setCashFlowMoneyCellPreserveRowFormat_|expectedMonth/);
+assert.match(incomeSources, /Cisco Mid Year Bonus and Cisco End Year Bonus are edited as their own annual income rows/);
+assert.match(help, /Cisco Mid Year Bonus and Cisco End Year Bonus/);
+assert.match(help, /not used for the 90-day cash reserve/);
+assert.match(client, /function renderDebtPayoffDatedBonusScenarioHtml_/);
+assert.match(client, /not cash available each month/);
+assert.match(client, /not used for the 90-day cash reserve/);
+assert.doesNotMatch(sliceFunction(projection, 'compareDebtPayoffStrategies_'),
+  /datedBonusScenario|February Bonus Amount|Expected Month/);
+assert.doesNotMatch(sliceFunction(projection, 'simulateDebtPayoffSchedule_'),
+  /datedBonusScenario|February Bonus Amount|Expected Month/);
+assert.match(projection, /appliedToComparison: false/);
+assert.match(projection, /countedInRecurringIncomeMonthly: false/);
+assert.match(projection, /countedInReserve: false/);
+assert.doesNotMatch(cashflowSetup, /CASH_FLOW_EXPECTED_MONTH_HEADERS_|Expected Month/);
+assert.doesNotMatch(cashflowSetup, /concat\(CASH_FLOW_CISCO_BONUS_HEADERS_\)/);
+
+assert.equal(context.parseIncomeRecurringStatusFromDashboard_(''), '');
+assert.equal(context.parseIncomeRecurringStatusFromDashboard_('Yes'), 'Yes');
+assert.equal(context.parseIncomeRecurringStatusFromDashboard_('No'), 'No');
+assert.equal(context.parseIncomeExpectedAmountFromDashboard_('').known, false);
+assert.equal(context.parseIncomeExpectedAmountFromDashboard_(0).known, true);
+assert.equal(context.parseIncomeExpectedAmountFromDashboard_(0).value, 0);
+assert.equal(context.parseIncomeExpectedAmountFromDashboard_('0').value, 0);
+
+const freqHeaders = ['Type', 'Payee', 'Active', 'Recurring', 'Frequency', 'Expected Amount'];
+function parseIncomeRows(rows, valueRows) {
+  const display = [freqHeaders].concat(rows);
+  const values = [freqHeaders].concat(valueRows || rows.map(function(row) {
+    return row.slice(0, 5).concat([row[5] === '' || row[5] == null ? '' : Number(row[5])]);
+  }));
+  return context.debtPayoffParseConfirmedCashFlowIncome_(display, values);
+}
+
+const blankRecurring = parseIncomeRows([
+  ['Income', 'Salary', 'Yes', '', 'Monthly', '4000']
+], [
+  ['Income', 'Salary', 'Yes', '', 'Monthly', 4000]
+]);
+assert.equal(blankRecurring.cadenceUnconfirmed, true);
+assert.match(String(blankRecurring.reason), /Salary \(Cash Flow row 2\) needs Recurring/);
+assert.equal(blankRecurring.sources.length, 0);
+assert.equal(blankRecurring.incompleteRows.length, 1);
+assert.equal(blankRecurring.incompleteRows[0].payee, 'Salary');
+assert.equal(blankRecurring.incompleteRows[0].sheetRow, 2);
+assert.deepEqual(Array.from(blankRecurring.incompleteRows[0].missing), ['Recurring']);
+
+const recurringNo = parseIncomeRows([
+  ['Income', 'Side gig', 'Yes', 'No', 'Monthly', '4000']
+], [
+  ['Income', 'Side gig', 'Yes', 'No', 'Monthly', 4000]
+]);
+assert.equal(recurringNo.cadenceUnconfirmed, false);
+assert.equal(recurringNo.sources.length, 0);
+
+const recurringYes = parseIncomeRows([
+  ['Income', 'Salary', 'Yes', 'Yes', 'Monthly', '4000']
+], [
+  ['Income', 'Salary', 'Yes', 'Yes', 'Monthly', 4000]
+]);
+assert.equal(recurringYes.cadenceUnconfirmed, false);
+assert.equal(recurringYes.sources.length, 1);
+assert.equal(recurringYes.sources[0].recurringConfirmed, true);
+assert.equal(recurringYes.sources[0].expectedAmount, 4000);
+
+const supportedFreq = {
+  Weekly: 'weekly',
+  Biweekly: 'biweekly',
+  Monthly: 'monthly',
+  'Semi-monthly / twice monthly': 'semi_monthly',
+  'Every two months': 'bimonthly',
+  Bimonthly: 'bimonthly',
+  Quarterly: 'quarterly',
+  'Semi-annually': 'semi_annually',
+  Yearly: 'yearly'
+};
+const expectedMonthlyFrom100 = {
+  weekly: 433.33,
+  biweekly: 216.67,
+  monthly: 100,
+  semi_monthly: 200,
+  bimonthly: 50,
+  quarterly: 33.33,
+  semi_annually: 16.67,
+  yearly: 8.33
+};
+Object.keys(supportedFreq).forEach(function(label) {
+  const key = supportedFreq[label];
+  const parsed = parseIncomeRows([
+    ['Income', 'Salary', 'Yes', 'Yes', label, '100']
+  ], [
+    ['Income', 'Salary', 'Yes', 'Yes', label, 100]
+  ]);
+  assert.equal(parsed.sources[0].frequency, key, label + ' must normalize');
+  assert.equal(
+    context.debtPayoffScenarioScheduledToMonthly_(100, key),
+    expectedMonthlyFrom100[key],
+    label + ' must convert by payment frequency, not sparse history'
+  );
+});
+
+const explicitZero = parseIncomeRows([
+  ['Income', 'Salary', 'Yes', 'Yes', 'Monthly', '0']
+], [
+  ['Income', 'Salary', 'Yes', 'Yes', 'Monthly', 0]
+]);
+assert.equal(explicitZero.sources[0].amountKnown, true);
+assert.equal(explicitZero.sources[0].expectedAmount, 0);
+const zeroClassified = context.debtPayoffClassifySupportedIncomeSource_(explicitZero.sources[0]);
+assert.equal(zeroClassified.monthlyAmount, 0);
+assert.equal(zeroClassified.blocker, undefined);
+
+const blankExpected = parseIncomeRows([
+  ['Income', 'Salary', 'Yes', 'Yes', 'Monthly', '']
+], [
+  ['Income', 'Salary', 'Yes', 'Yes', 'Monthly', '']
+]);
+assert.equal(blankExpected.cadenceUnconfirmed, true);
+assert.equal(blankExpected.sources.length, 0);
+assert.equal(blankExpected.incompleteRows[0].payee, 'Salary');
+assert.deepEqual(Array.from(blankExpected.incompleteRows[0].missing), ['Expected Amount']);
+assert.notEqual(explicitZero.sources[0].amountKnown, false);
+const blankClassified = context.debtPayoffClassifySupportedIncomeSource_({
+  rawPayee: 'Salary',
+  name: 'Salary',
+  recurringConfirmed: true,
+  cadenceKnown: true,
+  frequency: 'monthly',
+  expectedAmount: null,
+  amountKnown: false
+});
+assert.equal(blankClassified.blocker.code, 'INCOME_AMOUNT_UNKNOWN');
+assert.match(String(blankClassified.blocker.reason), /blank Expected Amount/);
+
+const inactiveIncome = parseIncomeRows([
+  ['Income', 'Old job', 'No', '', 'Monthly', '4000'],
+  ['Income', 'Salary', 'Yes', 'Yes', 'Monthly', '3000']
+], [
+  ['Income', 'Old job', 'No', '', 'Monthly', 4000],
+  ['Income', 'Salary', 'Yes', 'Yes', 'Monthly', 3000]
+]);
+assert.equal(inactiveIncome.cadenceUnconfirmed, false);
+assert.equal(inactiveIncome.sources.length, 1);
+assert.equal(inactiveIncome.sources[0].rawPayee, 'Salary');
+
+const mixedParser = parseIncomeRows([
+  ['Income', 'Cisco Pay 1', 'Yes', 'Yes', 'Monthly', '4000'],
+  ['Income', 'Cisco Pay 3 (RSU)', 'Yes', 'Yes', 'Monthly', '2000']
+], [
+  ['Income', 'Cisco Pay 1', 'Yes', 'Yes', 'Monthly', 4000],
+  ['Income', 'Cisco Pay 3 (RSU)', 'Yes', 'Yes', 'Monthly', 2000]
+]);
+assert.equal(mixedParser.cadenceUnconfirmed, false);
+assert.equal(mixedParser.sources.length, 1);
+assert.deepEqual(Array.from(mixedParser.sources[0].rawPayees), ['Cisco Pay 1', 'Cisco Pay 3 (RSU)']);
+const mixedClassified = context.debtPayoffClassifySupportedIncomeSource_(mixedParser.sources[0]);
+assert.equal(mixedClassified.blocker.code, 'INCOME_EXCLUDED_IDENTITY_MIXED');
+
+const bonusOnly = parseIncomeRows([
+  ['Income', 'Annual Bonus', 'Yes', 'Yes', 'Yearly', '8000']
+], [
+  ['Income', 'Annual Bonus', 'Yes', 'Yes', 'Yearly', 8000]
+]);
+assert.equal(bonusOnly.sources.length, 0);
+
+const populatedHeaders = [
+  'Type', 'Flow Source', 'Payee', 'Active',
+  'Jan-26', 'Feb-26', 'Mar-26', 'Apr-26', 'May-26', 'Jun-26',
+  'Jul-26', 'Aug-26', 'Sep-26', 'Oct-26', 'Nov-26', 'Dec-26',
+  'Total', 'Notes'
+];
+const populatedMonthValues = ['Income', 'CASH', 'Salary', 'YES',
+  5000, 0, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 55000, 'keep me'];
+assert.deepEqual(
+  Array.from(context.cashFlowIncomeForecastHeadersToAppend_(populatedHeaders)),
+  ['Recurring', 'Frequency', 'Expected Amount']
+);
+const afterAppend = populatedHeaders.concat(['Recurring', 'Frequency', 'Expected Amount']);
+assert.deepEqual(Array.from(context.cashFlowIncomeForecastHeadersToAppend_(afterAppend)), []);
+assert.deepEqual(
+  Array.from(context.cashFlowIncomeForecastHeadersToAppend_(populatedHeaders.concat(['Recurring']))),
+  ['Frequency', 'Expected Amount']
+);
+const layoutWithTrailing = context.detectCashFlowLayout_(afterAppend);
+assert.equal(afterAppend[layoutWithTrailing.totalCol0], 'Total');
+assert.notEqual(afterAppend[layoutWithTrailing.totalCol0], 'Expected Amount');
+assert.notEqual(afterAppend[layoutWithTrailing.totalCol0], 'Notes');
+assert.equal(layoutWithTrailing.totalCol0, populatedHeaders.indexOf('Total'));
+assert.equal(populatedMonthValues[4], 5000);
+assert.equal(populatedMonthValues[5], 0);
+assert.equal(populatedMonthValues[populatedHeaders.indexOf('Notes')], 'keep me');
+assert.ok(afterAppend.indexOf('Recurring') > afterAppend.indexOf('Total'));
+assert.ok(afterAppend.indexOf('Recurring') > afterAppend.indexOf('Notes'));
+assert.equal(afterAppend[afterAppend.length - 3], 'Recurring');
+assert.equal(afterAppend[afterAppend.length - 1], 'Expected Amount');
+
+const populatedWorkbookHeaders = [
+  'Type', 'Flow Source', 'Payee', 'Active',
+  'Jan-26', 'Feb-26', 'Mar-26', 'Apr-26', 'May-26', 'Jun-26',
+  'Jul-26', 'Aug-26', 'Sep-26', 'Oct-26', 'Nov-26', 'Dec-26',
+  'Totals', 'Yearly Total'
+];
+const populatedWorkbookRow = [
+  'Income', 'CASH', 'Salary', 'YES',
+  5000, 0, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000,
+  '=SUM(E2:P2)', '=Q2'
+];
+const populatedGrid = [populatedWorkbookHeaders, populatedWorkbookRow];
+const populatedLayout = context.detectCashFlowLayout_(populatedWorkbookHeaders);
+assert.equal(populatedLayout.totalCol0, -1,
+  'existing Totals / Yearly Total sheets must not be treated as a column named Total');
+assert.equal(populatedWorkbookHeaders[populatedLayout.lastSummaryCol0], 'Yearly Total');
+assert.ok(populatedLayout.lastSummaryCol0 > populatedLayout.lastMonthCol0);
+const firstAppend = context.applyCashFlowIncomeForecastHeadersToGrid_(populatedGrid);
+assert.deepEqual(Array.from(firstAppend.added), ['Recurring', 'Frequency', 'Expected Amount']);
+assert.equal(firstAppend.grid[0][firstAppend.grid[0].length - 3], 'Recurring');
+assert.equal(firstAppend.grid[0][firstAppend.grid[0].length - 1], 'Expected Amount');
+assert.ok(firstAppend.grid[0].indexOf('Recurring') > firstAppend.grid[0].indexOf('Yearly Total'));
+assert.ok(firstAppend.grid[0].indexOf('Recurring') > firstAppend.grid[0].indexOf('Totals'));
+assert.equal(firstAppend.grid[1][4], 5000);
+assert.equal(firstAppend.grid[1][5], 0);
+assert.equal(firstAppend.grid[1][16], '=SUM(E2:P2)');
+assert.equal(firstAppend.grid[1][17], '=Q2');
+assert.equal(firstAppend.grid[1][18], '');
+assert.equal(firstAppend.grid[1][19], '');
+assert.equal(firstAppend.grid[1][20], '');
+const secondAppend = context.applyCashFlowIncomeForecastHeadersToGrid_(firstAppend.grid);
+assert.deepEqual(Array.from(secondAppend.added), []);
+assert.deepEqual(Array.from(secondAppend.grid[0]), Array.from(firstAppend.grid[0]));
+assert.equal(secondAppend.grid[1][16], '=SUM(E2:P2)');
+assert.equal(secondAppend.grid[1][4], 5000);
+assert.equal(context.cashFlowIsSummaryHeader_('Totals'), true);
+assert.equal(context.cashFlowIsSummaryHeader_('Yearly Total'), true);
+assert.equal(context.cashFlowIsSummaryHeader_('Total'), true);
+assert.equal(context.cashFlowIsSummaryHeader_('Recurring'), false);
+
+assert.equal(context.normalizeFrequency_('Semi-monthly / twice monthly'), 'semi_monthly');
+assert.equal(context.normalizeFrequency_('twice monthly'), 'semi_monthly');
+assert.equal(context.normalizeFrequency_('Every two months'), 'bimonthly');
+assert.equal(context.normalizeFrequency_('Bimonthly'), 'bimonthly');
+assert.equal(context.debtPayoffScenarioScheduledToMonthly_(100, 'semi_monthly'), 200);
+assert.equal(context.debtPayoffScenarioScheduledToMonthly_(100, 'bimonthly'), 50);
+
+const blankFrequency = parseIncomeRows([
+  ['Income', 'Salary', 'Yes', 'Yes', '', '4000']
+], [
+  ['Income', 'Salary', 'Yes', 'Yes', '', 4000]
+]);
+assert.equal(blankFrequency.cadenceUnconfirmed, true);
+assert.deepEqual(Array.from(blankFrequency.incompleteRows[0].missing), ['Frequency']);
+
+const twoIncomplete = parseIncomeRows([
+  ['Income', 'Salary', 'Yes', '', 'Monthly', '4000'],
+  ['Income', 'Consulting', 'Yes', 'Yes', 'Monthly', '']
+], [
+  ['Income', 'Salary', 'Yes', '', 'Monthly', 4000],
+  ['Income', 'Consulting', 'Yes', 'Yes', 'Monthly', '']
+]);
+assert.equal(twoIncomplete.incompleteRows.length, 2);
+assert.equal(twoIncomplete.incompleteRows[0].payee, 'Salary');
+assert.equal(twoIncomplete.incompleteRows[0].sheetRow, 2);
+assert.equal(twoIncomplete.incompleteRows[1].payee, 'Consulting');
+assert.equal(twoIncomplete.incompleteRows[1].sheetRow, 3);
+assert.deepEqual(Array.from(twoIncomplete.incompleteRows[1].missing), ['Expected Amount']);
+
+const withheldWithRows = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  incomeCadenceUnconfirmed: true,
+  incomeCadenceReason: context.debtPayoffFormatIncompleteIncomeRows_(twoIncomplete.incompleteRows),
+  incomeIncompleteRows: twoIncomplete.incompleteRows,
+  recurringIncomeSources: []
+}));
+assert.equal(withheldWithRows.available, false);
+const cadenceBlocker = withheldWithRows.blockers.find(function(row) {
+  return row.code === 'INCOME_CADENCE_UNCONFIRMED';
+});
+assert.ok(cadenceBlocker);
+assert.equal(cadenceBlocker.incompleteRows.length, 2);
+assert.equal(cadenceBlocker.incompleteRows[0].payee, 'Salary');
+assert.match(client, /Complete these active Cash Flow income groups from Income → Manage → Edit/);
+assert.match(client, /row\.incompleteRows/);
+assert.match(client, /incomeRow\.rawPayees/);
+
+const forecastHeaderMap = {
+  recurringColZero: afterAppend.indexOf('Recurring'),
+  frequencyColZero: afterAppend.indexOf('Frequency'),
+  expectedAmountColZero: afterAppend.indexOf('Expected Amount')
+};
+const existingRow = populatedMonthValues.concat(['', '', '']);
+const editedRow = context.applyIncomeForecastFieldsToRow_(existingRow, forecastHeaderMap, {
+  recurring: 'Yes',
+  frequency: 'Every two months',
+  expectedKnown: true,
+  expectedAmount: 2500
+});
+assert.equal(editedRow[4], 5000);
+assert.equal(editedRow[5], 0);
+assert.equal(editedRow[populatedHeaders.indexOf('Notes')], 'keep me');
+assert.equal(editedRow[forecastHeaderMap.recurringColZero], 'Yes');
+assert.equal(editedRow[forecastHeaderMap.frequencyColZero], 'Every two months');
+assert.equal(editedRow[forecastHeaderMap.expectedAmountColZero], 2500);
+assert.notEqual(existingRow[forecastHeaderMap.recurringColZero], 'Yes');
+
+const incomeEditWriter = sliceFunction(incomeSources, 'updateIncomeForecastFieldsFromDashboard');
+assert.doesNotMatch(incomeEditWriter, /insertCashFlowRow_|getMonthColumnByDate_|setCashFlowMoneyCellPreserveRowFormat_/);
+assert.match(incomeEditWriter, /applyIncomeForecastFieldsToRow_/);
+assert.match(incomeEditWriter, /validateIncomeLifecycleReference_/);
+assert.match(incomeClient, /function openIncomeEditForm_/);
+assert.match(incomeClient, /updateIncomeForecastFieldsFromDashboard/);
+assert.match(incomeClient, /function submitIncomeForm_/);
+const incomeFreqSelect = body.slice(
+  body.indexOf('id="income_add_frequency"'),
+  body.indexOf('id="income_add_expected"')
+);
+assert.match(incomeFreqSelect, /Semi-monthly \/ twice monthly/);
+assert.match(incomeFreqSelect, /Every two months/);
+assert.doesNotMatch(incomeFreqSelect, />Bimonthly</);
+assert.match(body, /Biweekly is 26 times a year \(amount × 26 ÷ 12\)/);
+assert.match(body, /Semi-monthly \/ twice monthly is 24 times a year \(amount × 24 ÷ 12\)/);
+assert.match(body, /Historical avg is separate and is never used as Expected amount/);
+assert.match(incomeClient, /Historical avg is not used as Expected Amount/);
+assert.match(incomeClient, /Never prefill Expected Amount from the historical average/);
+assert.doesNotMatch(
+  sliceFunction(incomeClient, 'openIncomeEditForm_'),
+  /avgNonZero|src\.amount\b/
+);
+assert.match(incomeClient, /expectedKnown === true && src.expectedAmount != null/);
+assert.match(help, /Biweekly is 26 times a year/);
+assert.match(help, /Semi-monthly \/ twice monthly is 24 times a year/);
+assert.match(projection, /Multiple Cash Flow history rows in the same group are not multiplied/);
+
+const ciscoPaycheck = 3200;
+const ciscoMonthlyOnce = context.debtPayoffScenarioScheduledToMonthly_(ciscoPaycheck, 'biweekly');
+assert.equal(ciscoMonthlyOnce, 6933.33);
+assert.notEqual(context.round2_(ciscoPaycheck * 3 * 26 / 12), ciscoMonthlyOnce);
+
+const ciscoGrouped = parseIncomeRows([
+  ['Income', 'Cisco Pay 1', 'Yes', 'Yes', 'Biweekly', '3200'],
+  ['Income', 'Cisco Pay 2', 'Yes', 'Yes', 'Biweekly', '3200'],
+  ['Income', 'Cisco Pay 3', 'Yes', 'Yes', 'Biweekly', '3200']
+], [
+  ['Income', 'Cisco Pay 1', 'Yes', 'Yes', 'Biweekly', 3200],
+  ['Income', 'Cisco Pay 2', 'Yes', 'Yes', 'Biweekly', 3200],
+  ['Income', 'Cisco Pay 3', 'Yes', 'Yes', 'Biweekly', 3200]
+]);
+assert.equal(ciscoGrouped.cadenceUnconfirmed, false);
+assert.equal(ciscoGrouped.sources.length, 1, 'Cisco Pay 1/2/3 must be one forecast source');
+assert.equal(ciscoGrouped.sources[0].name, 'Cisco Salary');
+assert.equal(ciscoGrouped.sources[0].expectedAmount, ciscoPaycheck);
+assert.equal(ciscoGrouped.sources[0].frequency, 'biweekly');
+assert.equal(ciscoGrouped.sources[0].historyRowCount, 3);
+assert.deepEqual(
+  Array.from(ciscoGrouped.sources[0].rawPayees),
+  ['Cisco Pay 1', 'Cisco Pay 2', 'Cisco Pay 3']
+);
+const ciscoClassified = context.debtPayoffClassifySupportedIncomeSource_(ciscoGrouped.sources[0]);
+assert.equal(ciscoClassified.monthlyAmount, ciscoMonthlyOnce);
+assert.notEqual(ciscoClassified.monthlyAmount, 20800);
+assert.notEqual(ciscoClassified.monthlyAmount, context.round2_(ciscoPaycheck * 3 * 26 / 12));
+
+const oakleyRent = 4500;
+const oakleyGrouped = parseIncomeRows([
+  ['Income', 'Rent Oakley House - Section 8', 'Yes', 'Yes', 'Monthly', '4500'],
+  ['Income', 'Rent Oakley House - Tenant Part 1', 'Yes', 'Yes', 'Monthly', '4500'],
+  ['Income', 'Rent Oakley House - Tenant Part 2', 'Yes', 'Yes', 'Monthly', '4500'],
+  ['Income', 'Rent Oakley House - Tenant Part 3', 'Yes', 'Yes', 'Monthly', '4500']
+], [
+  ['Income', 'Rent Oakley House - Section 8', 'Yes', 'Yes', 'Monthly', 4500],
+  ['Income', 'Rent Oakley House - Tenant Part 1', 'Yes', 'Yes', 'Monthly', 4500],
+  ['Income', 'Rent Oakley House - Tenant Part 2', 'Yes', 'Yes', 'Monthly', 4500],
+  ['Income', 'Rent Oakley House - Tenant Part 3', 'Yes', 'Yes', 'Monthly', 4500]
+]);
+assert.equal(oakleyGrouped.sources.length, 1, 'Oakley payer rows must be one forecast source');
+assert.equal(oakleyGrouped.sources[0].name, 'Rent Oakley House');
+assert.equal(oakleyGrouped.sources[0].expectedAmount, oakleyRent);
+assert.equal(oakleyGrouped.sources[0].frequency, 'monthly');
+assert.equal(oakleyGrouped.sources[0].historyRowCount, 4);
+const oakleyClassified = context.debtPayoffClassifySupportedIncomeSource_(oakleyGrouped.sources[0]);
+assert.equal(oakleyClassified.monthlyAmount, oakleyRent);
+assert.notEqual(oakleyClassified.monthlyAmount, oakleyRent * 4);
+
+const mixedExcludedHousehold = parseIncomeRows([
+  ['Income', 'Cisco Pay 1', 'Yes', 'Yes', 'Biweekly', '3200'],
+  ['Income', 'Cisco Pay 2', 'Yes', 'Yes', 'Biweekly', '3200'],
+  ['Income', 'Cisco Pay 3 (RSU)', 'Yes', 'Yes', 'Monthly', '2000'],
+  ['Income', 'Annual Bonus', 'Yes', 'Yes', 'Yearly', '8000'],
+  ['Income', 'AAPL stock sale', 'Yes', 'Yes', 'Yearly', '15000'],
+  ['Income', 'One-time catch-up', 'Yes', 'Yes', 'Monthly', '900']
+], [
+  ['Income', 'Cisco Pay 1', 'Yes', 'Yes', 'Biweekly', 3200],
+  ['Income', 'Cisco Pay 2', 'Yes', 'Yes', 'Biweekly', 3200],
+  ['Income', 'Cisco Pay 3 (RSU)', 'Yes', 'Yes', 'Monthly', 2000],
+  ['Income', 'Annual Bonus', 'Yes', 'Yes', 'Yearly', 8000],
+  ['Income', 'AAPL stock sale', 'Yes', 'Yes', 'Yearly', 15000],
+  ['Income', 'One-time catch-up', 'Yes', 'Yes', 'Monthly', 900]
+]);
+assert.equal(mixedExcludedHousehold.sources.length, 1);
+assert.equal(mixedExcludedHousehold.sources[0].name, 'Cisco Salary');
+const mixedHouseholdClassified = context.debtPayoffClassifySupportedIncomeSource_(
+  mixedExcludedHousehold.sources[0]);
+assert.equal(mixedHouseholdClassified.blocker.code, 'INCOME_EXCLUDED_IDENTITY_MIXED');
+const mixedHouseholdEstimate = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  recurringIncomeSources: mixedExcludedHousehold.sources
+}));
+assert.equal(mixedHouseholdEstimate.available, false);
+assert.equal(mixedHouseholdEstimate.blockers.some(function(row) {
+  return row.code === 'INCOME_EXCLUDED_IDENTITY_MIXED';
+}), true);
+
+const ciscoConflict = parseIncomeRows([
+  ['Income', 'Cisco Pay 1', 'Yes', 'Yes', 'Biweekly', '3200'],
+  ['Income', 'Cisco Pay 2', 'Yes', 'Yes', 'Biweekly', '4100']
+], [
+  ['Income', 'Cisco Pay 1', 'Yes', 'Yes', 'Biweekly', 3200],
+  ['Income', 'Cisco Pay 2', 'Yes', 'Yes', 'Biweekly', 4100]
+]);
+assert.equal(ciscoConflict.cadenceUnconfirmed, true);
+assert.equal(ciscoConflict.sources.length, 0);
+assert.equal(ciscoConflict.incompleteRows[0].payee, 'Cisco Salary');
+assert.match(String(ciscoConflict.reason), /matching Recurring, Frequency, and Expected Amount/);
+
+const groupedIncomeEstimate = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  recurringIncomeSources: ciscoGrouped.sources.concat(oakleyGrouped.sources)
+}));
+assert.equal(groupedIncomeEstimate.available, true);
+assert.equal(groupedIncomeEstimate.components.recurringIncomeMonthly, context.round2_(ciscoMonthlyOnce + oakleyRent));
+assert.notEqual(
+  groupedIncomeEstimate.components.recurringIncomeMonthly,
+  context.round2_(ciscoPaycheck * 3 * 26 / 12 + oakleyRent * 4)
+);
+
+const ciscoHistoryHeaders = [
+  'Type', 'Flow Source', 'Payee', 'Active',
+  'Jan-26', 'Feb-26', 'Mar-26', 'Apr-26', 'May-26', 'Jun-26',
+  'Jul-26', 'Aug-26', 'Sep-26', 'Oct-26', 'Nov-26', 'Dec-26',
+  'Totals', 'Yearly Total', 'Recurring', 'Frequency', 'Expected Amount'
+];
+function ciscoHistoryRow(payee, jan, mar, totalFormula, yearlyFormula) {
+  return [
+    'Income', 'CASH', payee, 'YES',
+    jan, 0, mar, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    totalFormula, yearlyFormula, '', '', ''
+  ];
+}
+const ciscoHistoryGrid = [
+  ciscoHistoryHeaders,
+  ciscoHistoryRow('Cisco Pay 1', 3187.42, 3187.42, '=SUM(E2:P2)', '=Q2'),
+  ciscoHistoryRow('Cisco Pay 2', 412.11, 0, '=SUM(E3:P3)', '=Q3'),
+  ciscoHistoryRow('Cisco Pay 3', 0, 890.55, '=SUM(E4:P4)', '=Q4')
+];
+const ciscoForecastMap = {
+  recurringColZero: ciscoHistoryHeaders.indexOf('Recurring'),
+  frequencyColZero: ciscoHistoryHeaders.indexOf('Frequency'),
+  expectedAmountColZero: ciscoHistoryHeaders.indexOf('Expected Amount')
+};
+const forecastFields = {
+  recurring: 'Yes',
+  frequency: 'Biweekly',
+  expectedKnown: true,
+  expectedAmount: ciscoPaycheck
+};
+const editedCiscoGrid = [ciscoHistoryGrid[0]].concat(ciscoHistoryGrid.slice(1).map(function(row) {
+  return context.applyIncomeForecastFieldsToRow_(row, ciscoForecastMap, forecastFields);
+}));
+editedCiscoGrid.slice(1).forEach(function(row, idx) {
+  const original = ciscoHistoryGrid[idx + 1];
+  assert.equal(row[2], original[2]);
+  assert.equal(row[4], original[4]);
+  assert.equal(row[5], original[5]);
+  assert.equal(row[6], original[6]);
+  assert.equal(row[16], original[16]);
+  assert.equal(row[17], original[17]);
+  assert.equal(row[ciscoForecastMap.recurringColZero], 'Yes');
+  assert.equal(row[ciscoForecastMap.frequencyColZero], 'Biweekly');
+  assert.equal(row[ciscoForecastMap.expectedAmountColZero], ciscoPaycheck);
+});
+const parsedAfterEdit = context.debtPayoffParseConfirmedCashFlowIncome_(editedCiscoGrid, editedCiscoGrid);
+assert.equal(parsedAfterEdit.sources.length, 1);
+assert.equal(parsedAfterEdit.sources[0].expectedAmount, ciscoPaycheck);
+assert.equal(
+  context.debtPayoffClassifySupportedIncomeSource_(parsedAfterEdit.sources[0]).monthlyAmount,
+  ciscoMonthlyOnce
+);
+
+assert.equal(context.normalizeIncomeName_('Cisco Bonus'), 'Cisco Bonus');
+assert.equal(context.normalizeIncomeName_('Cisco Bonus 1'), 'Cisco Bonus');
+assert.equal(context.normalizeIncomeName_('Cisco Mid Year Bonus'), 'Cisco Mid Year Bonus');
+assert.equal(context.normalizeIncomeName_('Cisco End Year Bonus'), 'Cisco End Year Bonus');
+assert.equal(context.isCiscoBonusIncomeName_('Cisco Bonus'), true);
+assert.equal(context.isCiscoBonusIncomeName_('Cisco Bonus 1'), true);
+assert.equal(context.isCiscoNamedAnnualBonusIncomeName_('Cisco Mid Year Bonus'), true);
+assert.equal(context.isCiscoNamedAnnualBonusIncomeName_('Cisco End Year Bonus'), true);
+assert.equal(context.isLegacyCiscoBonusIncomeName_('Cisco Mid Year Bonus'), false);
+assert.equal(context.isCiscoBonusIncomeName_('Cisco Pay 1'), false);
+assert.equal(context.incomeIsExcludedName_('Cisco Bonus'), true);
+assert.equal(context.incomeIsExcludedName_('Cisco Mid Year Bonus'), true);
+assert.equal(context.incomeIsExcludedName_('Cisco End Year Bonus'), true);
+
+const bonusHeaders = [
+  'Type', 'Payee', 'Active', 'Recurring', 'Frequency', 'Expected Amount'
+];
+function parseBonusScenario(rows, valueRows) {
+  const display = [bonusHeaders].concat(rows);
+  const values = [bonusHeaders].concat(valueRows || rows);
+  return context.debtPayoffParseCiscoBonusScenario_(display, values);
+}
+
+const unequalBonuses = parseBonusScenario([
+  ['Income', 'Cisco Mid Year Bonus', 'Yes', 'Yes', 'Yearly', '12000'],
+  ['Income', 'Cisco End Year Bonus', 'Yes', 'Yes', 'Yearly', '4500']
+], [
+  ['Income', 'Cisco Mid Year Bonus', 'Yes', 'Yes', 'Yearly', 12000],
+  ['Income', 'Cisco End Year Bonus', 'Yes', 'Yes', 'Yearly', 4500]
+]);
+assert.equal(unequalBonuses.identityKnown, true);
+assert.equal(unequalBonuses.appliedToComparison, false);
+assert.equal(unequalBonuses.countedInRecurringIncomeMonthly, false);
+assert.equal(unequalBonuses.countedInReserve, false);
+assert.equal(unequalBonuses.payments.length, 2);
+assert.equal(unequalBonuses.payments[0].name, 'Cisco Mid Year Bonus');
+assert.equal(unequalBonuses.payments[0].included, true);
+assert.equal(unequalBonuses.payments[0].amount, 12000);
+assert.equal(unequalBonuses.payments[1].name, 'Cisco End Year Bonus');
+assert.equal(unequalBonuses.payments[1].included, true);
+assert.equal(unequalBonuses.payments[1].amount, 4500);
+assert.notEqual(unequalBonuses.payments[0].amount, unequalBonuses.payments[1].amount);
+assert.notEqual(unequalBonuses.payments[0].amount, context.round2_((12000 + 4500) / 2));
+assert.notEqual(unequalBonuses.payments[0].amount, context.round2_((12000 + 4500) / 12));
+assert.equal(unequalBonuses.annualizedMonthlyEquivalent, context.round2_((12000 + 4500) / 12));
+assert.match(String(unequalBonuses.annualizedMonthlyEquivalentLabel), /estimate only/);
+assert.match(String(unequalBonuses.annualizedMonthlyEquivalentLabel), /not cash available each month/);
+assert.match(String(unequalBonuses.annualizedMonthlyEquivalentLabel), /90-day cash reserve/);
+assert.match(String(unequalBonuses.comparisonConstraint), /does not model month-specific inflows/);
+
+const blankMidYear = parseBonusScenario([
+  ['Income', 'Cisco End Year Bonus', 'Yes', 'Yes', 'Yearly', '4500']
+], [
+  ['Income', 'Cisco End Year Bonus', 'Yes', 'Yes', 'Yearly', 4500]
+]);
+assert.equal(blankMidYear.payments[0].known, false);
+assert.equal(blankMidYear.payments[0].included, false);
+assert.equal(blankMidYear.payments[0].amount, null);
+assert.equal(blankMidYear.payments[1].included, true);
+assert.equal(blankMidYear.payments[1].amount, 4500);
+assert.match(String(blankMidYear.reviewReasons.join(' ')), /Cisco Mid Year Bonus was not found/);
+
+const blankAmount = parseBonusScenario([
+  ['Income', 'Cisco Mid Year Bonus', 'Yes', 'Yes', 'Yearly', ''],
+  ['Income', 'Cisco End Year Bonus', 'Yes', 'Yes', 'Yearly', '4500']
+], [
+  ['Income', 'Cisco Mid Year Bonus', 'Yes', 'Yes', 'Yearly', ''],
+  ['Income', 'Cisco End Year Bonus', 'Yes', 'Yes', 'Yearly', 4500]
+]);
+assert.equal(blankAmount.payments[0].included, false);
+assert.equal(blankAmount.payments[0].known, false);
+assert.equal(blankAmount.payments[1].amount, 4500);
+assert.match(String(blankAmount.reviewReasons.join(' ')), /blank \(unknown\)/);
+assert.match(String(blankAmount.reviewReasons.join(' ')), /Blank was not treated as \$0/);
+assert.equal(blankAmount.annualizedMonthlyEquivalent, context.round2_(4500 / 12));
+
+const explicitZeroMidYear = parseBonusScenario([
+  ['Income', 'Cisco Mid Year Bonus', 'Yes', 'Yes', 'Yearly', '0'],
+  ['Income', 'Cisco End Year Bonus', 'Yes', 'Yes', 'Yearly', '4500']
+], [
+  ['Income', 'Cisco Mid Year Bonus', 'Yes', 'Yes', 'Yearly', 0],
+  ['Income', 'Cisco End Year Bonus', 'Yes', 'Yes', 'Yearly', 4500]
+]);
+assert.equal(explicitZeroMidYear.payments[0].known, true);
+assert.equal(explicitZeroMidYear.payments[0].included, true);
+assert.equal(explicitZeroMidYear.payments[0].amount, 0);
+assert.equal(explicitZeroMidYear.payments[1].amount, 4500);
+assert.equal(explicitZeroMidYear.annualizedMonthlyEquivalent, context.round2_(4500 / 12));
+
+const missingIdentity = parseBonusScenario([
+  ['Income', 'Cisco Pay 1', 'Yes', 'Yes', 'Biweekly', '3200']
+], [
+  ['Income', 'Cisco Pay 1', 'Yes', 'Yes', 'Biweekly', 3200]
+]);
+assert.equal(missingIdentity.identityKnown, false);
+assert.equal(missingIdentity.appliedToComparison, false);
+assert.match(String(missingIdentity.reviewReasons.join(' ')), /Cisco Mid Year Bonus and Cisco End Year Bonus were not found/);
+
+const leftoverNeedsSplit = parseBonusScenario([
+  ['Income', 'Cisco Bonus', 'Yes', 'Yes', 'Yearly', '12000']
+], [
+  ['Income', 'Cisco Bonus', 'Yes', 'Yes', 'Yearly', 12000]
+]);
+assert.equal(leftoverNeedsSplit.identityKnown, true);
+assert.equal(leftoverNeedsSplit.payments[0].included, false);
+assert.equal(leftoverNeedsSplit.payments[1].included, false);
+assert.match(String(leftoverNeedsSplit.reviewReasons.join(' ')), /Split the existing Cisco Bonus entry/);
+
+const duplicateMidYear = parseBonusScenario([
+  ['Income', 'Cisco Mid Year Bonus', 'Yes', 'Yes', 'Yearly', '12000'],
+  ['Income', 'Cisco Mid Year Bonus', 'Yes', 'Yes', 'Yearly', '8000'],
+  ['Income', 'Cisco End Year Bonus', 'Yes', 'Yes', 'Yearly', '4500']
+], [
+  ['Income', 'Cisco Mid Year Bonus', 'Yes', 'Yes', 'Yearly', 12000],
+  ['Income', 'Cisco Mid Year Bonus', 'Yes', 'Yes', 'Yearly', 8000],
+  ['Income', 'Cisco End Year Bonus', 'Yes', 'Yes', 'Yearly', 4500]
+]);
+assert.equal(duplicateMidYear.payments[0].included, false);
+assert.equal(duplicateMidYear.payments[1].included, true);
+assert.equal(duplicateMidYear.payments[1].amount, 4500);
+assert.match(String(duplicateMidYear.reviewReasons.join(' ')), /counted twice/);
+
+const yearlyWouldMonthly = context.debtPayoffScenarioScheduledToMonthly_(12000, 'yearly');
+assert.equal(yearlyWouldMonthly, 1000);
+assert.notEqual(unequalBonuses.payments[0].amount, yearlyWouldMonthly);
+assert.notEqual(
+  unequalBonuses.annualizedMonthlyEquivalent,
+  context.round2_(ciscoMonthlyOnce + yearlyWouldMonthly)
+);
+
+const bonusWithSalaryAndRent = parseIncomeRows([
+  ['Income', 'Cisco Pay 1', 'Yes', 'Yes', 'Biweekly', '3200'],
+  ['Income', 'Cisco Pay 2', 'Yes', 'Yes', 'Biweekly', '3200'],
+  ['Income', 'Cisco Pay 3', 'Yes', 'Yes', 'Biweekly', '3200'],
+  ['Income', 'Rent Oakley House - Section 8', 'Yes', 'Yes', 'Monthly', '4500'],
+  ['Income', 'Rent Oakley House - Tenant Part 1', 'Yes', 'Yes', 'Monthly', '4500'],
+  ['Income', 'Cisco Mid Year Bonus', 'Yes', 'Yes', 'Yearly', '12000'],
+  ['Income', 'Cisco End Year Bonus', 'Yes', 'Yes', 'Yearly', '4500'],
+  ['Income', 'Annual Bonus', 'Yes', 'Yes', 'Yearly', '8000'],
+  ['Income', 'AAPL stock sale', 'Yes', 'Yes', 'Yearly', '15000']
+], [
+  ['Income', 'Cisco Pay 1', 'Yes', 'Yes', 'Biweekly', 3200],
+  ['Income', 'Cisco Pay 2', 'Yes', 'Yes', 'Biweekly', 3200],
+  ['Income', 'Cisco Pay 3', 'Yes', 'Yes', 'Biweekly', 3200],
+  ['Income', 'Rent Oakley House - Section 8', 'Yes', 'Yes', 'Monthly', 4500],
+  ['Income', 'Rent Oakley House - Tenant Part 1', 'Yes', 'Yes', 'Monthly', 4500],
+  ['Income', 'Cisco Mid Year Bonus', 'Yes', 'Yes', 'Yearly', 12000],
+  ['Income', 'Cisco End Year Bonus', 'Yes', 'Yes', 'Yearly', 4500],
+  ['Income', 'Annual Bonus', 'Yes', 'Yes', 'Yearly', 8000],
+  ['Income', 'AAPL stock sale', 'Yes', 'Yes', 'Yearly', 15000]
+]);
+assert.equal(bonusWithSalaryAndRent.sources.length, 2);
+assert.equal(bonusWithSalaryAndRent.sources[0].name, 'Cisco Salary');
+assert.equal(bonusWithSalaryAndRent.sources[1].name, 'Rent Oakley House');
+const bonusHouseholdEstimate = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  recurringIncomeSources: bonusWithSalaryAndRent.sources,
+  datedBonusScenario: unequalBonuses
+}));
+assert.equal(bonusHouseholdEstimate.available, true);
+assert.equal(
+  bonusHouseholdEstimate.components.recurringIncomeMonthly,
+  context.round2_(ciscoMonthlyOnce + oakleyRent)
+);
+assert.notEqual(
+  bonusHouseholdEstimate.components.recurringIncomeMonthly,
+  context.round2_(ciscoMonthlyOnce + oakleyRent + 12000 + 4500)
+);
+assert.notEqual(
+  bonusHouseholdEstimate.components.recurringIncomeMonthly,
+  context.round2_(ciscoMonthlyOnce + oakleyRent + 1000 + 375)
+);
+assert.notEqual(
+  bonusHouseholdEstimate.components.recurringIncomeMonthly,
+  context.round2_(ciscoMonthlyOnce + oakleyRent + unequalBonuses.annualizedMonthlyEquivalent)
+);
+assert.equal(bonusHouseholdEstimate.datedBonusScenario.appliedToComparison, false);
+assert.equal(bonusHouseholdEstimate.datedBonusScenario.countedInRecurringIncomeMonthly, false);
+assert.equal(bonusHouseholdEstimate.datedBonusScenario.countedInReserve, false);
+assert.equal(bonusHouseholdEstimate.datedBonusScenario.payments[0].amount, 12000);
+assert.equal(bonusHouseholdEstimate.datedBonusScenario.payments[1].amount, 4500);
+assert.match(String(bonusHouseholdEstimate.assumptions.join(' ')), /estimate only/);
+assert.match(String(bonusHouseholdEstimate.assumptions.join(' ')), /not used to satisfy the 90-day cash reserve/);
+
+const cadenceUnconfirmedStillReviewsBonus = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  incomeCadenceUnconfirmed: true,
+  incomeCadenceReason: 'Salary needs Recurring.',
+  recurringIncomeSources: [],
+  datedBonusScenario: blankMidYear
+}));
+assert.equal(cadenceUnconfirmedStillReviewsBonus.available, false);
+assert.equal(cadenceUnconfirmedStillReviewsBonus.datedBonusScenario.payments[1].amount, 4500);
+assert.equal(cadenceUnconfirmedStillReviewsBonus.datedBonusScenario.payments[0].included, false);
+
+const comparisonBeforeBonus = context.compareDebtPayoffStrategies_(debts, extra, { asOfDate: asOf });
+const comparisonAfterBonus = context.compareDebtPayoffStrategies_(debts, extra, { asOfDate: asOf });
+assert.equal(comparisonAfterBonus.monthlyExtra, comparisonBeforeBonus.monthlyExtra);
+assert.equal(comparisonAfterBonus.strategies.avalanche.totalInterest,
+  comparisonBeforeBonus.strategies.avalanche.totalInterest);
+assert.equal(comparisonAfterBonus.strategies.snowball.totalInterest,
+  comparisonBeforeBonus.strategies.snowball.totalInterest);
+assert.equal(comparisonAfterBonus.reserveModeled, false);
+assert.match(String(comparisonAfterBonus.assumptions.join(' ')),
+  /does not model future income, expenses, cash reserves, or changing rates/);
+
+function cashFlowYearHeaders(year) {
+  const suffix = String(year).slice(-2);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return ['Type', 'Flow Source', 'Payee', 'Active']
+    .concat(months.map(function(month) { return month + '-' + suffix; }))
+    .concat(['Totals', 'Yearly Total', 'Recurring', 'Frequency', 'Expected Amount']);
+}
+function bonusAmountsRow(headers, payee, amounts, totalFormula, yearlyFormula) {
+  return headers.map(function(header, idx) {
+    if (idx === 0) return 'Income';
+    if (idx === 1) return 'CASH';
+    if (idx === 2) return payee;
+    if (idx === 3) return 'YES';
+    if (Object.prototype.hasOwnProperty.call(amounts, header)) return amounts[header];
+    if (/^[A-Z][a-z]{2}-\d{2}$/.test(header)) return 0;
+    if (header === 'Totals') return totalFormula || '';
+    if (header === 'Yearly Total') return yearlyFormula || '';
+    return '';
+  });
+}
+
+const trusted2026Headers = cashFlowYearHeaders(2026);
+const trusted2026Grid = [
+  trusted2026Headers,
+  ciscoHistoryRow('Cisco Pay 1', 3187.42, 3187.42, '=SUM(E2:P2)', '=Q2'),
+  bonusAmountsRow(trusted2026Headers, 'Cisco Bonus', {
+    'Mar-26': 22766.25,
+    'Sep-26': 56476.24
+  }, '=SUM(E3:P3)', '=Q3')
+];
+const salaryBeforeTrusted = trusted2026Grid[1].slice();
+const trustedInspect = context.inspectCiscoBonusHistorySplit_(trusted2026Grid, trusted2026Grid);
+assert.equal(trustedInspect.canSplit, true);
+assert.equal(trustedInspect.trustedMapping, true);
+assert.equal(trustedInspect.requiresConfirmation, false);
+assert.equal(trustedInspect.proposal.payments[0].header, 'Mar-26');
+assert.equal(trustedInspect.proposal.payments[0].amount, 22766.25);
+assert.equal(trustedInspect.proposal.payments[0].toPayee, 'Cisco Mid Year Bonus');
+assert.equal(trustedInspect.proposal.payments[1].header, 'Sep-26');
+assert.equal(trustedInspect.proposal.payments[1].amount, 56476.24);
+assert.equal(trustedInspect.proposal.payments[1].toPayee, 'Cisco End Year Bonus');
+const trustedSplit = context.applyCiscoBonusHistorySplitToGrid_(trusted2026Grid);
+assert.equal(trustedSplit.ok, true);
+assert.deepEqual(trustedSplit.monthlyTotalsAfter, trustedSplit.monthlyTotalsBefore);
+assert.equal(trustedSplit.annualTotalAfter, trustedSplit.annualTotalBefore);
+assert.deepEqual(trustedSplit.grid[1], salaryBeforeTrusted);
+const trustedMid = trustedSplit.grid.find(function(row) { return row[2] === 'Cisco Mid Year Bonus'; });
+const trustedEnd = trustedSplit.grid.find(function(row) { return row[2] === 'Cisco End Year Bonus'; });
+assert.equal(trustedMid[trusted2026Headers.indexOf('Mar-26')], 22766.25);
+assert.equal(trustedMid[trusted2026Headers.indexOf('Sep-26')], '');
+assert.equal(trustedEnd[trusted2026Headers.indexOf('Mar-26')], '');
+assert.equal(trustedEnd[trusted2026Headers.indexOf('Sep-26')], 56476.24);
+assert.equal(trustedMid[trusted2026Headers.indexOf('Expected Amount')], '');
+assert.equal(trustedEnd[trusted2026Headers.indexOf('Expected Amount')], '');
+assert.equal(trustedMid[trusted2026Headers.indexOf('Recurring')], 'Yes');
+assert.equal(trustedEnd[trusted2026Headers.indexOf('Frequency')], 'Yearly');
+assert.equal(trustedSplit.grid[1][trusted2026Headers.indexOf('Totals')], '=SUM(E2:P2)');
+assert.equal(trustedMid[trusted2026Headers.indexOf('Totals')], '=SUM(E3:P3)');
+
+const shiftingHeaders = cashFlowYearHeaders(2027);
+const shiftingGrid = [
+  shiftingHeaders,
+  ciscoHistoryRow('Cisco Pay 1', 3187.42, 3187.42, '=SUM(E2:P2)', '=Q2'),
+  bonusAmountsRow(shiftingHeaders, 'Cisco Bonus', {
+    'Feb-27': 10000,
+    'Oct-27': 20000
+  }, '=SUM(E3:P3)', '=Q3')
+];
+shiftingGrid[1][2] = 'Cisco Pay 1';
+const shiftingInspect = context.inspectCiscoBonusHistorySplit_(shiftingGrid, shiftingGrid);
+assert.equal(shiftingInspect.canSplit, true);
+assert.equal(shiftingInspect.trustedMapping, false);
+assert.equal(shiftingInspect.requiresConfirmation, true);
+assert.equal(shiftingInspect.proposal.payments[0].header, 'Feb-27');
+assert.equal(shiftingInspect.proposal.payments[1].header, 'Oct-27');
+const shiftingUnconfirmed = context.applyCiscoBonusHistorySplitToGrid_(shiftingGrid);
+assert.equal(shiftingUnconfirmed.ok, false);
+assert.equal(shiftingUnconfirmed.needsConfirmation, true);
+assert.equal(shiftingUnconfirmed.grid[2][2], 'Cisco Bonus');
+assert.equal(shiftingUnconfirmed.grid[2][shiftingHeaders.indexOf('Feb-27')], 10000);
+assert.equal(shiftingUnconfirmed.grid[2][shiftingHeaders.indexOf('Oct-27')], 20000);
+const shiftingConfirmed = context.applyCiscoBonusHistorySplitToGrid_(shiftingGrid, {
+  confirmProposal: true,
+  proposal: shiftingInspect.proposal
+});
+assert.equal(shiftingConfirmed.ok, true);
+assert.deepEqual(shiftingConfirmed.monthlyTotalsAfter, shiftingConfirmed.monthlyTotalsBefore);
+assert.equal(shiftingConfirmed.annualTotalAfter, shiftingConfirmed.annualTotalBefore);
+const shiftingMid = shiftingConfirmed.grid.find(function(row) { return row[2] === 'Cisco Mid Year Bonus'; });
+const shiftingEnd = shiftingConfirmed.grid.find(function(row) { return row[2] === 'Cisco End Year Bonus'; });
+assert.equal(shiftingMid[shiftingHeaders.indexOf('Feb-27')], 10000);
+assert.equal(shiftingEnd[shiftingHeaders.indexOf('Oct-27')], 20000);
+assert.equal(shiftingMid[shiftingHeaders.indexOf('Expected Amount')], '');
+assert.equal(shiftingEnd[shiftingHeaders.indexOf('Expected Amount')], '');
+
+const ambiguousThree = [
+  trusted2026Headers,
+  bonusAmountsRow(trusted2026Headers, 'Cisco Bonus', {
+    'Mar-26': 22766.25,
+    'Jun-26': 100,
+    'Sep-26': 56476.24
+  })
+];
+const ambiguousInspect = context.inspectCiscoBonusHistorySplit_(ambiguousThree, ambiguousThree);
+assert.equal(ambiguousInspect.canSplit, false);
+assert.match(String(ambiguousInspect.ambiguities.join(' ')), /Jun-26/);
+const ambiguousApply = context.applyCiscoBonusHistorySplitToGrid_(ambiguousThree);
+assert.equal(ambiguousApply.ok, false);
+assert.equal(ambiguousApply.grid[1][2], 'Cisco Bonus');
+assert.equal(ambiguousApply.grid[1][trusted2026Headers.indexOf('Mar-26')], 22766.25);
+assert.equal(ambiguousApply.grid[1][trusted2026Headers.indexOf('Jun-26')], 100);
+assert.equal(ambiguousApply.grid[1][trusted2026Headers.indexOf('Sep-26')], 56476.24);
+
+const onePaymentGrid = [
+  trusted2026Headers,
+  bonusAmountsRow(trusted2026Headers, 'Cisco Bonus', { 'Sep-26': 56476.24 })
+];
+const onePaymentInspect = context.inspectCiscoBonusHistorySplit_(onePaymentGrid, onePaymentGrid);
+assert.equal(onePaymentInspect.canSplit, false);
+assert.match(String(onePaymentInspect.ambiguities.join(' ')), /only one recorded payment month/);
+
+const editedBonusRow = context.applyIncomeForecastFieldsToRow_(
+  bonusAmountsRow(trusted2026Headers, 'Cisco Mid Year Bonus', { 'Mar-26': 22766.25 }),
+  {
+    recurringColZero: trusted2026Headers.indexOf('Recurring'),
+    frequencyColZero: trusted2026Headers.indexOf('Frequency'),
+    expectedAmountColZero: trusted2026Headers.indexOf('Expected Amount')
+  },
+  {
+    recurring: 'Yes',
+    frequency: 'Yearly',
+    expectedKnown: true,
+    expectedAmount: 12000
+  }
+);
+assert.equal(editedBonusRow[trusted2026Headers.indexOf('Mar-26')], 22766.25);
+assert.equal(editedBonusRow[trusted2026Headers.indexOf('Sep-26')], 0);
+assert.equal(editedBonusRow[trusted2026Headers.indexOf('Expected Amount')], 12000);
+assert.equal(trusted2026Headers.indexOf('Expected Month'), -1);
 
 console.log('checkDebtPayoffStrategyComparisonRegressions: ok');

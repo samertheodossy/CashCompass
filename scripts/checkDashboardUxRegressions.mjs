@@ -2905,6 +2905,42 @@ assert.match(files['Dashboard_Script_Income.html'],
 const incomeOverviewRenderer = functionSource_(files['Dashboard_Script_Income.html'], 'renderIncomeOverviewList_');
 assert.doesNotMatch(incomeOverviewRenderer, /Stop tracking|Reactivate|income_inactive|addIncomeSourceFromDashboard/,
   'Current income must remain a read-only review surface without lifecycle writers');
+const incomeBonusOverviewRenderer = functionSource_(files['Dashboard_Script_Income.html'], 'renderCiscoBonusOverview_');
+assert.match(body,
+  /id="income_mode_current_wrap"[\s\S]*?>Monthly income sources\.</,
+  'Current income must use a short monthly-income description above the recurring table');
+assert.doesNotMatch(body,
+  /Annual Cash Flow rows such as Cisco Mid Year Bonus/,
+  'Current income must not explain annual bonuses in the recurring-table intro');
+assert.match(incomeBonusOverviewRenderer,
+  /Annual income[\s\S]*?income-overview-table[\s\S]*?Expected Amount per year[\s\S]*?Frequency/,
+  'Current income must show named Cisco bonuses as a standard Annual income table');
+assert.match(incomeBonusOverviewRenderer,
+  /Amounts are per year, not monthly cash, and are excluded from the 90-day reserve/,
+  'Current income Annual income copy must stay concise and exclude yearly amounts from the 90-day reserve');
+assert.doesNotMatch(incomeBonusOverviewRenderer,
+  /Stop tracking|Reactivate|income-bonus-review|recurring monthly income/,
+  'Current income Annual income must stay read-only and must not use bonus cards or a recurring monthly income label');
+const incomeBonusManageRenderer = functionSource_(files['Dashboard_Script_Income.html'], 'renderScheduledBonusSources_');
+assert.match(incomeBonusManageRenderer,
+  /kind === 'cisco_annual_bonus'[\s\S]*?Edit[\s\S]*?Stop tracking[\s\S]*?income-manage-table/,
+  'Manage income must present named Cisco bonuses as standard income rows with Edit and Stop tracking');
+assert.match(incomeBonusManageRenderer,
+  /cisco_bonus_legacy[\s\S]*?split\.alreadySplit !== true[\s\S]*?income-split-preview/,
+  'Manage income must keep the Cisco Bonus split action only while unsplit history remains');
+assert.doesNotMatch(incomeBonusManageRenderer, /income-bonus-review/,
+  'Manage income must not render custom Cisco bonus summary cards');
+assert.match(functionSource_(files['Dashboard_Script_Income.html'], 'renderIncomeForecastSchema_'),
+  /schema\.present === true && schema\.needsFormat !== true[\s\S]*?wrap\.style\.display = 'none'[\s\S]*?schema\.present === true[\s\S]*?formatBtn\.style\.display = ''/,
+  'Manage income must hide the Format card when forecast headers already match and show it only when they need formatting');
+assert.match(files['Dashboard_Script_Income.html'],
+  /function renderIncomeForecastMismatchList_[\s\S]*?schema\.mismatches/,
+  'Manage income must list the actual Format-status mismatches');
+assert.match(body, /id="income_forecast_schema_mismatch_list"/,
+  'Manage income must expose a mismatch list for diagnosable Format-status failures');
+assert.match(functionSource_(files['Dashboard_Script_Income.html'], 'confirmFormatIncomeForecastColumns_'),
+  /header style and widths are updated/,
+  'Format confirm must describe header style and width repair, not header number format');
 assert.match(files['Dashboard_Script_Income.html'],
   /function renderIncomeSourcesList_\([\s\S]*?Stop tracking[\s\S]*?renderInactiveIncomeSources_/,
   'Manage income must own Stop tracking and inactive lifecycle presentation');

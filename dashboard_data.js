@@ -3812,7 +3812,27 @@ function normalizeFrequency_(value) {
   ) {
     return 'semi_annually';
   }
-  if (v === 'bimonthly' || v === 'bi-monthly' || v === 'bi monthly') return 'bimonthly';
+  if (
+    v === 'semi monthly' ||
+    v === 'semi-monthly' ||
+    v === 'semimonthly' ||
+    v === 'twice monthly' ||
+    v === 'twice-monthly' ||
+    v === 'twice a month' ||
+    v === 'semi-monthly / twice monthly' ||
+    v === 'semimonthly / twice monthly'
+  ) {
+    return 'semi_monthly';
+  }
+  if (
+    v === 'bimonthly' ||
+    v === 'bi-monthly' ||
+    v === 'bi monthly' ||
+    v === 'every two months' ||
+    v === 'every 2 months'
+  ) {
+    return 'bimonthly';
+  }
   if (v === 'monthly') return 'monthly';
   return 'unknown';
 }

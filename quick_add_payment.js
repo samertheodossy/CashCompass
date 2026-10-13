@@ -1635,6 +1635,9 @@ function getCashFlowHeaderMapFromHeaders_(headers) {
   // `Active` is optional metadata — YES/NO/blank. Blank is treated as YES
   // by every consumer, so legacy tabs without the column stay valid.
   const activeColZero = headers.indexOf('Active');
+  const recurringColZero = headers.indexOf('Recurring');
+  const frequencyColZero = headers.indexOf('Frequency');
+  var expectedAmountColZero = headers.indexOf('Expected Amount');
 
   if (typeColZero === -1 || payeeColZero === -1) {
     throw new Error('Cash Flow sheet must contain Type and Payee headers.');
@@ -1645,10 +1648,16 @@ function getCashFlowHeaderMapFromHeaders_(headers) {
     payeeColZero: payeeColZero,
     flowSourceColZero: flowSourceColZero,
     activeColZero: activeColZero,
+    recurringColZero: recurringColZero,
+    frequencyColZero: frequencyColZero,
+    expectedAmountColZero: expectedAmountColZero,
     typeCol: typeColZero + 1,
     payeeCol: payeeColZero + 1,
     flowSourceCol: flowSourceColZero === -1 ? -1 : flowSourceColZero + 1,
-    activeCol: activeColZero === -1 ? -1 : activeColZero + 1
+    activeCol: activeColZero === -1 ? -1 : activeColZero + 1,
+    recurringCol: recurringColZero === -1 ? -1 : recurringColZero + 1,
+    frequencyCol: frequencyColZero === -1 ? -1 : frequencyColZero + 1,
+    expectedAmountCol: expectedAmountColZero === -1 ? -1 : expectedAmountColZero + 1
   };
 }
 

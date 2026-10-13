@@ -2086,6 +2086,31 @@
     margin-top: 10px;
     color: #9a3412;
   }
+  .debt-payoff-supported-extra {
+    margin: 10px 0;
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+  .debt-payoff-supported-extra-label {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+  }
+  .debt-payoff-supported-extra p {
+    margin: 0 0 6px 0;
+  }
+  .debt-payoff-supported-extra ul {
+    margin: 0 0 8px 0;
+    padding-left: 1.15rem;
+  }
+  .debt-payoff-supported-extra li {
+    margin-bottom: 0.3rem;
+    font-size: 13px;
+  }
   @media (max-width: 900px) {
     .debt-payoff-strategy-grid {
       grid-template-columns: minmax(0, 1fr);
@@ -2611,6 +2636,48 @@
   .error { color: #991b1b; }
   .info { background: #eef6ff; border: 1px solid #cfe3ff; border-radius: var(--cc-radius-sm); padding: var(--cc-space-3); margin: var(--cc-space-3) 0; font-size: 12px; line-height: 1.55; }
   .muted { color: #475569; }
+
+  .income-overview-tablewrap,
+  .income-manage-tablewrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+  .income-overview-table,
+  .income-manage-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .income-section-title {
+    margin: 0 0 8px 0;
+  }
+  .income-annual-section {
+    margin-top: 0;
+  }
+  .income-split-preview {
+    padding: 10px 12px;
+    border: 1px solid #fde68a;
+    border-radius: var(--cc-radius-sm, 8px);
+    background: #fffbeb;
+    margin: 0 0 12px 0;
+  }
+  .income-split-preview p:last-child {
+    margin-bottom: 0;
+  }
+  @media (max-width: 640px) {
+    .income-overview-table th,
+    .income-overview-table td,
+    .income-manage-table th,
+    .income-manage-table td {
+      padding: 8px 6px;
+    }
+    .income-manage-actions {
+      white-space: normal;
+    }
+    .income-manage-actions .small-btn {
+      margin: 2px 0;
+    }
+  }
 
   .surface-state,
   .empty-state,

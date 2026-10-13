@@ -44,6 +44,11 @@ var INCOME_MAX_YEARS_BACK_ = 5;
  */
 var INCOME_MIN_MONTHS_FOR_RECURRING_ = 1;
 
+var CISCO_MID_YEAR_BONUS_PAYEE_ = 'Cisco Mid Year Bonus';
+var CISCO_END_YEAR_BONUS_PAYEE_ = 'Cisco End Year Bonus';
+var CISCO_BONUS_TRUSTED_2026_MID_AMOUNT_ = 22766.25;
+var CISCO_BONUS_TRUSTED_2026_END_AMOUNT_ = 56476.24;
+
 /* -------------------------------------------------------------------------- */
 /*  Name normalization and exclusion (shared by display + other-detected)     */
 /* -------------------------------------------------------------------------- */
@@ -68,6 +73,15 @@ function normalizeIncomeName_(payee) {
   if (/^cisco\s+pay(?:\s+\d+)?(?:\s*\(.*\))?$/i.test(s)) {
     return 'Cisco Salary';
   }
+  if (/^cisco\s+mid\s+year\s+bonus$/i.test(s)) {
+    return CISCO_MID_YEAR_BONUS_PAYEE_;
+  }
+  if (/^cisco\s+end\s+year\s+bonus$/i.test(s)) {
+    return CISCO_END_YEAR_BONUS_PAYEE_;
+  }
+  if (/^cisco\s+bonus(?:\s+\d+)?(?:\s*\(.*\))?$/i.test(s)) {
+    return 'Cisco Bonus';
+  }
 
   // "Rent Oakley House", "Rent Oakley House - Unit A", etc. Tenant /
   // unit suffixes are logged separately but represent the same
@@ -86,6 +100,36 @@ function normalizeIncomeName_(payee) {
  * still surface in the "Other detected income" reference section so
  * users can see them.
  */
+function canonicalizeIncomePayeeKey_(payee) {
+  return String(payee || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function isCiscoMidYearBonusIncomeName_(payee) {
+  return canonicalizeIncomePayeeKey_(payee) ===
+    canonicalizeIncomePayeeKey_(CISCO_MID_YEAR_BONUS_PAYEE_);
+}
+
+function isCiscoEndYearBonusIncomeName_(payee) {
+  return canonicalizeIncomePayeeKey_(payee) ===
+    canonicalizeIncomePayeeKey_(CISCO_END_YEAR_BONUS_PAYEE_);
+}
+
+function isCiscoNamedAnnualBonusIncomeName_(payee) {
+  return isCiscoMidYearBonusIncomeName_(payee) || isCiscoEndYearBonusIncomeName_(payee);
+}
+
+function isLegacyCiscoBonusIncomeName_(payee) {
+  if (isCiscoNamedAnnualBonusIncomeName_(payee)) return false;
+  var s = String(payee || '').trim();
+  if (!s) return false;
+  var normalized = normalizeIncomeName_(s) || s;
+  return /^cisco\s+bonus$/i.test(normalized);
+}
+
+function isCiscoBonusIncomeName_(payee) {
+  return isCiscoNamedAnnualBonusIncomeName_(payee) || isLegacyCiscoBonusIncomeName_(payee);
+}
+
 function incomeIsExcludedName_(name) {
   var s = String(name || '').toLowerCase();
   if (!s) return true;
@@ -427,10 +471,1257 @@ function classifyIncomeGroupsInSheet_(sheet, optionalDisplay, optionalHeaderMap)
  *   sheetName: string
  * }>}
  */
+function readCashFlowIncomeForecastSchema_(optionalSpreadsheet) {
+  var ss = optionalSpreadsheet || getUserSpreadsheet_();
+  var year = getCurrentYear_();
+  var sheet = null;
+  try { sheet = getCashFlowSheet_(ss, year); } catch (_currentErr) { sheet = null; }
+  if (!sheet) {
+    year = findLatestCashFlowYearWithAnyIncome_(ss);
+    if (year == null) {
+      return {
+        year: null,
+        sheetName: '',
+        present: false,
+        missing: CASH_FLOW_INCOME_FORECAST_HEADERS_.slice(),
+        lastSummaryLabel: ''
+      };
+    }
+    try { sheet = getCashFlowSheet_(ss, year); } catch (_latestErr) {
+      return {
+        year: year,
+        sheetName: '',
+        present: false,
+        missing: CASH_FLOW_INCOME_FORECAST_HEADERS_.slice(),
+        lastSummaryLabel: ''
+      };
+    }
+  }
+  var lastCol = Math.max(1, sheet.getLastColumn());
+  var headers = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0] || [];
+  var missing = typeof cashFlowIncomeForecastHeadersToAppend_ === 'function'
+    ? cashFlowIncomeForecastHeadersToAppend_(headers)
+    : ['Recurring', 'Frequency', 'Expected Amount'];
+  var lastSummary = typeof cashFlowLastSummaryColumnIndex_ === 'function'
+    ? cashFlowLastSummaryColumnIndex_(headers)
+    : -1;
+  var present = missing.length === 0;
+  var needsFormat = false;
+  var mismatches = [];
+  var mismatchDetails = [];
+  if (present) {
+    if (typeof inspectCashFlowIncomeForecastFormatting_ === 'function') {
+      try {
+        var inspection = inspectCashFlowIncomeForecastFormatting_(sheet);
+        needsFormat = inspection && inspection.needsFormat === true;
+        mismatches = inspection && Array.isArray(inspection.mismatches)
+          ? inspection.mismatches.slice()
+          : [];
+        mismatchDetails = inspection && Array.isArray(inspection.mismatchDetails)
+          ? inspection.mismatchDetails.slice()
+          : [];
+      } catch (_inspectErr) {
+        needsFormat = true;
+        mismatches = ['Cash Flow forecast header formatting could not be read.'];
+      }
+    } else {
+      needsFormat = true;
+    }
+  }
+  return {
+    year: year,
+    sheetName: sheet.getName(),
+    present: present,
+    missing: missing,
+    needsFormat: needsFormat === true,
+    mismatches: mismatches,
+    mismatchDetails: mismatchDetails,
+    lastSummaryLabel: lastSummary >= 0 ? String(headers[lastSummary] || '') : ''
+  };
+}
+
+/**
+ * Explicit setup: append Recurring / Frequency / Expected Amount to the
+ * current year's Cash Flow sheet after Totals / Yearly Total. Never inserts
+ * an income row and never writes month cells, totals, or formulas.
+ */
+function addIncomeForecastColumnsFromDashboard(optionalSpreadsheet) {
+  var ss = optionalSpreadsheet || getUserSpreadsheet_();
+  var lock = LockService.getUserLock();
+  lock.waitLock(10000);
+  try {
+    var year = getCurrentYear_();
+    var sheet;
+    try { sheet = getCashFlowSheet_(ss, year); }
+    catch (e) {
+      throw new Error(
+        'Cash Flow sheet for ' + year + ' was not found. Open the current year tab first.'
+      );
+    }
+    var lastCol = Math.max(1, sheet.getLastColumn());
+    var headersBefore = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0] || [];
+    var missing = typeof cashFlowIncomeForecastHeadersToAppend_ === 'function'
+      ? cashFlowIncomeForecastHeadersToAppend_(headersBefore)
+      : ['Recurring', 'Frequency', 'Expected Amount'];
+    if (!missing.length) {
+      return {
+        ok: true,
+        added: [],
+        alreadyPresent: true,
+        year: year,
+        sheetName: sheet.getName(),
+        lastSummaryLabel: typeof cashFlowLastSummaryColumnIndex_ === 'function' &&
+          cashFlowLastSummaryColumnIndex_(headersBefore) >= 0
+          ? String(headersBefore[cashFlowLastSummaryColumnIndex_(headersBefore)] || '')
+          : '',
+        message: 'Recurring, Frequency, and Expected Amount are already on ' +
+          sheet.getName() + '.'
+      };
+    }
+    if (typeof ensureCashFlowIncomeForecastSchema_ !== 'function') {
+      throw new Error('Cash Flow forecast columns could not be added.');
+    }
+    ensureCashFlowIncomeForecastSchema_(sheet);
+    var headersAfter = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0] || [];
+    var stillMissing = cashFlowIncomeForecastHeadersToAppend_(headersAfter);
+    if (stillMissing.length) {
+      throw new Error('Cash Flow forecast columns could not be verified after adding them.');
+    }
+    var lastSummary = cashFlowLastSummaryColumnIndex_(headersAfter);
+    var lastSummaryLabel = lastSummary >= 0 ? String(headersAfter[lastSummary] || '') : '';
+    var recurringIndex = headersAfter.indexOf('Recurring');
+    if (lastSummary >= 0 && recurringIndex >= 0 && recurringIndex <= lastSummary) {
+      throw new Error('Forecast columns must be added after Totals and Yearly Total.');
+    }
+    return {
+      ok: true,
+      added: missing,
+      alreadyPresent: false,
+      year: year,
+      sheetName: sheet.getName(),
+      lastSummaryLabel: lastSummaryLabel,
+      message: 'Added ' + missing.join(', ') + ' after ' +
+        (lastSummaryLabel || 'the existing Cash Flow columns') +
+        ' on ' + sheet.getName() +
+        '. Existing month amounts, totals, and income rows were not changed.'
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Explicit setup: match Recurring / Frequency / Expected Amount to the
+ * existing Cash Flow header style. Never adds columns and never writes
+ * values, formulas, month cells, totals, or income rows.
+ */
+function formatIncomeForecastColumnsFromDashboard(optionalSpreadsheet) {
+  var ss = optionalSpreadsheet || getUserSpreadsheet_();
+  var lock = LockService.getUserLock();
+  lock.waitLock(10000);
+  try {
+    var year = getCurrentYear_();
+    var sheet;
+    try { sheet = getCashFlowSheet_(ss, year); }
+    catch (e) {
+      throw new Error(
+        'Cash Flow sheet for ' + year + ' was not found. Open the current year tab first.'
+      );
+    }
+    var lastCol = Math.max(1, sheet.getLastColumn());
+    var headers = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0] || [];
+    var missing = typeof cashFlowIncomeForecastHeadersToAppend_ === 'function'
+      ? cashFlowIncomeForecastHeadersToAppend_(headers)
+      : ['Recurring', 'Frequency', 'Expected Amount'];
+    if (missing.length) {
+      throw new Error(
+        'Recurring, Frequency, and Expected Amount are not all on ' +
+        sheet.getName() +
+        '. Add the missing columns first. This action does not add columns.'
+      );
+    }
+    if (typeof formatCashFlowIncomeForecastColumns_ !== 'function') {
+      throw new Error('Cash Flow forecast columns could not be formatted.');
+    }
+    var result = formatCashFlowIncomeForecastColumns_(sheet);
+    if (!result || result.formatted !== true || result.added === true) {
+      throw new Error('Cash Flow forecast columns could not be formatted without adding columns.');
+    }
+    if (typeof cashFlowIncomeForecastFlush_ === 'function') cashFlowIncomeForecastFlush_();
+    var inspection = typeof inspectCashFlowIncomeForecastFormatting_ === 'function'
+      ? inspectCashFlowIncomeForecastFormatting_(sheet)
+      : { needsFormat: false, mismatches: [], mismatchDetails: [] };
+    var mismatchLines = inspection && Array.isArray(inspection.mismatches)
+      ? inspection.mismatches.slice()
+      : [];
+    var message = 'Formatted Recurring, Frequency, and Expected Amount on ' +
+      sheet.getName() +
+      ' to match the existing Cash Flow headers. Values, formulas, month columns, totals, and income rows were not changed.';
+    if (inspection && inspection.needsFormat === true) {
+      message = 'Format ran on ' + sheet.getName() +
+        ', but the fresh status read still found mismatches: ' +
+        (mismatchLines.length ? mismatchLines.join('; ') : 'headers still need formatting') +
+        '. Values, formulas, and income rows were not changed.';
+    }
+    return {
+      ok: true,
+      added: false,
+      formatted: true,
+      needsFormat: inspection && inspection.needsFormat === true,
+      mismatches: mismatchLines,
+      mismatchDetails: inspection && Array.isArray(inspection.mismatchDetails)
+        ? inspection.mismatchDetails.slice()
+        : [],
+      columns: result.columns || [],
+      year: year,
+      sheetName: sheet.getName(),
+      message: message
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function ciscoBonusHistoryValueIsFormula_(value) {
+  return typeof value === 'string' && String(value).trim().charAt(0) === '=';
+}
+
+function ciscoBonusHistoryCellAmount_(value, display) {
+  if (ciscoBonusHistoryValueIsFormula_(value) || ciscoBonusHistoryValueIsFormula_(display)) {
+    return { formula: true, known: false, amount: null, present: true };
+  }
+  var known = typeof debtMinimumPaymentCellIsKnown_ === 'function'
+    ? debtMinimumPaymentCellIsKnown_(value, display)
+    : String(display == null ? '' : display).trim() !== '';
+  if (!known) return { formula: false, known: false, amount: null, present: false };
+  var amount = round2_(toNumber_(value));
+  return {
+    formula: false,
+    known: true,
+    amount: amount,
+    present: amount !== 0
+  };
+}
+
+function listCashFlowMonthColumnsForBonusSplit_(headers) {
+  var out = [];
+  (headers || []).forEach(function(header, col) {
+    if (typeof parseMonthHeader_ !== 'function') return;
+    var parsed = parseMonthHeader_(header);
+    if (!parsed) return;
+    out.push({
+      col: col,
+      header: String(header || '').trim(),
+      date: parsed,
+      monthIndex: parsed.getMonth(),
+      year: parsed.getFullYear()
+    });
+  });
+  return out;
+}
+
+function cashFlowIncomeMonthlyTotalsFromGrid_(display, values, typeCol, monthCols) {
+  var totals = {};
+  (monthCols || []).forEach(function(month) {
+    totals[month.header] = 0;
+  });
+  for (var r = 1; r < (display || []).length; r++) {
+    if (String((display[r] || [])[typeCol] || '').trim().toLowerCase() !== 'income') continue;
+    (monthCols || []).forEach(function(month) {
+      var val = ((values && values[r]) || display[r] || [])[month.col];
+      if (ciscoBonusHistoryValueIsFormula_(val)) return;
+      var n = toNumber_(val);
+      if (isFinite(n)) {
+        totals[month.header] = round2_((totals[month.header] || 0) + n);
+      }
+    });
+  }
+  return totals;
+}
+
+function cashFlowIncomeAnnualTotalFromMonthly_(monthlyTotals) {
+  var sum = 0;
+  Object.keys(monthlyTotals || {}).forEach(function(key) {
+    sum = round2_(sum + (Number(monthlyTotals[key]) || 0));
+  });
+  return sum;
+}
+
+function cashFlowRewriteFormulaRow_(formula, fromRow, toRow) {
+  var text = String(formula || '');
+  if (!text || text.charAt(0) !== '=') return text;
+  var from = String(fromRow);
+  var to = String(toRow);
+  return text.replace(new RegExp('([A-Za-z]+)\\$?' + from + '\\b', 'g'), '$1' + to);
+}
+
+function ciscoBonusTrusted2026Split_(payments) {
+  if (!payments || payments.length !== 2) return false;
+  var years = {};
+  var byMonth = {};
+  payments.forEach(function(payment) {
+    years[payment.year] = true;
+    byMonth[payment.monthIndex] = round2_(Number(payment.amount));
+  });
+  return years[2026] === true && Object.keys(years).length === 1 &&
+    byMonth[2] === CISCO_BONUS_TRUSTED_2026_MID_AMOUNT_ &&
+    byMonth[8] === CISCO_BONUS_TRUSTED_2026_END_AMOUNT_;
+}
+
+function ciscoBonusProposalFingerprint_(proposal) {
+  var payments = (proposal && proposal.payments) || [];
+  return payments.map(function(payment) {
+    return String(payment.header || '') + '=' +
+      round2_(Number(payment.amount) || 0) + '>' +
+      String(payment.toPayee || '');
+  }).join('|');
+}
+
+function inspectCiscoBonusHistorySplit_(display, values) {
+  display = display || [];
+  values = values || display;
+  var headers = display[0] || [];
+  var typeCol = headers.indexOf('Type');
+  var payeeCol = headers.indexOf('Payee');
+  var activeCol = headers.indexOf('Active');
+  var expectedCol = headers.indexOf('Expected Amount');
+  var monthCols = listCashFlowMonthColumnsForBonusSplit_(headers);
+  var result = {
+    needed: false,
+    alreadySplit: false,
+    canSplit: false,
+    requiresConfirmation: false,
+    trustedMapping: false,
+    historyYear: null,
+    proposal: null,
+    paymentMonths: [],
+    ambiguities: [],
+    warnings: [],
+    monthlyTotals: cashFlowIncomeMonthlyTotalsFromGrid_(display, values, typeCol, monthCols),
+    annualTotal: 0,
+    legacyRows: [],
+    namedRows: { mid: [], end: [] },
+    rename: [],
+    insert: [],
+    moves: [],
+    deactivate: [],
+    clearExpected: []
+  };
+  result.annualTotal = cashFlowIncomeAnnualTotalFromMonthly_(result.monthlyTotals);
+  if (typeCol === -1 || payeeCol === -1) {
+    result.ambiguities.push(
+      'Cisco Bonus history cannot be split because Cash Flow Type and Payee headers are missing.'
+    );
+    return result;
+  }
+
+  function rowInactive_(row) {
+    if (activeCol === -1) return false;
+    var rawActive = String(row[activeCol] || '').trim();
+    return !!rawActive && normalizeYesNo_(rawActive) === 'no';
+  }
+
+  var bonusRows = [];
+  for (var r = 1; r < display.length; r++) {
+    var row = display[r] || [];
+    if (String(row[typeCol] || '').trim().toLowerCase() !== 'income') continue;
+    var payee = String(row[payeeCol] || '').trim();
+    if (!payee || !isCiscoBonusIncomeName_(payee)) continue;
+    var valueRow = values[r] || row;
+    var expectedKnown = expectedCol >= 0 && (
+      typeof debtMinimumPaymentCellIsKnown_ === 'function'
+        ? debtMinimumPaymentCellIsKnown_(valueRow[expectedCol], row[expectedCol])
+        : String(row[expectedCol] || '').trim() !== ''
+    );
+    var info = {
+      sheetRow: r + 1,
+      rowIndex: r,
+      payee: payee,
+      inactive: rowInactive_(row),
+      expectedKnown: expectedKnown === true,
+      expectedAmount: expectedKnown === true ? toNumber_(valueRow[expectedCol]) : null,
+      cells: []
+    };
+    if (isCiscoMidYearBonusIncomeName_(payee)) result.namedRows.mid.push(info);
+    else if (isCiscoEndYearBonusIncomeName_(payee)) result.namedRows.end.push(info);
+    else if (!info.inactive) result.legacyRows.push(info);
+    if (!info.inactive) bonusRows.push(info);
+  }
+
+  var activeMid = result.namedRows.mid.filter(function(row) { return !row.inactive; });
+  var activeEnd = result.namedRows.end.filter(function(row) { return !row.inactive; });
+  result.needed = result.legacyRows.length > 0 ||
+    activeMid.length !== 1 ||
+    activeEnd.length !== 1;
+
+  if (activeMid.length > 1) {
+    result.ambiguities.push(
+      'Multiple Cisco Mid Year Bonus rows exist, so history was not rewritten.'
+    );
+  }
+  if (activeEnd.length > 1) {
+    result.ambiguities.push(
+      'Multiple Cisco End Year Bonus rows exist, so history was not rewritten.'
+    );
+  }
+  if (!result.legacyRows.length && !activeMid.length && !activeEnd.length) {
+    result.ambiguities.push('No Cisco Bonus income entry was found to split.');
+    return result;
+  }
+
+  var hitsByHeader = {};
+  var historyYears = {};
+  bonusRows.forEach(function(info) {
+    var valueRow = values[info.rowIndex] || display[info.rowIndex] || [];
+    var shownRow = display[info.rowIndex] || [];
+    monthCols.forEach(function(month) {
+      var cell = ciscoBonusHistoryCellAmount_(valueRow[month.col], shownRow[month.col]);
+      info.cells.push({
+        col: month.col,
+        header: month.header,
+        monthIndex: month.monthIndex,
+        year: month.year,
+        date: month.date,
+        value: valueRow[month.col],
+        present: cell.present,
+        formula: cell.formula,
+        amount: cell.amount
+      });
+      if (!cell.present) return;
+      historyYears[month.year] = true;
+      if (cell.formula) {
+        result.ambiguities.push(
+          info.payee + ' row ' + info.sheetRow + ' ' + month.header +
+          ' is a formula, so that historical value was not moved.'
+        );
+        return;
+      }
+      if (!hitsByHeader[month.header]) hitsByHeader[month.header] = [];
+      hitsByHeader[month.header].push({
+        row: info,
+        header: month.header,
+        col: month.col,
+        monthIndex: month.monthIndex,
+        year: month.year,
+        date: month.date,
+        amount: cell.amount,
+        value: valueRow[month.col]
+      });
+    });
+  });
+
+  var paymentMonths = Object.keys(hitsByHeader);
+  paymentMonths.forEach(function(header) {
+    if (hitsByHeader[header].length > 1) {
+      result.ambiguities.push(
+        header +
+        ' has more than one Cisco Bonus amount, so it cannot be assigned to Cisco Mid Year Bonus or Cisco End Year Bonus without guessing.'
+      );
+    }
+  });
+  if (Object.keys(historyYears).length > 1) {
+    result.ambiguities.push(
+      'Cisco Bonus history spans more than one year, so payment order was not guessed.'
+    );
+  }
+  result.historyYear = Object.keys(historyYears).length === 1
+    ? Number(Object.keys(historyYears)[0])
+    : (monthCols[0] ? monthCols[0].year : null);
+  result.paymentMonths = paymentMonths.slice();
+
+  var uniquePayments = paymentMonths.map(function(header) {
+    return hitsByHeader[header][0];
+  }).filter(Boolean);
+  uniquePayments.sort(function(a, b) {
+    return a.date - b.date;
+  });
+
+  if (result.ambiguities.length) return result;
+
+  if (uniquePayments.length === 0 &&
+      result.legacyRows.length === 0 &&
+      activeMid.length === 1 &&
+      activeEnd.length === 1) {
+    result.alreadySplit = true;
+    result.needed = false;
+    result.canSplit = true;
+    return result;
+  }
+
+  if (uniquePayments.length !== 2) {
+    result.ambiguities.push(
+      uniquePayments.length === 0
+        ? 'Cisco Bonus history has no recorded payments, so two separate payments could not be identified. History was not changed.'
+        : uniquePayments.length === 1
+          ? 'Cisco Bonus history has only one recorded payment month (' +
+            uniquePayments[0].header + ' ' +
+            (typeof fmtCurrency_ === 'function' ? fmtCurrency_(uniquePayments[0].amount) : uniquePayments[0].amount) +
+            '), so a Mid Year and End Year split was not guessed.'
+          : 'Cisco Bonus history has ' + uniquePayments.length +
+            ' recorded payment months (' +
+            uniquePayments.map(function(payment) { return payment.header; }).join(', ') +
+            '), so two separate payments could not be identified without guessing.'
+    );
+    return result;
+  }
+
+  var earlier = uniquePayments[0];
+  var later = uniquePayments[1];
+  result.proposal = {
+    year: result.historyYear,
+    payments: [
+      {
+        header: earlier.header,
+        monthIndex: earlier.monthIndex,
+        year: earlier.year,
+        amount: earlier.amount,
+        toPayee: CISCO_MID_YEAR_BONUS_PAYEE_,
+        identity: 'mid'
+      },
+      {
+        header: later.header,
+        monthIndex: later.monthIndex,
+        year: later.year,
+        amount: later.amount,
+        toPayee: CISCO_END_YEAR_BONUS_PAYEE_,
+        identity: 'end'
+      }
+    ]
+  };
+  result.trustedMapping = ciscoBonusTrusted2026Split_(result.proposal.payments);
+  result.requiresConfirmation = result.trustedMapping !== true;
+
+  var midRow = activeMid[0] || null;
+  var endRow = activeEnd[0] || null;
+  var leftover = result.legacyRows.slice();
+
+  function takeRow_(row) {
+    for (var i = 0; i < leftover.length; i++) {
+      if (leftover[i] === row) {
+        leftover.splice(i, 1);
+        return row;
+      }
+    }
+    return row;
+  }
+
+  if (!midRow) {
+    result.rename.push({
+      sheetRow: earlier.row.sheetRow,
+      rowIndex: earlier.row.rowIndex,
+      fromPayee: earlier.row.payee,
+      toPayee: CISCO_MID_YEAR_BONUS_PAYEE_
+    });
+    midRow = takeRow_(earlier.row);
+  }
+  if (!endRow) {
+    if (later.row !== midRow && leftover.indexOf(later.row) >= 0 &&
+        later.row.payee && !isCiscoNamedAnnualBonusIncomeName_(later.row.payee)) {
+      result.rename.push({
+        sheetRow: later.row.sheetRow,
+        rowIndex: later.row.rowIndex,
+        fromPayee: later.row.payee,
+        toPayee: CISCO_END_YEAR_BONUS_PAYEE_
+      });
+      endRow = takeRow_(later.row);
+    } else {
+      result.insert.push({ payee: CISCO_END_YEAR_BONUS_PAYEE_ });
+    }
+  }
+  if (!midRow) result.insert.push({ payee: CISCO_MID_YEAR_BONUS_PAYEE_ });
+
+  var renamedToMid = result.rename.some(function(item) {
+    return item.rowIndex === earlier.row.rowIndex &&
+      item.toPayee === CISCO_MID_YEAR_BONUS_PAYEE_;
+  });
+  var renamedToEnd = result.rename.some(function(item) {
+    return item.rowIndex === later.row.rowIndex &&
+      item.toPayee === CISCO_END_YEAR_BONUS_PAYEE_;
+  });
+  if (!renamedToMid && !isCiscoMidYearBonusIncomeName_(earlier.row.payee)) {
+    result.moves.push({
+      fromSheetRow: earlier.row.sheetRow,
+      fromRowIndex: earlier.row.rowIndex,
+      fromCol: earlier.col,
+      header: earlier.header,
+      value: earlier.value,
+      toPayee: CISCO_MID_YEAR_BONUS_PAYEE_
+    });
+  }
+  if (!renamedToEnd && !isCiscoEndYearBonusIncomeName_(later.row.payee)) {
+    result.moves.push({
+      fromSheetRow: later.row.sheetRow,
+      fromRowIndex: later.row.rowIndex,
+      fromCol: later.col,
+      header: later.header,
+      value: later.value,
+      toPayee: CISCO_END_YEAR_BONUS_PAYEE_
+    });
+  }
+
+  leftover.forEach(function(row) {
+    var remaining = (row.cells || []).some(function(cell) { return cell.present; });
+    if (remaining && row !== earlier.row && row !== later.row) {
+      result.ambiguities.push(
+        row.payee + ' row ' + row.sheetRow +
+        ' still has historical amounts that cannot be assigned to Cisco Mid Year Bonus or Cisco End Year Bonus without guessing.'
+      );
+      return;
+    }
+    if (row !== midRow && row !== endRow) {
+      result.deactivate.push({
+        sheetRow: row.sheetRow,
+        rowIndex: row.rowIndex,
+        payee: row.payee
+      });
+    }
+  });
+
+  if (result.ambiguities.length) return result;
+
+  function blankExpected_(row, payeeLabel) {
+    if (!row) return;
+    result.clearExpected.push({
+      sheetRow: row.sheetRow,
+      rowIndex: row.rowIndex,
+      reason: 'Expected Amount on ' + (payeeLabel || row.payee) +
+        ' was left blank. Set Cisco Mid Year Bonus and Cisco End Year Bonus independently; a combined amount was not copied.'
+    });
+  }
+  blankExpected_(midRow, CISCO_MID_YEAR_BONUS_PAYEE_);
+  if (endRow) blankExpected_(endRow, CISCO_END_YEAR_BONUS_PAYEE_);
+  result.warnings = result.clearExpected.map(function(item) { return item.reason; })
+    .filter(function(reason, idx, all) { return all.indexOf(reason) === idx; });
+  if (!result.warnings.length) {
+    result.warnings.push(
+      'Expected Amount on Cisco Mid Year Bonus and Cisco End Year Bonus was left blank until each is entered.'
+    );
+  }
+  result.needed = true;
+  result.alreadySplit = false;
+  result.canSplit = true;
+  return result;
+}
+
+function applyCiscoBonusHistorySplitToGrid_(grid, options) {
+  options = options || {};
+  var source = (grid || []).map(function(row) {
+    return (row || []).slice();
+  });
+  var inspection = inspectCiscoBonusHistorySplit_(source, source);
+  if (!inspection.canSplit) {
+    return {
+      ok: false,
+      changed: false,
+      error: inspection.ambiguities.join(' '),
+      ambiguities: inspection.ambiguities.slice(),
+      grid: source,
+      monthlyTotalsBefore: inspection.monthlyTotals,
+      monthlyTotalsAfter: inspection.monthlyTotals,
+      annualTotalBefore: inspection.annualTotal,
+      annualTotalAfter: inspection.annualTotal
+    };
+  }
+  if (inspection.alreadySplit) {
+    return {
+      ok: true,
+      changed: false,
+      alreadySplit: true,
+      grid: source,
+      monthlyTotalsBefore: inspection.monthlyTotals,
+      monthlyTotalsAfter: inspection.monthlyTotals,
+      annualTotalBefore: inspection.annualTotal,
+      annualTotalAfter: inspection.annualTotal,
+      warnings: []
+    };
+  }
+  if (inspection.requiresConfirmation === true && options.confirmProposal !== true) {
+    return {
+      ok: false,
+      changed: false,
+      needsConfirmation: true,
+      proposal: inspection.proposal,
+      error: 'Confirm the proposed earlier payment as Cisco Mid Year Bonus and later payment as Cisco End Year Bonus before history is changed.',
+      ambiguities: [],
+      grid: source,
+      monthlyTotalsBefore: inspection.monthlyTotals,
+      monthlyTotalsAfter: inspection.monthlyTotals,
+      annualTotalBefore: inspection.annualTotal,
+      annualTotalAfter: inspection.annualTotal
+    };
+  }
+  if (options.proposal) {
+    if (ciscoBonusProposalFingerprint_(options.proposal) !==
+        ciscoBonusProposalFingerprint_(inspection.proposal)) {
+      return {
+        ok: false,
+        changed: false,
+        error: 'The proposed payment months changed. History was not rewritten.',
+        grid: source,
+        monthlyTotalsBefore: inspection.monthlyTotals,
+        monthlyTotalsAfter: inspection.monthlyTotals,
+        annualTotalBefore: inspection.annualTotal,
+        annualTotalAfter: inspection.annualTotal
+      };
+    }
+  }
+
+  var headers = source[0] || [];
+  var typeCol = headers.indexOf('Type');
+  var payeeCol = headers.indexOf('Payee');
+  var flowCol = headers.indexOf('Flow Source');
+  var activeCol = headers.indexOf('Active');
+  var recurringCol = headers.indexOf('Recurring');
+  var frequencyCol = headers.indexOf('Frequency');
+  var expectedCol = headers.indexOf('Expected Amount');
+  var monthCols = listCashFlowMonthColumnsForBonusSplit_(headers);
+  var totalsBefore = cashFlowIncomeMonthlyTotalsFromGrid_(source, source, typeCol, monthCols);
+  var annualBefore = cashFlowIncomeAnnualTotalFromMonthly_(totalsBefore);
+  var unrelatedBefore = source.slice(1).filter(function(row) {
+    return String(row[typeCol] || '').trim().toLowerCase() === 'income' &&
+      !isCiscoBonusIncomeName_(row[payeeCol]);
+  }).map(function(row) { return row.slice(); });
+
+  inspection.rename.forEach(function(item) {
+    source[item.rowIndex][payeeCol] = item.toPayee;
+  });
+  inspection.deactivate.forEach(function(item) {
+    if (activeCol >= 0) source[item.rowIndex][activeCol] = 'NO';
+  });
+
+  function findPayeeRow_(payee) {
+    for (var r = 1; r < source.length; r++) {
+      if (String(source[r][typeCol] || '').trim().toLowerCase() !== 'income') continue;
+      if (canonicalizeIncomePayeeKey_(source[r][payeeCol]) === canonicalizeIncomePayeeKey_(payee)) {
+        var inactive = activeCol >= 0 &&
+          String(source[r][activeCol] || '').trim() &&
+          normalizeYesNo_(source[r][activeCol]) === 'no';
+        if (!inactive) return r;
+      }
+    }
+    return -1;
+  }
+
+  function blankRowFrom_(templateIndex, payee) {
+    var template = source[templateIndex] || source[1] || [];
+    var next = template.map(function() { return ''; });
+    next[typeCol] = 'Income';
+    if (flowCol >= 0) next[flowCol] = template[flowCol] || 'CASH';
+    next[payeeCol] = payee;
+    if (activeCol >= 0) next[activeCol] = 'YES';
+    if (recurringCol >= 0) next[recurringCol] = 'Yes';
+    if (frequencyCol >= 0) next[frequencyCol] = 'Yearly';
+    if (expectedCol >= 0) next[expectedCol] = '';
+    headers.forEach(function(header, col) {
+      var label = String(header || '').trim().toLowerCase();
+      if (label !== 'total' && label !== 'totals' && label !== 'yearly total') return;
+      var formula = template[col];
+      if (ciscoBonusHistoryValueIsFormula_(formula)) {
+        next[col] = cashFlowRewriteFormulaRow_(formula, templateIndex + 1, source.length + 1);
+      }
+    });
+    return next;
+  }
+
+  var templateIndex = inspection.rename[0] ? inspection.rename[0].rowIndex : 1;
+  inspection.insert.forEach(function(item) {
+    if (findPayeeRow_(item.payee) >= 0) return;
+    source.push(blankRowFrom_(templateIndex, item.payee));
+  });
+
+  inspection.moves.forEach(function(move) {
+    var destIndex = findPayeeRow_(move.toPayee);
+    if (destIndex < 0) {
+      inspection.ambiguities.push(
+        'Cisco Bonus history could not be moved to ' + move.toPayee + '.'
+      );
+      return;
+    }
+    if (destIndex === move.fromRowIndex) return;
+    source[destIndex][move.fromCol] = move.value;
+    source[move.fromRowIndex][move.fromCol] = '';
+  });
+
+  [CISCO_MID_YEAR_BONUS_PAYEE_, CISCO_END_YEAR_BONUS_PAYEE_].forEach(function(payee) {
+    var rowIndex = findPayeeRow_(payee);
+    if (rowIndex < 0) return;
+    if (recurringCol >= 0) source[rowIndex][recurringCol] = 'Yes';
+    if (frequencyCol >= 0) source[rowIndex][frequencyCol] = 'Yearly';
+    if (expectedCol >= 0) source[rowIndex][expectedCol] = '';
+  });
+
+  if (inspection.ambiguities.length) {
+    return {
+      ok: false,
+      changed: false,
+      error: inspection.ambiguities.join(' '),
+      ambiguities: inspection.ambiguities.slice(),
+      grid: (grid || []).map(function(row) { return (row || []).slice(); }),
+      monthlyTotalsBefore: totalsBefore,
+      monthlyTotalsAfter: totalsBefore,
+      annualTotalBefore: annualBefore,
+      annualTotalAfter: annualBefore
+    };
+  }
+
+  var unrelatedAfter = source.slice(1).filter(function(row) {
+    return String(row[typeCol] || '').trim().toLowerCase() === 'income' &&
+      !isCiscoBonusIncomeName_(row[payeeCol]);
+  });
+  if (unrelatedAfter.length !== unrelatedBefore.length) {
+    return {
+      ok: false,
+      changed: false,
+      error: 'Unrelated income rows would have changed. History was not rewritten.',
+      grid: (grid || []).map(function(row) { return (row || []).slice(); }),
+      monthlyTotalsBefore: totalsBefore,
+      monthlyTotalsAfter: totalsBefore,
+      annualTotalBefore: annualBefore,
+      annualTotalAfter: annualBefore
+    };
+  }
+  for (var u = 0; u < unrelatedBefore.length; u++) {
+    if (JSON.stringify(unrelatedBefore[u]) !== JSON.stringify(unrelatedAfter[u])) {
+      return {
+        ok: false,
+        changed: false,
+        error: 'Unrelated income rows would have changed. History was not rewritten.',
+        grid: (grid || []).map(function(row) { return (row || []).slice(); }),
+        monthlyTotalsBefore: totalsBefore,
+        monthlyTotalsAfter: totalsBefore,
+        annualTotalBefore: annualBefore,
+        annualTotalAfter: annualBefore
+      };
+    }
+  }
+
+  var totalsAfter = cashFlowIncomeMonthlyTotalsFromGrid_(source, source, typeCol, monthCols);
+  return {
+    ok: true,
+    changed: true,
+    alreadySplit: false,
+    trustedMapping: inspection.trustedMapping === true,
+    proposal: inspection.proposal,
+    grid: source,
+    monthlyTotalsBefore: totalsBefore,
+    monthlyTotalsAfter: totalsAfter,
+    annualTotalBefore: annualBefore,
+    annualTotalAfter: cashFlowIncomeAnnualTotalFromMonthly_(totalsAfter),
+    warnings: inspection.warnings.slice(),
+    inspection: inspection
+  };
+}
+
+function listCiscoBonusIncomeEntries_(sheet, headerMap) {
+  if (!sheet || !headerMap) return [];
+  var display = sheet.getDataRange().getDisplayValues();
+  var values = sheet.getDataRange().getValues();
+  var out = [];
+  for (var r = 1; r < display.length; r++) {
+    var row = display[r] || [];
+    if (String(row[headerMap.typeColZero] || '').trim().toLowerCase() !== 'income') continue;
+    var payee = String(row[headerMap.payeeColZero] || '').trim();
+    if (!payee || !isCiscoBonusIncomeName_(payee)) continue;
+    var inactive = false;
+    if (headerMap.activeColZero !== -1) {
+      var rawActive = String(row[headerMap.activeColZero] || '').trim();
+      inactive = !!rawActive && normalizeYesNo_(rawActive) === 'no';
+    }
+    var forecast = {
+      recurring: headerMap.recurringColZero >= 0
+        ? String(row[headerMap.recurringColZero] || '').trim() : '',
+      frequency: headerMap.frequencyColZero >= 0
+        ? String(row[headerMap.frequencyColZero] || '').trim() : '',
+      expectedAmount: null,
+      expectedKnown: false
+    };
+    if (headerMap.expectedAmountColZero >= 0) {
+      forecast.expectedKnown = typeof debtMinimumPaymentCellIsKnown_ === 'function'
+        ? debtMinimumPaymentCellIsKnown_(
+            values[r][headerMap.expectedAmountColZero],
+            row[headerMap.expectedAmountColZero]
+          )
+        : String(row[headerMap.expectedAmountColZero] || '').trim() !== '';
+      if (forecast.expectedKnown) {
+        forecast.expectedAmount = toNumber_(values[r][headerMap.expectedAmountColZero]);
+      }
+    }
+    var named = isCiscoNamedAnnualBonusIncomeName_(payee);
+    var posSum = 0;
+    var posCount = 0;
+    var headers = display[0] || [];
+    for (var c = 0; c < headers.length; c++) {
+      if (typeof parseMonthHeader_ !== 'function' || !parseMonthHeader_(headers[c])) continue;
+      var monthAmt = toNumber_(values[r][c]);
+      if (monthAmt > 0) {
+        posSum += monthAmt;
+        posCount += 1;
+      }
+    }
+    out.push({
+      groupKey: (normalizeIncomeName_(payee) || payee).toLowerCase(),
+      sourceName: named ? (normalizeIncomeName_(payee) || payee) : (normalizeIncomeName_(payee) || 'Cisco Bonus'),
+      payee: payee,
+      kind: named ? 'cisco_annual_bonus' : 'cisco_bonus_legacy',
+      sheetRow: r + 1,
+      rows: [{ sheetRow: r + 1, payee: payee }],
+      lifecycleState: inactive ? 'inactive' : 'active',
+      amount: posCount ? round2_(posSum / posCount) : 0,
+      recurring: forecast.recurring,
+      frequency: forecast.frequency,
+      expectedAmount: forecast.expectedAmount,
+      expectedKnown: forecast.expectedKnown === true
+    });
+  }
+  return out;
+}
+
+function validateCiscoBonusRowReference_(sheet, headerMap, payload) {
+  var expectedRows = normalizeIncomeLifecycleRows_(payload.rows);
+  if (expectedRows.length !== 1) {
+    throw new Error('Cisco bonus payments are edited one Cash Flow row at a time.');
+  }
+  var expected = expectedRows[0];
+  var display = sheet.getDataRange().getDisplayValues();
+  var rowIndex = expected.sheetRow - 1;
+  if (rowIndex < 1 || rowIndex >= display.length) {
+    throw new Error('This Cisco bonus row moved or changed. Refresh Income and try again.');
+  }
+  var row = display[rowIndex] || [];
+  if (String(row[headerMap.typeColZero] || '').trim().toLowerCase() !== 'income') {
+    throw new Error('This Cisco bonus row moved or changed. Refresh Income and try again.');
+  }
+  var payee = String(row[headerMap.payeeColZero] || '').trim();
+  if (payee !== expected.payee || !isCiscoNamedAnnualBonusIncomeName_(payee)) {
+    throw new Error('This Cisco bonus row moved or changed. Refresh Income and try again.');
+  }
+  var inactive = false;
+  if (headerMap.activeColZero !== -1) {
+    var rawActive = String(row[headerMap.activeColZero] || '').trim();
+    inactive = !!rawActive && normalizeYesNo_(rawActive) === 'no';
+  }
+  return {
+    displayName: normalizeIncomeName_(payee) || payee,
+    payee: payee,
+    sheetRow: expected.sheetRow,
+    rows: [{ sheetRow: expected.sheetRow, payee: payee }],
+    activeCount: inactive ? 0 : 1
+  };
+}
+
+function updateCiscoBonusForecastFieldsFromDashboard(payload, optionalSpreadsheet) {
+  validateRequired_(payload, ['year', 'rows']);
+  var recurring = parseIncomeRecurringStatusFromDashboard_(payload.recurring);
+  var frequency = parseIncomeFrequencyFromDashboard_(payload.frequency);
+  var expected = parseIncomeExpectedAmountFromDashboard_(payload.expectedAmount);
+  if (recurring === 'Yes') {
+    if (!frequency) {
+      throw new Error('Frequency is required when Recurring is Yes.');
+    }
+    if (typeof normalizeFrequency_ === 'function' && normalizeFrequency_(frequency) !== 'yearly') {
+      throw new Error('Cisco Mid Year Bonus and Cisco End Year Bonus are annual. Frequency must be Yearly.');
+    }
+    if (expected.known !== true) {
+      throw new Error('Expected amount is required when Recurring is Yes. Use 0 if the occurrence amount is zero.');
+    }
+  }
+  var year = Math.round(Number(payload.year));
+  if (!isFinite(year) || year < 2000 || year > 3000) {
+    throw new Error('Invalid year for income source.');
+  }
+  var ss = optionalSpreadsheet || getUserSpreadsheet_();
+  var lock = LockService.getUserLock();
+  lock.waitLock(10000);
+  try {
+    var sheet;
+    try { sheet = getCashFlowSheet_(ss, year); }
+    catch (e) { throw new Error('Cash Flow sheet for ' + year + ' was not found.'); }
+    var headerMap = getCashFlowHeaderMap_(sheet);
+    if (!(headerMap.recurringCol > 0) || !(headerMap.frequencyCol > 0) ||
+        !(headerMap.expectedAmountCol > 0)) {
+      throw new Error(
+        'Add Recurring, Frequency, and Expected Amount columns from Manage income first. Existing income rows were not changed.'
+      );
+    }
+    var identity = validateCiscoBonusRowReference_(sheet, headerMap, payload);
+    if (identity.activeCount === 0) {
+      throw new Error('Inactive income sources cannot be edited. Reactivate the source first.');
+    }
+    var lastCol = Math.max(1, sheet.getLastColumn());
+    var valueRow = sheet.getRange(identity.sheetRow, 1, 1, lastCol).getValues()[0] || [];
+    var originals = {
+      recurring: headerMap.recurringCol > 0
+        ? sheet.getRange(identity.sheetRow, headerMap.recurringCol).getValue() : '',
+      frequency: headerMap.frequencyCol > 0
+        ? sheet.getRange(identity.sheetRow, headerMap.frequencyCol).getValue() : '',
+      expectedAmount: headerMap.expectedAmountCol > 0
+        ? sheet.getRange(identity.sheetRow, headerMap.expectedAmountCol).getValue() : ''
+    };
+    try {
+      var nextRow = applyIncomeForecastFieldsToRow_(valueRow, headerMap, {
+        recurring: recurring,
+        frequency: frequency,
+        expectedKnown: expected.known === true,
+        expectedAmount: expected.known === true ? expected.value : ''
+      });
+      sheet.getRange(identity.sheetRow, headerMap.recurringCol)
+        .setValue(nextRow[headerMap.recurringColZero]);
+      sheet.getRange(identity.sheetRow, headerMap.frequencyCol)
+        .setValue(nextRow[headerMap.frequencyColZero]);
+      var expectedCell = sheet.getRange(identity.sheetRow, headerMap.expectedAmountCol);
+      expectedCell.setValue(nextRow[headerMap.expectedAmountColZero]);
+      if (expected.known) {
+        try { expectedCell.setNumberFormat('$#,##0.00;[Red]-$#,##0.00'); } catch (_expFmt) { /* cosmetic */ }
+      }
+    } catch (writeErr) {
+      try {
+        sheet.getRange(identity.sheetRow, headerMap.recurringCol).setValue(originals.recurring);
+        sheet.getRange(identity.sheetRow, headerMap.frequencyCol).setValue(originals.frequency);
+        sheet.getRange(identity.sheetRow, headerMap.expectedAmountCol).setValue(originals.expectedAmount);
+      } catch (_rb) { /* best-effort rollback */ }
+      throw writeErr;
+    }
+    try {
+      appendActivityLog_(ss, {
+        eventType: 'income_bonus_forecast_edit',
+        entryDate: Utilities.formatDate(stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+        amount: expected.known ? expected.value : 0,
+        direction: 'income',
+        payee: identity.payee,
+        category: '',
+        accountSource: '',
+        cashFlowSheet: sheet.getName(),
+        cashFlowMonth: '',
+        dedupeKey: '',
+        details: JSON.stringify({
+          detailsVersion: 3,
+          year: year,
+          rows: identity.rows,
+          recurring: recurring,
+          frequency: frequency,
+          expectedKnown: expected.known === true,
+          expectedAmount: expected.known ? expected.value : null
+        })
+      });
+    } catch (logErr) {
+      Logger.log('updateCiscoBonusForecastFieldsFromDashboard activity log: ' + logErr);
+    }
+    touchDashboardSourceUpdated_('cash_flow');
+    return {
+      ok: true,
+      message: 'Updated ' + identity.displayName +
+        '. Historical month amounts were not changed.',
+      sourceName: identity.displayName,
+      rows: identity.rows
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function splitCiscoBonusIncomeRowsFromDashboard(payload, optionalSpreadsheet) {
+  if (payload && typeof payload.getSheetByName === 'function' && optionalSpreadsheet == null) {
+    optionalSpreadsheet = payload;
+    payload = {};
+  }
+  payload = payload || {};
+  var ss = optionalSpreadsheet || getUserSpreadsheet_();
+  var lock = LockService.getUserLock();
+  lock.waitLock(10000);
+  try {
+    var year = getCurrentYear_();
+    var sheet;
+    try { sheet = getCashFlowSheet_(ss, year); }
+    catch (e) {
+      throw new Error('Cash Flow sheet for ' + year + ' was not found.');
+    }
+    var headerMap = getCashFlowHeaderMap_(sheet);
+    var display = sheet.getDataRange().getDisplayValues();
+    var values = sheet.getDataRange().getValues();
+    var inspection = inspectCiscoBonusHistorySplit_(display, values);
+    if (!inspection.canSplit) {
+      throw new Error(
+        (inspection.ambiguities && inspection.ambiguities.length
+          ? inspection.ambiguities.join(' ')
+          : 'Cisco Bonus history cannot be split without guessing.') +
+        ' Existing month amounts, totals, and income rows were not changed.'
+      );
+    }
+    if (inspection.requiresConfirmation === true) {
+      if (payload.confirmProposal !== true) {
+        throw new Error(
+          'Confirm the proposed earlier payment as Cisco Mid Year Bonus and later payment as Cisco End Year Bonus before history is changed. Existing month amounts were not rewritten.'
+        );
+      }
+      if (payload.proposal && ciscoBonusProposalFingerprint_(payload.proposal) !==
+          ciscoBonusProposalFingerprint_(inspection.proposal)) {
+        throw new Error(
+          'The proposed payment months changed. Refresh Income and confirm again. Existing month amounts were not rewritten.'
+        );
+      }
+    }
+    if (inspection.alreadySplit) {
+      return {
+        ok: true,
+        changed: false,
+        alreadySplit: true,
+        year: year,
+        sheetName: sheet.getName(),
+        message: 'Cisco Mid Year Bonus and Cisco End Year Bonus already exist. Historical month amounts were not changed.'
+      };
+    }
+
+    var monthlyBefore = inspection.monthlyTotals;
+    inspection.rename.forEach(function(item) {
+      sheet.getRange(item.sheetRow, headerMap.payeeCol).setValue(item.toPayee);
+    });
+    inspection.clearExpected.forEach(function(item) {
+      if (headerMap.expectedAmountCol > 0) {
+        sheet.getRange(item.sheetRow, headerMap.expectedAmountCol).setValue('');
+      }
+    });
+    inspection.insert.forEach(function(item) {
+      var rowInfo = insertCashFlowRow_(sheet, 'Income', item.payee, 'CASH');
+      if (rowInfo && rowInfo.row && String(
+        sheet.getRange(rowInfo.row, headerMap.payeeCol).getDisplayValue() || ''
+      ).trim() !== item.payee) {
+        throw new Error('A named Cisco bonus row could not be added without changing an existing payee. Existing history was not finished.');
+      }
+    });
+    display = sheet.getDataRange().getDisplayValues();
+    values = sheet.getDataRange().getValues();
+    function findNamedRow_(payee) {
+      for (var r = 1; r < display.length; r++) {
+        if (String(display[r][headerMap.typeColZero] || '').trim().toLowerCase() !== 'income') continue;
+        if (canonicalizeIncomePayeeKey_(display[r][headerMap.payeeColZero]) !==
+            canonicalizeIncomePayeeKey_(payee)) continue;
+        if (headerMap.activeColZero !== -1) {
+          var rawActive = String(display[r][headerMap.activeColZero] || '').trim();
+          if (rawActive && normalizeYesNo_(rawActive) === 'no') continue;
+        }
+        return r + 1;
+      }
+      return 0;
+    }
+    inspection.moves.forEach(function(move) {
+      var destRow = findNamedRow_(move.toPayee);
+      if (!destRow) {
+        throw new Error(
+          'Cisco Bonus history could not be moved to ' + move.toPayee +
+          '. Existing month amounts were not finished.'
+        );
+      }
+      var destCol = move.fromCol + 1;
+      var sourceCell = sheet.getRange(move.fromSheetRow, destCol);
+      var destCell = sheet.getRange(destRow, destCol);
+      destCell.setValue(sourceCell.getValue());
+      try {
+        var fmt = sourceCell.getNumberFormat();
+        if (fmt) destCell.setNumberFormat(fmt);
+      } catch (_fmtErr) { /* cosmetic */ }
+      sourceCell.setValue('');
+    });
+    [CISCO_MID_YEAR_BONUS_PAYEE_, CISCO_END_YEAR_BONUS_PAYEE_].forEach(function(payee) {
+      var sheetRow = findNamedRow_(payee);
+      if (!sheetRow) return;
+      if (headerMap.recurringCol > 0) {
+        sheet.getRange(sheetRow, headerMap.recurringCol).setValue('Yes');
+      }
+      if (headerMap.frequencyCol > 0) {
+        sheet.getRange(sheetRow, headerMap.frequencyCol).setValue('Yearly');
+      }
+      if (headerMap.expectedAmountCol > 0) {
+        sheet.getRange(sheetRow, headerMap.expectedAmountCol).setValue('');
+      }
+    });
+    inspection.deactivate.forEach(function(item) {
+      if (headerMap.activeCol > 0) {
+        sheet.getRange(item.sheetRow, headerMap.activeCol).setValue('NO');
+      }
+    });
+
+    display = sheet.getDataRange().getDisplayValues();
+    values = sheet.getDataRange().getValues();
+    var monthCols = listCashFlowMonthColumnsForBonusSplit_(display[0] || []);
+    var monthlyAfter = cashFlowIncomeMonthlyTotalsFromGrid_(
+      display, values, (display[0] || []).indexOf('Type'), monthCols);
+    Object.keys(monthlyBefore || {}).forEach(function(header) {
+      if (round2_(monthlyBefore[header] || 0) !== round2_(monthlyAfter[header] || 0)) {
+        throw new Error(
+          'Cisco Bonus split stopped because ' + header +
+          ' totals would have changed. Existing history was not left in a guessed state.'
+        );
+      }
+    });
+
+    try {
+      appendActivityLog_(ss, {
+        eventType: 'income_bonus_split',
+        entryDate: Utilities.formatDate(stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+        amount: 0,
+        direction: 'income',
+        payee: CISCO_MID_YEAR_BONUS_PAYEE_,
+        category: '',
+        accountSource: '',
+        cashFlowSheet: sheet.getName(),
+        cashFlowMonth: '',
+        dedupeKey: '',
+        details: JSON.stringify({
+          detailsVersion: 1,
+          year: year,
+          warnings: inspection.warnings,
+          renamed: inspection.rename.map(function(item) {
+            return { from: item.fromPayee, to: item.toPayee, sheetRow: item.sheetRow };
+          })
+        })
+      });
+    } catch (logErr) {
+      Logger.log('splitCiscoBonusIncomeRowsFromDashboard activity log: ' + logErr);
+    }
+    touchDashboardSourceUpdated_('cash_flow');
+    var warningText = inspection.warnings.length
+      ? ' ' + inspection.warnings.join(' ')
+      : '';
+    return {
+      ok: true,
+      changed: true,
+      alreadySplit: false,
+      year: year,
+      sheetName: sheet.getName(),
+      warnings: inspection.warnings.slice(),
+      proposal: inspection.proposal,
+      trustedMapping: inspection.trustedMapping === true,
+      message: 'Split the existing Cisco Bonus entry into Cisco Mid Year Bonus and Cisco End Year Bonus. Mid Year is the first recorded payment; End Year is the second. Recurring is Yes and Frequency is Yearly on both rows. Expected Amount was left blank on both. Historical monthly totals were not changed.' +
+        warningText
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function getIncomeSourcesForManagementFromDashboard(optionalSpreadsheet) {
   var ss = optionalSpreadsheet || getUserSpreadsheet_();
+  var forecastSchema = readCashFlowIncomeForecastSchema_(ss);
   var year = findLatestCashFlowYearWithAnyIncome_(ss);
-  if (year == null) return { year: null, activeSources: [], inactiveSources: [] };
+  if (year == null) {
+    return {
+      year: null,
+      activeSources: [],
+      inactiveSources: [],
+      scheduledBonusSources: [],
+      bonusSplit: {
+        needed: false,
+        alreadySplit: false,
+        canSplit: false,
+        requiresConfirmation: false,
+        trustedMapping: false,
+        proposal: null,
+        paymentMonths: [],
+        ambiguities: []
+      },
+      forecastSchema: forecastSchema
+    };
+  }
 
   var sheet;
   try { sheet = getCashFlowSheet_(ss, year); }
@@ -438,17 +1729,47 @@ function getIncomeSourcesForManagementFromDashboard(optionalSpreadsheet) {
     throw new Error('Could not load the income lifecycle inventory. Please refresh and try again.');
   }
 
+  var headerMap;
+  try { headerMap = getCashFlowHeaderMap_(sheet); }
+  catch (mapErr) { headerMap = {}; }
+
   var groups = analyzeIncomeLifecycleGroupsInSheet_(sheet);
   var active = [];
   var inactive = [];
   for (var i = 0; i < groups.length; i++) {
     var g = groups[i];
+    if (typeof isCiscoBonusIncomeName_ === 'function' && isCiscoBonusIncomeName_(g.displayName)) {
+      if (typeof isCiscoNamedAnnualBonusIncomeName_ === 'function' &&
+          isCiscoNamedAnnualBonusIncomeName_(g.displayName) &&
+          g.lifecycleState === 'inactive') {
+        var bonusForecast = readIncomeForecastFieldsFromGroup_(sheet, headerMap, g.rows);
+        inactive.push({
+          groupKey: g.groupKey,
+          sourceName: g.displayName,
+          amount: g.avgNonZero,
+          frequency: bonusForecast.frequency || '',
+          recurring: bonusForecast.recurring || '',
+          expectedAmount: bonusForecast.expectedAmount,
+          expectedKnown: bonusForecast.expectedKnown === true,
+          year: year,
+          sheetName: sheet.getName(),
+          rows: g.rows,
+          mixedState: g.mixedState,
+          kind: 'cisco_annual_bonus'
+        });
+      }
+      continue;
+    }
     if (!incomeGroupQualifiesAsRecurring_(g)) continue;
+    var forecast = readIncomeForecastFieldsFromGroup_(sheet, headerMap, g.rows);
     var item = {
       groupKey: g.groupKey,
       sourceName: g.displayName,
       amount: g.avgNonZero,
-      frequency: 'Monthly',
+      frequency: forecast.frequency || '',
+      recurring: forecast.recurring || '',
+      expectedAmount: forecast.expectedAmount,
+      expectedKnown: forecast.expectedKnown === true,
       year: year,
       sheetName: sheet.getName(),
       rows: g.rows,
@@ -456,6 +1777,36 @@ function getIncomeSourcesForManagementFromDashboard(optionalSpreadsheet) {
     };
     if (g.lifecycleState === 'inactive') inactive.push(item);
     else active.push(item);
+  }
+  var scheduledBonus = listCiscoBonusIncomeEntries_(sheet, headerMap).map(function(entry) {
+    entry.year = year;
+    entry.sheetName = sheet.getName();
+    return entry;
+  });
+  var bonusSplit = {
+    needed: false,
+    alreadySplit: false,
+    canSplit: false,
+    ambiguities: []
+  };
+  try {
+    var display = sheet.getDataRange().getDisplayValues();
+    var values = sheet.getDataRange().getValues();
+    var inspection = inspectCiscoBonusHistorySplit_(display, values);
+    bonusSplit = {
+      needed: inspection.needed === true,
+      alreadySplit: inspection.alreadySplit === true,
+      canSplit: inspection.canSplit === true,
+      requiresConfirmation: inspection.requiresConfirmation === true,
+      trustedMapping: inspection.trustedMapping === true,
+      year: inspection.historyYear,
+      proposal: inspection.proposal || null,
+      paymentMonths: inspection.paymentMonths ? inspection.paymentMonths.slice() : [],
+      ambiguities: inspection.ambiguities ? inspection.ambiguities.slice() : [],
+      warnings: inspection.warnings ? inspection.warnings.slice() : []
+    };
+  } catch (_splitInspectErr) {
+    bonusSplit.ambiguities = ['Cisco Bonus history could not be inspected.'];
   }
   // Largest-first ordering surfaces material income at the top of the
   // management list; name is a deterministic tiebreaker.
@@ -466,7 +1817,23 @@ function getIncomeSourcesForManagementFromDashboard(optionalSpreadsheet) {
   };
   active.sort(sortSources);
   inactive.sort(sortSources);
-  return { year: year, activeSources: active, inactiveSources: inactive };
+  scheduledBonus.sort(function(a, b) {
+    var nameOrder = {};
+    nameOrder[canonicalizeIncomePayeeKey_(CISCO_MID_YEAR_BONUS_PAYEE_)] = 1;
+    nameOrder[canonicalizeIncomePayeeKey_(CISCO_END_YEAR_BONUS_PAYEE_)] = 2;
+    var am = nameOrder[canonicalizeIncomePayeeKey_(a.payee || a.sourceName)] || 9;
+    var bm = nameOrder[canonicalizeIncomePayeeKey_(b.payee || b.sourceName)] || 9;
+    if (am !== bm) return am - bm;
+    return Number(a.sheetRow || 0) - Number(b.sheetRow || 0);
+  });
+  return {
+    year: year,
+    activeSources: active,
+    inactiveSources: inactive,
+    scheduledBonusSources: scheduledBonus,
+    bonusSplit: bonusSplit,
+    forecastSchema: forecastSchema
+  };
 }
 
 /** Backward-compatible active-only read seam for older callers. */
@@ -479,12 +1846,106 @@ function getActiveIncomeSourcesForManagementFromDashboard(optionalSpreadsheet) {
 /* -------------------------------------------------------------------------- */
 
 /**
+ * Recurring Yes / No / blank-unknown. Blank stays unknown; it is not No.
+ */
+function parseIncomeRecurringStatusFromDashboard_(value) {
+  var text = String(value == null ? '' : value).replace(/\u00A0/g, ' ').trim();
+  if (!text) return '';
+  var v = text.toLowerCase();
+  if (v === 'yes' || v === 'y') return 'Yes';
+  if (v === 'no' || v === 'n') return 'No';
+  throw new Error('Recurring must be Yes, No, or left blank.');
+}
+
+function parseIncomeFrequencyFromDashboard_(value) {
+  var text = String(value == null ? '' : value).replace(/\u00A0/g, ' ').trim();
+  if (!text) return '';
+  var normalized = typeof normalizeFrequency_ === 'function'
+    ? normalizeFrequency_(text)
+    : 'unknown';
+  if (normalized === 'unknown') {
+    throw new Error('Frequency must be a supported payment frequency or left blank.');
+  }
+  return text;
+}
+
+function parseIncomeExpectedAmountFromDashboard_(raw) {
+  if (raw === undefined || raw === null || String(raw).trim() === '') {
+    return { known: false, value: null };
+  }
+  var amountNum = toNumber_(raw);
+  if (!isFinite(amountNum)) throw new Error('Expected amount must be a valid number.');
+  if (amountNum < 0) throw new Error('Expected amount cannot be negative.');
+  return { known: true, value: round2_(amountNum) };
+}
+
+/**
+ * Copy a Cash Flow row and write only Recurring / Frequency / Expected Amount.
+ * Month cells and every other column stay untouched. Blank expected stays blank.
+ */
+function applyIncomeForecastFieldsToRow_(row, headerMap, fields) {
+  var next = (row || []).slice();
+  fields = fields || {};
+  if (headerMap && headerMap.recurringColZero >= 0) {
+    next[headerMap.recurringColZero] = fields.recurring || '';
+  }
+  if (headerMap && headerMap.frequencyColZero >= 0) {
+    next[headerMap.frequencyColZero] = fields.frequency || '';
+  }
+  if (headerMap && headerMap.expectedAmountColZero >= 0) {
+    next[headerMap.expectedAmountColZero] = fields.expectedKnown === true
+      ? fields.expectedAmount
+      : '';
+  }
+  return next;
+}
+
+function readIncomeForecastFieldsFromGroup_(sheet, headerMap, rows) {
+  var empty = { recurring: '', frequency: '', expectedAmount: null, expectedKnown: false };
+  if (!sheet || !headerMap || !rows || !rows.length) return empty;
+  var first = rows[0];
+  var sheetRow = Number(first && first.sheetRow);
+  if (!isFinite(sheetRow) || sheetRow < 2) return empty;
+  var lastCol = Math.max(1, sheet.getLastColumn());
+  var displayRow = sheet.getRange(sheetRow, 1, 1, lastCol).getDisplayValues()[0] || [];
+  var valueRow = sheet.getRange(sheetRow, 1, 1, lastCol).getValues()[0] || [];
+  var recurring = headerMap.recurringColZero >= 0
+    ? String(displayRow[headerMap.recurringColZero] || '').trim()
+    : '';
+  var frequency = headerMap.frequencyColZero >= 0
+    ? String(displayRow[headerMap.frequencyColZero] || '').trim()
+    : '';
+  var expectedAmount = null;
+  var expectedKnown = false;
+  if (headerMap.expectedAmountColZero >= 0) {
+    expectedKnown = typeof debtMinimumPaymentCellIsKnown_ === 'function'
+      ? debtMinimumPaymentCellIsKnown_(
+          valueRow[headerMap.expectedAmountColZero],
+          displayRow[headerMap.expectedAmountColZero]
+        )
+      : String(displayRow[headerMap.expectedAmountColZero] || '').trim() !== '';
+    if (expectedKnown) {
+      expectedAmount = toNumber_(valueRow[headerMap.expectedAmountColZero]);
+    }
+  }
+  return {
+    recurring: recurring,
+    frequency: frequency,
+    expectedAmount: expectedAmount,
+    expectedKnown: expectedKnown
+  };
+}
+
+/**
  * Add a new income source by writing directly to the current year's
  * Cash Flow tab.
  *
  * Payload:
  *   - sourceName {string} non-empty (<=160 chars)
  *   - amount     {number|string} strictly > 0 (this month's amount)
+ *   - recurring  {string} Yes / No / blank-unknown
+ *   - frequency  {string} payment frequency or blank
+ *   - expectedAmount {number|string} amount per occurrence, including explicit 0, or blank
  *
  * Behavior:
  *   - Group-level duplicate check includes active and inactive rows.
@@ -520,6 +1981,18 @@ function addIncomeSourceFromDashboard(payload, optionalSpreadsheet) {
   if (amountNum <= 0) throw new Error('Amount must be greater than zero.');
   amountNum = round2_(amountNum);
 
+  var recurring = parseIncomeRecurringStatusFromDashboard_(payload.recurring);
+  var frequency = parseIncomeFrequencyFromDashboard_(payload.frequency);
+  var expected = parseIncomeExpectedAmountFromDashboard_(payload.expectedAmount);
+  if (recurring === 'Yes') {
+    if (!frequency) {
+      throw new Error('Frequency is required when Recurring is Yes.');
+    }
+    if (expected.known !== true) {
+      throw new Error('Expected amount is required when Recurring is Yes. Use 0 if the occurrence amount is zero.');
+    }
+  }
+
   var ss = optionalSpreadsheet || getUserSpreadsheet_();
   var year = getCurrentYear_();
 
@@ -543,6 +2016,13 @@ function addIncomeSourceFromDashboard(payload, optionalSpreadsheet) {
   }
 
   var headerMap = getCashFlowHeaderMap_(sheet);
+  if ((recurring || frequency || expected.known) &&
+      (!(headerMap.recurringCol > 0) || !(headerMap.frequencyCol > 0) ||
+       !(headerMap.expectedAmountCol > 0))) {
+    throw new Error(
+      'Add Recurring, Frequency, and Expected Amount columns from Manage income first. No income row was added.'
+    );
+  }
 
   var today = stripTime_(new Date());
   var monthCol;
@@ -584,6 +2064,20 @@ function addIncomeSourceFromDashboard(payload, optionalSpreadsheet) {
   // positive so the negative section is inert here.
   setCashFlowMoneyCellPreserveRowFormat_(sheet, targetRow, monthCol, amountNum, 3);
 
+  if (headerMap.recurringCol > 0 && recurring) {
+    sheet.getRange(targetRow, headerMap.recurringCol).setValue(recurring);
+  }
+  if (headerMap.frequencyCol > 0 && frequency) {
+    sheet.getRange(targetRow, headerMap.frequencyCol).setValue(frequency);
+  }
+  if (headerMap.expectedAmountCol > 0 && expected.known) {
+    var expectedCell = sheet.getRange(targetRow, headerMap.expectedAmountCol);
+    expectedCell.setValue(expected.value);
+    try {
+      expectedCell.setNumberFormat('$#,##0.00;[Red]-$#,##0.00');
+    } catch (_expectedFmt) { /* cosmetic */ }
+  }
+
   var monthLabel = Utilities.formatDate(today, Session.getScriptTimeZone(), 'MMM-yy');
   var todayIso = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
@@ -605,7 +2099,11 @@ function addIncomeSourceFromDashboard(payload, optionalSpreadsheet) {
         year: year,
         rowCreated: rowCreated,
         rowReactivated: false,
-        flowSourceWritten: flowSourceWritten
+        flowSourceWritten: flowSourceWritten,
+        recurring: recurring,
+        frequency: frequency,
+        expectedAmount: expected.known ? expected.value : null,
+        expectedKnown: expected.known === true
       })
     });
   } catch (logErr) {
@@ -625,6 +2123,15 @@ function addIncomeSourceFromDashboard(payload, optionalSpreadsheet) {
   if (flowSourceWritten) {
     incomeFitTargets.push({ sheet: sheet, col: headerMap.flowSourceCol });
   }
+  if (headerMap.recurringCol > 0) {
+    incomeFitTargets.push({ sheet: sheet, col: headerMap.recurringCol });
+  }
+  if (headerMap.frequencyCol > 0) {
+    incomeFitTargets.push({ sheet: sheet, col: headerMap.frequencyCol });
+  }
+  if (headerMap.expectedAmountCol > 0) {
+    incomeFitTargets.push({ sheet: sheet, col: headerMap.expectedAmountCol });
+  }
   fitContentColumnsToContents_(
     incomeFitTargets,
     'addIncomeSourceFromDashboard changed-column fit'
@@ -640,6 +2147,161 @@ function addIncomeSourceFromDashboard(payload, optionalSpreadsheet) {
     year: year,
     sheetName: sheet.getName()
   };
+}
+
+/**
+ * Update Recurring / Frequency / Expected Amount on existing active Cash Flow
+ * income rows. Never inserts a row and never writes month cells.
+ */
+function updateIncomeForecastFieldsFromDashboard(payload, optionalSpreadsheet) {
+  validateRequired_(payload, ['groupKey', 'year', 'rows']);
+
+  var recurring = parseIncomeRecurringStatusFromDashboard_(payload.recurring);
+  var frequency = parseIncomeFrequencyFromDashboard_(payload.frequency);
+  var expected = parseIncomeExpectedAmountFromDashboard_(payload.expectedAmount);
+  if (recurring === 'Yes') {
+    if (!frequency) {
+      throw new Error('Frequency is required when Recurring is Yes.');
+    }
+    if (expected.known !== true) {
+      throw new Error('Expected amount is required when Recurring is Yes. Use 0 if the occurrence amount is zero.');
+    }
+  }
+
+  var year = Math.round(Number(payload.year));
+  if (!isFinite(year) || year < 2000 || year > 3000) {
+    throw new Error('Invalid year for income source.');
+  }
+
+  var ss = optionalSpreadsheet || getUserSpreadsheet_();
+  var lock = LockService.getUserLock();
+  lock.waitLock(10000);
+  try {
+    var sheet;
+    try { sheet = getCashFlowSheet_(ss, year); }
+    catch (e) { throw new Error('Cash Flow sheet for ' + year + ' was not found.'); }
+
+    var headerMap = getCashFlowHeaderMap_(sheet);
+    if (!(headerMap.recurringCol > 0) || !(headerMap.frequencyCol > 0) ||
+        !(headerMap.expectedAmountCol > 0)) {
+      throw new Error(
+        'Add Recurring, Frequency, and Expected Amount columns from Manage income first. Existing income rows were not changed.'
+      );
+    }
+    var identity = validateIncomeLifecycleReference_(sheet, headerMap, payload);
+    if (typeof isCiscoBonusIncomeName_ === 'function' &&
+        isCiscoBonusIncomeName_(identity.displayName)) {
+      throw new Error(
+        'Cisco Mid Year Bonus and Cisco End Year Bonus are edited as their own annual income rows. Split the existing Cisco Bonus entry first if those named rows are not present.'
+      );
+    }
+    if (identity.activeCount === 0) {
+      throw new Error('Inactive income sources cannot be edited. Reactivate the source first.');
+    }
+
+    var fields = {
+      recurring: recurring,
+      frequency: frequency,
+      expectedKnown: expected.known === true,
+      expectedAmount: expected.known === true ? expected.value : ''
+    };
+    var originals = [];
+    try {
+      for (var i = 0; i < identity.rows.length; i++) {
+        var sheetRow = identity.rows[i].sheetRow;
+        var lastCol = Math.max(1, sheet.getLastColumn());
+        var valueRow = sheet.getRange(sheetRow, 1, 1, lastCol).getValues()[0] || [];
+        originals.push({
+          sheetRow: sheetRow,
+          recurring: headerMap.recurringCol > 0
+            ? sheet.getRange(sheetRow, headerMap.recurringCol).getValue() : '',
+          frequency: headerMap.frequencyCol > 0
+            ? sheet.getRange(sheetRow, headerMap.frequencyCol).getValue() : '',
+          expected: headerMap.expectedAmountCol > 0
+            ? sheet.getRange(sheetRow, headerMap.expectedAmountCol).getValue() : ''
+        });
+        var nextRow = applyIncomeForecastFieldsToRow_(valueRow, headerMap, fields);
+        if (headerMap.recurringCol > 0) {
+          sheet.getRange(sheetRow, headerMap.recurringCol)
+            .setValue(nextRow[headerMap.recurringColZero]);
+        }
+        if (headerMap.frequencyCol > 0) {
+          sheet.getRange(sheetRow, headerMap.frequencyCol)
+            .setValue(nextRow[headerMap.frequencyColZero]);
+        }
+        if (headerMap.expectedAmountCol > 0) {
+          var expectedCell = sheet.getRange(sheetRow, headerMap.expectedAmountCol);
+          expectedCell.setValue(nextRow[headerMap.expectedAmountColZero]);
+          if (fields.expectedKnown) {
+            try {
+              expectedCell.setNumberFormat('$#,##0.00;[Red]-$#,##0.00');
+            } catch (_expectedFmt) { /* cosmetic */ }
+          }
+        }
+      }
+    } catch (writeErr) {
+      for (var j = 0; j < originals.length; j++) {
+        try {
+          if (headerMap.recurringCol > 0) {
+            sheet.getRange(originals[j].sheetRow, headerMap.recurringCol)
+              .setValue(originals[j].recurring);
+          }
+          if (headerMap.frequencyCol > 0) {
+            sheet.getRange(originals[j].sheetRow, headerMap.frequencyCol)
+              .setValue(originals[j].frequency);
+          }
+          if (headerMap.expectedAmountCol > 0) {
+            sheet.getRange(originals[j].sheetRow, headerMap.expectedAmountCol)
+              .setValue(originals[j].expected);
+          }
+        } catch (_rollbackErr) { /* best effort */ }
+      }
+      throw writeErr;
+    }
+
+    try {
+      appendActivityLog_(ss, {
+        eventType: 'income_forecast_edit',
+        entryDate: Utilities.formatDate(
+          stripTime_(new Date()),
+          Session.getScriptTimeZone(),
+          'yyyy-MM-dd'
+        ),
+        amount: expected.known ? expected.value : 0,
+        direction: 'income',
+        payee: identity.displayName,
+        category: '',
+        accountSource: '',
+        cashFlowSheet: sheet.getName(),
+        cashFlowMonth: '',
+        dedupeKey: '',
+        details: JSON.stringify({
+          detailsVersion: 1,
+          reason: 'forecast_fields',
+          year: year,
+          recurring: recurring,
+          frequency: frequency,
+          expectedAmount: expected.known ? expected.value : null,
+          expectedKnown: expected.known === true,
+          rowsUpdated: identity.rows.length,
+          rows: identity.rows
+        })
+      });
+    } catch (logErr) {
+      Logger.log('updateIncomeForecastFieldsFromDashboard activity log: ' + logErr);
+    }
+
+    touchDashboardSourceUpdated_('cash_flow');
+    return {
+      ok: true,
+      message: 'Updated Recurring, Frequency, and Expected Amount for "' +
+        identity.displayName + '" without changing monthly Cash Flow amounts.',
+      sourceName: identity.displayName,
+      rowsUpdated: identity.rows.length
+    };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -912,6 +2574,9 @@ function getOtherDetectedIncomeFromLatestCashFlowFromDashboard() {
   var items = [];
   for (var i = 0; i < groups.length; i++) {
     var g = groups[i];
+    if (typeof isCiscoBonusIncomeName_ === 'function' && isCiscoBonusIncomeName_(g.displayName)) {
+      continue;
+    }
     var reason;
     if (g.excluded) reason = 'excluded_pattern';
     else if (g.hasNegativeMonth) reason = 'negative_month';

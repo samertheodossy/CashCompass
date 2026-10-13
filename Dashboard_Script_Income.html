@@ -26,6 +26,91 @@
 var __incomeStatusClearTimer = null;
 var INCOME_STATUS_AUTOCLEAR_MS_ = 4000;
 
+var __incomeFormMode = { mode: 'add', editing: null };
+
+function setIncomeFormModeToAdd_() {
+  __incomeFormMode = { mode: 'add', editing: null };
+  applyIncomeFormModeUi_();
+}
+
+function setIncomeFormModeToEdit_(editing) {
+  __incomeFormMode = { mode: 'edit', editing: editing || null };
+  applyIncomeFormModeUi_();
+}
+
+function incomeForecastFrequencyOptionValue_(raw) {
+  var text = String(raw || '').trim();
+  if (!text) return '';
+  var key = String(text).toLowerCase().replace(/\s+/g, ' ');
+  if (key === 'monthly') return 'Monthly';
+  if (key.indexOf('semi-month') >= 0 || key.indexOf('semi month') >= 0 ||
+      key.indexOf('twice month') >= 0 || key.indexOf('twice-month') >= 0) {
+    return 'Semi-monthly / twice monthly';
+  }
+  if (key === 'biweekly') return 'Biweekly';
+  if (key === 'weekly') return 'Weekly';
+  if (key === 'bimonthly' || key === 'bi-monthly' || key === 'bi monthly' ||
+      key === 'every two months' || key === 'every 2 months') {
+    return 'Every two months';
+  }
+  if (key === 'quarterly') return 'Quarterly';
+  if (key.indexOf('semi-annual') >= 0 || key.indexOf('semi annual') >= 0 ||
+      key === 'semiannually') {
+    return 'Semi-annually';
+  }
+  if (key === 'yearly' || key === 'annual' || key === 'annually') return 'Yearly';
+  var select = document.getElementById('income_add_frequency');
+  if (select) {
+    for (var i = 0; i < select.options.length; i++) {
+      if (select.options[i].value === text) return text;
+    }
+  }
+  return text;
+}
+
+function applyIncomeFormModeUi_() {
+  var isEdit = __incomeFormMode.mode === 'edit';
+  var editing = __incomeFormMode.editing;
+  var isBonusEdit = isEdit && editing &&
+    (editing.kind === 'cisco_annual_bonus' || editing.kind === 'cisco_bonus');
+  var historyCount = editing && editing.rows && editing.rows.length
+    ? editing.rows.length
+    : 0;
+  var addTab = document.getElementById('income_mode_add_btn');
+  if (addTab) addTab.textContent = isEdit ? 'Edit income' : 'Add income';
+  var title = document.getElementById('income_form_title');
+  if (title) {
+    title.textContent = isBonusEdit
+      ? 'Edit annual bonus'
+      : (isEdit ? 'Edit income forecast' : 'Add an income source');
+  }
+  var purpose = document.getElementById('income_form_purpose');
+  if (purpose) {
+    purpose.textContent = isBonusEdit
+      ? 'This is one annual bonus income row. Set Recurring = Yes, Frequency = Yearly, and this row’s Expected Amount. Historical month amounts stay unchanged. Blank Expected Amount means unknown; an explicit $0 is a known zero. This amount is not monthly cash and is not used for the 90-day cash reserve.'
+      : (isEdit
+        ? (historyCount > 1
+          ? 'Update Recurring, Frequency, and Expected Amount for this income group. ' +
+            historyCount +
+            ' Cash Flow history rows stay in place and are not merged. The Debt Overview estimate counts Expected Amount once for the group. Frequency converts that amount per occurrence to a monthly equivalent (Biweekly = 26 ÷ 12, Semi-monthly / twice monthly = 24 ÷ 12). Historical avg is not used as Expected Amount. Monthly amounts, totals, and formulas stay unchanged.'
+          : 'Update Recurring, Frequency, and Expected Amount on the existing Cash Flow row. Monthly amounts stay unchanged and no duplicate source is created. Historical avg is not used as Expected Amount.')
+        : 'Adds an income source on this year’s Cash Flow and records its amount for the current month. Recurring, frequency, and expected amount stay blank unless you set them. Blank means unknown. Required fields are marked with *');
+  }
+  var saveBtn = document.getElementById('income_form_save_btn');
+  if (saveBtn) saveBtn.textContent = isEdit ? 'Save changes' : 'Save income source';
+  var cancelBtn = document.getElementById('income_form_cancel_btn');
+  if (cancelBtn) cancelBtn.textContent = isEdit ? 'Cancel edit' : 'Cancel';
+  var amountWrap = document.getElementById('income_add_amount_wrap');
+  if (amountWrap) amountWrap.style.display = isEdit ? 'none' : '';
+  var forecastWrap = document.getElementById('income_forecast_fields_wrap');
+  if (forecastWrap) forecastWrap.style.display = '';
+  var nameEl = document.getElementById('income_add_name');
+  if (nameEl) {
+    nameEl.readOnly = isEdit;
+    nameEl.disabled = isEdit;
+  }
+}
+
 function setIncomePanelMode_(mode) {
   var next = mode === 'add' || mode === 'manage' ? mode : 'current';
   ['current', 'add', 'manage'].forEach(function(name) {
@@ -39,7 +124,11 @@ function setIncomePanelMode_(mode) {
     if (wrap) wrap.classList.toggle('active', active);
   });
   if (next === 'add') {
-    var input = document.getElementById('income_add_name');
+    var focusId = 'income_add_name';
+    if (__incomeFormMode.mode === 'edit') {
+      focusId = 'income_add_recurring';
+    }
+    var input = document.getElementById(focusId);
     if (input && typeof input.focus === 'function') {
       try { input.focus(); } catch (e) { /* ignore */ }
     }
@@ -74,6 +163,9 @@ function loadIncomeSourcesSection() {
   el.innerHTML = loadingBlockHtml('Loading income sources…');
   if (overviewEl) overviewEl.innerHTML = loadingBlockHtml('Loading income sources…');
   renderInactiveIncomeSources_(null);
+  renderIncomeForecastSchema_(null);
+  renderScheduledBonusSources_(null, null);
+  renderCiscoBonusOverview_(null);
 
   runReadOnlyRpcWithRetry_({
     invoke: function(onSuccess, onFailure) {
@@ -89,6 +181,9 @@ function loadIncomeSourcesSection() {
           'The income inventory response was incomplete. Please refresh and try again.</div>';
         el.innerHTML = invalidPayloadHtml;
         if (overviewEl) overviewEl.innerHTML = invalidPayloadHtml;
+        renderIncomeForecastSchema_(null);
+        renderScheduledBonusSources_(null, null);
+        renderCiscoBonusOverview_(null);
         finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
         return;
       }
@@ -104,6 +199,9 @@ function loadIncomeSourcesSection() {
       }
       renderIncomeOverviewList_(active);
       renderIncomeSourcesList_(active, inactive);
+      renderIncomeForecastSchema_(payload.forecastSchema);
+      renderScheduledBonusSources_(payload.scheduledBonusSources || [], payload.bonusSplit);
+      renderCiscoBonusOverview_(payload.scheduledBonusSources || []);
       loadIncomeOtherDetected_();
       finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
     },
@@ -121,6 +219,9 @@ function loadIncomeSourcesSection() {
         '</div>';
       el.innerHTML = errorHtml;
       if (overviewEl) overviewEl.innerHTML = errorHtml;
+      renderIncomeForecastSchema_(null);
+      renderScheduledBonusSources_(null, null);
+      renderCiscoBonusOverview_(null);
       finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
     }
   });
@@ -143,6 +244,11 @@ function renderIncomeOverviewList_(rows) {
         '<td class="income-manage-num" style="padding:8px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap;">' +
           (Number(r.amount) > 0 ? fmtCurrency(Number(r.amount)) : '<span class="muted">—</span>') +
         '</td>' +
+        '<td class="income-manage-num" style="padding:8px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap;">' +
+          (r.expectedKnown === true && r.expectedAmount != null
+            ? fmtCurrency(Number(r.expectedAmount))
+            : '<span class="muted">—</span>') +
+        '</td>' +
         '<td style="padding:8px;border-bottom:1px solid #f1f5f9;">' +
           (r.frequency ? escapeHtml(r.frequency) : '<span class="muted">—</span>') +
         '</td>' +
@@ -154,12 +260,364 @@ function renderIncomeOverviewList_(rows) {
       '<table class="income-overview-table" style="width:100%;border-collapse:collapse;">' +
         '<thead><tr>' +
           '<th scope="col" style="text-align:left;padding:8px;border-bottom:1px solid #e5e7eb;">Source</th>' +
-          '<th scope="col" class="income-manage-num" style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Avg Amount</th>' +
+          '<th scope="col" class="income-manage-num" style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Historical avg</th>' +
+          '<th scope="col" class="income-manage-num" style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Expected Amount</th>' +
           '<th scope="col" style="text-align:left;padding:8px;border-bottom:1px solid #e5e7eb;">Frequency</th>' +
         '</tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody>' +
       '</table>' +
     '</div>';
+}
+
+function renderIncomeForecastMismatchList_(schema) {
+  var list = document.getElementById('income_forecast_schema_mismatch_list');
+  if (!list) return;
+  var items = schema && Array.isArray(schema.mismatches) ? schema.mismatches : [];
+  if (!items.length) {
+    list.innerHTML = '';
+    list.style.display = 'none';
+    return;
+  }
+  list.innerHTML = items.map(function(line) {
+    return '<li>' + escapeHtml(String(line)) + '</li>';
+  }).join('');
+  list.style.display = '';
+}
+
+function renderIncomeForecastSchema_(schema) {
+  var wrap = document.getElementById('income_forecast_schema_wrap');
+  var copy = document.getElementById('income_forecast_schema_copy');
+  var addBtn = document.getElementById('income_forecast_schema_btn');
+  var formatBtn = document.getElementById('income_forecast_format_btn');
+  if (!wrap) return;
+  window.__incomeForecastSchema = schema && typeof schema === 'object' ? schema : null;
+  if (!schema || !schema.sheetName) {
+    wrap.style.display = 'none';
+    renderIncomeForecastMismatchList_(null);
+    return;
+  }
+  if (schema.present === true && schema.needsFormat !== true) {
+    wrap.style.display = 'none';
+    if (addBtn) addBtn.style.display = 'none';
+    if (formatBtn) formatBtn.style.display = 'none';
+    renderIncomeForecastMismatchList_(null);
+    return;
+  }
+  if (schema.present === true) {
+    if (copy) {
+      copy.textContent = schema.sheetName +
+        ' already has Recurring, Frequency, and Expected Amount, but those headers still need formatting. Format them to match the existing Cash Flow header style and set readable widths. Values, formulas, month columns, totals, and income rows will not change.';
+    }
+    renderIncomeForecastMismatchList_(schema);
+    if (addBtn) addBtn.style.display = 'none';
+    if (formatBtn) formatBtn.style.display = '';
+    wrap.style.display = '';
+    return;
+  }
+  var missing = Array.isArray(schema.missing) && schema.missing.length
+    ? schema.missing.join(', ')
+    : 'Recurring, Frequency, and Expected Amount';
+  var afterLabel = schema.lastSummaryLabel
+    ? 'after ' + schema.lastSummaryLabel
+    : 'after the existing Totals / Yearly Total columns';
+  if (copy) {
+    copy.textContent = schema.sheetName + ' does not yet have ' + missing +
+      '. Add them ' + afterLabel +
+      '. Existing month amounts, totals, formulas, and income rows will not change.';
+  }
+  renderIncomeForecastMismatchList_(null);
+  if (addBtn) addBtn.style.display = '';
+  if (formatBtn) formatBtn.style.display = 'none';
+  wrap.style.display = '';
+}
+
+function confirmAddIncomeForecastColumns_() {
+  var schema = window.__incomeForecastSchema || {};
+  var sheetName = schema.sheetName || 'this year’s Cash Flow sheet';
+  var afterLabel = schema.lastSummaryLabel || 'Totals / Yearly Total';
+  openDashboardConfirm_({
+    eyebrow: 'Income',
+    title: 'Add Recurring, Frequency, and Expected Amount columns?',
+    subjectLabel: 'Sheet',
+    subject: sheetName,
+    message: 'CashCompass will append three blank columns after ' + afterLabel + '.',
+    consequences: [
+      'No income row will be added.',
+      'Existing month amounts, totals, formulas, and income rows will not change.',
+      'You can set Recurring, Frequency, and Expected Amount on existing sources afterward with Edit.'
+    ],
+    cancelLabel: 'Don’t add columns',
+    confirmLabel: 'Add columns',
+    onConfirm: function() {
+      setStatusLoading('income_status', 'Adding Cash Flow columns…');
+      google.script.run
+        .withSuccessHandler(function(res) {
+          setIncomeStatus_((res && res.message) || 'Cash Flow columns added.', false);
+          loadIncomeSourcesSection();
+        })
+        .withFailureHandler(function(err) {
+          setIncomeStatus_(err && err.message ? String(err.message) : String(err), true);
+        })
+        .addIncomeForecastColumnsFromDashboard();
+    }
+  });
+}
+
+function confirmFormatIncomeForecastColumns_() {
+  var schema = window.__incomeForecastSchema || {};
+  var sheetName = schema.sheetName || 'this year’s Cash Flow sheet';
+  openDashboardConfirm_({
+    eyebrow: 'Income',
+    title: 'Format Recurring, Frequency, and Expected Amount columns?',
+    subjectLabel: 'Sheet',
+    subject: sheetName,
+    message: 'CashCompass will match those three headers to the existing Cash Flow header style and set readable widths. Columns will not be added again.',
+    consequences: [
+      'No income row will be added or rewritten.',
+      'Cell values, formulas, month columns, totals, and other existing formatting will not change.',
+      'Only Recurring, Frequency, and Expected Amount header style and widths are updated.'
+    ],
+    cancelLabel: 'Don’t format columns',
+    confirmLabel: 'Format columns',
+    onConfirm: function() {
+      setStatusLoading('income_status', 'Formatting Cash Flow columns…');
+      google.script.run
+        .withSuccessHandler(function(res) {
+          var stillNeeded = res && res.needsFormat === true;
+          var detail = stillNeeded && Array.isArray(res.mismatches) && res.mismatches.length
+            ? res.mismatches.join('; ')
+            : '';
+          setIncomeStatus_(
+            (res && res.message) ||
+              (stillNeeded
+                ? ('Format ran, but the fresh status read still found mismatches: ' + detail)
+                : 'Cash Flow columns formatted.'),
+            stillNeeded
+          );
+          loadIncomeSourcesSection();
+        })
+        .withFailureHandler(function(err) {
+          setIncomeStatus_(err && err.message ? String(err.message) : String(err), true);
+        })
+        .formatIncomeForecastColumnsFromDashboard();
+    }
+  });
+}
+
+function renderCiscoBonusOverview_(rows) {
+  var el = document.getElementById('income_bonus_overview');
+  if (!el) return;
+  var named = (Array.isArray(rows) ? rows : []).filter(function(src) {
+    return src && src.kind === 'cisco_annual_bonus' && src.lifecycleState !== 'inactive';
+  });
+  if (!named.length) {
+    el.innerHTML = '';
+    return;
+  }
+  var rowsHtml = named.map(function(r) {
+    return (
+      '<tr>' +
+        '<td style="padding:8px;border-bottom:1px solid #f1f5f9;"><strong>' +
+          escapeHtml(r.payee || r.sourceName || 'Annual income') +
+        '</strong></td>' +
+        '<td class="income-manage-num" style="padding:8px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap;">' +
+          (r.expectedKnown === true && r.expectedAmount != null
+            ? fmtCurrency(Number(r.expectedAmount))
+            : '<span class="muted">—</span>') +
+        '</td>' +
+        '<td style="padding:8px;border-bottom:1px solid #f1f5f9;">' +
+          (r.frequency ? escapeHtml(r.frequency) : '<span class="muted">—</span>') +
+        '</td>' +
+      '</tr>'
+    );
+  }).join('');
+  el.innerHTML =
+    '<section class="income-annual-section" aria-label="Annual income">' +
+      '<div class="card-title income-section-title" style="margin:0 0 8px 0;">Annual income</div>' +
+      '<p class="muted" style="margin:0 0 8px 0;">Amounts are per year, not monthly cash, and are excluded from the 90-day reserve.</p>' +
+      '<div class="income-overview-tablewrap" style="overflow-x:auto;">' +
+        '<table class="income-overview-table" style="width:100%;border-collapse:collapse;">' +
+          '<thead><tr>' +
+            '<th scope="col" style="text-align:left;padding:8px;border-bottom:1px solid #e5e7eb;">Source</th>' +
+            '<th scope="col" class="income-manage-num" style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Expected Amount per year</th>' +
+            '<th scope="col" style="text-align:left;padding:8px;border-bottom:1px solid #e5e7eb;">Frequency</th>' +
+          '</tr></thead>' +
+          '<tbody>' + rowsHtml + '</tbody>' +
+        '</table>' +
+      '</div>' +
+    '</section>';
+}
+
+function formatCiscoBonusSplitProposalLines_(proposal) {
+  var payments = proposal && Array.isArray(proposal.payments) ? proposal.payments : [];
+  return payments.map(function(payment) {
+    var amountLabel = payment.amount != null
+      ? fmtCurrency(Number(payment.amount))
+      : 'Unknown';
+    return (payment.header || 'Payment') + ' ' + amountLabel + ' → ' +
+      (payment.toPayee || 'named bonus row');
+  });
+}
+
+function confirmSplitCiscoBonusRows_() {
+  var split = window.__incomeBonusSplit || {};
+  if (split.canSplit !== true) {
+    setIncomeStatus_(
+      (split.ambiguities && split.ambiguities[0]) ||
+        'Cisco Bonus history cannot be split without guessing.',
+      true
+    );
+    return;
+  }
+  var proposalLines = formatCiscoBonusSplitProposalLines_(split.proposal);
+  var confirmLabel = split.requiresConfirmation === true
+    ? 'Confirm this Mid Year / End Year split'
+    : 'Split into two rows';
+  openDashboardConfirm_({
+    eyebrow: 'Income',
+    title: 'Split Cisco Bonus into two annual rows?',
+    subjectLabel: 'Rows',
+    subject: 'Cisco Mid Year Bonus and Cisco End Year Bonus',
+    message: split.requiresConfirmation === true
+      ? 'Mid Year is the first bonus payment of the year; End Year is the second. Payment months can change. Confirm this proposed mapping before history is moved.'
+      : 'CashCompass will split the existing Cisco Bonus entry into those two named rows. Mid Year is the first recorded payment; End Year is the second.',
+    consequences: proposalLines.concat([
+      'Each row uses Recurring = Yes and Frequency = Yearly with its own Expected Amount, left blank until you enter it.',
+      'Combined month totals, annual totals, formulas, and unrelated rows stay unchanged.',
+      'If two separate payments cannot be identified, nothing is changed.'
+    ]),
+    cancelLabel: 'Don’t split',
+    confirmLabel: confirmLabel,
+    onConfirm: function() {
+      setStatusLoading('income_status', 'Splitting Cisco Bonus…');
+      google.script.run
+        .withSuccessHandler(function(res) {
+          setIncomeStatus_((res && res.message) || 'Cisco Bonus split into two annual rows.', false);
+          loadIncomeSourcesSection();
+        })
+        .withFailureHandler(function(err) {
+          setIncomeStatus_(err && err.message ? String(err.message) : String(err), true);
+        })
+        .splitCiscoBonusIncomeRowsFromDashboard({
+          confirmProposal: true,
+          proposal: split.proposal || null
+        });
+    }
+  });
+}
+
+function renderScheduledBonusSources_(rows, bonusSplit) {
+  var el = document.getElementById('income_bonus_manage_list');
+  if (!el) return;
+  window.__dashboardScheduledBonusSources = {};
+  var list = Array.isArray(rows) ? rows : [];
+  var split = bonusSplit && typeof bonusSplit === 'object' ? bonusSplit : {};
+  window.__incomeBonusSplit = split;
+  var leftover = list.filter(function(src) {
+    return src && src.kind === 'cisco_bonus_legacy' && src.lifecycleState !== 'inactive';
+  });
+  var namedActive = list.filter(function(src) {
+    return src && src.kind === 'cisco_annual_bonus' && src.lifecycleState !== 'inactive';
+  });
+  var showSplit = leftover.length > 0 && split.alreadySplit !== true;
+  var rowsHtml = namedActive.map(function(src, idx) {
+    var key = 'bonus::' + idx;
+    window.__dashboardScheduledBonusSources[key] = src;
+    var amountStr = Number(src.amount) > 0
+      ? fmtCurrency(Number(src.amount))
+      : '<span class="muted">—</span>';
+    var expectedStr = src.expectedKnown === true && src.expectedAmount != null
+      ? fmtCurrency(Number(src.expectedAmount))
+      : '<span class="muted">—</span>';
+    var freqStr = src.frequency
+      ? escapeHtml(src.frequency)
+      : '<span class="muted">—</span>';
+    return (
+      '<tr>' +
+        '<td style="padding:8px;border-bottom:1px solid #f1f5f9;"><strong>' +
+          escapeHtml(src.payee || src.sourceName || 'Annual income') +
+        '</strong></td>' +
+        '<td class="income-manage-num" style="padding:8px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap;">' +
+          amountStr +
+        '</td>' +
+        '<td class="income-manage-num" style="padding:8px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap;">' +
+          expectedStr +
+        '</td>' +
+        '<td style="padding:8px;border-bottom:1px solid #f1f5f9;">' + freqStr + '</td>' +
+        '<td class="income-manage-actions" style="padding:8px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap;">' +
+          '<button class="small-btn" ' +
+            'title="Edit Recurring, Frequency, and Expected Amount. Historical month cells stay unchanged." ' +
+            'onclick="openCiscoBonusEditForm_(\'' + escapeJs(key) + '\')">' +
+            'Edit' +
+          '</button> ' +
+          '<button class="small-btn danger" ' +
+            'title="Stop tracking this annual Cash Flow income row; history is preserved" ' +
+            'onclick="stopTrackingIncomeSource(\'' + escapeJs(key) + '\')">' +
+            'Stop tracking' +
+          '</button>' +
+        '</td>' +
+      '</tr>'
+    );
+  }).join('');
+  var tableHtml = namedActive.length
+    ? '<section class="income-annual-section" aria-label="Annual income">' +
+        '<div class="card-title income-section-title" style="margin:0 0 8px 0;">Annual income</div>' +
+        '<p class="muted" style="margin:0 0 8px 0;">Saved Cash Flow income rows with the same Edit and Stop tracking controls as other income sources. Amounts are annual, not monthly cash, and are not used for the 90-day cash reserve.</p>' +
+        '<div class="income-manage-tablewrap" style="overflow-x:auto;">' +
+          '<table class="income-manage-table" style="width:100%;border-collapse:collapse;">' +
+            '<thead><tr>' +
+              '<th scope="col" style="text-align:left;padding:8px;border-bottom:1px solid #e5e7eb;">Source</th>' +
+              '<th scope="col" class="income-manage-num" style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Historical avg</th>' +
+              '<th scope="col" class="income-manage-num" style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Expected Amount</th>' +
+              '<th scope="col" style="text-align:left;padding:8px;border-bottom:1px solid #e5e7eb;">Frequency</th>' +
+              '<th scope="col" class="income-manage-actions" style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Action</th>' +
+            '</tr></thead>' +
+            '<tbody>' + rowsHtml + '</tbody>' +
+          '</table>' +
+        '</div>' +
+      '</section>'
+    : '';
+  var splitHtml = '';
+  if (showSplit) {
+    var proposalLines = formatCiscoBonusSplitProposalLines_(split.proposal);
+    var proposalHtml = proposalLines.length
+      ? '<p style="margin:0 0 8px 0;">Proposed mapping (first payment = Mid Year, second payment = End Year):</p><ul style="margin:0 0 8px 0;padding-left:18px;">' +
+        proposalLines.map(function(line) {
+          return '<li>' + escapeHtml(line) + '</li>';
+        }).join('') + '</ul>'
+      : '';
+    var ambiguityHtml = '';
+    if (Array.isArray(split.ambiguities) && split.ambiguities.length) {
+      ambiguityHtml =
+        '<p style="margin:0 0 8px 0;">History was not changed. Specific ambiguity:</p><ul style="margin:0 0 8px 0;padding-left:18px;">' +
+        split.ambiguities.map(function(reason) {
+          return '<li>' + escapeHtml(reason) + '</li>';
+        }).join('') +
+        '</ul>';
+    }
+    var actionHtml = split.canSplit === true
+      ? '<button type="button" class="small-btn primary" onclick="confirmSplitCiscoBonusRows_()">' +
+        (split.requiresConfirmation === true
+          ? 'Review and confirm Mid Year / End Year split'
+          : 'Split into Cisco Mid Year Bonus and Cisco End Year Bonus') +
+        '</button>'
+      : '';
+    var leftoverCopy = namedActive.length
+      ? 'The leftover Cisco Bonus row is unsplit Cash Flow history. The Mid Year and End Year rows below are already saved Cash Flow income rows, not a pending preview.'
+      : 'Unsplit Cash Flow history row: Cisco Bonus. Split it into Cisco Mid Year Bonus and Cisco End Year Bonus. Mid Year is the first bonus payment of the year; End Year is the second.';
+    splitHtml =
+      '<div class="income-split-preview" style="padding:10px 12px;border:1px solid #fde68a;border-radius:8px;background:#fffbeb;margin:0 0 12px 0;">' +
+        '<p class="muted" style="margin:0 0 8px 0;">' + leftoverCopy + '</p>' +
+        proposalHtml +
+        ambiguityHtml +
+        actionHtml +
+      '</div>';
+  }
+  if (!namedActive.length && !showSplit) {
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = splitHtml + tableHtml;
 }
 
 function renderIncomeSourcesList_(rows, inactiveRows) {
@@ -189,6 +647,9 @@ function renderIncomeSourcesList_(rows, inactiveRows) {
     var amountStr = Number(r.amount) > 0
       ? fmtCurrency(Number(r.amount))
       : '<span class="muted">—</span>';
+    var expectedStr = r.expectedKnown === true && r.expectedAmount != null
+      ? fmtCurrency(Number(r.expectedAmount))
+      : '<span class="muted">—</span>';
     var freqStr = r.frequency
       ? escapeHtml(r.frequency)
       : '<span class="muted">—</span>';
@@ -197,8 +658,14 @@ function renderIncomeSourcesList_(rows, inactiveRows) {
       '<tr>' +
         '<td style="padding:8px;border-bottom:1px solid #f1f5f9;"><strong>' + escapeHtml(r.sourceName || 'Income source') + '</strong></td>' +
         '<td class="income-manage-num" style="padding:8px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap;">' + amountStr + '</td>' +
+        '<td class="income-manage-num" style="padding:8px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap;">' + expectedStr + '</td>' +
         '<td style="padding:8px;border-bottom:1px solid #f1f5f9;">' + freqStr + '</td>' +
         '<td class="income-manage-actions" style="padding:8px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap;">' +
+          '<button class="small-btn" ' +
+            'title="Edit Recurring, Frequency, and Expected Amount for this income group. History rows stay in place." ' +
+            'onclick="openIncomeEditForm_(\'' + escapeJs(key) + '\')">' +
+            'Edit' +
+          '</button> ' +
           '<button class="small-btn danger" ' +
             'title="Stop tracking this income source; history is preserved" ' +
             'onclick="stopTrackingIncomeSource(\'' + escapeJs(key) + '\')">' +
@@ -217,7 +684,8 @@ function renderIncomeSourcesList_(rows, inactiveRows) {
       '<table class="income-manage-table" style="width:100%;border-collapse:collapse;">' +
         '<thead><tr>' +
           '<th scope="col" style="text-align:left;padding:8px;border-bottom:1px solid #e5e7eb;">Source</th>' +
-          '<th scope="col" class="income-manage-num" style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Avg Amount</th>' +
+          '<th scope="col" class="income-manage-num" style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Historical avg</th>' +
+          '<th scope="col" class="income-manage-num" style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Expected Amount</th>' +
           '<th scope="col" style="text-align:left;padding:8px;border-bottom:1px solid #e5e7eb;">Frequency</th>' +
           '<th scope="col" class="income-manage-actions" style="text-align:right;padding:8px;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Action</th>' +
         '</tr></thead>' +
@@ -387,26 +855,107 @@ function renderIncomeOtherDetected_(payload) {
 /* -------------------------------------------------------------------------- */
 
 function toggleIncomeAddForm() {
-  setIncomePanelMode_('add');
+  openIncomeAddForm_();
 }
 
 function openIncomeAddForm_() {
+  setIncomeFormModeToAdd_();
+  resetIncomeAddForm_();
+  setIncomePanelMode_('add');
+}
+
+function openIncomeEditForm_(key) {
+  var store = window.__dashboardActiveIncomeSources || {};
+  var src = store[key];
+  if (!src) {
+    setIncomeStatus_('Income source not found.', true);
+    return;
+  }
+  if (src.kind === 'cisco_annual_bonus' || src.kind === 'cisco_bonus') {
+    openCiscoBonusEditForm_(key);
+    return;
+  }
+  setIncomeFormModeToEdit_(src);
+  var nameEl = document.getElementById('income_add_name');
+  if (nameEl) nameEl.value = src.sourceName || '';
+  var recurringEl = document.getElementById('income_add_recurring');
+  if (recurringEl) {
+    var recurring = String(src.recurring || '').trim();
+    if (/^yes$/i.test(recurring)) recurringEl.value = 'Yes';
+    else if (/^no$/i.test(recurring)) recurringEl.value = 'No';
+    else recurringEl.value = '';
+  }
+  var frequencyEl = document.getElementById('income_add_frequency');
+  if (frequencyEl) frequencyEl.value = incomeForecastFrequencyOptionValue_(src.frequency);
+  var expectedEl = document.getElementById('income_add_expected');
+  if (expectedEl) {
+    // Never prefill Expected Amount from the historical average.
+    expectedEl.value = src.expectedKnown === true && src.expectedAmount != null
+      ? String(src.expectedAmount)
+      : '';
+  }
+  clearIncomeAddNameError_();
+  clearIncomeAddAmountError_();
+  clearIncomeAddForecastError_();
+  setIncomePanelMode_('add');
+}
+
+function fillCiscoBonusForecastFields_(src) {
+  var nameEl = document.getElementById('income_add_name');
+  if (nameEl) nameEl.value = (src && (src.payee || src.sourceName)) || 'Cisco Bonus';
+  var recurringEl = document.getElementById('income_add_recurring');
+  if (recurringEl) {
+    var recurring = String(src && src.recurring || '').trim();
+    if (/^yes$/i.test(recurring)) recurringEl.value = 'Yes';
+    else if (/^no$/i.test(recurring)) recurringEl.value = 'No';
+    else recurringEl.value = src && src.kind === 'cisco_annual_bonus' ? 'Yes' : '';
+  }
+  var frequencyEl = document.getElementById('income_add_frequency');
+  if (frequencyEl) {
+    frequencyEl.value = incomeForecastFrequencyOptionValue_(src && src.frequency) || 'Yearly';
+  }
+  var expectedEl = document.getElementById('income_add_expected');
+  if (expectedEl) {
+    expectedEl.value = src && src.expectedKnown === true && src.expectedAmount != null
+      ? String(src.expectedAmount)
+      : '';
+  }
+}
+
+function openCiscoBonusEditForm_(key) {
+  var store = window.__dashboardScheduledBonusSources || {};
+  var src = store[key];
+  if (!src) {
+    setIncomeStatus_('Cisco Bonus was not found.', true);
+    return;
+  }
+  setIncomeFormModeToEdit_(src);
+  fillCiscoBonusForecastFields_(src);
+  clearIncomeAddNameError_();
+  clearIncomeAddAmountError_();
+  clearIncomeAddForecastError_();
   setIncomePanelMode_('add');
 }
 
 function closeIncomeAddForm() {
   resetIncomeAddForm_();
+  setIncomeFormModeToAdd_();
   setIncomePanelMode_('current');
 }
 
 function resetIncomeAddForm_() {
-  var ids = ['income_add_name', 'income_add_amount'];
+  var ids = ['income_add_name', 'income_add_amount', 'income_add_expected'];
   ids.forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.value = '';
   });
+  var recurringEl = document.getElementById('income_add_recurring');
+  if (recurringEl) recurringEl.value = '';
+  var frequencyEl = document.getElementById('income_add_frequency');
+  if (frequencyEl) frequencyEl.value = '';
   clearIncomeAddNameError_();
   clearIncomeAddAmountError_();
+  clearIncomeAddForecastError_();
 }
 
 function clearIncomeAddNameError_() {
@@ -437,13 +986,137 @@ function setIncomeAddAmountError_(msg) {
   }
 }
 
+function clearIncomeAddForecastError_() {
+  var el = document.getElementById('income_add_forecast_error');
+  if (el) el.textContent = '';
+}
+
+function setIncomeAddForecastError_(msg) {
+  var el = document.getElementById('income_add_forecast_error');
+  if (el) el.textContent = msg || '';
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Save new income source                                                    */
 /* -------------------------------------------------------------------------- */
 
+function submitIncomeForm_() {
+  if (__incomeFormMode.mode === 'edit' &&
+      __incomeFormMode.editing &&
+      (__incomeFormMode.editing.kind === 'cisco_annual_bonus' ||
+        __incomeFormMode.editing.kind === 'cisco_bonus')) {
+    submitCiscoBonusForecastEdit_();
+    return;
+  }
+  if (__incomeFormMode.mode === 'edit') {
+    submitIncomeForecastEdit_();
+    return;
+  }
+  submitNewIncomeSource();
+}
+
+function submitCiscoBonusForecastEdit_() {
+  var editing = __incomeFormMode.editing;
+  if (!editing) {
+    setIncomeStatus_('Cisco bonus row was not found.', true);
+    return;
+  }
+  var forecast = collectIncomeForecastPayload_();
+  if (!forecast) return;
+  var payload = {
+    groupKey: editing.groupKey,
+    year: editing.year,
+    sourceName: editing.sourceName,
+    rows: editing.rows,
+    recurring: forecast.recurring,
+    frequency: forecast.frequency,
+    expectedAmount: forecast.expectedAmount
+  };
+  setStatusLoading('income_status', 'Saving annual bonus…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setIncomeStatus_((res && res.message) || 'Annual bonus updated.', false);
+      closeIncomeAddForm();
+      loadIncomeSourcesSection();
+    })
+    .withFailureHandler(function(err) {
+      setIncomeStatus_(err && err.message ? String(err.message) : String(err), true);
+    })
+    .updateCiscoBonusForecastFieldsFromDashboard(payload);
+}
+
+function collectIncomeForecastPayload_() {
+  clearIncomeAddForecastError_();
+  var recurringEl = document.getElementById('income_add_recurring');
+  var frequencyEl = document.getElementById('income_add_frequency');
+  var expectedEl = document.getElementById('income_add_expected');
+  var recurring = (recurringEl && recurringEl.value || '').trim();
+  var frequency = (frequencyEl && frequencyEl.value || '').trim();
+  var expectedRaw = (expectedEl && expectedEl.value) || '';
+  var expectedAmount = null;
+  if (String(expectedRaw).trim() !== '') {
+    var expectedNum = toNumber(expectedRaw);
+    if (!isFinite(expectedNum)) {
+      setIncomeAddForecastError_('Expected amount must be a valid number, or left blank if unknown.');
+      return null;
+    }
+    if (expectedNum < 0) {
+      setIncomeAddForecastError_('Expected amount cannot be negative.');
+      return null;
+    }
+    expectedAmount = expectedNum;
+  }
+  if (recurring === 'Yes') {
+    if (!frequency) {
+      setIncomeAddForecastError_('Frequency is required when Recurring is Yes.');
+      return null;
+    }
+    if (expectedAmount === null) {
+      setIncomeAddForecastError_('Expected amount is required when Recurring is Yes. Use 0 if the occurrence amount is zero.');
+      return null;
+    }
+  }
+  return {
+    recurring: recurring,
+    frequency: frequency,
+    expectedAmount: expectedAmount
+  };
+}
+
+function submitIncomeForecastEdit_() {
+  var editing = __incomeFormMode.editing;
+  if (!editing) {
+    setIncomeStatus_('Income source not found.', true);
+    return;
+  }
+  var forecast = collectIncomeForecastPayload_();
+  if (!forecast) return;
+  var payload = {
+    groupKey: editing.groupKey,
+    year: editing.year,
+    sourceName: editing.sourceName,
+    rows: editing.rows,
+    recurring: forecast.recurring,
+    frequency: forecast.frequency,
+    expectedAmount: forecast.expectedAmount
+  };
+  setStatusLoading('income_status', 'Saving income forecast…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setIncomeStatus_((res && res.message) || 'Income forecast updated.', false);
+      closeIncomeAddForm();
+      loadIncomeSourcesSection();
+    })
+    .withFailureHandler(function(err) {
+      setIncomeStatus_(err && err.message ? String(err.message) : String(err), true);
+    })
+    .updateIncomeForecastFieldsFromDashboard(payload);
+}
+
 function submitNewIncomeSource() {
   clearIncomeAddNameError_();
   clearIncomeAddAmountError_();
+  clearIncomeAddForecastError_();
 
   var nameEl = document.getElementById('income_add_name');
   var amountEl = document.getElementById('income_add_amount');
@@ -474,9 +1147,15 @@ function submitNewIncomeSource() {
     return;
   }
 
+  var forecast = collectIncomeForecastPayload_();
+  if (!forecast) return;
+
   var payload = {
     sourceName: name,
-    amount: amountNum
+    amount: amountNum,
+    recurring: forecast.recurring,
+    frequency: forecast.frequency,
+    expectedAmount: forecast.expectedAmount
   };
 
   setStatusLoading('income_status', 'Saving income source…');
@@ -507,8 +1186,8 @@ function submitNewIncomeSource() {
 /* -------------------------------------------------------------------------- */
 
 function stopTrackingIncomeSource(key) {
-  var store = window.__dashboardActiveIncomeSources || {};
-  var src = store[key];
+  var src = (window.__dashboardActiveIncomeSources || {})[key] ||
+    (window.__dashboardScheduledBonusSources || {})[key];
   if (!src) {
     setIncomeStatus_('Income source not found.', true);
     return;
@@ -521,13 +1200,16 @@ function stopTrackingIncomeSource(key) {
     return;
   }
 
-  var nameLabel = src.sourceName || 'this income source';
+  var nameLabel = src.sourceName || src.payee || 'this income source';
+  var isAnnualBonus = src.kind === 'cisco_annual_bonus';
   openDashboardConfirm_({
     eyebrow: 'Income',
     title: 'Stop tracking this income source?',
     subjectLabel: 'Source',
     subject: nameLabel,
-    message: 'This source will no longer be included in recurring income totals.',
+    message: isAnnualBonus
+      ? 'This annual Cash Flow income row will no longer be tracked. It is not monthly cash and is not used for the 90-day cash reserve.'
+      : 'This source will no longer be included in recurring income totals.',
     consequences: ['Existing Cash Flow history is preserved.'],
     cancelLabel: 'Keep tracking',
     confirmLabel: 'Stop tracking',

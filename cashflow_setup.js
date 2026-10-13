@@ -79,6 +79,12 @@ function createNextYearCashFlowSheet() {
 
   newSheet.getRange(1, 1, numRows, numCols).setValues(newValues);
 
+  try {
+    if (typeof ensureCashFlowIncomeForecastSchema_ === 'function') {
+      ensureCashFlowIncomeForecastSchema_(newSheet);
+    }
+  } catch (_forecastErr) { /* additive schema; the copied year already succeeded */ }
+
   // Force each month header cell to plain text so "Jan-27" stays "Jan-27"
   // instead of getting auto-parsed by Sheets as a date.
   for (let i = 0; i < layout.monthCol0s.length; i++) {
@@ -110,9 +116,14 @@ function createNextYearCashFlowSheet() {
   // the helpers here guarantees the new year reads like the reference
   // layout regardless of source vintage.
   try {
-    applyCashFlowSheetStyling_(newSheet, layout);
+    var styledLayout = layout;
+    try {
+      var headerNow = newSheet.getRange(1, 1, 1, newSheet.getLastColumn()).getDisplayValues()[0] || [];
+      styledLayout = detectCashFlowLayout_(headerNow);
+    } catch (_layoutErr) { styledLayout = layout; }
+    applyCashFlowSheetStyling_(newSheet, styledLayout);
     if (summaryRow > 0) {
-      applyCashFlowSummaryRowStyling_(newSheet, summaryRow, layout);
+      applyCashFlowSummaryRowStyling_(newSheet, summaryRow, styledLayout);
     }
     // Canonical body font (FIRST-CREATE clone). This sheet is brand-new this
     // run (not an existing user workbook), so washing body font to the
@@ -121,11 +132,11 @@ function createNextYearCashFlowSheet() {
     // copied from the source above — Phase A does not restyle clone heights.
     const maxRowsClone = newSheet.getMaxRows();
     if (maxRowsClone > 1) {
-      newSheet.getRange(2, 1, maxRowsClone - 1, numCols).setFontSize(CANON_FONT_BODY_);
+      newSheet.getRange(2, 1, maxRowsClone - 1, styledLayout.numCols || numCols).setFontSize(CANON_FONT_BODY_);
     }
     // Golden Workbook row-type text colors (FIRST-CREATE clone): Income
     // green, Expense red, via conditional formatting on the new sheet.
-    applyCashFlowRowTypeColorRules_(newSheet, layout);
+    applyCashFlowRowTypeColorRules_(newSheet, styledLayout);
   } catch (_styleErr) { /* cosmetic only */ }
 
   ss.setActiveSheet(newSheet);
@@ -139,10 +150,10 @@ function createNextYearCashFlowSheet() {
  * accordingly. A sheet is considered valid as long as Type, Payee, and at
  * least one MMM-YY month column are present.
  *
- * The `totalCol0` heuristic mirrors the legacy behavior: if there is any
- * column strictly to the right of the last month column, the right-most one
- * is treated as the yearly-total column. This keeps user-added layouts
- * (e.g. a trailing "Notes" column) from silently getting stomped.
+ * `totalCol0` is the header labelled exactly "Total" after the last month
+ * column. Populated workbooks often use "Totals" and "Yearly Total" instead;
+ * those are tracked as `lastSummaryCol0` so forecast columns can append after
+ * them without rewriting existing totals formulas that are not named "Total".
  */
 function detectCashFlowLayout_(headerRowValues) {
   const headers = (headerRowValues || []).map(function(h) {
@@ -178,7 +189,29 @@ function detectCashFlowLayout_(headerRowValues) {
   const firstMonthCol0 = monthCol0s[0];
   const lastMonthCol0 = monthCol0s[monthCol0s.length - 1];
   const numCols = headers.length;
-  const totalCol0 = (numCols - 1 > lastMonthCol0) ? (numCols - 1) : -1;
+  var totalCol0 = -1;
+  for (var tc = lastMonthCol0 + 1; tc < headers.length; tc++) {
+    if (headers[tc] === 'Total') {
+      totalCol0 = tc;
+      break;
+    }
+  }
+  if (totalCol0 === -1) {
+    for (var tc2 = 0; tc2 < headers.length; tc2++) {
+      if (headers[tc2] === 'Total') {
+        totalCol0 = tc2;
+        break;
+      }
+    }
+  }
+
+  var lastSummaryCol0 = -1;
+  for (var sc = lastMonthCol0 + 1; sc < headers.length; sc++) {
+    var summaryKey = String(headers[sc] || '').trim().toLowerCase();
+    if (summaryKey === 'total' || summaryKey === 'totals' || summaryKey === 'yearly total') {
+      lastSummaryCol0 = sc;
+    }
+  }
 
   return {
     typeCol0: typeCol0,
@@ -200,8 +233,31 @@ function detectCashFlowLayout_(headerRowValues) {
     lastMonthCol1: lastMonthCol0 + 1,
     totalCol0: totalCol0,
     totalCol1: totalCol0 === -1 ? -1 : totalCol0 + 1,
+    lastSummaryCol0: lastSummaryCol0,
+    lastSummaryCol1: lastSummaryCol0 === -1 ? -1 : lastSummaryCol0 + 1,
     numCols: numCols
   };
+}
+
+function cashFlowIsSummaryHeader_(value) {
+  var v = String(value == null ? '' : value).trim().toLowerCase();
+  return v === 'total' || v === 'totals' || v === 'yearly total';
+}
+
+function cashFlowLastSummaryColumnIndex_(headers) {
+  headers = headers || [];
+  var lastMonth = -1;
+  for (var c = 0; c < headers.length; c++) {
+    if (typeof parseMonthHeader_ === 'function' && parseMonthHeader_(headers[c])) {
+      lastMonth = c;
+    }
+  }
+  var lastSummary = -1;
+  var start = lastMonth === -1 ? 0 : lastMonth + 1;
+  for (var i = start; i < headers.length; i++) {
+    if (cashFlowIsSummaryHeader_(headers[i])) lastSummary = i;
+  }
+  return lastSummary;
 }
 
 /**
@@ -601,7 +657,8 @@ function buildCashFlowYearSheet_(ss, year) {
 
   const headerRow = CASH_FLOW_REQUIRED_HEADERS_
     .concat(monthHeaders)
-    .concat(['Total']);
+    .concat(['Total'])
+    .concat(CASH_FLOW_INCOME_FORECAST_HEADERS_);
 
   try {
     sheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
@@ -640,6 +697,11 @@ function buildCashFlowYearSheet_(ss, year) {
       .setNumberFormat('$#,##0.00;[Red]-$#,##0.00');
     sheet.getRange(2, totalCol1, sheet.getMaxRows() - 1, 1)
       .setNumberFormat('$#,##0.00;[Red]-$#,##0.00');
+    var expectedCol1 = headerRow.indexOf('Expected Amount') + 1;
+    if (expectedCol1 > 0) {
+      sheet.getRange(2, expectedCol1, sheet.getMaxRows() - 1, 1)
+        .setNumberFormat('$#,##0.00;[Red]-$#,##0.00');
+    }
   } catch (e) {
     // Number format is cosmetic; do not fail the ensure op.
   }
@@ -800,7 +862,10 @@ const CASH_FLOW_CANONICAL_WIDTHS_ = {
   'Type': 189,
   'Flow Source': 255,
   'Payee': 439,
-  'Active': 147
+  'Active': 147,
+  'Recurring': 150,
+  'Frequency': 170,
+  'Expected Amount': 200
 };
 
 /**
@@ -813,6 +878,487 @@ const CASH_FLOW_CANONICAL_WIDTHS_ = {
  * these labels by string, so order here is layout-independent but must not change.
  */
 const CASH_FLOW_REQUIRED_HEADERS_ = ['Type', 'Flow Source', 'Payee', 'Active'];
+
+/**
+ * Additive trailing income-forecast columns. Always appended AFTER Total so
+ * populated month cells never move. Blank means unknown; never backfilled.
+ */
+var CASH_FLOW_INCOME_FORECAST_HEADERS_ = ['Recurring', 'Frequency', 'Expected Amount'];
+
+function cashFlowIncomeForecastHeadersToAppend_(headerRow) {
+  var have = {};
+  (headerRow || []).forEach(function(value) {
+    var key = String(value || '').trim().toLowerCase();
+    if (key) have[key] = true;
+  });
+  return CASH_FLOW_INCOME_FORECAST_HEADERS_.filter(function(name) {
+    return !have[String(name).toLowerCase()];
+  });
+}
+
+/**
+ * Pure append of missing forecast headers after the existing final summary
+ * column (Totals / Yearly Total / Total) and any later trailing columns.
+ * Body cells are extended with blanks only; existing values and formulas are
+ * copied unchanged. Idempotent.
+ */
+function applyCashFlowIncomeForecastHeadersToGrid_(grid) {
+  var next = (grid || []).map(function(row) {
+    return (row || []).slice();
+  });
+  if (!next.length) return { grid: next, added: [] };
+  var headers = next[0];
+  var missing = cashFlowIncomeForecastHeadersToAppend_(headers);
+  if (!missing.length) return { grid: next, added: [] };
+  var lastMonth = -1;
+  for (var c = 0; c < headers.length; c++) {
+    if (typeof parseMonthHeader_ === 'function' && parseMonthHeader_(headers[c])) {
+      lastMonth = c;
+    }
+  }
+  var lastSummary = cashFlowLastSummaryColumnIndex_(headers);
+  if (lastMonth !== -1 && lastSummary !== -1 && lastSummary <= lastMonth) {
+    throw new Error('Cash Flow summary columns must stay after the month columns.');
+  }
+  for (var i = 0; i < missing.length; i++) {
+    next[0].push(missing[i]);
+    for (var r = 1; r < next.length; r++) next[r].push('');
+  }
+  return { grid: next, added: missing };
+}
+
+function cashFlowIncomeForecastColumnIndexes_(headers) {
+  var out = { recurring: -1, frequency: -1, expectedAmount: -1 };
+  (headers || []).forEach(function(value, i) {
+    var key = String(value || '').trim().toLowerCase();
+    if (key === 'recurring' && out.recurring === -1) out.recurring = i;
+    else if (key === 'frequency' && out.frequency === -1) out.frequency = i;
+    else if (key === 'expected amount' && out.expectedAmount === -1) out.expectedAmount = i;
+  });
+  return out;
+}
+
+function cashFlowIncomeForecastMoneyFormat_() {
+  return (typeof CASH_FLOW_MONEY_FORMAT_ === 'string' && CASH_FLOW_MONEY_FORMAT_)
+    ? CASH_FLOW_MONEY_FORMAT_
+    : '$#,##0.00;[Red]-$#,##0.00';
+}
+
+function cashFlowIncomeForecastHeaderFontSize_(templateCell) {
+  try {
+    var size = Number(templateCell && templateCell.getFontSize && templateCell.getFontSize());
+    if (size > 0) return size;
+  } catch (_sizeErr) { /* fall through */ }
+  return (typeof CANON_FONT_HEADER_ === 'number') ? CANON_FONT_HEADER_ : 16;
+}
+
+var CASH_FLOW_INCOME_FORECAST_HEADER_FILL_ = '#ffe599';
+var CASH_FLOW_INCOME_FORECAST_HEADER_FONT_COLOR_ = '#000000';
+
+function cashFlowIncomeForecastHeaderContract_(templateCell, columnName) {
+  return {
+    fill: CASH_FLOW_INCOME_FORECAST_HEADER_FILL_,
+    fontWeight: 'bold',
+    fontSize: cashFlowIncomeForecastHeaderFontSize_(templateCell),
+    fontColor: CASH_FLOW_INCOME_FORECAST_HEADER_FONT_COLOR_,
+    horizontalAlignment: 'center',
+    verticalAlignment: 'middle',
+    wrap: true,
+    minWidth: (CASH_FLOW_CANONICAL_WIDTHS_ && CASH_FLOW_CANONICAL_WIDTHS_[columnName]) || 0
+  };
+}
+
+function cashFlowIncomeForecastNormalizeColor_(raw) {
+  var text = String(raw || '').replace(/\s/g, '').toLowerCase();
+  var rgb = text.match(/^rgba?\((\d+),(\d+),(\d+)(?:,[0-9.]+)?\)$/);
+  if (rgb) {
+    return '#' + [rgb[1], rgb[2], rgb[3]].map(function(part) {
+      var hex = Number(part).toString(16);
+      return hex.length < 2 ? '0' + hex : hex;
+    }).join('');
+  }
+  if (/^#[0-9a-f]{8}$/.test(text)) return text.slice(0, 7);
+  if (/^#[0-9a-f]{6}$/.test(text)) return text;
+  if (/^#[0-9a-f]{3}$/.test(text)) {
+    return '#' + text.charAt(1) + text.charAt(1) + text.charAt(2) +
+      text.charAt(2) + text.charAt(3) + text.charAt(3);
+  }
+  if (text === 'black') return '#000000';
+  if (text === '#000') return '#000000';
+  return text;
+}
+
+function cashFlowIncomeForecastReadColor_(cell, kind) {
+  var getter = kind === 'font' ? 'getFontColor' : 'getBackground';
+  var objectGetter = kind === 'font' ? 'getFontColorObject' : 'getBackgroundObject';
+  try {
+    if (typeof cell[getter] === 'function') {
+      var normalized = cashFlowIncomeForecastNormalizeColor_(cell[getter]());
+      if (normalized && normalized.charAt(0) === '#') return normalized;
+    }
+  } catch (_colorRead) { /* try Color object */ }
+  try {
+    if (typeof cell[objectGetter] === 'function') {
+      var obj = cell[objectGetter]();
+      if (obj && typeof obj.asRgbColor === 'function') {
+        var rgb = obj.asRgbColor();
+        if (rgb && typeof rgb.asHexString === 'function') {
+          return cashFlowIncomeForecastNormalizeColor_(rgb.asHexString());
+        }
+      }
+    }
+  } catch (_objectRead) { /* fall through */ }
+  return '';
+}
+
+function cashFlowIncomeForecastReadWrapLabel_(headerCell) {
+  try {
+    if (typeof headerCell.getWrap === 'function' &&
+        (headerCell.getWrap() === true || headerCell.getWrap() === 'true')) {
+      return 'true';
+    }
+  } catch (_wrapRead) { /* continue */ }
+  try {
+    if (typeof headerCell.getWrapStrategy === 'function') {
+      var strategy = cashFlowIncomeForecastReadEnum_(headerCell.getWrapStrategy());
+      if (strategy && strategy.indexOf('wrap') !== -1) return 'true';
+      if (strategy) return strategy;
+    }
+  } catch (_strategyRead) { /* continue */ }
+  return 'false';
+}
+
+function cashFlowIncomeForecastReadEnum_(raw) {
+  if (raw == null) return '';
+  return String(raw).replace(/^.*\./, '').toLowerCase();
+}
+
+function cashFlowIncomeForecastApplyWrap_(headerCell) {
+  try { headerCell.setWrap(true); } catch (_wrapErr) { /* continue */ }
+  try {
+    if (typeof SpreadsheetApp !== 'undefined' && SpreadsheetApp.WrapStrategy &&
+        typeof headerCell.setWrapStrategy === 'function') {
+      headerCell.setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    }
+  } catch (_strategyErr) { /* continue */ }
+}
+
+function cashFlowIncomeForecastReadWrap_(headerCell) {
+  try {
+    if (typeof headerCell.getWrap === 'function') {
+      var wrap = headerCell.getWrap();
+      if (wrap === true || wrap === 'true') return true;
+    }
+  } catch (_wrapRead) { /* continue */ }
+  try {
+    if (typeof headerCell.getWrapStrategy === 'function' &&
+        typeof SpreadsheetApp !== 'undefined' && SpreadsheetApp.WrapStrategy) {
+      return headerCell.getWrapStrategy() === SpreadsheetApp.WrapStrategy.WRAP;
+    }
+  } catch (_strategyRead) { /* continue */ }
+  return false;
+}
+
+function cashFlowIncomeForecastFlush_() {
+  try {
+    if (typeof SpreadsheetApp !== 'undefined' && typeof SpreadsheetApp.flush === 'function') {
+      SpreadsheetApp.flush();
+    }
+  } catch (_flushErr) { /* read-after-write best effort */ }
+}
+
+function applyCashFlowIncomeForecastHeaderFallbackStyle_(headerCell, fontSize) {
+  var size = Number(fontSize);
+  if (!(size > 0)) {
+    size = (typeof CANON_FONT_HEADER_ === 'number') ? CANON_FONT_HEADER_ : 16;
+  }
+  headerCell
+    .setBackground(CASH_FLOW_INCOME_FORECAST_HEADER_FILL_)
+    .setFontWeight('bold')
+    .setFontSize(size)
+    .setFontColor(CASH_FLOW_INCOME_FORECAST_HEADER_FONT_COLOR_)
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle');
+  try {
+    headerCell.setBorder(
+      null, null, true, null, null, null,
+      CASH_FLOW_INCOME_FORECAST_HEADER_FONT_COLOR_,
+      SpreadsheetApp.BorderStyle.SOLID
+    );
+  } catch (_borderErr) { /* cosmetic */ }
+  cashFlowIncomeForecastApplyWrap_(headerCell);
+}
+
+function cashFlowIncomeForecastApplyHeaderContract_(headerCell, contract) {
+  try {
+    if (typeof headerCell.clearFormat === 'function') headerCell.clearFormat();
+  } catch (_clearErr) { /* continue */ }
+  try { headerCell.setBackground(null); } catch (_clearFill) { /* continue */ }
+  applyCashFlowIncomeForecastHeaderFallbackStyle_(headerCell, contract.fontSize);
+  try { headerCell.setFontSize(contract.fontSize); } catch (_fontErr) { /* continue */ }
+  cashFlowIncomeForecastApplyWrap_(headerCell);
+}
+
+function cashFlowIncomeForecastReadHeaderState_(headerCell, columnWidth) {
+  var fontSize = 0;
+  try { fontSize = Number(headerCell.getFontSize()); } catch (_sizeErr) { fontSize = 0; }
+  if (!isFinite(fontSize)) fontSize = 0;
+  var fontWeight = '';
+  try { fontWeight = cashFlowIncomeForecastReadEnum_(headerCell.getFontWeight()); } catch (_wErr) { fontWeight = ''; }
+  var alignment = '';
+  try { alignment = cashFlowIncomeForecastReadEnum_(headerCell.getHorizontalAlignment()); } catch (_aErr) { alignment = ''; }
+  var verticalAlignment = '';
+  try { verticalAlignment = cashFlowIncomeForecastReadEnum_(headerCell.getVerticalAlignment()); } catch (_vErr) { verticalAlignment = ''; }
+  return {
+    fill: cashFlowIncomeForecastReadColor_(headerCell, 'fill'),
+    fontWeight: fontWeight,
+    fontSize: fontSize,
+    fontColor: cashFlowIncomeForecastReadColor_(headerCell, 'font'),
+    horizontalAlignment: alignment,
+    verticalAlignment: verticalAlignment,
+    wrap: cashFlowIncomeForecastReadWrap_(headerCell) === true,
+    wrapLabel: cashFlowIncomeForecastReadWrapLabel_(headerCell),
+    width: Number(columnWidth) || 0
+  };
+}
+
+function cashFlowIncomeForecastHeaderMismatches_(headerCell, contract, columnWidth) {
+  var actual = cashFlowIncomeForecastReadHeaderState_(headerCell, columnWidth);
+  var expectedFill = cashFlowIncomeForecastNormalizeColor_(contract.fill);
+  var expectedFontColor = cashFlowIncomeForecastNormalizeColor_(contract.fontColor);
+  var expectedSize = Number(contract.fontSize);
+  var expectedWidth = Number(contract.minWidth) || 0;
+  var mismatches = [];
+  function push_(property, actualValue, expectedValue) {
+    mismatches.push({
+      property: property,
+      actual: String(actualValue),
+      expected: String(expectedValue)
+    });
+  }
+  if (actual.fill !== expectedFill) push_('fill', actual.fill || '(blank)', expectedFill);
+  if (String(actual.fontWeight || '').indexOf('bold') === -1) {
+    push_('font weight', actual.fontWeight || '(blank)', 'bold');
+  }
+  if (actual.fontSize !== expectedSize) {
+    push_('font size', actual.fontSize || '(blank)', expectedSize);
+  }
+  if (actual.fontColor !== expectedFontColor) {
+    push_('font color', actual.fontColor || '(blank)', expectedFontColor);
+  }
+  if (String(actual.horizontalAlignment || '').indexOf('center') === -1) {
+    push_('alignment', actual.horizontalAlignment || '(blank)', 'center');
+  }
+  if (String(actual.verticalAlignment || '').indexOf('middle') === -1) {
+    push_('vertical alignment', actual.verticalAlignment || '(blank)', 'middle');
+  }
+  if (actual.wrap !== true) push_('wrap', actual.wrapLabel || 'false', 'true');
+  if (expectedWidth > 0 && actual.width < expectedWidth) {
+    push_('minimum width', actual.width, expectedWidth);
+  }
+  return mismatches;
+}
+
+function cashFlowIncomeForecastMismatchLine_(column, detail) {
+  return column + ' ' + detail.property + ': actual ' + detail.actual +
+    ', expected ' + detail.expected;
+}
+
+/**
+ * Format already-present Recurring / Frequency / Expected Amount columns to
+ * match the existing Cash Flow header style. Does not add columns, write
+ * values, or restyle month / totals / other columns. Idempotent.
+ */
+function formatCashFlowIncomeForecastColumns_(sheet) {
+  if (!sheet || typeof sheet.getLastColumn !== 'function') {
+    return { formatted: false, added: false, columns: [] };
+  }
+  var lastCol = Math.max(1, sheet.getLastColumn());
+  var headers = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0] || [];
+  var idx = cashFlowIncomeForecastColumnIndexes_(headers);
+  var targets = [];
+  if (idx.recurring >= 0) {
+    targets.push({ name: 'Recurring', col0: idx.recurring, bodyFormat: '@STRING@' });
+  }
+  if (idx.frequency >= 0) {
+    targets.push({ name: 'Frequency', col0: idx.frequency, bodyFormat: '@STRING@' });
+  }
+  if (idx.expectedAmount >= 0) {
+    targets.push({
+      name: 'Expected Amount',
+      col0: idx.expectedAmount,
+      bodyFormat: cashFlowIncomeForecastMoneyFormat_()
+    });
+  }
+  if (!targets.length) return { formatted: false, added: false, columns: [] };
+
+  var templateCol0 = typeof cashFlowLastSummaryColumnIndex_ === 'function'
+    ? cashFlowLastSummaryColumnIndex_(headers)
+    : -1;
+  if (templateCol0 < 0) {
+    var typeCol0 = headers.indexOf('Type');
+    templateCol0 = typeCol0 >= 0 ? typeCol0 : 0;
+  }
+  var templateCell = sheet.getRange(1, templateCol0 + 1);
+  var maxRows = 2;
+  try { maxRows = Math.max(2, sheet.getMaxRows()); } catch (_mr) { maxRows = 2; }
+  var bodyRows = Math.max(1, maxRows - 1);
+  var formattedNames = [];
+
+  function applyForecastColumn_(target, copyTemplate) {
+    var col1 = target.col0 + 1;
+    var headerCell = sheet.getRange(1, col1);
+    var contract = cashFlowIncomeForecastHeaderContract_(templateCell, target.name);
+    if (copyTemplate) {
+      try {
+        if (templateCell && typeof templateCell.copyTo === 'function' &&
+            typeof SpreadsheetApp !== 'undefined' &&
+            SpreadsheetApp.CopyPasteType) {
+          templateCell.copyTo(headerCell, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+        }
+      } catch (_copyErr) { /* explicit contract below still applies */ }
+    }
+    try { cashFlowIncomeForecastApplyHeaderContract_(headerCell, contract); }
+    catch (_styleErr) { /* retry path still inspects */ }
+    if (contract.minWidth) {
+      try {
+        if (Number(sheet.getColumnWidth(col1)) < contract.minWidth) {
+          sheet.setColumnWidth(col1, contract.minWidth);
+        }
+      } catch (_wErr) { /* cosmetic */ }
+    }
+    try {
+      sheet.getRange(2, col1, bodyRows, 1).setNumberFormat(target.bodyFormat);
+    } catch (_bodyErr) { /* cosmetic */ }
+    formattedNames.push(target.name);
+  }
+
+  for (var t = 0; t < targets.length; t++) applyForecastColumn_(targets[t], true);
+  cashFlowIncomeForecastFlush_();
+  var inspection = typeof inspectCashFlowIncomeForecastFormatting_ === 'function'
+    ? inspectCashFlowIncomeForecastFormatting_(sheet)
+    : { needsFormat: false, mismatches: [] };
+  if (inspection && inspection.needsFormat === true) {
+    formattedNames = [];
+    for (var retry = 0; retry < targets.length; retry++) {
+      applyForecastColumn_(targets[retry], false);
+    }
+    cashFlowIncomeForecastFlush_();
+    inspection = inspectCashFlowIncomeForecastFormatting_(sheet);
+  }
+  return {
+    formatted: true,
+    added: false,
+    columns: formattedNames,
+    needsFormat: inspection && inspection.needsFormat === true,
+    mismatches: (inspection && inspection.mismatches) ? inspection.mismatches.slice() : [],
+    mismatchDetails: (inspection && inspection.mismatchDetails)
+      ? inspection.mismatchDetails.slice()
+      : []
+  };
+}
+
+function cashFlowIncomeForecastColorLooksYellow_(raw) {
+  return cashFlowIncomeForecastNormalizeColor_(raw) ===
+    cashFlowIncomeForecastNormalizeColor_(CASH_FLOW_INCOME_FORECAST_HEADER_FILL_);
+}
+
+/**
+ * Read-only comparison of already-present Recurring / Frequency /
+ * Expected Amount headers against the Format contract. Never writes
+ * values, formulas, widths, or number formats.
+ */
+function inspectCashFlowIncomeForecastFormatting_(sheet) {
+  var result = {
+    needsFormat: false,
+    added: false,
+    columns: [],
+    mismatches: [],
+    mismatchDetails: []
+  };
+  if (!sheet || typeof sheet.getLastColumn !== 'function') return result;
+  var lastCol = Math.max(1, sheet.getLastColumn());
+  var headers = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0] || [];
+  var idx = cashFlowIncomeForecastColumnIndexes_(headers);
+  var targets = [];
+  if (idx.recurring >= 0) targets.push({ name: 'Recurring', col0: idx.recurring });
+  if (idx.frequency >= 0) targets.push({ name: 'Frequency', col0: idx.frequency });
+  if (idx.expectedAmount >= 0) {
+    targets.push({ name: 'Expected Amount', col0: idx.expectedAmount });
+  }
+  result.columns = targets.map(function(target) { return target.name; });
+  if (targets.length !== CASH_FLOW_INCOME_FORECAST_HEADERS_.length) {
+    result.needsFormat = false;
+    return result;
+  }
+
+  var templateCol0 = typeof cashFlowLastSummaryColumnIndex_ === 'function'
+    ? cashFlowLastSummaryColumnIndex_(headers)
+    : -1;
+  if (templateCol0 < 0) {
+    var typeCol0 = headers.indexOf('Type');
+    templateCol0 = typeCol0 >= 0 ? typeCol0 : 0;
+  }
+  var templateCell = sheet.getRange(1, templateCol0 + 1);
+
+  for (var t = 0; t < targets.length; t++) {
+    var target = targets[t];
+    var col1 = target.col0 + 1;
+    var headerCell = sheet.getRange(1, col1);
+    var contract = cashFlowIncomeForecastHeaderContract_(templateCell, target.name);
+    var width = 0;
+    try { width = sheet.getColumnWidth(col1); } catch (_widthRead) { width = 0; }
+    var properties = cashFlowIncomeForecastHeaderMismatches_(headerCell, contract, width);
+    for (var p = 0; p < properties.length; p++) {
+      var detail = properties[p];
+      result.mismatchDetails.push({
+        column: target.name,
+        property: detail.property,
+        actual: detail.actual,
+        expected: detail.expected
+      });
+      result.mismatches.push(cashFlowIncomeForecastMismatchLine_(target.name, detail));
+    }
+  }
+  result.needsFormat = result.mismatches.length > 0;
+  return result;
+}
+
+/**
+ * Append missing Recurring / Frequency / Expected Amount columns after the
+ * existing final summary column. Idempotent. Never inserts among months and
+ * never writes body values, so historical cells and totals stay put.
+ */
+function ensureCashFlowIncomeForecastSchema_(sheet) {
+  if (!sheet || typeof sheet.getLastColumn !== 'function') return false;
+  var lastCol = Math.max(1, sheet.getLastColumn());
+  var headers = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0] || [];
+  var missing = cashFlowIncomeForecastHeadersToAppend_(headers);
+  if (!missing.length) return false;
+  var lastMonth = -1;
+  for (var mc = 0; mc < headers.length; mc++) {
+    if (typeof parseMonthHeader_ === 'function' && parseMonthHeader_(headers[mc])) {
+      lastMonth = mc;
+    }
+  }
+  var lastSummary = cashFlowLastSummaryColumnIndex_(headers);
+  if (lastMonth !== -1 && lastSummary !== -1 && lastSummary <= lastMonth) {
+    throw new Error('Cash Flow summary columns must stay after the month columns.');
+  }
+  for (var i = 0; i < missing.length; i++) {
+    var col = sheet.getLastColumn() + 1;
+    if (lastMonth !== -1 && col <= lastMonth + 1) {
+      throw new Error('Income forecast columns cannot be inserted among month columns.');
+    }
+    if (lastSummary !== -1 && col <= lastSummary + 1) {
+      throw new Error('Income forecast columns cannot be inserted before Totals or Yearly Total.');
+    }
+    var headerCell = sheet.getRange(1, col);
+    headerCell.setValue(missing[i]);
+  }
+  try { formatCashFlowIncomeForecastColumns_(sheet); } catch (_fmtErr) { /* cosmetic */ }
+  return true;
+}
 
 /**
  * Apply the canonical Cash Flow header styling (warm-yellow fill, bold
@@ -883,10 +1429,9 @@ function applyCashFlowSheetStyling_(sheet, layout) {
     applyCanonicalColumnWidthsByHeader_(sheet, 1, CASH_FLOW_CANONICAL_WIDTHS_);
   } catch (_cfWidthErr) { /* cosmetic only */ }
 
-  // Total is identified POSITIONALLY (the last column after the month block),
-  // not by a fixed header, so it stays on the layout-index widen-only path
-  // rather than the header-addressed helper. Widen-only preserves any manual
-  // widening; fresh sheets start at ~100px and get the canonical 120.
+  // Total is identified by header label (see detectCashFlowLayout_), so trailing
+  // forecast columns after Total are not widened as money. Widen-only preserves
+  // any manual widening; fresh sheets start at ~100px and get the canonical 120.
   if (layout.totalCol1 > 0) {
     try {
       if (sheet.getColumnWidth(layout.totalCol1) < 120) {

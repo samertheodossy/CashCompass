@@ -4,13 +4,53 @@
 
 **Documentation only.** This document sets **priority and sequence**. The complete numbered pre-Beta inventory, estimates, critical path, and parallel lanes live in `FULL_BETA_REMAINING_PLAN.md`; the detailed **Stage 1–6** roadmap (with per-item effort, dependencies, and history) lives in `TODO.md → Product Maturity Stages`; current technical status lives in `PROJECT_CONTEXT.md`; engineering rules (incl. **Milestone Discipline**) live in `ENGINEERING_STANDARDS.md`. Where the priority stack below and the Stage model disagree on ordering, **this document reflects the latest intent.**
 
+Explainable decisions from **current valid facts** are sequenced in **Decision roadmap**. Manual entry, import, and Plaid coverage remain a **separate** track in **Activity architecture status**; additional imports are not a prerequisite for that decision path.
+
 > Follow **Milestone Discipline** (`ENGINEERING_STANDARDS.md → §11`): finish the current milestone before starting the next; record discoveries here instead of implementing them immediately; close milestones cleanly before opening the next.
+
+---
+
+## Decision roadmap (from current valid facts)
+
+This is the path to CashCompass making **explainable, safe financial decisions** from validated current facts and explicit household policies. It does **not** interrupt the import/Plaid backlog, reopen frozen **This Week** / RFP-3, change **Rolling Debt Payoff**, or authorize payments or silent writes.
+
+### North Star acceptance
+
+For current validated facts and explicit household policies, CashCompass explains the recommended next-dollar action and amount, compares viable alternatives, shows the effects on debt-free timing, interest, liquidity, and retirement outlook, identifies assumptions and uncertainty, and withholds recommendations that depend on missing facts. It never executes payments or silently changes financial data.
+
+### Completed
+
+- ✅ **RFP-3 / This Week** — current-week cash allocation exists and remains **frozen**. Do not change that kernel.
+- ✅ **Rolling Debt Payoff** — already exists. Do not treat its hardcoded caps as the household extra-payment amount.
+- ✅ **Debt Overview strategy comparison** — minimum-only, avalanche, and snowball on the existing Debt Overview surface. Implemented, committed, and Central-tested with blank ($0.00), $1,000, and rejected negative input. It is a **hypothetical** overlay: it does **not** establish affordability, is **not** an affordable-payment recommendation, and does **not** write to accounts.
+
+### NEXT — Affordable recurring extra-payment amount
+
+Trace and reuse existing Cash Flow and Planning safety calculations to derive an amount that can recur monthly after required obligations and protected cash. Do **not** multiply This Week’s weekly amount by four, use Rolling Debt Payoff’s hardcoded caps, or assume variable or one-time income recurs. Preserve reserves, existing investment commitments, and policy floors. If existing facts cannot support the calculation, show what is missing instead of guessing.
+
+### THEN — Next-dollar allocation comparison
+
+Compare eligible uses of the supported amount: high-APR debt payoff, holding cash/reserve, extra mortgage principal, or investing. Show the amount, timing, interest/return assumptions, liquidity effect, and tradeoffs. Do **not** change This Week’s frozen kernel or initiate payments or transfers.
+
+### LATER — Household and variable-income scenarios
+
+Add bonus, RSU/ESPP, rental-surplus, HELOC, and mortgage-acceleration scenarios only with explicit timing and assumptions. Keep variable income separate from recurring income.
+
+### LATER — Debt-to-retirement integration
+
+Use editable Education inputs for each child’s 529 and school costs, and include future RSUs and retirement contribution/match assumptions in retirement scenarios. Keep estimates labeled and editable; do not hardcode financial values.
 
 ---
 
 ## Activity architecture status (2026-09-19; investment imports reconciled 2026-10-01)
 
-This is the current import and review model. It does not reopen frozen Planning Overview or Debt UX, and it does not create a second import system. CSV/PDF file adapters and Connected Plaid retrieval are separate sources that must converge on preview-first, explicit confirmation, and CashCompass INPUT/SYS authority until the user confirms.
+This is the current import and review model. It does not reopen frozen Planning
+Overview or This Week / RFP-3, does not change Rolling Debt Payoff, and does
+not create a second import system. Decision work from current facts is a
+**separate** track (**Decision roadmap**); remaining imports are not a
+prerequisite for it. CSV/PDF file adapters and Connected Plaid retrieval are
+separate sources that must converge on preview-first, explicit confirmation,
+and CashCompass INPUT/SYS authority until the user confirms.
 
 ### Completed foundations
 
@@ -76,7 +116,7 @@ These are planned, not complete:
 
 - **f. Optional Zillow/Redfin or uploaded valuation evidence** — provider-neutral property evidence only if later approved. No live Zillow/Redfin APIs are in the current product.
 - **g. Remaining investment imports** — Production customer import path for remaining E\*TRADE accounts (**Laith Etrade Account**, **Lutfi Etrade Account**; client-statement PDF/OCR **deferred**); **Laith 529** and **Lutfi 529** stay manual until a reliable source exists; any account without a reliable supported export stays deferred. The combined **E\*TRADE Cisco Statement — RSU/ESPP + Future** monthly-value profile is complete. **Samer Etrade Account** monthly value + Unified holdings is runtime-validated and is not a remaining build. **401K Account** blank-month Apply is implemented in source; Central runtime proof is **deferred**. **Lutfi Robinhood** eligibility and runtime validation are **on hold**. **Charles Schwab - Personal** holdings Apply is runtime-validated; blank-only monthly INPUT **October** validation is **deferred**. **Samer Robinhood**, **M1 Account - Gmail**, **M1 Account - yahoo**, **Charles Schwab - Personal**, and **Stash Account** detailed holdings are no longer in this remaining list. Robinhood → Unified stays deferred. Stash does not gain monthly INPUT writes in this sequence. No auto-mapping and no silent Apply.
-- **h. Income, debt payoff, HELOC, mortgage, tax, and portfolio decision features** — including residual Rolling Financial Plan / Multi-Broker Portfolio Intelligence ranking, Whole-Household Debt Freedom Planner, and related north-star work. These do not interrupt the activity-drawer sequence.
+- **h. Income, debt payoff, HELOC, mortgage, tax, and portfolio decision features** — a **separate** decision track, not an import prerequisite. Residual Rolling Financial Plan / Multi-Broker Portfolio Intelligence ranking, Whole-Household Debt Freedom Planner, and related north-star work do not interrupt the activity-drawer sequence. **Debt Overview strategy comparison** (minimum-only / avalanche / snowball) is complete, hypothetical, and non-writing. The next decision slice is **affordable recurring extra-payment amount**; see **Decision roadmap**.
 - **i. Education forecasts** — Planning → Education currently saves inputs only. Coverage, overlap, and projection math stay deferred. Do not mix 529 balances back into Retirement investable assets.
 - **j. 401K Account Central proof** — blank-month ending-balance Apply already exists in source. Occupied cells, including explicit $0, must not be overwritten. Owner will run Central Preview/Apply later. Do not treat this as current in-progress.
 - **k. Lutfi Robinhood** — CSV eligibility and runtime validation in the existing Portfolio activity drawer are **on hold**. Do not copy **Samer Robinhood** proof onto this account. Do not treat this as current in-progress.
@@ -120,12 +160,18 @@ These are planned, not complete:
 
 **Now / next:**
 
-- **Frozen Planning checkpoint:** **Overview FROZEN · Debt FROZEN · 30/90-day
-  post-decision safety PROVEN · Planning foundation STABLE.** Commit `9a6cb96`
-  contains the canonical required-first/exact-once plan, recurrence and payment-
-  evidence corrections, independent reserve and Balanced-pacing protections,
-  gross current-cash 30/90-day solvency checks, and the accepted Overview/Debt
-  presentation. Do not reopen ordinary Overview or Debt UX work.
+- **Frozen Planning checkpoint:** **Overview FROZEN · This Week / RFP-3 kernel
+  FROZEN · 30/90-day post-decision safety PROVEN · Planning foundation STABLE.**
+  Commit `9a6cb96` contains the canonical required-first/exact-once plan,
+  recurrence and payment-evidence corrections, independent reserve and Balanced-
+  pacing protections, gross current-cash 30/90-day solvency checks, and the
+  accepted Overview/This Week presentation. **Rolling Debt Payoff already
+  exists.** **Debt Overview strategy comparison** (minimum-only / avalanche /
+  snowball) is a completed hypothetical overlay on that frozen surface:
+  committed, Central-tested with blank ($0.00), $1,000, and rejected negative
+  input; it does not write and does not establish affordability. Do not reopen
+  ordinary Overview UX or the frozen This Week kernel. Next decision work is
+  the **affordable recurring extra-payment** calculation, not a surface redesign.
 - **Completed lifecycle cluster:** Bills, House tracking/recovery, and Income
   tracking/recovery are complete. Safe soft-delete existed before full recovery
   parity; the completed contract now includes counted inactive discovery,
@@ -202,12 +248,16 @@ IDs and estimates remain in `FULL_BETA_REMAINING_PLAN.md`.
 | C — known product gap | Central planner-email debounce/trigger noise | Open historical Central design issue; no financial-data impact | Must be dispositioned in known limitations/operations; implementation priority depends on cohort impact | Re-qualify before implementation; do not mix into import work |
 | C — known product gap | AutoPay creation of a missing exact Cash Flow payee row | Open product/financial decision; current behavior fails closed to manual handling | No unless cohort evidence promotes it | Separate higher-risk Bills decision; not part of completed lifecycle |
 | D — deferred strategic | Residual `RFP-4`/`RFP-5`, shared sheet-write utilities, Income Expected/Due, Money Plan Phase 2, debt aliases/merge, refresh awareness | Deferred | No, except exact evidence already represented elsewhere | Re-qualify after current Beta-critical work |
-| E — future/north star | **Complete financial decision engine** (source-neutral evidence → history → explainable payoff/investment recommendations), plus Strategic Capital Allocation, Whole-Household Debt Freedom Planner, **Multi-Broker Portfolio Intelligence** (`MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` Phases 1–8), rewards/spend optimization, recurring schedule/gap modeling, Recurring Bill & Subscription Discovery, Property Value / AVM Refresh, broader transaction/provider ingestion, Chat/Assistant, billing activation | Future | No | Does not interrupt the current Import / Refresh cluster, frozen Planning, or bounded-workbook safety. See **Complete financial decision engine** below. Current account list and statuses: Activity architecture inventory (2026-10-01). Combined **E\*TRADE Cisco Statement — RSU/ESPP + Future** monthly-value import is complete. **Samer Etrade Account** monthly value + Unified holdings is runtime-validated. **Laith Etrade Account**, **Lutfi Etrade Account**, **Lutfi Robinhood**, **Laith 529**, **Lutfi 529**, and any account without a reliable supported export remain deferred. **401K Account** blank-month Apply is implemented in source; Central runtime proof is deferred. |
+| E — future/north star | **Complete financial decision engine** (source-neutral evidence → history → explainable payoff/investment recommendations), plus Strategic Capital Allocation, Whole-Household Debt Freedom Planner, **Multi-Broker Portfolio Intelligence** (`MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` Phases 1–8), rewards/spend optimization, recurring schedule/gap modeling, Recurring Bill & Subscription Discovery, Property Value / AVM Refresh, broader transaction/provider ingestion, Chat/Assistant, billing activation | Sequenced separately from import: strategy comparison **complete**; **NEXT** is affordable recurring extra; later slices remain future | No | Does not interrupt the Import / Refresh cluster, frozen This Week / RFP-3, Rolling Debt Payoff, or bounded-workbook safety. Additional imports are **not** a prerequisite. See **Decision roadmap** and **Complete financial decision engine**. Current account list and statuses: Activity architecture inventory (2026-10-01). Combined **E\*TRADE Cisco Statement — RSU/ESPP + Future** monthly-value import is complete. **Samer Etrade Account** monthly value + Unified holdings is runtime-validated. **Laith Etrade Account**, **Lutfi Etrade Account**, **Lutfi Robinhood**, **Laith 529**, **Lutfi 529**, and any account without a reliable supported export remain deferred. **401K Account** blank-month Apply is implemented in source; Central runtime proof is deferred. |
 | F — obsolete/stale | Bills/House/Income recovery listed as open; native browser confirmation migration listed as open; zero-count recovery listed as missing; old Bank Import Step 2a “not started”; old bounded deployment cleanup item | Closed or superseded | No | Retain only as clearly labeled history |
 
-The Planning Overview and Debt surfaces remain frozen. Import work improves the
-quality and freshness of facts they consume; it does not authorize another UX
-redesign or an authority switch.
+The Planning Overview and This Week / RFP-3 kernel remain frozen. **Rolling Debt
+Payoff** already exists. **Debt Overview strategy comparison** is a completed
+hypothetical overlay (not an affordability recommendation and not a write).
+Import work improves the quality and freshness of facts they consume; it does
+not authorize another UX redesign, an authority switch, or a second product
+design. Additional imports are **not** a prerequisite for the **Decision
+roadmap**.
 
 ---
 
@@ -467,14 +517,17 @@ does not retroactively import activity behind its boundary if later included.
 The owner reviewed and accepted the bounded presentation. This is a common-source
 foundation extension; it is not retroactively claimed as isolated `@351` evidence.
 
-**Next active item after the separate commit boundary:** `RFP-3`, the read-only
-Capital Allocation Queue and weekly recommendation engine. It uses an in-memory
-read model with two classes: hard constraints such as obligations, protected
-cash, and debt minimums; and ranked discretionary candidates such as extra debt,
+**RFP-3 / This Week — complete and frozen.** The read-only Capital Allocation
+Queue and weekly recommendation engine exist. They use an in-memory read model
+with two classes: hard constraints such as obligations, protected cash, and
+debt minimums; and ranked discretionary candidates such as extra debt,
 Income-Producing Account funding, reserve restoration, or waiting. Every result
 must be deterministic, provenance-backed, confidence-labeled, and exactly
-reconciled. It may not transfer funds, place trades, post payments, or write
-recommendations into the workbook.
+reconciled. They may not transfer funds, place trades, post payments, or write
+recommendations into the workbook. **Do not change this frozen kernel.** The
+next *decision* slice is **affordable recurring extra-payment amount**
+(**Decision roadmap**), not a new This Week allocation engine. Import/Plaid
+coverage remains a separate track.
 
 **RFP-3a complete on isolated Central `@353`:** the first contained slice defines the
 spreadsheet-scoped read-only fact seam and pure Capital Allocation Queue kernel.
@@ -486,7 +539,8 @@ and unsupported timing/reconciliation inputs fail closed through data-quality
 findings. Permanent local regressions pass, and isolated run
 `20260814-112123-c4fd` passed its PURE scenario and 16/16 assertions in 5.7 s
 with Provisioning/Drift PASS, verified Trash cleanup, and the runner returned
-OFF. Ranking and allocation remain the next separately reviewed RFP-3 slice.
+OFF. Ranking and allocation were delivered in the completed, **frozen** RFP-3b
+kernel. Do not reopen that slice.
 
 **RFP-3 Part 1 Capital Deployment Pace candidate:** the optimizer no longer
 hands every dollar above the hard reserve to the ranker. A disclosed preferred
@@ -540,9 +594,11 @@ is the net floor after a capped `$83,636.61` forecast-income offset from
 `$125,454.92` gross obligations, while the independent current-cash test uses
 the full gross amount. Post-decision cash of `$133,010.14` leaves `$7,555.22`
 headroom (`1.06x`), so optional deployment requires no unreceived future income.
-Checkpoint `9a6cb96` is committed and pushed. The next milestone is the real
-customer Import / Refresh program under the debt-risk-first sequence defined in
-`PART_2A_FINANCIAL_FACTS_CONTRACT.md → §§11–15`.
+Checkpoint `9a6cb96` is committed and pushed. Import / Refresh remains a
+**separate** track under the debt-risk-first sequence in
+`PART_2A_FINANCIAL_FACTS_CONTRACT.md → §§11–15`. It is not a prerequisite for
+the **Decision roadmap**. The next *decision* slice is **affordable recurring
+extra-payment amount**.
 
 The same `@387` source also fixes a newly tracked AutoPay bill inheriting a
 false prior-month overdue occurrence when its row-level effective date is
@@ -611,15 +667,31 @@ visual acceptance, and the 30/90-day proof close this RFP-3b foundation.
 
 **Rolling Financial Plan sequence:** `RFP-1` read-only contract → `RFP-2`
 optional funding-purpose metadata → `RFP-6a` broker activity/holdings foundation
-(prioritized after granular data arrived) → `RFP-3` read-only recommendation engine →
-`RFP-4` completed **This Week** decision detail with deterministic **Why not?**
-counterfactuals → `RFP-5` disposable-workbook and isolated runtime proof.
-**Next remaining import slices:** remaining E\*TRADE accounts (**Laith Etrade Account**, **Lutfi Etrade Account**; client-statement PDF/OCR deferred); **Laith 529** and **Lutfi 529** stay manual; any account without a reliable supported export stays deferred. Combined **E\*TRADE Cisco Statement — RSU/ESPP + Future** monthly-value import is complete. **Samer Etrade Account** monthly value + Unified holdings is runtime-validated and is not a remaining build. **401K Account** blank-month Apply is implemented in source; Central runtime proof is deferred. **Lutfi Robinhood** eligibility and runtime validation are on hold. **Samer Robinhood**, **M1 Account - Gmail**, **M1 Account - yahoo**, **Charles Schwab - Personal** detailed holdings, and **Stash Account** detailed holdings are runtime-validated. Schwab monthly blank-only INPUT fill **October** validation is deferred. Stash does not write monthly INPUT. Robinhood → Unified remains deferred. Broader multi-broker direction: `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` Phase 1. `RFP-6b` allocation analysis and `RFP-7` tax-lot analysis are later
-portfolio layers (Phases 5–6 of that doc); the household plan must work without
-either. Each slice has a separate review and commit boundary. Existing Rolling
-Debt Payoff behavior stays unchanged until a reviewed composition seam is
-introduced, and no slice may automatically transfer cash, sell securities, or
-post debt payments.
+(prioritized after granular data arrived) → `RFP-3` read-only recommendation
+engine **complete and frozen** → `RFP-4` completed **This Week** decision detail
+with deterministic **Why not?** counterfactuals → `RFP-5` disposable-workbook
+and isolated runtime proof. **Next remaining import slices** (separate track):
+remaining E\*TRADE accounts (**Laith Etrade Account**, **Lutfi Etrade Account**;
+client-statement PDF/OCR deferred); **Laith 529** and **Lutfi 529** stay manual;
+any account without a reliable supported export stays deferred. Combined
+**E\*TRADE Cisco Statement — RSU/ESPP + Future** monthly-value import is
+complete. **Samer Etrade Account** monthly value + Unified holdings is
+runtime-validated and is not a remaining build. **401K Account** blank-month
+Apply is implemented in source; Central runtime proof is deferred. **Lutfi
+Robinhood** eligibility and runtime validation are on hold. **Samer Robinhood**,
+**M1 Account - Gmail**, **M1 Account - yahoo**, **Charles Schwab - Personal**
+detailed holdings, and **Stash Account** detailed holdings are
+runtime-validated. Schwab monthly blank-only INPUT fill **October** validation
+is deferred. Stash does not write monthly INPUT. Robinhood → Unified remains
+deferred. Broader multi-broker direction:
+`MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` Phase 1. `RFP-6b` allocation analysis
+and `RFP-7` tax-lot analysis are later portfolio layers (Phases 5–6 of that
+doc); the household plan must work without either. Each slice has a separate
+review and commit boundary. Existing Rolling Debt Payoff behavior stays
+unchanged until a reviewed composition seam is introduced, and no slice may
+automatically transfer cash, sell securities, or post debt payments. The next
+*decision* slice is **affordable recurring extra-payment amount** (**Decision
+roadmap**); it does not wait on remaining import slices.
 
 `RFP-6c` is the product-wide data-import framework follow-up. It extracts the
 safe workflow established by the Robinhood adapter—source detection,
@@ -776,7 +848,7 @@ Performance under `8b`. Preserve Beta `@106` plus the user-controlled bounded de
 
 ### Priority 4 — Future features
 
-- **Complete financial decision engine** *(future north star; recorded 2026-09-17; does not interrupt current Beta work)* — a source-neutral engine that can use manual and imported data, historical values, holdings, debts, income, expenses, and tax-sensitive information to produce **explainable** payoff and investment recommendations. Full areas, provider coverage, milestones, and dependencies are in **Complete financial decision engine** below. Existing M1, Robinhood, common investment drawer, Data readiness, Planning, and bounded-workbook behavior stay as they are. One common drawer; provider-specific adapters behind it; no duplicate provider pages.
+- **Complete financial decision engine** *(north star; sequence in **Decision roadmap**; recorded 2026-09-17; does not interrupt import/Beta work)* — a source-neutral engine that uses current valid facts (manual or imported) to produce **explainable** payoff and investment recommendations. Only the **affordable recurring extra-payment** calculation is **NEXT**; remaining engine areas stay later. Additional imports are not a prerequisite. Existing M1, Robinhood, common investment drawer, Data readiness, frozen This Week, Rolling Debt Payoff, and bounded-workbook behavior stay as they are. One common drawer; provider-specific adapters behind it; no duplicate provider pages. Full areas: **Complete financial decision engine** below.
 - **Multi-Broker Portfolio Intelligence** *(Foundation v1 complete; current
   account statuses are the Activity architecture inventory 2026-10-01;
   **Samer Robinhood**, **M1 Account - Gmail**, **M1 Account - yahoo**,
@@ -793,7 +865,8 @@ Performance under `8b`. Preserve Beta `@106` plus the user-controlled bounded de
   separately approved. Authoritative direction:
   `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md`.
 - **Strategic Capital Allocation and Portfolio Growth** *(overarching north-star
-  capability; after authoritative cross-domain facts)* — continuously answer
+  capability; **LATER** after the Decision roadmap NEXT/THEN slices; uses current
+  valid facts and does not wait on remaining imports)* — continuously answer
   where the household's next available dollar should go across debt reduction,
   liquidity, strategic contributions, brokerage accounts, mortgages/term debt,
   property, retirement, taxes, and known commitments. Compare guaranteed
@@ -807,8 +880,9 @@ Performance under `8b`. Preserve Beta `@106` plus the user-controlled bounded de
   in-kind transfers, and tax-aware sales remain distinct future paths.
   Canonical contract:
   `ROLLING_FINANCIAL_PLAN_DECISION_CONTRACT.md → Future north star — Strategic Capital Allocation and Portfolio Growth`.
-- **Whole-Household Debt Freedom Planner** *(north-star capability; after the
-  import/freshness foundation; integrated with Strategic Capital Allocation)* — continuously construct the safest
+- **Whole-Household Debt Freedom Planner** *(north-star capability; **LATER** on
+  the Decision roadmap, integrated with Strategic Capital Allocation; uses
+  current valid facts and does not wait on remaining imports)* — continuously construct the safest
   high-confidence path from today's next dollar to debt freedom across credit
   cards, HELOCs, mortgages, auto/personal/credit-union loans, and other debt.
   Compare More Liquidity, Balanced, Faster Debt-Free, and Custom strategies;
@@ -900,29 +974,34 @@ Performance under `8b`. Preserve Beta `@106` plus the user-controlled bounded de
 
 ---
 
-## Complete financial decision engine *(future north star — 2026-09-17)*
+## Complete financial decision engine *(north star — sequence in Decision roadmap)*
 
-**Documentation only.** This section expands the long-term destination. It does
-**not** change the current Import / Refresh cluster, frozen Planning Overview or
-Debt surfaces, Data readiness four-status contract, common investment drawer,
-Robinhood production path, runtime-validated M1/Schwab/Stash Unified holdings Apply,
-**401K Account** blank-month Apply (Central runtime proof deferred), remaining E*TRADE/529 tabs, or
-bounded-workbook safety rules. Do not implement these capabilities from this
-roadmap update.
+**Documentation only.** This section expands the destination and remaining
+areas. Ordered next/later work lives in **Decision roadmap**. This section does
+**not** change the Import / Refresh cluster, frozen This Week / RFP-3 kernel,
+Rolling Debt Payoff, Data readiness four-status contract, common investment
+drawer, Robinhood production path, runtime-validated M1/Schwab/Stash Unified
+holdings Apply, **401K Account** blank-month Apply (Central runtime proof
+deferred), remaining E*TRADE/529 tabs, or bounded-workbook safety rules.
+Additional imports are **not** a prerequisite. The first remaining *decision*
+slice is **affordable recurring extra-payment amount**, not a new Planning
+surface.
 
 **Objective.** CashCompass becomes a **source-neutral financial decision engine**
-that can use manual and imported data, historical values, holdings, debts,
-income, expenses, and tax-sensitive information to produce explainable payoff
-and investment recommendations. Recommendations remain advisory. The user must
-explicitly approve any financial action. There is no automatic trading, no
-automatic debt payment, no automatic account matching, and no automatic
-imported-data application.
+that can use current valid facts (manual or imported), historical values,
+holdings, debts, income, expenses, and tax-sensitive information to produce
+explainable payoff and investment recommendations. Recommendations remain
+advisory. The user must explicitly approve any financial action. There is no
+automatic trading, no automatic debt payment, no automatic account matching, and
+no automatic imported-data application. Acceptance is the **North Star
+acceptance** definition in **Decision roadmap**.
 
 **Product-surface constraint.** Keep **one common drawer** and put
 provider-specific parsers behind adapters. Do **not** create duplicate
 provider-specific pages. Preserve current **Samer Robinhood**, **M1 Account - Gmail** / **yahoo**,
 **Charles Schwab - Personal**, **Stash Account**, drawer, readiness,
-Planning, and bounded-workbook behavior while this engine is sequenced.
+frozen This Week / RFP-3, Rolling Debt Payoff, and bounded-workbook behavior
+while this engine is sequenced.
 
 Related contracts already in the repository (do not replace them):
 `PART_2A_FINANCIAL_FACTS_CONTRACT.md`, `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md`,
@@ -986,18 +1065,27 @@ duplicate facts. Raw source files remain non-retained by default.
 
 ### Area 4 — Debt-payoff optimizer
 
-After authoritative revolving-debt, HELOC, and mortgage facts:
+**Completed:** household minimum-only / avalanche / snowball comparison on
+**Debt Overview**, using one explicit hypothetical monthly extra. Implemented,
+committed, and Central-tested with blank ($0.00), $1,000, and rejected negative
+input. It does **not** write to accounts and does **not** establish
+affordability. Do not describe it as an affordable-payment recommendation.
 
-- credit cards, HELOC, mortgages;
-- minimum payments, APRs, payoff dates;
-- avalanche vs snowball comparison;
-- interest savings;
-- reserve protection;
-- bonus, RSU, rental, and monthly-surplus scenarios.
+**NEXT (first remaining DE-4 slice):** a supported **recurring monthly extra**
+from existing Cash Flow and Planning safety calculations after required bills,
+known debt minimums, investment commitments/policy floors, buffers, and the
+90-day reserve. Do not multiply This Week’s weekly extra by four, use Rolling
+Debt Payoff’s hardcoded caps, or treat variable/one-time income as recurring.
+If current facts cannot support the amount, show the missing fact or policy
+instead of guessing.
+
+**LATER in this area:** bonus, RSU/ESPP, rental-surplus, HELOC, and
+mortgage-acceleration scenarios only with explicit timing and assumptions.
+Variable income stays separate from recurring income.
 
 Must not violate required obligations, liquidity, or 30/90-day safety. Must not
 auto-pay any debt. Builds on frozen Planning invariants and the Whole-Household
-Debt Freedom Planner north star.
+Debt Freedom Planner north star. Does **not** wait on additional imports.
 
 ### Area 5 — Tax-aware portfolio action analysis
 
@@ -1017,10 +1105,14 @@ protected from default sell-for-cash recommendations unless policy changes.
 
 ### Area 6 — Idle-cash allocation
 
-Compare reserve, card payoff, HELOC payoff, extra mortgage principal, and
-investing options. Show cash remaining, interest saved, expected benefit, and
-risk. Pace only genuinely excess capital after hard reserve, preferred
-liquidity, and post-decision 30/90-day coverage using current cash only.
+**THEN — Next-dollar allocation comparison** (after a supported recurring extra
+exists, or after the product has shown why that extra cannot be proven). Compare
+eligible uses of the supported amount: high-APR debt payoff, holding
+cash/reserve, extra mortgage principal, or investing. Show the amount, timing,
+interest/return assumptions, liquidity effect, and tradeoffs. Do not change
+This Week’s frozen kernel or initiate payments or transfers. Pace only
+genuinely excess capital after hard reserve, preferred liquidity, and
+post-decision 30/90-day coverage using current cash only.
 
 ### Area 7 — Robinhood funding optimization
 
@@ -1066,7 +1158,7 @@ double-counted with other income or assets.
 
 **Education and 529 treatment**
 - **Done in source:** Planning → Education saves Lutfi 529 / Laith 529 inputs (no forecast yet). Retirement current investable assets, including Overview Retirement outlook, exclude `SYS - Assets` rows typed Education or 529. Classification uses Type only. Net worth still includes those balances.
-- **Remaining (roadmap only; not implemented or runtime-tested):** education-cost timing and expected 529 use in retirement cash-flow projections; Education coverage/projection math.
+- **LATER — Debt-to-retirement integration:** use those editable Education inputs for each child’s 529 and school costs, and include future RSUs and retirement contribution/match assumptions in retirement scenarios. Keep estimates labeled and editable; do not hardcode financial values. Remaining coverage/projection math stays later.
 
 ### Area 11 — Explainable recommendations
 
@@ -1103,31 +1195,40 @@ Standing rules for every milestone in this engine:
 
 ### Milestones and dependencies
 
-These milestones are **future**. They start only after the named dependency is
-closed or explicitly waived. They do not preempt Credit Card Import
-correctness, Bank/Investment Apply (when separately opened), House/Income
-Edit/Rename disposition, or frozen-candidate evidence `8a`–`8f`.
+Import/Plaid milestones (**DE-1**, **DE-2**, **DE-3**) remain a **separate**
+coverage track. They do **not** gate the **Decision roadmap**. Decision slices
+use **current valid facts** and fail closed when a needed fact or policy is
+missing. They do not preempt Credit Card Import correctness, Bank/Investment
+Apply (when separately opened), House/Income Edit/Rename disposition, or
+frozen-candidate evidence `8a`–`8f`.
 
 | ID | Milestone | Depends on | Delivers |
 |---|---|---|---|
-| **DE-0** | Preservation gate (constraint, not a feature build) | Current **Samer Robinhood**, **M1 Account - Gmail** / **yahoo**, **Charles Schwab - Personal**, **Stash Account**, common drawer, Data readiness, Planning freeze, bounded-workbook rules | Written non-regression: no duplicate provider UI; adapters behind the common drawer |
-| **DE-1** | Source-neutral evidence completeness | Part 2A-0–2A-5; current four-status readiness; no Planning authority switch | Identity, source, as-of, freshness, provenance, confidence on cash/card and then later domains; manual/Plaid/CSV/PDF count equally; explicit zero valid |
+| **DE-0** | Preservation gate (constraint, not a feature build) | Current **Samer Robinhood**, **M1 Account - Gmail** / **yahoo**, **Charles Schwab - Personal**, **Stash Account**, common drawer, Data readiness, frozen This Week / RFP-3, Rolling Debt Payoff, bounded-workbook rules | Written non-regression: no duplicate provider UI; adapters behind the common drawer; no second product design |
+| **DE-1** | Source-neutral evidence completeness | Part 2A-0–2A-5; current four-status readiness; no Planning authority switch | Identity, source, as-of, freshness, provenance, confidence on cash/card and then later domains; manual/Plaid/CSV/PDF count equally; explicit zero valid. **Separate import track** — not a prerequisite for DE-4 remaining slices |
 | **DE-2** | Account-coverage adapters | DE-0, DE-1; per-provider format inspection | Remaining (not current): remaining E\*TRADE partitions (**Laith Etrade Account**, **Lutfi Etrade Account**; OCR deferred); **Laith 529** / **Lutfi 529** only if a reliable source appears. Combined Cisco monthly-value import is complete. **Samer Etrade Account** monthly value + Unified holdings is runtime-validated. **401K Account** blank-month Apply is implemented in source; Central runtime proof is deferred. **Lutfi Robinhood** eligibility/runtime validation is on hold. **Charles Schwab - Personal** blank-only monthly INPUT October validation is deferred. Do not rebuild runtime-validated Robinhood/M1/Schwab/Stash/Samer E\*TRADE holdings paths |
-| **DE-3** | Historical data foundation | DE-1; duplicate/replay-safe import | Monthly snapshots, holdings/lots, cash/debt/mortgage/income/expense history, lineage |
-| **DE-4** | Debt-payoff optimizer | DE-1; revolving-debt + HELOC + mortgage facts; frozen Planning safety | Cards/HELOC/mortgages, minimums, APRs, dates, avalanche/snowball, interest saved, reserve protection, surplus scenarios |
-| **DE-5** | Idle-cash allocation | DE-3, DE-4; hard reserve + preferred liquidity | Compare reserve vs payoff vs extra mortgage vs investing with remaining cash, benefit, and risk |
-| **DE-6** | HELOC analysis | DE-4; house financing identity | Cash vs HELOC vs staged use; variable-rate, repayment, reserve, liquidity, tax; never “because credit exists” |
-| **DE-7** | Mortgage acceleration | DE-4; Property Performance V1 | Extra principal, refinance, interest, cash-flow, opportunity cost, rental treatment, prepayment limits |
+| **DE-3** | Historical data foundation | DE-1; duplicate/replay-safe import | Monthly snapshots, holdings/lots, cash/debt/mortgage/income/expense history, lineage. **Separate import track** |
+| **DE-4** | Debt-payoff optimizer | Current valid facts; frozen This Week / RFP-3 safety; existing Rolling Debt Payoff unchanged | **Completed:** Debt Overview minimum-only / avalanche / snowball comparison (hypothetical extra; Central-tested blank / $1,000 / rejected negative; non-writing; not an affordability recommendation). **NEXT:** supported recurring monthly extra from existing Cash Flow / Planning safety calculations; show missing facts instead of guessing. **LATER:** bonus/RSU/rental/HELOC/mortgage scenarios with explicit timing |
+| **DE-5** | Idle-cash / next-dollar allocation | Supported extra from remaining DE-4 (or an explicit missing-fact result); hard reserve + preferred liquidity | **THEN:** compare high-APR payoff, holding cash/reserve, extra mortgage principal, or investing; show amount, timing, interest/return assumptions, liquidity, and tradeoffs. Does not change This Week’s frozen kernel or initiate payments/transfers. Does **not** wait on DE-3 history |
+| **DE-6** | HELOC analysis | Remaining DE-4; house financing identity | **LATER:** cash vs HELOC vs staged use; variable-rate, repayment, reserve, liquidity, tax; never “because credit exists” |
+| **DE-7** | Mortgage acceleration | Remaining DE-4; Property Performance V1 | **LATER:** extra principal, refinance, interest, cash-flow, opportunity cost, rental treatment, prepayment limits |
 | **DE-8** | Tax-aware portfolio actions | DE-2, DE-3 tax lots; Robinhood protection policy | Candidate lots, ST/LT, basis, RSU/ESPP, concentration, taxable vs retirement, estimated tax; no auto-sell |
 | **DE-9** | Robinhood funding optimization | DE-3, DE-5; current Robinhood policy floor | Contribution, capacity, allocation, dividends, total return, tax, concentration, time-to-income; not yield-only |
-| **DE-10** | Retirement and income planning | DE-2 401(k); DE-3 history; current Retirement surface | Remaining: contributions/match/allocation, wrappers, RSU/ESPP as uncertain vesting (no guaranteed income, no double-count), education-cost/529 timing in cash-flow projections, rent, age, sequencing, SS/pension when present, cash-flow gap. Already done: Retirement investable assets exclude SYS - Assets rows typed Education or 529; Overview uses that filtered total; Education saved inputs exist without forecasts. Remaining DE-10 work is roadmap only — not implemented or runtime-tested |
-| **DE-11** | Explainable recommendation packet | Required output of DE-4 through DE-10 | Action, amount, benefit, assumptions, tax, liquidity, risks, missing data, confidence; explicit approval |
-| **DE-12** | Safety and governance evidence | Cross-cutting from DE-1 | No auto-trade/pay/match/apply; assumptions; audit trail; user approval; bounded-workbook writer prohibition |
+| **DE-10** | Retirement and income planning | Current Retirement and Education surfaces; current valid facts | **LATER — Debt-to-retirement integration:** editable Education 529/school-cost inputs, future RSUs, contribution/match assumptions; estimates labeled and editable; no hardcoded financial values. Remaining: wrappers, sequencing, SS/pension when present, cash-flow gap. Already done: Retirement investable assets exclude SYS - Assets rows typed Education or 529; Overview uses that filtered total; Education saved inputs exist without forecasts. Additional 401(k)/history imports are **not** a prerequisite |
+| **DE-11** | Explainable recommendation packet | Required output of remaining DE-4 through DE-10 | Action, amount, benefit, assumptions, tax, liquidity, risks, missing data, confidence; explicit approval. Withhold when facts are missing |
+| **DE-12** | Safety and governance evidence | Cross-cutting | No auto-trade/pay/match/apply; assumptions; audit trail; user approval; bounded-workbook writer prohibition |
 
-**Suggested later sequence (after current Beta-critical import work):**
-DE-0/DE-1 (evidence) → DE-2 (coverage, one adapter at a time) → DE-3 (history)
-→ DE-11/DE-12 (packet + governance, in parallel) → DE-4 → DE-5 → DE-6 / DE-7
-→ DE-8 → DE-9 → DE-10.
+**Decision sequence (current valid facts; imports stay parallel, not ahead):**
+Completed: frozen RFP-3 / This Week → existing Rolling Debt Payoff → DE-4
+strategy comparison.
+**NEXT:** remaining DE-4 affordable recurring extra.
+**THEN:** DE-5 next-dollar allocation.
+**LATER:** DE-6 / DE-7 and variable-income scenarios → DE-10 debt-to-retirement
+→ DE-8 / DE-9 as tax-lot and funding data allow → DE-11 / DE-12 as the standing
+packet and governance output.
+
+**Import sequence (separate track, not a decision prerequisite):**
+DE-0/DE-1 (evidence) → DE-2 (coverage, one adapter at a time) → DE-3 (history).
 
 **Explicit non-goals for these milestones:** automatic execution, silent
 Planning-authority switch, provider-specific duplicate UIs, optimizing Robinhood
@@ -1181,10 +1282,14 @@ Sequenced **immediately after Validator Phase 2 and before major new user featur
 
 ## Related documents
 
-- `ROADMAP.md → Complete financial decision engine` — future source-neutral
-  decision engine (account coverage, history, payoff/investment/retirement
-  recommendations, explainability, and governance). Documentation only;
-  does not change current Beta sequence.
+- `ROADMAP.md → Decision roadmap` — sequenced path from current valid facts:
+  completed This Week / Rolling / Debt Overview comparison; **NEXT** affordable
+  recurring extra; **THEN** next-dollar allocation; **LATER** variable-income
+  and debt-to-retirement. Imports are a separate track, not a prerequisite.
+- `ROADMAP.md → Complete financial decision engine` — remaining source-neutral
+  areas (account coverage, history, payoff/investment/retirement, explainability,
+  and governance). Documentation only; does not change the import/Beta sequence
+  or unfreeze This Week.
 - `MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` — later Investment intelligence:
   multi-broker normalization, tax lots, passive income, and recommendation-only
   optimizers (Robinhood protected). Current customer import status is

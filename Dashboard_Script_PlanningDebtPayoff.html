@@ -2,6 +2,7 @@
 
 /** Cached payload for re-sort without re-fetching */
 var __debtPayoffReadCache = null;
+var __debtPayoffSupportedExtraAmount_ = null;
 
 function loadDebtPayoffReadSection() {
   var statusEl = document.getElementById('debt_payoff_read_status');
@@ -21,6 +22,9 @@ function loadDebtPayoffReadSection() {
   if (chartWrap) chartWrap.innerHTML = '';
   var strategyResults = document.getElementById('debt_payoff_strategy_results');
   if (strategyResults) strategyResults.innerHTML = '';
+  var supportedWrap = document.getElementById('debt_payoff_supported_extra');
+  if (supportedWrap) supportedWrap.innerHTML = '';
+  __debtPayoffSupportedExtraAmount_ = null;
   if (wrap) {
     wrap.innerHTML =
       typeof loadingIndicatorHtml === 'function'
@@ -384,7 +388,133 @@ function renderDebtPayoffReadData_(data) {
   }
 
   renderDebtPayoffTable_(data, yLabel);
+  renderDebtPayoffSupportedMonthlyExtra_(data && data.supportedMonthlyExtra);
   runDebtPayoffStrategyComparison();
+}
+
+function renderDebtPayoffSupportedMonthlyExtra_(supported) {
+  var wrap = document.getElementById('debt_payoff_supported_extra');
+  if (!wrap) return;
+  __debtPayoffSupportedExtraAmount_ = null;
+  if (!supported) {
+    wrap.innerHTML = '';
+    return;
+  }
+
+  var parts = [];
+  parts.push('<div class="debt-payoff-overall-head">Supported monthly extra');
+  parts.push('<span class="debt-payoff-supported-extra-label">' +
+    escapeHtml(supported.label || 'Estimate') + '</span></div>');
+
+  if (supported.available && supported.amount != null) {
+    __debtPayoffSupportedExtraAmount_ = Number(supported.amount);
+    var whyZero = '';
+    if (supported.reserveProtects) {
+      whyZero = ' Usable cash after buffers does not yet cover This Week’s canonical reserve, so extra for debt is $0.00.';
+    } else if (supported.deficit) {
+      whyZero = ' Recurring commitments leave no surplus, so extra for debt is $0.00.';
+    }
+    parts.push('<p><strong>' + fmtCurrency(supported.amount) +
+      '</strong> estimated recurring monthly extra after required bills, known debt minimums, and standing investment floors.' +
+      whyZero + '</p>');
+    parts.push('<button type="button" class="small-btn" onclick="useDebtPayoffSupportedMonthlyExtra_()">Use this amount in the scenario</button>');
+  } else {
+    parts.push('<p>An estimated recurring extra cannot be proven from current facts. Missing values were not replaced with $0.</p>');
+    if (supported.blockers && supported.blockers.length) {
+      parts.push('<ul>');
+      supported.blockers.forEach(function(row) {
+        parts.push('<li>' + escapeHtml(row.reason || row.code || 'A required fact is missing.') + '</li>');
+        if (row.incompleteRows && row.incompleteRows.length) {
+          parts.push('<li>Complete these active Cash Flow income groups from Income → Manage → Edit:<ul>');
+          row.incompleteRows.forEach(function(incomeRow) {
+            var missing = (incomeRow.missing && incomeRow.missing.length)
+              ? incomeRow.missing.join(', ')
+              : 'Recurring, Frequency, or Expected Amount';
+            var history = incomeRow.rawPayees && incomeRow.rawPayees.length > 1
+              ? '; history rows ' + incomeRow.rawPayees.join(', ')
+              : '';
+            parts.push('<li>' + escapeHtml(incomeRow.payee || 'Income') +
+              ' (row ' + escapeHtml(String(incomeRow.sheetRow || '')) +
+              escapeHtml(history) + '): ' +
+              escapeHtml(missing) + '</li>');
+          });
+          parts.push('</ul></li>');
+        }
+      });
+      parts.push('</ul>');
+    }
+  }
+
+  if (supported.source) {
+    parts.push('<p class="muted">Source: ' + escapeHtml(supported.source) + '</p>');
+  }
+  if (supported.assumptions && supported.assumptions.length) {
+    parts.push('<p class="muted">Assumptions</p><ul>');
+    supported.assumptions.forEach(function(line) {
+      parts.push('<li>' + escapeHtml(line) + '</li>');
+    });
+    parts.push('</ul>');
+  }
+  parts.push(renderDebtPayoffDatedBonusScenarioHtml_(supported.datedBonusScenario));
+  parts.push('<p class="muted">This estimate is not a payment, is not saved, and does not prove affordability. The scenario field stays editable.</p>');
+  wrap.innerHTML = parts.join('');
+}
+
+function renderDebtPayoffDatedBonusScenarioHtml_(scenario) {
+  if (!scenario || typeof scenario !== 'object') return '';
+  var parts = [];
+  parts.push('<div class="debt-payoff-dated-bonus" style="margin-top:12px;">');
+  parts.push('<div class="debt-payoff-overall-head">Cisco annual bonuses</div>');
+  parts.push('<p>Cisco Mid Year Bonus and Cisco End Year Bonus are separate yearly income rows. They are not recurring monthly income, not cash available each month, not used for the 90-day cash reserve, and not applied to avalanche or snowball.</p>');
+  if (scenario.payments && scenario.payments.length) {
+    parts.push('<ul>');
+    scenario.payments.forEach(function(payment) {
+      var amountLabel = payment.known === true && payment.amount != null
+        ? fmtCurrency(Number(payment.amount))
+        : 'Unknown';
+      var status = payment.included === true
+        ? 'reviewed, not applied to the comparison'
+        : 'withheld from the scenario';
+      parts.push('<li>' + escapeHtml(payment.name || 'Cisco bonus') +
+        ' expected amount: <strong>' + escapeHtml(amountLabel) +
+        '</strong> (annual; ' + escapeHtml(status) + ')</li>');
+    });
+    parts.push('</ul>');
+  }
+  if (scenario.annualizedMonthlyEquivalent != null) {
+    parts.push('<p class="muted">Annualized monthly equivalent: <strong>' +
+      escapeHtml(fmtCurrency(Number(scenario.annualizedMonthlyEquivalent))) +
+      '</strong> — estimate only, not cash each month, not added to the extra estimate, and not used for the 90-day cash reserve.</p>');
+  }
+  if (scenario.reviewReasons && scenario.reviewReasons.length) {
+    parts.push('<p>Review</p><ul>');
+    scenario.reviewReasons.forEach(function(reason) {
+      parts.push('<li>' + escapeHtml(reason) + '</li>');
+    });
+    parts.push('</ul>');
+  }
+  if (scenario.comparisonConstraint) {
+    parts.push('<p class="muted">' + escapeHtml(scenario.comparisonConstraint) + '</p>');
+  }
+  if (scenario.appliedToComparison === true ||
+      scenario.countedInRecurringIncomeMonthly === true ||
+      scenario.countedInReserve === true) {
+    parts.push('<p class="muted">Unexpected: annual bonus amounts must not change the extra estimate, reserve, or strategy comparison.</p>');
+  }
+  parts.push('</div>');
+  return parts.join('');
+}
+
+function useDebtPayoffSupportedMonthlyExtra_() {
+  var amount = Number(__debtPayoffSupportedExtraAmount_);
+  if (!isFinite(amount) || amount < 0) return;
+  var el = document.getElementById('debt_payoff_scenario_extra');
+  if (el) el.value = amount.toFixed(2);
+  setStatus(
+    'debt_payoff_strategy_status',
+    'Copied the estimated amount into the scenario field. Click Compare strategies to apply it. This is not a payment and is not saved.',
+    false
+  );
 }
 
 function parseDebtPayoffScenarioExtraFromInput_() {
@@ -542,6 +672,9 @@ function runDebtPayoffStrategyComparison() {
   google.script.run
     .withSuccessHandler(function(data) {
       setStatus(statusId, '', false);
+      if (data && data.supportedMonthlyExtra) {
+        renderDebtPayoffSupportedMonthlyExtra_(data.supportedMonthlyExtra);
+      }
       renderDebtPayoffStrategyComparison_(data);
     })
     .withFailureHandler(function(err) {
