@@ -2111,8 +2111,40 @@
     margin-bottom: 0.3rem;
     font-size: 13px;
   }
+  .debt-payoff-scenario-bonus {
+    margin: 10px 0;
+    padding: 10px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #ffffff;
+  }
+  .debt-payoff-bonus-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
+    gap: 8px 12px;
+    align-items: end;
+    padding: 8px 0;
+    border-top: 1px solid #e2e8f0;
+  }
+  .debt-payoff-bonus-row label {
+    margin: 0;
+    font-weight: 600;
+    font-size: 13px;
+  }
+  .debt-payoff-bonus-repeat {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    font-size: 13px;
+  }
+  .debt-payoff-bonus-repeat label {
+    font-weight: 500;
+  }
   @media (max-width: 900px) {
     .debt-payoff-strategy-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .debt-payoff-bonus-row {
       grid-template-columns: minmax(0, 1fr);
     }
   }

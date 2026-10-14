@@ -62,17 +62,40 @@ assert.doesNotMatch(planningTools,
   'must not add a separate strategy-comparison Planning tool');
 
 assert.match(client,
-  /getDebtPayoffStrategyComparison\(\{\s*monthlyExtra:\s*parsed\.amount\s*\}\)/,
-  'the client must send only the explicit monthly extra');
-assert.match(client,
+  /getDebtPayoffStrategyComparison\(\{[\s\S]*monthlyExtra:\s*parsed\.amount[\s\S]*bonusSelections:\s*bonusSelections/,
+  'the client must send the explicit monthly extra and optional bonus selections');
+assert.match(body, /id="debt_payoff_scenario_bonus_wrap"/);
+assert.match(client, /function collectDebtPayoffScenarioBonusSelections_/);
+assert.match(client, /function validateDebtPayoffScenarioBonusSelections_/);
+assert.match(help, /optional comparison overlay can include a bonus/);
+assert.match(help, /RSU\/ESPP sales, Other Stock Sales, and tax refunds stay excluded/);
+assert.match(sliceFunction(client, 'runDebtPayoffStrategyComparison'),
   /if \(!parsed\.ok\)[\s\S]*?wrap\.innerHTML = ''[\s\S]*?setStatus\(statusId, parsed\.error, true\)[\s\S]*?return;/,
   'invalid extra must show an error and must not run Compare');
+assert.match(sliceFunction(client, 'runDebtPayoffStrategyComparison'),
+  /if \(!bonusCheck\.ok\)[\s\S]*?wrap\.innerHTML = ''[\s\S]*?setStatus\(statusId, bonusCheck\.error, true\)[\s\S]*?return;/,
+  'invalid bonus timing must show an error and must not run Compare');
 assert.doesNotMatch(client, /\*\s*4/,
   'the extra must not be inferred by multiplying a weekly amount by four');
 assert.doesNotMatch(client, /weeklyExtra|getCapitalAllocation|saveDebt\(|PropertiesService/);
 assert.doesNotMatch(client, /setValue\(|appendRow\(|PAY_EXTRA_DEBT/);
 assert.match(client, /Not within forecast horizon/);
-assert.match(client, /Interest saved vs minimum-only/);
+assert.match(client, /less interest than baseline/);
+assert.match(client, /more interest than baseline/);
+assert.match(client, /Same interest as baseline/);
+assert.doesNotMatch(sliceFunction(projection, 'summarizeDebtPayoffScenario_'),
+  /Math\.max\(0,\s*Number\(minOnlyInterest/);
+assert.match(sliceFunction(client, 'debtPayoffStrategyTitle_'), /data\.baselineLabel/);
+assert.match(sliceFunction(client, 'renderDebtPayoffStrategyCard_'),
+  /debtPayoffStrategyTitle_\(row\.strategy, data\)/);
+assert.match(sliceFunction(client, 'renderDebtPayoffStrategyCard_'),
+  /formatDebtPayoffInterestVsBaseline_\(row\)/);
+assert.doesNotMatch(sliceFunction(client, 'renderDebtPayoffStrategyCard_'),
+  /fmtCurrency\(row\.interestSavedVsMinimumOnly\)/);
+assert.match(help, /additional interest, not \$0 saved/);
+assert.match(debtOverview, /additional interest is shown rather than \$0 saved/);
+assert.match(help, /not “minimum payments only\.”/);
+assert.match(projection, /DEBT_PAYOFF_SCENARIO_BASELINE_WITH_BONUS_LABEL_/);
 assert.match(client, /minimumPaymentKnown === false \? '—' : fmtCurrency/);
 assert.match(client, /interestRateKnown === false \? '—' : fmtPercent/);
 
@@ -299,6 +322,9 @@ const runContext = vm.createContext({
 vm.runInContext(
   sliceFunction(client, 'parseDebtPayoffScenarioExtraFromInput_') +
   '\n' + sliceFunction(client, 'parseDebtPayoffScenarioExtraText_') +
+  '\n' + sliceFunction(client, 'collectDebtPayoffScenarioBonusSelections_') +
+  '\n' + sliceFunction(client, 'debtPayoffScenarioForecastStartMonthKey_') +
+  '\n' + sliceFunction(client, 'validateDebtPayoffScenarioBonusSelections_') +
   '\n' + sliceFunction(client, 'runDebtPayoffStrategyComparison'),
   runContext
 );
@@ -317,6 +343,8 @@ resultsEl.innerHTML = '';
 runContext.runDebtPayoffStrategyComparison();
 assert.equal(rpcPayloads.length, 1, 'blank extra must still run the $0 scenario');
 assert.equal(rpcPayloads[0].monthlyExtra, 0);
+assert.deepEqual(Array.from(rpcPayloads[0].bonusSelections || []), [],
+  'bonuses stay off unless explicitly included');
 assert.equal(statusCalls.some(function(row) { return row.isError; }), false);
 
 extraInputEl.value = '125.50';
@@ -324,6 +352,7 @@ rpcPayloads = [];
 runContext.runDebtPayoffStrategyComparison();
 assert.equal(rpcPayloads.length, 1);
 assert.equal(rpcPayloads[0].monthlyExtra, 125.5);
+assert.deepEqual(Array.from(rpcPayloads[0].bonusSelections || []), []);
 
 const overpay = context.simulateDebtPayoffSchedule_(
   [usableDebt('Tiny', 100, 0, 10)], 1000, 'avalanche', { asOfDate: asOf });
@@ -772,6 +801,19 @@ assert.doesNotMatch(sliceFunction(projection, 'compareDebtPayoffStrategies_'),
   /datedBonusScenario|February Bonus Amount|Expected Month/);
 assert.doesNotMatch(sliceFunction(projection, 'simulateDebtPayoffSchedule_'),
   /datedBonusScenario|February Bonus Amount|Expected Month/);
+assert.match(sliceFunction(projection, 'simulateDebtPayoffSchedule_'),
+  /d\.balance \+ interest[\s\S]*minimumPayment[\s\S]*bonusByMonth\[m\]/,
+  'bonus cash must apply after interest and contractual minimums');
+assert.match(sliceFunction(projection, 'simulateDebtPayoffSchedule_'),
+  /applyDebtPayoffScenarioLeftover_\(\s*remaining, bonusAmount, allocStrategy\)/);
+assert.match(sliceFunction(projection, 'simulateDebtPayoffSchedule_'),
+  /applyDebtPayoffScenarioLeftover_\(\s*remaining, extra, allocStrategy\)/);
+assert.match(help, /avalanche applies monthly extra and bonus payments highest APR first/);
+assert.match(help, /snowball applies both smallest balance first/);
+assert.doesNotMatch(sliceFunction(projection, 'resolveDebtPayoffScenarioBonusEvents_'),
+  /setValue\(|appendRow\(|PropertiesService|parseMonthHeader_/);
+assert.doesNotMatch(sliceFunction(projection, 'getDebtPayoffStrategyComparison'),
+  /setValue\(|appendRow\(|PropertiesService/);
 assert.match(projection, /appliedToComparison: false/);
 assert.match(projection, /countedInRecurringIncomeMonthly: false/);
 assert.match(projection, /countedInReserve: false/);
@@ -1292,7 +1334,9 @@ assert.equal(unequalBonuses.annualizedMonthlyEquivalent, context.round2_((12000 
 assert.match(String(unequalBonuses.annualizedMonthlyEquivalentLabel), /estimate only/);
 assert.match(String(unequalBonuses.annualizedMonthlyEquivalentLabel), /not cash available each month/);
 assert.match(String(unequalBonuses.annualizedMonthlyEquivalentLabel), /90-day cash reserve/);
-assert.match(String(unequalBonuses.comparisonConstraint), /does not model month-specific inflows/);
+assert.match(String(unequalBonuses.comparisonConstraint), /not applied until you include them/);
+assert.match(String(unequalBonuses.comparisonConstraint), /Timing is not inferred from the row name/);
+assert.match(String(unequalBonuses.comparisonConstraint), /RSU\/ESPP sales/);
 
 const blankMidYear = parseBonusScenario([
   ['Income', 'Cisco End Year Bonus', 'Yes', 'Yes', 'Yearly', '4500']
@@ -1588,5 +1632,497 @@ assert.equal(editedBonusRow[trusted2026Headers.indexOf('Mar-26')], 22766.25);
 assert.equal(editedBonusRow[trusted2026Headers.indexOf('Sep-26')], 0);
 assert.equal(editedBonusRow[trusted2026Headers.indexOf('Expected Amount')], 12000);
 assert.equal(trusted2026Headers.indexOf('Expected Month'), -1);
+
+const bonusPayments = unequalBonuses.payments;
+const offPlan = context.resolveDebtPayoffScenarioBonusEvents_([], unequalBonuses, asOf, 600);
+assert.equal(offPlan.ok, true);
+assert.equal(offPlan.included, false);
+assert.equal(offPlan.events.length, 0);
+
+const omittedPlan = context.resolveDebtPayoffScenarioBonusEvents_(null, unequalBonuses, asOf, 600);
+assert.equal(omittedPlan.included, false);
+assert.equal(omittedPlan.events.length, 0);
+
+const baseline = context.compareDebtPayoffStrategies_(debts, extra, { asOfDate: asOf });
+const stillOff = context.compareDebtPayoffStrategies_(debts, extra, {
+  asOfDate: asOf,
+  bonusEvents: [],
+  bonusPlan: offPlan
+});
+assert.equal(stillOff.strategies.minimum_only.totalInterest, baseline.strategies.minimum_only.totalInterest);
+assert.equal(stillOff.strategies.avalanche.totalInterest, baseline.strategies.avalanche.totalInterest);
+assert.equal(stillOff.strategies.snowball.totalInterest, baseline.strategies.snowball.totalInterest);
+assert.equal(stillOff.scenarioBonuses.included, false);
+
+const blankInclude = context.resolveDebtPayoffScenarioBonusEvents_([{
+  name: 'Cisco Mid Year Bonus',
+  include: true,
+  month: 10,
+  year: 2026,
+  repeat: 'once'
+}], blankAmount, asOf, 600);
+assert.equal(blankInclude.ok, false);
+assert.match(String(blankInclude.error), /blank \(unknown\)/);
+assert.match(String(blankInclude.error), /not treated as \$0/);
+
+const zeroPlan = context.resolveDebtPayoffScenarioBonusEvents_([{
+  name: 'Cisco Mid Year Bonus',
+  include: true,
+  month: 10,
+  year: 2026,
+  repeat: 'once'
+}], explicitZeroMidYear, asOf, 600);
+assert.equal(zeroPlan.ok, true);
+assert.equal(zeroPlan.events.length, 1);
+assert.equal(zeroPlan.events[0].amount, 0);
+const zeroCompare = context.compareDebtPayoffStrategies_(debts, extra, {
+  asOfDate: asOf,
+  bonusEvents: zeroPlan.events,
+  bonusPlan: zeroPlan
+});
+assert.equal(zeroCompare.strategies.avalanche.totalInterest, baseline.strategies.avalanche.totalInterest);
+assert.equal(zeroCompare.strategies.minimum_only.totalInterest, baseline.strategies.minimum_only.totalInterest);
+
+const missingMonth = context.resolveDebtPayoffScenarioBonusEvents_([{
+  name: 'Cisco Mid Year Bonus',
+  include: true,
+  month: '',
+  year: 2026,
+  repeat: 'once'
+}], unequalBonuses, asOf, 600);
+assert.equal(missingMonth.ok, false);
+assert.match(String(missingMonth.error), /month and year/);
+assert.match(String(missingMonth.error), /not inferred/);
+
+const pastMonth = context.resolveDebtPayoffScenarioBonusEvents_([{
+  name: 'Cisco Mid Year Bonus',
+  include: true,
+  month: 9,
+  year: 2026,
+  repeat: 'once'
+}], unequalBonuses, asOf, 600);
+assert.equal(pastMonth.ok, false);
+assert.equal(pastMonth.events.length, 0);
+assert.match(String(pastMonth.error), /forecast start month \(2026-10\)/);
+assert.match(String(pastMonth.error), /not moved into a later month/);
+assert.match(String(pastMonth.error), /2026-09/);
+
+const pastAnnualNotRolled = context.resolveDebtPayoffScenarioBonusEvents_([{
+  name: 'Cisco Mid Year Bonus',
+  include: true,
+  month: 6,
+  year: 2026,
+  repeat: 'annual'
+}], unequalBonuses, asOf, 600);
+assert.equal(pastAnnualNotRolled.ok, false);
+assert.equal(pastAnnualNotRolled.events.length, 0);
+assert.match(String(pastAnnualNotRolled.error), /forecast start month \(2026-10\)/);
+assert.doesNotMatch(JSON.stringify(pastAnnualNotRolled.events), /2027-06/);
+
+const currentForecastMonth = context.resolveDebtPayoffScenarioBonusEvents_([{
+  name: 'Cisco End Year Bonus',
+  include: true,
+  month: 10,
+  year: 2026,
+  repeat: 'once'
+}], unequalBonuses, asOf, 600);
+assert.equal(currentForecastMonth.ok, true);
+assert.equal(currentForecastMonth.events[0].monthIndex, 1);
+assert.equal(currentForecastMonth.events[0].monthKey, '2026-10');
+assert.equal(context.debtPayoffScenarioForecastStartMonthKey_(asOf), '2026-10');
+
+const inferredName = context.resolveDebtPayoffScenarioBonusEvents_([{
+  name: 'Cisco Mid Year Bonus',
+  include: true,
+  month: 6,
+  year: 2027,
+  repeat: 'once'
+}], unequalBonuses, asOf, 600);
+assert.equal(inferredName.ok, true);
+assert.equal(inferredName.events[0].monthKey, '2027-06');
+assert.notEqual(inferredName.events[0].monthKey, '2026-06',
+  'Mid Year must not infer June of the current year from the row name');
+
+const rsuExcluded = context.resolveDebtPayoffScenarioBonusEvents_([{
+  name: 'RSU/ESPP',
+  include: true,
+  month: 10,
+  year: 2026,
+  repeat: 'once'
+}], unequalBonuses, asOf, 600);
+assert.equal(rsuExcluded.ok, false);
+assert.match(String(rsuExcluded.error), /RSU\/ESPP sales/);
+
+const taxRefundExcluded = context.resolveDebtPayoffScenarioBonusEvents_([{
+  name: 'Tax refund',
+  include: true,
+  month: 10,
+  year: 2026,
+  repeat: 'once'
+}], unequalBonuses, asOf, 600);
+assert.equal(taxRefundExcluded.ok, false);
+
+const stockSaleExcluded = context.resolveDebtPayoffScenarioBonusEvents_([{
+  name: 'Other Stock Sales',
+  include: true,
+  month: 10,
+  year: 2026,
+  repeat: 'once'
+}], unequalBonuses, asOf, 600);
+assert.equal(stockSaleExcluded.ok, false);
+
+const missingRepeat = context.resolveDebtPayoffScenarioBonusEvents_([{
+  name: 'Cisco End Year Bonus',
+  include: true,
+  month: 12,
+  year: 2026,
+  repeat: ''
+}], unequalBonuses, asOf, 600);
+assert.equal(missingRepeat.ok, false);
+assert.match(String(missingRepeat.error), /once or repeats annually/);
+
+const oncePlan = context.resolveDebtPayoffScenarioBonusEvents_([{
+  name: 'Cisco Mid Year Bonus',
+  include: true,
+  month: 10,
+  year: 2026,
+  repeat: 'once'
+}], unequalBonuses, asOf, 600);
+assert.equal(oncePlan.ok, true);
+assert.equal(oncePlan.events.length, 1);
+assert.equal(oncePlan.events[0].amount, 12000);
+assert.equal(oncePlan.events[0].monthKey, '2026-10');
+assert.equal(oncePlan.events[0].repeat, 'once');
+
+const annualPlan = context.resolveDebtPayoffScenarioBonusEvents_([{
+  name: 'Cisco Mid Year Bonus',
+  include: true,
+  month: 10,
+  year: 2026,
+  repeat: 'annual'
+}], unequalBonuses, asOf, 36);
+assert.equal(annualPlan.ok, true);
+assert.equal(annualPlan.events.length, 3);
+assert.equal(annualPlan.events[0].monthKey, '2026-10');
+assert.equal(annualPlan.events[1].monthKey, '2027-10');
+assert.equal(annualPlan.events[2].monthKey, '2028-10');
+annualPlan.events.forEach(function(ev) {
+  assert.equal(ev.amount, 12000);
+  assert.equal(ev.amountHeldConstant, true);
+});
+
+const longDebts = [
+  usableDebt('High APR Card', 25000, 24, 250),
+  usableDebt('Small Balance Card', 18000, 12, 200)
+];
+const longBaseline = context.compareDebtPayoffStrategies_(longDebts, extra, { asOfDate: asOf });
+const onceCompare = context.compareDebtPayoffStrategies_(longDebts, extra, {
+  asOfDate: asOf,
+  bonusEvents: oncePlan.events,
+  bonusPlan: oncePlan
+});
+const annualCompare = context.compareDebtPayoffStrategies_(longDebts, extra, {
+  asOfDate: asOf,
+  bonusEvents: annualPlan.events,
+  bonusPlan: annualPlan
+});
+assert.ok(onceCompare.strategies.avalanche.totalInterest < longBaseline.strategies.avalanche.totalInterest);
+assert.ok(annualCompare.strategies.avalanche.totalInterest < onceCompare.strategies.avalanche.totalInterest);
+assert.ok(onceCompare.strategies.minimum_only.totalInterest < longBaseline.strategies.minimum_only.totalInterest);
+assert.equal(onceCompare.scenarioBonuses.events.length, 1);
+assert.equal(annualCompare.scenarioBonuses.events.length, 3);
+assert.equal(longBaseline.baselineLabel, 'Minimum payments only');
+assert.equal(
+  onceCompare.baselineLabel,
+  'Minimum contractual payments plus selected bonus events (highest APR first)'
+);
+assert.notEqual(onceCompare.baselineLabel, 'Minimum payments only');
+assert.ok(onceCompare.strategies.avalanche.totalInterest <=
+  onceCompare.strategies.minimum_only.totalInterest);
+assert.equal(onceCompare.strategies.minimum_only.bonusAllocationRule, 'avalanche');
+assert.equal(onceCompare.strategies.avalanche.bonusAllocationRule, 'avalanche');
+assert.equal(onceCompare.strategies.snowball.bonusAllocationRule, 'snowball');
+assert.equal(
+  onceCompare.strategies.avalanche.interestSavedVsMinimumOnly,
+  context.round2_(
+    onceCompare.strategies.minimum_only.totalInterest -
+    onceCompare.strategies.avalanche.totalInterest
+  )
+);
+assert.equal(
+  onceCompare.strategies.snowball.interestSavedVsMinimumOnly,
+  context.round2_(
+    onceCompare.strategies.minimum_only.totalInterest -
+    onceCompare.strategies.snowball.totalInterest
+  )
+);
+assert.match(String(onceCompare.assumptions.join(' ')),
+  /minimum contractual payments plus the selected bonus events/);
+assert.match(String(onceCompare.assumptions.join(' ')), /highest APR first/);
+assert.match(String(onceCompare.assumptions.join(' ')),
+  /Interest savings are measured against this baseline/);
+assert.match(String(onceCompare.assumptions.join(' ')),
+  /Snowball applies monthly extra and bonus payments smallest balance first/);
+assert.match(String(onceCompare.assumptions.join(' ')), /after interest and contractual minimums/);
+assert.match(String(onceCompare.assumptions.join(' ')), /held constant as a scenario assumption/);
+
+['minimum_only', 'avalanche', 'snowball'].forEach(function(key) {
+  assert.equal(onceCompare.strategies[key].monthlyExtra, key === 'minimum_only' ? 0 : extra);
+  assert.ok(onceCompare.strategies[key].totalInterest < longBaseline.strategies[key].totalInterest);
+});
+assert.equal(onceCompare.scenarioBonuses.included, true);
+assert.deepEqual(
+  Array.from(onceCompare.scenarioBonuses.events).map(function(ev) { return ev.monthKey + '|' + ev.amount; }),
+  ['2026-10|12000']
+);
+
+const targetingDebts = [
+  usableDebt('High APR Card', 5000, 24, 200),
+  usableDebt('Small Balance Card', 800, 6, 50)
+];
+const targetingBonus = [{
+  name: 'Cisco Mid Year Bonus',
+  amount: 300,
+  monthIndex: 1,
+  monthKey: '2026-10',
+  repeat: 'once'
+}];
+const targeting = context.compareDebtPayoffStrategies_(targetingDebts, 0, {
+  asOfDate: asOf,
+  bonusEvents: targetingBonus
+});
+const avBonus = targeting.strategies.avalanche.bonusApplications[0];
+const snBonus = targeting.strategies.snowball.bonusApplications[0];
+const baseBonus = targeting.strategies.minimum_only.bonusApplications[0];
+assert.ok(avBonus && snBonus && baseBonus, 'each strategy must record the selected bonus application');
+assert.equal(avBonus.monthKey, '2026-10');
+assert.equal(snBonus.monthKey, avBonus.monthKey);
+assert.equal(baseBonus.monthKey, avBonus.monthKey);
+assert.equal(avBonus.amount, 300);
+assert.equal(snBonus.amount, avBonus.amount);
+assert.equal(baseBonus.amount, avBonus.amount);
+assert.equal(avBonus.firstTarget, 'High APR Card');
+assert.equal(snBonus.firstTarget, 'Small Balance Card');
+assert.notEqual(avBonus.firstTarget, snBonus.firstTarget,
+  'avalanche and snowball must send the same bonus to different debts');
+assert.equal(baseBonus.firstTarget, 'High APR Card',
+  'baseline bonus allocation is highest APR first');
+assert.deepEqual(
+  Array.from(targeting.scenarioBonuses.events).map(function(ev) {
+    return ev.name + '|' + ev.monthKey + '|' + ev.amount;
+  }),
+  ['Cisco Mid Year Bonus|2026-10|300']
+);
+assert.equal(targeting.strategies.avalanche.bonusApplications.length,
+  targeting.strategies.snowball.bonusApplications.length);
+assert.equal(targeting.asOfMonthKey, '2026-10');
+assert.equal(targeting.strategies.minimum_only.monthlyExtra, 0);
+assert.equal(targeting.strategies.avalanche.monthlyExtra, 0);
+assert.equal(targeting.strategies.snowball.monthlyExtra, 0);
+assert.equal(
+  targeting.strategies.avalanche.totalInterest,
+  targeting.strategies.minimum_only.totalInterest,
+  'with $0 extra, avalanche and baseline share highest-APR bonus routing and must match interest'
+);
+assert.ok(targeting.strategies.snowball.totalInterest >
+  targeting.strategies.minimum_only.totalInterest,
+  'snowball routing the bonus to the lower-APR debt must accrue more interest than the baseline');
+const snowballVsBaseline = context.round2_(
+  targeting.strategies.minimum_only.totalInterest -
+  targeting.strategies.snowball.totalInterest
+);
+assert.ok(snowballVsBaseline < 0);
+assert.equal(targeting.strategies.snowball.interestSavedVsMinimumOnly, snowballVsBaseline);
+assert.notEqual(targeting.strategies.snowball.interestSavedVsMinimumOnly, 0);
+assert.match(
+  String(targeting.strategies.snowball.interestVsBaselineLabel),
+  /more interest than baseline/
+);
+assert.doesNotMatch(
+  String(targeting.strategies.snowball.interestVsBaselineLabel),
+  /\$0(?:\.00)? saved|Same interest as baseline/
+);
+assert.equal(
+  targeting.strategies.snowball.interestVsBaselineLabel,
+  context.formatDebtPayoffInterestVsBaseline_({
+    interestSavedVsMinimumOnly: snowballVsBaseline
+  })
+);
+assert.equal(
+  targeting.strategies.minimum_only.interestVsBaselineLabel,
+  'Same interest as baseline.'
+);
+assert.equal(
+  targeting.strategies.avalanche.interestVsBaselineLabel,
+  'Same interest as baseline.'
+);
+assert.equal(
+  targeting.strategies.avalanche.interestSavedVsMinimumOnly,
+  context.round2_(
+    targeting.strategies.minimum_only.totalInterest -
+    targeting.strategies.avalanche.totalInterest
+  )
+);
+
+const bothPlan = context.resolveDebtPayoffScenarioBonusEvents_([
+  {
+    name: 'Cisco Mid Year Bonus',
+    include: true,
+    month: 10,
+    year: 2026,
+    repeat: 'once'
+  },
+  {
+    name: 'Cisco End Year Bonus',
+    include: true,
+    month: 12,
+    year: 2026,
+    repeat: 'once'
+  }
+], unequalBonuses, asOf, 600);
+assert.equal(bothPlan.events.length, 2);
+const bothCompare = context.compareDebtPayoffStrategies_(longDebts, extra, {
+  asOfDate: asOf,
+  bonusEvents: bothPlan.events,
+  bonusPlan: bothPlan
+});
+assert.ok(bothCompare.strategies.minimum_only.totalInterest <= onceCompare.strategies.minimum_only.totalInterest);
+assert.ok(bothCompare.strategies.avalanche.totalInterest <= onceCompare.strategies.avalanche.totalInterest);
+assert.ok(bothCompare.strategies.snowball.totalInterest <= onceCompare.strategies.snowball.totalInterest);
+
+const earlyPlan = context.resolveDebtPayoffScenarioBonusEvents_([{
+  name: 'Cisco End Year Bonus',
+  include: true,
+  month: 10,
+  year: 2026,
+  repeat: 'once'
+}], unequalBonuses, asOf, 600);
+const latePlan = context.resolveDebtPayoffScenarioBonusEvents_([{
+  name: 'Cisco End Year Bonus',
+  include: true,
+  month: 10,
+  year: 2027,
+  repeat: 'once'
+}], unequalBonuses, asOf, 600);
+const earlyCompare = context.compareDebtPayoffStrategies_(longDebts, extra, {
+  asOfDate: asOf,
+  bonusEvents: earlyPlan.events,
+  bonusPlan: earlyPlan
+});
+const lateCompare = context.compareDebtPayoffStrategies_(longDebts, extra, {
+  asOfDate: asOf,
+  bonusEvents: latePlan.events,
+  bonusPlan: latePlan
+});
+assert.ok(earlyCompare.strategies.avalanche.totalInterest < lateCompare.strategies.avalanche.totalInterest,
+  'an earlier bonus event must reduce modeled interest versus a later event of the same amount');
+assert.ok(earlyCompare.strategies.minimum_only.totalInterest < lateCompare.strategies.minimum_only.totalInterest);
+assert.ok(earlyCompare.strategies.snowball.totalInterest < lateCompare.strategies.snowball.totalInterest);
+
+assert.throws(function() {
+  context.compareDebtPayoffStrategies_(longDebts, extra, {
+    asOfDate: asOf,
+    bonusEvents: [{
+      name: 'Cisco Mid Year Bonus',
+      amount: 12000,
+      monthIndex: 0,
+      monthKey: '2026-09',
+      repeat: 'once'
+    }]
+  });
+}, /before the forecast start month \(2026-10\)/);
+
+const skippedPastSim = context.simulateDebtPayoffSchedule_(
+  longDebts, extra, 'avalanche', {
+    asOfDate: asOf,
+    bonusEvents: [{ name: 'Cisco Mid Year Bonus', amount: 12000, monthIndex: 0 }]
+  });
+const noBonusSim = context.simulateDebtPayoffSchedule_(
+  longDebts, extra, 'avalanche', { asOfDate: asOf, bonusEvents: [] });
+assert.equal(skippedPastSim.totalInterest, noBonusSim.totalInterest,
+  'a bonus before forecast start must not be applied in month 1 or any other month');
+
+const clientBonusContext = vm.createContext({
+  Date,
+  Math,
+  Number,
+  String,
+  Array,
+  Object,
+  JSON,
+  isFinite,
+  fmtCurrency: function(value) {
+    const num = Number(value);
+    if (!isFinite(num)) return '—';
+    const sign = num < 0 ? '-' : '';
+    return sign + '$' + Math.abs(num).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  }
+});
+vm.runInContext(
+  sliceFunction(client, 'collectDebtPayoffScenarioBonusSelections_') +
+  '\n' + sliceFunction(client, 'debtPayoffScenarioForecastStartMonthKey_') +
+  '\n' + sliceFunction(client, 'validateDebtPayoffScenarioBonusSelections_') +
+  '\n' + sliceFunction(client, 'debtPayoffStrategyTitle_') +
+  '\n' + sliceFunction(client, 'formatDebtPayoffInterestVsBaseline_'),
+  clientBonusContext
+);
+assert.equal(clientBonusContext.validateDebtPayoffScenarioBonusSelections_([{
+  name: 'Cisco Mid Year Bonus', include: true, month: '', year: '2026', repeat: 'once'
+}], asOf).ok, false);
+assert.equal(clientBonusContext.validateDebtPayoffScenarioBonusSelections_([{
+  name: 'Cisco Mid Year Bonus', include: false, month: '', year: '', repeat: 'once'
+}], asOf).ok, true);
+assert.equal(clientBonusContext.validateDebtPayoffScenarioBonusSelections_([{
+  name: 'Cisco Mid Year Bonus', include: true, month: '10', year: '2026', repeat: 'once'
+}], asOf).ok, true);
+const clientPast = clientBonusContext.validateDebtPayoffScenarioBonusSelections_([{
+  name: 'Cisco Mid Year Bonus', include: true, month: '9', year: '2026', repeat: 'once'
+}], asOf);
+assert.equal(clientPast.ok, false);
+assert.match(String(clientPast.error), /forecast start month \(2026-10\)/);
+assert.match(String(clientPast.error), /not moved into a later month/);
+assert.equal(
+  clientBonusContext.debtPayoffStrategyTitle_('minimum_only', { baselineLabel: 'Minimum payments only' }),
+  'Minimum payments only'
+);
+assert.equal(
+  clientBonusContext.debtPayoffStrategyTitle_('minimum_only', {
+    baselineLabel: 'Minimum contractual payments plus selected bonus events (highest APR first)'
+  }),
+  'Minimum contractual payments plus selected bonus events (highest APR first)'
+);
+assert.notEqual(
+  clientBonusContext.debtPayoffStrategyTitle_('minimum_only', {
+    baselineLabel: 'Minimum contractual payments plus selected bonus events (highest APR first)'
+  }),
+  'Minimum payments only'
+);
+assert.equal(
+  clientBonusContext.formatDebtPayoffInterestVsBaseline_({ interestSavedVsMinimumOnly: 12.5 }),
+  '$12.50 less interest than baseline.'
+);
+assert.equal(
+  clientBonusContext.formatDebtPayoffInterestVsBaseline_({ interestSavedVsMinimumOnly: -8.25 }),
+  '$8.25 more interest than baseline.'
+);
+assert.equal(
+  clientBonusContext.formatDebtPayoffInterestVsBaseline_({ interestSavedVsMinimumOnly: 0 }),
+  'Same interest as baseline.'
+);
+assert.match(
+  clientBonusContext.formatDebtPayoffInterestVsBaseline_({
+    interestSavedVsMinimumOnly: targeting.strategies.snowball.interestSavedVsMinimumOnly
+  }),
+  /more interest than baseline/
+);
+assert.doesNotMatch(
+  clientBonusContext.formatDebtPayoffInterestVsBaseline_({
+    interestSavedVsMinimumOnly: targeting.strategies.snowball.interestSavedVsMinimumOnly
+  }),
+  /\$0(?:\.00)? saved|Same interest as baseline/
+);
 
 console.log('checkDebtPayoffStrategyComparisonRegressions: ok');

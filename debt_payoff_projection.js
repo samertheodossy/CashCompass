@@ -386,11 +386,19 @@ var DEBT_PAYOFF_SCENARIO_ZERO_BAL_ = 0.005;
 
 /**
  * Read-only household strategy comparison from current INPUT - Debts.
- * payload.monthlyExtra is the only extra input. It is never inferred from
- * This Week, never persisted, and is not an affordability proof.
+ * payload.monthlyExtra is the recurring extra input. Optional
+ * payload.bonusSelections are hypothetical Cisco bonus events. Neither is
+ * inferred from This Week, persisted, or an affordability proof.
  */
 var DEBT_PAYOFF_SCENARIO_EXTRA_INVALID_ =
   'Enter a valid monthly extra of $0.00 or more. Negative and non-numeric amounts are not used.';
+var DEBT_PAYOFF_SCENARIO_BONUS_INVALID_ =
+  'Enter the next expected payment month and year for each included Cisco bonus. Timing is not inferred from the bonus name or a historical payment month.';
+var DEBT_PAYOFF_SCENARIO_BONUS_EXCLUDED_ =
+  'Only Cisco Mid Year Bonus and Cisco End Year Bonus can be included. RSU/ESPP sales, Other Stock Sales, and tax refunds stay excluded.';
+var DEBT_PAYOFF_SCENARIO_BASELINE_LABEL_ = 'Minimum payments only';
+var DEBT_PAYOFF_SCENARIO_BASELINE_WITH_BONUS_LABEL_ =
+  'Minimum contractual payments plus selected bonus events (highest APR first)';
 
 function getDebtPayoffStrategyComparison(payload) {
   payload = payload || {};
@@ -402,26 +410,41 @@ function getDebtPayoffStrategyComparison(payload) {
   const today = new Date();
   const ss = getUserSpreadsheet_();
   const sheetNames = getSheetNames_();
+  var debts = [];
+  var supported;
   if (!ss.getSheetByName(sheetNames.DEBTS)) {
-    var empty = compareDebtPayoffStrategies_([], monthlyExtra, { asOfDate: today });
-    empty.supportedMonthlyExtra = debtPayoffSupportedMonthlyExtraUnavailable_(
+    supported = debtPayoffSupportedMonthlyExtraUnavailable_(
       'INPUT - Debts is missing.');
-    return empty;
-  }
-  const debtRows = readSheetAsObjects_(ss, 'DEBTS');
-  const aliasMap = getAliasMap_();
-  const debts = normalizeDebts_(debtRows, aliasMap);
-  var comparison = compareDebtPayoffStrategies_(debts, monthlyExtra, { asOfDate: today });
-  var accountRows = [];
-  try {
-    if (ss.getSheetByName(sheetNames.ACCOUNTS)) {
-      accountRows = readSheetAsObjects_(ss, 'ACCOUNTS');
+  } else {
+    const debtRows = readSheetAsObjects_(ss, 'DEBTS');
+    const aliasMap = getAliasMap_();
+    debts = normalizeDebts_(debtRows, aliasMap);
+    var accountRows = [];
+    try {
+      if (ss.getSheetByName(sheetNames.ACCOUNTS)) {
+        accountRows = readSheetAsObjects_(ss, 'ACCOUNTS');
+      }
+    } catch (e) {
+      accountRows = [];
     }
-  } catch (e) {
-    accountRows = [];
+    supported = readDebtPayoffSupportedMonthlyExtra_(
+      ss, debts, normalizeAccounts_(accountRows));
   }
-  comparison.supportedMonthlyExtra = readDebtPayoffSupportedMonthlyExtra_(
-    ss, debts, normalizeAccounts_(accountRows));
+  var bonusPlan = resolveDebtPayoffScenarioBonusEvents_(
+    payload.bonusSelections,
+    supported && supported.datedBonusScenario,
+    today,
+    DEBT_PAYOFF_SCENARIO_HORIZON_MONTHS_
+  );
+  if (!bonusPlan.ok) {
+    throw new Error(bonusPlan.error);
+  }
+  var comparison = compareDebtPayoffStrategies_(debts, monthlyExtra, {
+    asOfDate: today,
+    bonusEvents: bonusPlan.events,
+    bonusPlan: bonusPlan
+  });
+  comparison.supportedMonthlyExtra = supported;
   return comparison;
 }
 
@@ -450,6 +473,262 @@ function parseDebtPayoffScenarioMonthlyExtra_(value) {
   const n = Number(normalized);
   if (!isFinite(n) || n < 0) return invalid;
   return valid(n);
+}
+
+function debtPayoffScenarioBonusCanonicalName_(name) {
+  if (typeof isCiscoMidYearBonusIncomeName_ === 'function' &&
+      isCiscoMidYearBonusIncomeName_(name)) {
+    return typeof CISCO_MID_YEAR_BONUS_PAYEE_ !== 'undefined'
+      ? CISCO_MID_YEAR_BONUS_PAYEE_
+      : 'Cisco Mid Year Bonus';
+  }
+  if (typeof isCiscoEndYearBonusIncomeName_ === 'function' &&
+      isCiscoEndYearBonusIncomeName_(name)) {
+    return typeof CISCO_END_YEAR_BONUS_PAYEE_ !== 'undefined'
+      ? CISCO_END_YEAR_BONUS_PAYEE_
+      : 'Cisco End Year Bonus';
+  }
+  return '';
+}
+
+function parseDebtPayoffScenarioBonusMonth_(value) {
+  if (typeof value === 'number' && isFinite(value) &&
+      value >= 1 && value <= 12 && Math.floor(value) === value) {
+    return { ok: true, month: value };
+  }
+  var text = String(value == null ? '' : value).replace(/\u00A0/g, ' ').trim();
+  if (!/^(0?[1-9]|1[0-2])$/.test(text)) return { ok: false, month: null };
+  return { ok: true, month: Number(text) };
+}
+
+function parseDebtPayoffScenarioBonusYear_(value) {
+  if (typeof value === 'number' && isFinite(value) &&
+      value >= 2000 && value <= 2100 && Math.floor(value) === value) {
+    return { ok: true, year: value };
+  }
+  var text = String(value == null ? '' : value).replace(/\u00A0/g, ' ').trim();
+  if (!/^\d{4}$/.test(text)) return { ok: false, year: null };
+  var year = Number(text);
+  if (year < 2000 || year > 2100) return { ok: false, year: null };
+  return { ok: true, year: year };
+}
+
+function debtPayoffScenarioMonthIndexFromYearMonth_(asOfDate, year, month) {
+  var asOf = asOfDate instanceof Date && !isNaN(asOfDate.getTime())
+    ? asOfDate
+    : new Date();
+  var y = Number(year);
+  var m = Number(month);
+  if (!isFinite(y) || !isFinite(m)) return null;
+  return (y - asOf.getFullYear()) * 12 + (m - (asOf.getMonth() + 1)) + 1;
+}
+
+function debtPayoffScenarioForecastStartMonthKey_(asOfDate) {
+  return debtPayoffScenarioMonthKey_(asOfDate, 1);
+}
+
+function debtPayoffScenarioBonusPastDateError_(name, year, month, asOfDate) {
+  var startKey = debtPayoffScenarioForecastStartMonthKey_(asOfDate);
+  var monthText = String(Number(month) || '');
+  if (monthText.length < 2) monthText = '0' + monthText;
+  return (name || 'A selected Cisco bonus') +
+    ' payment ' + year + '-' + monthText +
+    ' is before the forecast start month (' + startKey +
+    '). Past bonus dates are not applied and are not moved into a later month. Enter the next expected payment month on or after ' +
+    startKey + '.';
+}
+
+function debtPayoffScenarioBaselineLabel_(bonusIncluded) {
+  return bonusIncluded === true
+    ? DEBT_PAYOFF_SCENARIO_BASELINE_WITH_BONUS_LABEL_
+    : DEBT_PAYOFF_SCENARIO_BASELINE_LABEL_;
+}
+
+function debtPayoffScenarioBonusPlanIncluded_(bonusPlan) {
+  return !!(bonusPlan && bonusPlan.included === true &&
+    Array.isArray(bonusPlan.events) && bonusPlan.events.length);
+}
+
+function assertDebtPayoffScenarioBonusEventsInHorizon_(bonusEvents, asOfDate) {
+  var startKey = debtPayoffScenarioForecastStartMonthKey_(asOfDate);
+  (bonusEvents || []).forEach(function(ev) {
+    var idx = Number(ev && ev.monthIndex);
+    if (!(idx >= 1)) {
+      throw new Error(
+        (ev && ev.name ? ev.name : 'A selected Cisco bonus') +
+        ' event is before the forecast start month (' + startKey +
+        '). Past bonus dates are not applied and are not moved into a later month.'
+      );
+    }
+  });
+}
+
+function debtPayoffScenarioBonusAssumptions_() {
+  return [
+    'Selected Cisco bonus payments are a hypothetical overlay. They are not saved, not a payment, not recurring monthly income, not the extra estimate, and not used for the 90-day reserve.',
+    'The same selected bonus amounts and dates are used in the baseline, avalanche, and snowball. Bonus cash is applied after interest and contractual minimums. Avalanche applies monthly extra and bonus payments highest APR first. Snowball applies monthly extra and bonus payments smallest balance first. The baseline has no monthly extra; its bonus cash is allocated highest APR first.',
+    'When a bonus repeats annually, the entered Expected Amount is held constant as a scenario assumption.',
+    'Timing is the month and year you entered. It is not inferred from Mid Year / End Year names or from historical Cash Flow payment months.',
+    'RSU/ESPP sales, Other Stock Sales, and tax refunds stay excluded.'
+  ];
+}
+
+function debtPayoffScenarioBonusSummary_(bonusPlan) {
+  bonusPlan = bonusPlan || {};
+  var events = Array.isArray(bonusPlan.events) ? bonusPlan.events.slice() : [];
+  return {
+    included: bonusPlan.included === true && events.length > 0,
+    events: events,
+    selections: Array.isArray(bonusPlan.selections) ? bonusPlan.selections.slice() : [],
+    persisted: false
+  };
+}
+
+function resolveDebtPayoffScenarioBonusEvents_(
+    selections, datedBonusScenario, asOfDate, horizonMonths) {
+  var empty = {
+    ok: true,
+    included: false,
+    events: [],
+    selections: [],
+    assumptions: [],
+    error: ''
+  };
+  if (selections == null || selections === '') return empty;
+  if (!Array.isArray(selections)) {
+    return {
+      ok: false,
+      included: false,
+      events: [],
+      selections: [],
+      assumptions: [],
+      error: DEBT_PAYOFF_SCENARIO_BONUS_INVALID_
+    };
+  }
+  var payments = {};
+  ((datedBonusScenario && datedBonusScenario.payments) || []).forEach(function(payment) {
+    if (!payment || !payment.name) return;
+    payments[payment.name] = payment;
+  });
+  var included = [];
+  var seen = {};
+  for (var i = 0; i < selections.length; i++) {
+    var row = selections[i] || {};
+    if (row.include !== true) continue;
+    var canonical = debtPayoffScenarioBonusCanonicalName_(row.name);
+    if (!canonical) {
+      return {
+        ok: false,
+        included: false,
+        events: [],
+        selections: [],
+        assumptions: [],
+        error: DEBT_PAYOFF_SCENARIO_BONUS_EXCLUDED_
+      };
+    }
+    if (seen[canonical]) {
+      return {
+        ok: false,
+        included: false,
+        events: [],
+        selections: [],
+        assumptions: [],
+        error: 'Each Cisco bonus can be included only once.'
+      };
+    }
+    seen[canonical] = true;
+    var monthParsed = parseDebtPayoffScenarioBonusMonth_(row.month);
+    var yearParsed = parseDebtPayoffScenarioBonusYear_(row.year);
+    if (!monthParsed.ok || !yearParsed.ok) {
+      return {
+        ok: false,
+        included: false,
+        events: [],
+        selections: [],
+        assumptions: [],
+        error: 'Enter the next expected payment month and year for ' +
+          canonical +
+          '. Timing is not inferred from the bonus name or a historical payment month.'
+      };
+    }
+    var repeat = String(row.repeat || '').trim().toLowerCase();
+    if (repeat !== 'once' && repeat !== 'annual') {
+      return {
+        ok: false,
+        included: false,
+        events: [],
+        selections: [],
+        assumptions: [],
+        error: 'Choose whether ' + canonical + ' occurs once or repeats annually.'
+      };
+    }
+    var payment = payments[canonical];
+    if (!payment || payment.known !== true) {
+      return {
+        ok: false,
+        included: false,
+        events: [],
+        selections: [],
+        assumptions: [],
+        error: canonical +
+          ' Expected Amount is blank (unknown). Blank was not treated as $0. Include it only when Recurring=Yes, Frequency=Yearly, and Expected Amount are known on that Cash Flow row.'
+      };
+    }
+    var monthIndex = debtPayoffScenarioMonthIndexFromYearMonth_(
+      asOfDate, yearParsed.year, monthParsed.month);
+    if (monthIndex == null || monthIndex < 1) {
+      return {
+        ok: false,
+        included: false,
+        events: [],
+        selections: [],
+        assumptions: [],
+        error: debtPayoffScenarioBonusPastDateError_(
+          canonical, yearParsed.year, monthParsed.month, asOfDate)
+      };
+    }
+    included.push({
+      name: canonical,
+      amount: round2_(Number(payment.amount) || 0),
+      month: monthParsed.month,
+      year: yearParsed.year,
+      repeat: repeat,
+      firstMonthIndex: monthIndex
+    });
+  }
+  if (!included.length) return empty;
+
+  var events = [];
+  var horizon = Number(horizonMonths) > 0
+    ? Number(horizonMonths)
+    : DEBT_PAYOFF_SCENARIO_HORIZON_MONTHS_;
+  included.forEach(function(sel) {
+    var idx = sel.firstMonthIndex;
+    while (idx <= horizon) {
+      events.push({
+        name: sel.name,
+        amount: sel.amount,
+        monthIndex: idx,
+        monthKey: debtPayoffScenarioMonthKey_(asOfDate, idx),
+        repeat: sel.repeat,
+        amountHeldConstant: sel.repeat === 'annual'
+      });
+      if (sel.repeat !== 'annual') break;
+      idx += 12;
+    }
+  });
+  events.sort(function(a, b) {
+    if (a.monthIndex !== b.monthIndex) return a.monthIndex - b.monthIndex;
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
+  return {
+    ok: true,
+    included: true,
+    events: events,
+    selections: included,
+    assumptions: debtPayoffScenarioBonusAssumptions_(),
+    error: ''
+  };
 }
 
 function debtPayoffScenarioInputState_(debt) {
@@ -534,20 +813,65 @@ function debtPayoffScenarioSortTargets_(debts, strategy) {
   return rows;
 }
 
-function debtPayoffScenarioAssumptions_(monthlyExtra, horizonMonths) {
-  return [
+function debtPayoffScenarioAssumptions_(monthlyExtra, horizonMonths, bonusPlan) {
+  var lines = [
     'This is a hypothetical scenario. The extra amount is not saved, is not a payment, and is not proof that the extra is affordable.',
     'Monthly extra applied to avalanche and snowball: ' +
       fmtCurrency_(monthlyExtra) +
-      '. Minimum-only uses $0.00 extra.',
-    'The comparison does not model future income, expenses, cash reserves, or changing rates.',
-    'Contractual minimums are held at the current recorded amount for every forecast month (estimate).',
-    'Interest each month is remaining balance × (APR ÷ 100 ÷ 12), rounded to cents, then payments apply.',
+      '. The baseline uses $0.00 monthly extra.'
+  ];
+  if (debtPayoffScenarioBonusPlanIncluded_(bonusPlan)) {
+    lines.push(
+      'The comparison baseline is minimum contractual payments plus the selected bonus events. That baseline allocates bonus cash highest APR first after interest and contractual minimums, and it has no monthly extra. Avalanche and snowball use those same bonus amounts and dates, but each applies bonus cash with its own extra-payment rule. Interest savings are measured against this baseline. A strategy that costs more interest than the baseline is shown as additional interest, not $0 saved.'
+    );
+    lines = lines.concat(bonusPlan.assumptions || []);
+    lines.push(
+      'The comparison models only the selected Cisco bonus events. It does not model other future income, expenses, cash reserves, or changing rates.'
+    );
+  } else {
+    lines.push(
+      'The comparison does not model future income, expenses, cash reserves, or changing rates.'
+    );
+  }
+  lines.push(
+    'Contractual minimums are held at the current recorded amount for every forecast month (estimate).'
+  );
+  lines.push(
+    'Interest each month is remaining balance × (APR ÷ 100 ÷ 12), rounded to cents, then payments apply.'
+  );
+  lines.push(
     'Forecast horizon is ' +
       horizonMonths +
-      ' months. A household that still has a balance after that is reported as not within the forecast horizon.',
+      ' months. A household that still has a balance after that is reported as not within the forecast horizon.'
+  );
+  lines.push(
     'Only debts with a remaining balance and usable APR and minimum-payment inputs are modeled.'
-  ];
+  );
+  return lines;
+}
+
+function applyDebtPayoffScenarioLeftover_(remaining, amount, allocStrategy) {
+  var leftover = round2_(Math.max(0, Number(amount) || 0));
+  var applied = [];
+  if (!(leftover > DEBT_PAYOFF_SCENARIO_ZERO_BAL_)) return applied;
+  var targets = debtPayoffScenarioSortTargets_(
+    (remaining || []).filter(function(d) {
+      return d.balance > DEBT_PAYOFF_SCENARIO_ZERO_BAL_;
+    }),
+    allocStrategy
+  );
+  for (var t = 0; t < targets.length && leftover > DEBT_PAYOFF_SCENARIO_ZERO_BAL_; t++) {
+    var pay = Math.min(leftover, targets[t].balance);
+    if (!(pay > DEBT_PAYOFF_SCENARIO_ZERO_BAL_)) continue;
+    targets[t].balance = round2_(targets[t].balance - pay);
+    leftover = round2_(leftover - pay);
+    applied.push({ name: targets[t].name, amount: round2_(pay) });
+  }
+  return applied;
+}
+
+function debtPayoffScenarioAllocStrategy_(strategy) {
+  return strategy === 'snowball' ? 'snowball' : 'avalanche';
 }
 
 function copyDebtPayoffScenarioWorkingDebts_(debts) {
@@ -564,7 +888,8 @@ function copyDebtPayoffScenarioWorkingDebts_(debts) {
 
 /**
  * Month-loop payoff path. strategy: 'minimum_only' | 'avalanche' | 'snowball'.
- * Extra is applied only after every modeled debt receives its current minimum.
+ * Extra and selected bonus cash are applied only after interest and every
+ * modeled debt receives its current minimum.
  */
 function simulateDebtPayoffSchedule_(normalizedDebts, monthlyTotalToExtra, strategy, options) {
   options = options || {};
@@ -575,10 +900,20 @@ function simulateDebtPayoffSchedule_(normalizedDebts, monthlyTotalToExtra, strat
     ? 0
     : Math.max(0, round2_(monthlyTotalToExtra));
   const asOfDate = options.asOfDate;
+  const bonusEvents = options.bonusEvents || [];
+  const bonusByMonth = {};
+  bonusEvents.forEach(function(ev) {
+    var idx = Number(ev && ev.monthIndex);
+    if (!(idx >= 1)) return;
+    bonusByMonth[idx] = round2_(
+      (bonusByMonth[idx] || 0) + Math.max(0, Number(ev.amount) || 0)
+    );
+  });
   const working = copyDebtPayoffScenarioWorkingDebts_(normalizedDebts);
-  const extraPriorityOrder = strategy === 'minimum_only'
+  const allocStrategy = debtPayoffScenarioAllocStrategy_(strategy);
+  const extraPriorityOrder = (strategy === 'minimum_only' && !bonusEvents.length)
     ? []
-    : debtPayoffScenarioSortTargets_(working, strategy).map(function(row) {
+    : debtPayoffScenarioSortTargets_(working, allocStrategy).map(function(row) {
         return row.name;
       });
   const cannotAmortizeAtMinimum = working.filter(debtPayoffScenarioCannotAmortizeAtMinimum_)
@@ -592,12 +927,15 @@ function simulateDebtPayoffSchedule_(normalizedDebts, monthlyTotalToExtra, strat
     totalInterest: 0,
     payoffOrder: [],
     extraPriorityOrder: extraPriorityOrder,
+    bonusAllocationRule: allocStrategy,
+    bonusApplications: [],
     cannotAmortizeAtMinimum: cannotAmortizeAtMinimum,
     remainingBalance: 0,
     remainingDebtNames: []
   };
   if (!working.length) return emptyResult;
   const payoffOrder = [];
+  const bonusApplications = [];
   let totalInterest = 0;
   let remaining = working.slice();
 
@@ -613,17 +951,20 @@ function simulateDebtPayoffSchedule_(normalizedDebts, monthlyTotalToExtra, strat
       d.balance = round2_(d.balance - pay);
     });
 
+    var bonusAmount = bonusByMonth[m] || 0;
+    var bonusApplied = applyDebtPayoffScenarioLeftover_(
+      remaining, bonusAmount, allocStrategy);
+    if (bonusApplied.length) {
+      bonusApplications.push({
+        monthIndex: m,
+        monthKey: debtPayoffScenarioMonthKey_(asOfDate, m),
+        amount: round2_(bonusAmount),
+        firstTarget: bonusApplied[0].name,
+        allocations: bonusApplied
+      });
+    }
     if (extra > DEBT_PAYOFF_SCENARIO_ZERO_BAL_) {
-      let leftover = extra;
-      const targets = debtPayoffScenarioSortTargets_(
-        remaining.filter(function(d) { return d.balance > DEBT_PAYOFF_SCENARIO_ZERO_BAL_; }),
-        strategy
-      );
-      for (let t = 0; t < targets.length && leftover > DEBT_PAYOFF_SCENARIO_ZERO_BAL_; t++) {
-        const pay = Math.min(leftover, targets[t].balance);
-        targets[t].balance = round2_(targets[t].balance - pay);
-        leftover = round2_(leftover - pay);
-      }
+      applyDebtPayoffScenarioLeftover_(remaining, extra, allocStrategy);
     }
 
     const stillOpen = [];
@@ -650,6 +991,8 @@ function simulateDebtPayoffSchedule_(normalizedDebts, monthlyTotalToExtra, strat
         totalInterest: round2_(totalInterest),
         payoffOrder: payoffOrder,
         extraPriorityOrder: extraPriorityOrder,
+        bonusAllocationRule: allocStrategy,
+        bonusApplications: bonusApplications,
         cannotAmortizeAtMinimum: cannotAmortizeAtMinimum,
         remainingBalance: 0,
         remainingDebtNames: []
@@ -666,6 +1009,8 @@ function simulateDebtPayoffSchedule_(normalizedDebts, monthlyTotalToExtra, strat
     totalInterest: round2_(totalInterest),
     payoffOrder: payoffOrder,
     extraPriorityOrder: extraPriorityOrder,
+    bonusAllocationRule: allocStrategy,
+    bonusApplications: bonusApplications,
     cannotAmortizeAtMinimum: cannotAmortizeAtMinimum,
     remainingBalance: round2_(remaining.reduce(function(sum, d) {
       return sum + Number(d.balance || 0);
@@ -674,20 +1019,37 @@ function simulateDebtPayoffSchedule_(normalizedDebts, monthlyTotalToExtra, strat
   };
 }
 
+function formatDebtPayoffInterestVsBaseline_(row) {
+  var delta = Number(row && row.interestSavedVsMinimumOnly);
+  if (!isFinite(delta) || Math.abs(delta) <= DEBT_PAYOFF_SCENARIO_ZERO_BAL_) {
+    return 'Same interest as baseline.';
+  }
+  var amount = typeof fmtCurrency_ === 'function'
+    ? fmtCurrency_(Math.abs(delta))
+    : String(Math.abs(delta));
+  if (delta > 0) return amount + ' less interest than baseline.';
+  return amount + ' more interest than baseline.';
+}
+
 function summarizeDebtPayoffScenario_(result, minOnlyInterest) {
   const interestSaved = result.strategy === 'minimum_only'
     ? 0
-    : round2_(Math.max(0, Number(minOnlyInterest || 0) - Number(result.totalInterest || 0)));
+    : round2_(Number(minOnlyInterest || 0) - Number(result.totalInterest || 0));
   return {
     strategy: result.strategy,
     monthlyExtra: result.monthlyExtra,
     payoffOrder: result.payoffOrder,
     extraPriorityOrder: result.extraPriorityOrder,
+    bonusAllocationRule: result.bonusAllocationRule || debtPayoffScenarioAllocStrategy_(result.strategy),
+    bonusApplications: Array.isArray(result.bonusApplications) ? result.bonusApplications.slice() : [],
     debtFreeWithinHorizon: result.debtFreeWithinHorizon,
     debtFreeMonthIndex: result.debtFreeMonthIndex,
     debtFreeMonthKey: result.debtFreeMonthKey,
     totalInterest: result.totalInterest,
     interestSavedVsMinimumOnly: interestSaved,
+    interestVsBaselineLabel: formatDebtPayoffInterestVsBaseline_({
+      interestSavedVsMinimumOnly: interestSaved
+    }),
     cannotAmortizeAtMinimum: result.cannotAmortizeAtMinimum,
     remainingBalance: result.remainingBalance,
     remainingDebtNames: result.remainingDebtNames
@@ -705,9 +1067,18 @@ function compareDebtPayoffStrategies_(normalizedDebts, monthlyExtra, options) {
     ? Number(options.horizonMonths)
     : DEBT_PAYOFF_SCENARIO_HORIZON_MONTHS_;
   const classified = classifyDebtPayoffScenarioDebts_(normalizedDebts);
+  const bonusEvents = Array.isArray(options.bonusEvents) ? options.bonusEvents.slice() : [];
+  const bonusPlan = options.bonusPlan || {
+    included: bonusEvents.length > 0,
+    events: bonusEvents,
+    assumptions: options.bonusAssumptions || []
+  };
+  assertDebtPayoffScenarioBonusEventsInHorizon_(bonusEvents, options.asOfDate);
+  const bonusIncluded = debtPayoffScenarioBonusPlanIncluded_(bonusPlan);
   const simOptions = {
     asOfDate: options.asOfDate,
-    horizonMonths: horizonMonths
+    horizonMonths: horizonMonths,
+    bonusEvents: bonusEvents
   };
   const minOnly = simulateDebtPayoffSchedule_(
     classified.modeled, extra, 'minimum_only', simOptions);
@@ -724,10 +1095,12 @@ function compareDebtPayoffStrategies_(normalizedDebts, monthlyExtra, options) {
     householdComparisonComplete: classified.blockers.length === 0 && classified.modeled.length > 0,
     monthlyExtra: extra,
     horizonMonths: horizonMonths,
-    asOfMonthKey: debtPayoffScenarioMonthKey_(options.asOfDate, 1),
+    asOfMonthKey: debtPayoffScenarioForecastStartMonthKey_(options.asOfDate),
+    baselineLabel: debtPayoffScenarioBaselineLabel_(bonusIncluded),
     modeledDebtNames: classified.modeled.map(function(d) { return d.name; }),
     blockers: classified.blockers,
-    assumptions: debtPayoffScenarioAssumptions_(extra, horizonMonths),
+    assumptions: debtPayoffScenarioAssumptions_(extra, horizonMonths, bonusPlan),
+    scenarioBonuses: debtPayoffScenarioBonusSummary_(bonusPlan),
     strategies: {
       minimum_only: summarizeDebtPayoffScenario_(minOnly, minOnly.totalInterest),
       avalanche: summarizeDebtPayoffScenario_(avalanche, minOnly.totalInterest),
@@ -1038,7 +1411,7 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
     'Only income with an explicit Recurring confirmation, a usable Frequency, and an Expected Amount is included. Each Manage Income group is one forecast: Expected Amount is per occurrence, converted by frequency (Biweekly = amount × 26 ÷ 12; Semi-monthly / twice monthly = amount × 24 ÷ 12). Multiple Cash Flow history rows in the same group are not multiplied. Bonus, RSU/ESPP, one-time, and variable sources are excluded from the raw payee before any name normalization. Historical averages are not used as Expected Amount.',
     'Protected cash is This Week’s canonical reserve, including upcoming expenses and property contingency. A bills-only three-month proxy is not used.',
     'Matching Bills for a tracked debt are counted only as the contractual minimum. A policy-floor bill is not added on top of the standing weekly floor converted at 52 ÷ 12.',
-    'Cisco Mid Year Bonus and Cisco End Year Bonus are separate annual income rows with Recurring = Yes and Frequency = Yearly. They are not included in recurring monthly income, are not treated as cash available each month, are not used to satisfy the 90-day cash reserve, and are not applied to the strategy comparison. If a yearly amount is shown as a monthly equivalent, that figure is an estimate only.'
+    'Cisco Mid Year Bonus and Cisco End Year Bonus are separate annual income rows with Recurring = Yes and Frequency = Yearly. They are not included in recurring monthly income, are not treated as cash available each month, and are not used to satisfy the 90-day cash reserve. They are not applied to the strategy comparison unless you include them in the optional scenario overlay and enter the next payment month and year. If a yearly amount is shown as a monthly equivalent, that figure is an estimate only.'
   ];
 
   if (input.incomeUnavailable) {
@@ -1395,9 +1768,10 @@ function readDebtPayoffSupportedMonthlyExtraIncome_(ss) {
 
 var DEBT_PAYOFF_CISCO_BONUS_COMPARISON_CONSTRAINT_ =
   'Cisco Mid Year Bonus and Cisco End Year Bonus are separate annual cash flows. ' +
-  'The household strategy comparison uses one constant monthly extra and does not model month-specific inflows. ' +
-  'These bonus amounts are not applied to avalanche or snowball, are not treated as cash available each month, ' +
-  'and are not used to satisfy the 90-day cash reserve.';
+  'They are not added to recurring monthly income, are not used for the 90-day reserve, ' +
+  'and are not applied until you include them in the strategy comparison and enter the next payment month and year. ' +
+  'Timing is not inferred from the row name or a historical payment month. ' +
+  'RSU/ESPP sales, Other Stock Sales, and tax refunds stay excluded.';
 
 function debtPayoffCiscoBonusScenarioBase_() {
   return {
@@ -1435,7 +1809,7 @@ function debtPayoffCiscoBonusPayment_(name, extras) {
  * Each payment is one annual Cash Flow income row using Recurring,
  * Frequency = Yearly, and Expected Amount. Never converts either amount
  * into stable monthly income, never uses it for the 90-day reserve, and
- * never applies it to the strategy comparison.
+ * never auto-applies it to the strategy comparison.
  */
 function debtPayoffParseCiscoBonusScenario_(display, values) {
   display = display || [];
