@@ -52,8 +52,8 @@ assert.match(debtOverview,
   /id="debt_payoff_strategy_wrap"[\s\S]*?Household strategy comparison/,
   'scenario comparison belongs inside Debt Overview');
 assert.match(debtOverview,
-  /Hypothetical extra-payment scenario[\s\S]*?prove the extra amount is affordable/,
-  'the extra amount must be labeled hypothetical and not affordable');
+  /prove the extra amount is affordable/,
+  'the extra amount must be labeled not affordable');
 assert.match(debtOverview,
   /not taken from This Week[\s\S]*?does not model a cash reserve/,
   'the scenario must not infer This Week extra or claim a future reserve');
@@ -117,16 +117,102 @@ assert.match(comparisonSource, /readCapitalAllocationFacts_/);
 assert.match(comparisonSource, /futureUpcomingAmount/);
 assert.match(comparisonSource, /propertyContingencyAmount/);
 assert.match(help, /canonical reserve[\s\S]*?upcoming expenses and property contingency/);
-assert.match(debtOverview, /id="debt_payoff_supported_extra"/);
-assert.match(client, /Use this amount in the scenario/);
-assert.match(client, /function useDebtPayoffSupportedMonthlyExtra_/);
-assert.match(help, /estimated recurring monthly extra[\s\S]*?Use this amount in the scenario/);
+assert.doesNotMatch(debtOverview, /id="debt_payoff_supported_extra"/);
+assert.doesNotMatch(debtOverview, /Supported monthly extra/);
+assert.match(debtOverview, /id="debt_payoff_recommendation"/);
+assert.match(debtOverview, /<details class="debt-payoff-details debt-payoff-what-if">/);
+assert.doesNotMatch(debtOverview, /debt-payoff-what-if[^>]*\sopen/);
+assert.match(debtOverview, /Optional hypothetical scenario/);
+assert.match(debtOverview, /This is a separate hypothetical scenario/);
+assert.match(debtOverview, /Monthly extra \(hypothetical only\)/);
+assert.doesNotMatch(debtOverview, /Use this amount in a what-if/);
+assert.doesNotMatch(client, /Use this amount in a what-if/);
+assert.doesNotMatch(client, /function useDebtPayoffSupportedMonthlyExtra_/);
+assert.doesNotMatch(client, /function renderDebtPayoffSupportedMonthlyExtra_/);
+assert.match(client, /function renderDebtPayoffMonthlyRecommendation_/);
+assert.match(client, /<summary>How this amount was calculated<\/summary>/);
+assert.match(help, /estimated recurring monthly extra[\s\S]*?monthly recommendation uses it when extra cash can be proven/);
+assert.doesNotMatch(help, /Use this amount in a what-if/);
+assert.match(help, /monthly recommendation uses the supported extra automatically/);
+assert.doesNotMatch(sliceFunction(client, 'renderDebtPayoffReadData_'),
+  /runDebtPayoffStrategyComparison\(\)/,
+  'the monthly recommendation must not require a second Compare RPC on load');
+assert.match(help, /Active recurring bills marked Varies are not forecast from Default Amount/);
+assert.match(help, /YTD running average/);
+assert.match(help, /January through the latest completed month this year/);
+assert.match(help, /January ÷ 1, January–February ÷ 2/);
+assert.match(help, /blank or missing month withholds that bill/);
+assert.match(help, /annual or seasonal costs can make it swing/i);
+assert.match(client, /function renderDebtPayoffVariableBillEstimatesHtml_/);
+assert.match(client, /YTD running average for/);
+assert.match(client, /explicit \$0 counts and a blank month withholds this bill/);
+assert.match(client, /Annual or seasonal costs can make this average swing/);
+assert.match(client, /<th scope="col">Bill<\/th>/);
+assert.match(client, /<th scope="col">YTD total<\/th>/);
+assert.match(client, /<th scope="col">Months<\/th>/);
+assert.match(client, /<th scope="col">Monthly average/);
+assert.doesNotMatch(sliceFunction(client, 'renderDebtPayoffVariableBillEstimatesHtml_'),
+  /rows\.forEach\([\s\S]*Annual or seasonal costs can make this average swing/,
+  'the seasonal-cost explanation must not repeat on every variable-bill row');
+assert.doesNotMatch(sliceFunction(client, 'renderDebtPayoffMonthlyRecommendation_'),
+  /Use this amount in a what-if|useDebtPayoffSupportedMonthlyExtra_|debt-payoff-use-supported-extra|debt_payoff_scenario_extra/,
+  'the monthly recommendation must not copy itself into the hypothetical scenario');
+assert.match(sliceFunction(client, 'renderDebtPayoffMonthlyRecommendation_'),
+  /renderDebtPayoffCalculationDetailsHtml_/);
+assert.doesNotMatch(client, /<summary>View estimate details<\/summary>/);
+assert.doesNotMatch(sliceFunction(client, 'renderDebtPayoffReadData_'),
+  /renderDebtPayoffSupportedMonthlyExtra_/);
+assert.match(sliceFunction(client, 'renderDebtPayoffReadData_'),
+  /renderDebtPayoffMonthlyRecommendation_\([\s\S]*supportedMonthlyExtra/);
+assert.doesNotMatch(sliceFunction(client, 'runDebtPayoffStrategyComparison'),
+  /renderDebtPayoffMonthlyRecommendation_|renderDebtPayoffSupportedMonthlyExtra_/,
+  'a hypothetical Compare must not overwrite this month’s recommendation');
+assert.match(client, /<summary>Calculation assumptions<\/summary>/);
+assert.match(client, /<summary>Payoff order and allocation<\/summary>/);
+assert.match(client, /<dt>Debt-free<\/dt>/);
+assert.match(client, /<dt>Total interest<\/dt>/);
+assert.match(client, /<dt>vs baseline<\/dt>/);
+assert.doesNotMatch(client, /function renderDebtPayoffDatedBonusScenarioHtml_/);
+assert.doesNotMatch(sliceFunction(client, 'renderDebtPayoffMonthlyRecommendation_'),
+  /Cisco Mid Year Bonus and Cisco End Year Bonus/);
+assert.doesNotMatch(sliceFunction(client, 'renderDebtPayoffScenarioBonusForm_'),
+  /annualizedMonthlyEquivalent|Annualized monthly equivalent/);
+assert.doesNotMatch(sliceFunction(client, 'renderDebtPayoffStrategyComparison_'),
+  /Avalanche applies monthly extra and bonus payments highest APR first/);
+assert.match(debtOverview,
+  /id="debt_payoff_recommendation"[\s\S]*Optional hypothetical scenario[\s\S]*id="debt_payoff_scenario_bonus_wrap"[\s\S]*id="debt_payoff_scenario_extra"[\s\S]*Compare strategies[\s\S]*id="debt_payoff_strategy_results"/,
+  'Debt Overview must keep one recommendation section and a separate optional scenario');
+assert.match(debtOverview, /class="debt-payoff-strategy-controls"[\s\S]*debt_payoff_scenario_extra[\s\S]*Compare strategies/);
+assert.match(debtOverview, /class="debt-payoff-bonus-caveat"/);
+assert.equal((debtOverview.match(/not used for the 90-day cash reserve/g) || []).length, 1,
+  'the optional bonus caveat must appear once in the main flow');
+assert.equal((debtOverview.match(/Optional Cisco bonus/g) || []).length, 1);
+assert.doesNotMatch(debtOverview, /Annualized monthly equivalent/);
+assert.match(help, /one extra-payoff recommendation for this month[\s\S]*optional hypothetical scenario/);
+assert.doesNotMatch(sliceFunction(projection, 'debtPayoffParseKnownCashFlowSpend_'),
+  /Math\.abs/);
+assert.doesNotMatch(sliceFunction(client, 'renderDebtPayoffMonthlyRecommendation_'),
+  /el\.value\s*=/);
+assert.doesNotMatch(sliceFunction(projection, 'attachDebtPayoffVariableBillHistory_'),
+  /setValue\(|appendRow\(|insertColumn|insertCashFlowRow_|ensureCashFlowYearSheet_/);
+assert.doesNotMatch(sliceFunction(projection, 'estimateDebtPayoffVariableBillHistory_'),
+  /setValue\(|appendRow\(|getRange\(/);
+assert.doesNotMatch(sliceFunction(projection, 'readDebtPayoffSupportedMonthlyExtra_'),
+  /setValue\(|appendRow\(|insertColumn|insertCashFlowRow_/);
+assert.doesNotMatch(capital, /attachDebtPayoffVariableBillHistory_|estimateDebtPayoffVariableBillHistory_/);
+assert.doesNotMatch(rolling, /attachDebtPayoffVariableBillHistory_|estimateDebtPayoffVariableBillHistory_/);
 assert.match(projection,
   /function getDebtPayoffStrategyComparison\(payload\)[\s\S]*?parseDebtPayoffScenarioMonthlyExtra_\(payload\.monthlyExtra\)/);
 assert.match(projection, /recommendationState: 'HYPOTHETICAL'/);
+assert.match(projection, /function buildDebtPayoffMonthlyRecommendation_/);
+assert.match(projection, /monthlyRecommendation: buildDebtPayoffMonthlyRecommendation_/);
 assert.match(projection, /extraIsAffordable: null/);
 assert.match(projection, /persisted: false/);
 assert.match(projection, /reserveModeled: false/);
+assert.doesNotMatch(sliceFunction(projection, 'buildDebtPayoffMonthlyRecommendation_'),
+  /setValue\(|appendRow\(|PAY_EXTRA|PropertiesService|google\.script\.run/);
+assert.doesNotMatch(sliceFunction(projection, 'buildDebtPayoffMonthlyRecommendation_'),
+  /bonusSelections|datedBonusScenario/);
 assert.match(plannerCore, /interestRateKnown: interestRateKnown/);
 assert.match(plannerCore, /function debtInterestRateCellIsKnown_/);
 
@@ -156,6 +242,7 @@ vm.runInContext(
   '\n' + sliceFunction(plannerHelpers, 'round2_') +
   '\n' + sliceFunction(plannerHelpers, 'parseMonthHeader_') +
   '\n' + sliceFunction(plannerCore, 'debtMinimumPaymentCellIsKnown_') +
+  '\n' + sliceFunction(dashboardData, 'normalizeBillName_') +
   '\n' + sliceFunction(dashboardData, 'normalizeYesNo_') +
   '\n' + sliceFunction(dashboardData, 'normalizeFrequency_') +
   '\n' + sliceFrom(incomeSources, 'var CISCO_MID_YEAR_BONUS_PAYEE_', '\nfunction incomeIsExcludedName_') +
@@ -290,6 +377,9 @@ const extraInputEl = { value: '-40' };
 const resultsEl = { innerHTML: 'stale' };
 const runContext = vm.createContext({
   Date, Math, Number, String, Array, Object, JSON, isFinite,
+  __debtPayoffReadInFlight_: false,
+  __debtPayoffReadRequestId_: 0,
+  __debtPayoffStrategyRequestId_: 0,
   document: {
     getElementById: function(id) {
       if (id === 'debt_payoff_scenario_extra') return extraInputEl;
@@ -353,6 +443,171 @@ runContext.runDebtPayoffStrategyComparison();
 assert.equal(rpcPayloads.length, 1);
 assert.equal(rpcPayloads[0].monthlyExtra, 125.5);
 assert.deepEqual(Array.from(rpcPayloads[0].bonusSelections || []), []);
+
+assert.match(client, /function failDebtPayoffReadLoad_/);
+assert.match(sliceFunction(client, 'loadDebtPayoffReadSection'),
+  /requestId !== __debtPayoffReadRequestId_/);
+assert.match(sliceFunction(client, 'loadDebtPayoffReadSection'),
+  /failDebtPayoffReadLoad_\(wrap, err\)/);
+assert.match(sliceFunction(client, 'loadDebtPayoffReadSection'),
+  /Payoff data could not be loaded/);
+assert.match(sliceFunction(client, 'failDebtPayoffReadLoad_'),
+  /setStatus\(\s*'debt_payoff_read_status'[\s\S]*true\s*\)/);
+assert.doesNotMatch(sliceFunction(client, 'failDebtPayoffReadLoad_'),
+  /Loading payoff data/);
+assert.match(sliceFunction(client, 'runDebtPayoffStrategyComparison'),
+  /__debtPayoffReadInFlight_/);
+assert.match(sliceFunction(client, 'runDebtPayoffStrategyComparison'),
+  /requestId !== __debtPayoffStrategyRequestId_/);
+
+const payoffTableWrap = { innerHTML: '' };
+const payoffStatusCalls = [];
+const payoffRenderCalls = [];
+let payoffSuccess = null;
+let payoffFailure = null;
+const payoffLoadContext = vm.createContext({
+  Date, Math, Number, String, Array, Object, JSON, isFinite,
+  __debtPayoffReadCache: null,
+  __debtPayoffReadRequestId_: 0,
+  __debtPayoffStrategyRequestId_: 0,
+  __debtPayoffReadInFlight_: false,
+  document: {
+    getElementById: function(id) {
+      if (id === 'debt_payoff_read_table_wrap') return payoffTableWrap;
+      if (id === 'debt_payoff_read_status') return { textContent: '', className: '' };
+      if (id === 'debt_payoff_read_summary') return { innerHTML: '' };
+      if (id === 'debt_payoff_read_recommendations') return { innerHTML: '' };
+      if (id === 'debt_payoff_read_meta') return { textContent: '' };
+      if (id === 'debt_payoff_read_filter_note') return { textContent: '' };
+      if (id === 'debt_payoff_read_chart_wrap') return { innerHTML: '' };
+      if (id === 'debt_payoff_strategy_results') return { innerHTML: 'comparison' };
+      if (id === 'debt_payoff_recommendation') return { innerHTML: '' };
+      if (id === 'debt_payoff_scenario_extra') return { value: '25' };
+      return null;
+    }
+  },
+  setStatus: function(id, message, isError) {
+    payoffStatusCalls.push({ id: id, message: message, isError: isError });
+  },
+  loadingIndicatorHtml: function(label) { return 'LOADING:' + label; },
+  renderDebtPayoffReadData_: function(data) {
+    payoffRenderCalls.push(data);
+    payoffTableWrap.innerHTML = 'TABLE';
+  },
+  google: {
+    script: {
+      run: {
+        withSuccessHandler: function(handler) {
+          payoffSuccess = handler;
+          return this;
+        },
+        withFailureHandler: function(handler) {
+          payoffFailure = handler;
+          return this;
+        },
+        getDebtPayoffReadData: function() {}
+      }
+    }
+  }
+});
+vm.runInContext(
+  sliceFunction(client, 'failDebtPayoffReadLoad_') +
+  '\n' + sliceFunction(client, 'loadDebtPayoffReadSection'),
+  payoffLoadContext
+);
+
+payoffLoadContext.loadDebtPayoffReadSection();
+assert.match(payoffTableWrap.innerHTML, /LOADING:Loading payoff data…/);
+assert.equal(payoffLoadContext.__debtPayoffReadInFlight_, true);
+assert.equal(typeof payoffSuccess, 'function');
+assert.equal(typeof payoffFailure, 'function');
+
+payoffFailure(new Error('offline'));
+assert.equal(payoffTableWrap.innerHTML, '',
+  'failure must clear the payoff loading spinner');
+assert.equal(payoffLoadContext.__debtPayoffReadInFlight_, false);
+assert.equal(payoffStatusCalls.some(function(row) {
+  return row.id === 'debt_payoff_read_status' && row.isError === true && /offline/.test(row.message);
+}), true, 'failure must report a visible error instead of hiding the spinner');
+assert.equal(payoffRenderCalls.length, 0);
+
+payoffStatusCalls.length = 0;
+payoffRenderCalls.length = 0;
+payoffLoadContext.loadDebtPayoffReadSection();
+assert.match(payoffTableWrap.innerHTML, /LOADING:Loading payoff data…/);
+payoffSuccess({ debts: [{ name: 'Card' }] });
+assert.equal(payoffRenderCalls.length, 1);
+assert.equal(payoffTableWrap.innerHTML, 'TABLE',
+  'success must replace the loading spinner with payoff data');
+assert.equal(payoffLoadContext.__debtPayoffReadInFlight_, false);
+assert.equal(payoffStatusCalls.some(function(row) {
+  return row.id === 'debt_payoff_read_status' && row.isError === true;
+}), false);
+
+payoffStatusCalls.length = 0;
+payoffRenderCalls.length = 0;
+payoffLoadContext.loadDebtPayoffReadSection();
+payoffSuccess(null);
+assert.equal(payoffRenderCalls.length, 0);
+assert.equal(payoffTableWrap.innerHTML, '',
+  'empty success must not leave Loading payoff data… on screen');
+assert.equal(payoffStatusCalls.some(function(row) {
+  return row.isError === true && /Payoff data could not be loaded/.test(row.message);
+}), true, 'empty success must report a visible error');
+
+payoffStatusCalls.length = 0;
+payoffRenderCalls.length = 0;
+payoffLoadContext.renderDebtPayoffReadData_ = function() {
+  throw new Error('chart failed');
+};
+payoffLoadContext.loadDebtPayoffReadSection();
+payoffSuccess({ debts: [{ name: 'Card' }] });
+assert.equal(payoffTableWrap.innerHTML, '',
+  'a thrown success handler must clear the loading spinner');
+assert.equal(payoffStatusCalls.some(function(row) {
+  return row.isError === true && /chart failed/.test(row.message);
+}), true, 'a thrown success handler must surface the failure');
+
+const firstReadId = payoffLoadContext.__debtPayoffReadRequestId_;
+payoffStatusCalls.length = 0;
+payoffRenderCalls.length = 0;
+payoffLoadContext.renderDebtPayoffReadData_ = function(data) {
+  payoffRenderCalls.push(data);
+  payoffTableWrap.innerHTML = 'TABLE';
+};
+payoffLoadContext.loadDebtPayoffReadSection();
+const staleSuccess = payoffSuccess;
+const staleFailure = payoffFailure;
+payoffLoadContext.loadDebtPayoffReadSection();
+assert.ok(payoffLoadContext.__debtPayoffReadRequestId_ > firstReadId);
+staleSuccess({ debts: [{ name: 'Stale' }] });
+assert.equal(payoffRenderCalls.length, 0,
+  'a stale payoff-data success must not paint over a newer load');
+assert.match(payoffTableWrap.innerHTML, /LOADING:Loading payoff data…/);
+staleFailure(new Error('stale offline'));
+assert.match(payoffTableWrap.innerHTML, /LOADING:Loading payoff data…/,
+  'a stale payoff-data failure must not clear a newer load');
+assert.equal(payoffStatusCalls.some(function(row) {
+  return row.isError === true && /stale offline/.test(row.message);
+}), false);
+payoffSuccess({ debts: [{ name: 'Fresh' }] });
+assert.equal(payoffRenderCalls.length, 1);
+assert.equal(payoffTableWrap.innerHTML, 'TABLE');
+
+rpcPayloads = [];
+statusCalls = [];
+resultsEl.innerHTML = 'stale';
+runContext.__debtPayoffReadInFlight_ = true;
+extraInputEl.value = '50';
+runContext.runDebtPayoffStrategyComparison();
+assert.equal(rpcPayloads.length, 0,
+  'Compare must not run a second RPC while payoff data is still loading');
+assert.equal(resultsEl.innerHTML, 'stale',
+  'Compare during payoff load must not replace results or hide the table spinner');
+assert.equal(statusCalls.some(function(row) {
+  return !row.isError && /still loading/i.test(row.message);
+}), true);
+runContext.__debtPayoffReadInFlight_ = false;
 
 const overpay = context.simulateDebtPayoffSchedule_(
   [usableDebt('Tiny', 100, 0, 10)], 1000, 'avalanche', { asOfDate: asOf });
@@ -468,13 +723,11 @@ const normalizedZeroApr = rateContext.normalizeDebts_([{
 assert.equal(normalizedZeroApr[0].interestRateKnown, true);
 assert.equal(normalizedZeroApr[0].interestRate, 0);
 
-const renderSupported = sliceFunction(client, 'renderDebtPayoffSupportedMonthlyExtra_');
-assert.doesNotMatch(renderSupported, /debt_payoff_scenario_extra/,
+const renderRecommendation = sliceFunction(client, 'renderDebtPayoffMonthlyRecommendation_');
+assert.doesNotMatch(renderRecommendation, /debt_payoff_scenario_extra/,
   'the estimate must not auto-fill the hypothetical extra field');
-const useSupported = sliceFunction(client, 'useDebtPayoffSupportedMonthlyExtra_');
-assert.match(useSupported, /el\.value = amount\.toFixed\(2\)/);
-assert.doesNotMatch(useSupported, /runDebtPayoffStrategyComparison|google\.script\.run/,
-  'using the estimate copies the field only and does not run Compare or write');
+assert.doesNotMatch(renderRecommendation, /<button/,
+  'the monthly recommendation must not offer a copy-to-scenario button');
 
 function confirmedIncome(name, monthlyAmount) {
   return {
@@ -603,6 +856,76 @@ assert.notEqual(doubleCount.components.policyFloorMonthly, 4333.34,
   'a matching policy-floor bill must not be counted twice');
 assert.equal(doubleCount.amount, 1333.33);
 
+const recDebts = [
+  usableDebt('High APR Card', 3000, 24.99, 75),
+  usableDebt('Low APR Card', 800, 8.99, 25)
+];
+const recSupported = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  debts: recDebts
+}));
+const monthlyRec = context.buildDebtPayoffMonthlyRecommendation_(recDebts, recSupported, { asOfDate: asOf });
+assert.equal(recSupported.available, true);
+assert.ok(recSupported.amount > 0);
+assert.equal(monthlyRec.state, 'RECOMMENDED');
+assert.equal(monthlyRec.monthlyExtra, recSupported.amount);
+assert.equal(monthlyRec.strategyKey, 'avalanche');
+assert.equal(monthlyRec.firstExtraDebt, 'High APR Card');
+assert.equal(monthlyRec.extraIsAffordable, null);
+assert.equal(monthlyRec.persisted, false);
+assert.equal(monthlyRec.bonusesIncluded, false);
+assert.equal(monthlyRec.refreshesFromSavedFacts, true);
+assert.equal(monthlyRec.comparison.monthlyExtra, recSupported.amount);
+assert.equal(monthlyRec.comparison.scenarioBonuses.included, false);
+assert.ok(monthlyRec.nextMilestone && monthlyRec.nextMilestone.name);
+assert.match(String(monthlyRec.why), /highest-APR|Avalanche/i);
+assert.equal(monthlyRec.protection.reserveProtects, false);
+
+const zeroRec = context.buildDebtPayoffMonthlyRecommendation_(recDebts, deficit, { asOfDate: asOf });
+assert.equal(zeroRec.state, 'WITHHELD');
+assert.equal(zeroRec.code, 'NO_SURPLUS');
+assert.equal(zeroRec.monthlyExtra, 0);
+assert.equal(zeroRec.comparison, null);
+assert.equal(zeroRec.strategyKey, null);
+
+const missingRec = context.buildDebtPayoffMonthlyRecommendation_(recDebts, missingIncome, { asOfDate: asOf });
+assert.equal(missingRec.state, 'WITHHELD');
+assert.equal(missingRec.code, 'FACTS_MISSING');
+assert.equal(missingRec.comparison, null);
+
+const reserveRec = context.buildDebtPayoffMonthlyRecommendation_(recDebts, reserveProtected, { asOfDate: asOf });
+assert.equal(reserveRec.state, 'WITHHELD');
+assert.equal(reserveRec.code, 'RESERVE_PROTECTS');
+assert.equal(reserveRec.monthlyExtra, 0);
+assert.equal(reserveRec.comparison, null);
+assert.equal(reserveRec.protection.reserveProtects, true);
+
+const dedupRec = context.buildDebtPayoffMonthlyRecommendation_([
+  usableDebt('Visa', 1200, 19.99, 200)
+], doubleCount, { asOfDate: asOf });
+assert.equal(dedupRec.state, 'RECOMMENDED');
+assert.equal(dedupRec.monthlyExtra, 1333.33);
+assert.equal(dedupRec.protection.debtMinimumsMonthly, 200);
+assert.equal(dedupRec.protection.recurringBillsMonthly, 1000);
+assert.equal(dedupRec.protection.policyFloorMonthly, 2166.67);
+assert.notEqual(dedupRec.protection.recurringBillsMonthly, 1700);
+
+const incompleteRec = context.buildDebtPayoffMonthlyRecommendation_([
+  usableDebt('Good Card', 500, 19.99, 25),
+  {
+    name: 'Blank APR Card',
+    active: true,
+    balance: 400,
+    interestRate: 0,
+    minimumPayment: 20,
+    minimumPaymentKnown: true,
+    interestRateKnown: false
+  }
+], recSupported, { asOfDate: asOf });
+assert.equal(incompleteRec.state, 'WITHHELD');
+assert.equal(incompleteRec.code, 'HOUSEHOLD_INCOMPLETE');
+assert.equal(incompleteRec.comparison, null);
+assert.match(String(incompleteRec.reason), /Blank APR Card/);
+
 const oneTimeIncome = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
   recurringIncomeSources: [{
     rawPayee: 'Freelance Project',
@@ -672,6 +995,251 @@ assert.equal(missingVaries.amount, null);
 assert.equal(missingVaries.blockers.some(function(row) {
   return row.code === 'BILLS_UNAVAILABLE';
 }), true);
+
+const asOfJan2026 = new Date(2026, 0, 14);
+const asOfFeb2026 = new Date(2026, 1, 14);
+const asOfOct2026 = new Date(2026, 9, 14);
+const janKeys = context.debtPayoffYtdCompletedMonthKeys_(asOfJan2026);
+const febKeys = context.debtPayoffYtdCompletedMonthKeys_(asOfFeb2026);
+const windowKeys = context.debtPayoffYtdCompletedMonthKeys_(asOfOct2026);
+assert.equal(janKeys.length, 0);
+assert.deepEqual(Array.from(febKeys), ['2026-01']);
+assert.equal(windowKeys[0], '2026-01');
+assert.equal(windowKeys[1], '2026-02');
+assert.equal(windowKeys[8], '2026-09');
+assert.equal(windowKeys.length, 9);
+assert.equal(windowKeys.indexOf('2026-10') === -1, true);
+assert.equal(windowKeys.indexOf('2025-12') === -1, true);
+
+function buildCashFlowYear(year, rows) {
+  const yy = String(year).slice(-2);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const headers = ['Type', 'Payee'].concat(months.map(function(name) {
+    return name + '-' + yy;
+  }));
+  const display = [headers];
+  const values = [headers.slice()];
+  (rows || []).forEach(function(row) {
+    const d = [row.type || 'Expense', row.payee];
+    const v = [row.type || 'Expense', row.payee];
+    for (let m = 1; m <= 12; m++) {
+      const key = year + '-' + (m < 10 ? '0' + m : String(m));
+      if (!Object.prototype.hasOwnProperty.call(row.amounts || {}, key) ||
+          row.amounts[key] === '' || row.amounts[key] == null) {
+        d.push('');
+        v.push('');
+        continue;
+      }
+      const amt = row.amounts[key];
+      d.push(amt === 0 ? '0.00' : String(amt));
+      v.push(amt);
+    }
+    display.push(d);
+    values.push(v);
+  });
+  return { display: display, values: values };
+}
+
+function sheetsYtd(payee, fillFn, extraRows, keys) {
+  const useKeys = keys || windowKeys;
+  const amounts = { '2026-10': -5000, '2026-12': -5000 };
+  useKeys.forEach(function(key) {
+    amounts[key] = fillFn(key);
+  });
+  return {
+    2026: buildCashFlowYear(2026, [{
+      payee: payee,
+      amounts: amounts
+    }].concat(extraRows || []))
+  };
+}
+
+function variableBill(payee, history, extra) {
+  return Object.assign({
+    payee: payee,
+    amount: 999,
+    amountKnown: true,
+    frequency: 'monthly',
+    active: true,
+    varies: 'Yes',
+    variableHistory: history
+  }, extra || {});
+}
+
+const monthlyFill = function() { return -50; };
+const monthlyHistory = context.estimateDebtPayoffVariableBillHistory_(
+  'Utilities', windowKeys, sheetsYtd('Utilities', monthlyFill), []);
+assert.equal(monthlyHistory.ok, true);
+assert.equal(monthlyHistory.ytdTotal, 450);
+assert.equal(monthlyHistory.completedMonthCount, 9);
+assert.equal(monthlyHistory.monthlyEquivalent, 50);
+assert.equal(monthlyHistory.label, 'YTD running average');
+assert.notEqual(monthlyHistory.ytdTotal, 50 * 11,
+  'the current incomplete month and later months must be excluded');
+
+const janHistory = context.estimateDebtPayoffVariableBillHistory_(
+  'Utilities', janKeys, sheetsYtd('Utilities', monthlyFill, [], janKeys), []);
+assert.equal(janHistory.ok, false);
+assert.equal(janHistory.code, 'VARIABLE_BILL_HISTORY_INCOMPLETE');
+assert.match(String(janHistory.reason), /no completed Cash Flow month yet this year/);
+
+const febHistory = context.estimateDebtPayoffVariableBillHistory_(
+  'Utilities', febKeys, sheetsYtd('Utilities', function() { return -80; }, [], febKeys), []);
+assert.equal(febHistory.ok, true);
+assert.equal(febHistory.ytdTotal, 80);
+assert.equal(febHistory.completedMonthCount, 1);
+assert.equal(febHistory.monthlyEquivalent, 80);
+assert.equal(febHistory.periodStart, '2026-01');
+assert.equal(febHistory.periodEnd, '2026-01');
+assert.notEqual(febHistory.ytdTotal, 80 + 5000);
+
+const seasonalFill = function(key) { return key === '2026-03' ? -1200 : 0; };
+const seasonalHistory = context.estimateDebtPayoffVariableBillHistory_(
+  'Insurance', windowKeys, sheetsYtd('Insurance', seasonalFill), []);
+assert.equal(seasonalHistory.ok, true);
+assert.equal(seasonalHistory.ytdTotal, 1200);
+assert.equal(seasonalHistory.completedMonthCount, 9);
+assert.equal(seasonalHistory.monthlyEquivalent, 133.33);
+assert.equal(seasonalHistory.explicitZeroMonthCount, 8);
+assert.equal(seasonalHistory.label, 'YTD running average');
+assert.notEqual(seasonalHistory.monthlyEquivalent, 100);
+
+const blankInWindow = context.estimateDebtPayoffVariableBillHistory_(
+  'Insurance', windowKeys, sheetsYtd('Insurance', function(key) {
+    return key === '2026-09' ? '' : -50;
+  }), []);
+assert.equal(blankInWindow.ok, false);
+assert.equal(blankInWindow.code, 'VARIABLE_BILL_HISTORY_INCOMPLETE');
+assert.match(String(blankInWindow.reason), /blank or missing Cash Flow amount in 2026-09/i);
+assert.match(String(blankInWindow.reason), /not treated as \$0 or omitted from the YTD denominator/);
+
+const allBlankHistory = context.estimateDebtPayoffVariableBillHistory_(
+  'Insurance', windowKeys, sheetsYtd('Insurance', function() { return ''; }), []);
+assert.equal(allBlankHistory.ok, false);
+assert.equal(allBlankHistory.code, 'VARIABLE_BILL_HISTORY_INCOMPLETE');
+
+const missingYearHistory = context.estimateDebtPayoffVariableBillHistory_(
+  'Insurance', windowKeys, {}, ['2026']);
+assert.equal(missingYearHistory.ok, false);
+assert.equal(missingYearHistory.code, 'VARIABLE_BILL_HISTORY_INCOMPLETE');
+assert.match(String(missingYearHistory.reason), /Cash Flow 2026 is missing/);
+
+const noMatchHistory = context.estimateDebtPayoffVariableBillHistory_(
+  'Insurance', windowKeys, sheetsYtd('Water', monthlyFill), []);
+assert.equal(noMatchHistory.ok, false);
+assert.equal(noMatchHistory.code, 'VARIABLE_BILL_MATCH_MISSING');
+
+const ambiguousSheets = sheetsYtd('PG&E', monthlyFill, [
+  { payee: 'PG&E', amounts: { '2026-01': -80 } }
+]);
+const ambiguousHistory = context.estimateDebtPayoffVariableBillHistory_(
+  'PG&E', windowKeys, ambiguousSheets, []);
+assert.equal(ambiguousHistory.ok, false);
+assert.equal(ambiguousHistory.code, 'VARIABLE_BILL_MATCH_AMBIGUOUS');
+
+const oneTimeSheets = sheetsYtd('Insurance', seasonalFill, [
+  { payee: 'Graduation Gift', amounts: { '2026-06': -400 } }
+]);
+const ignoresOneTime = context.estimateDebtPayoffVariableBillHistory_(
+  'Insurance', windowKeys, oneTimeSheets, []);
+assert.equal(ignoresOneTime.ytdTotal, 1200);
+assert.notEqual(ignoresOneTime.ytdTotal, 1600);
+
+const creditFill = function(key) { return key === '2026-06' ? 20 : -50; };
+const creditHistory = context.estimateDebtPayoffVariableBillHistory_(
+  'Utilities', windowKeys, sheetsYtd('Utilities', creditFill), []);
+assert.equal(creditHistory.ok, true);
+assert.equal(creditHistory.ytdTotal, 380);
+assert.notEqual(creditHistory.ytdTotal, 420,
+  'a documented Expense credit must be netted, not converted with an absolute value');
+
+const netCreditHistory = context.estimateDebtPayoffVariableBillHistory_(
+  'Utilities', windowKeys, sheetsYtd('Utilities', function() { return 20; }), []);
+assert.equal(netCreditHistory.ok, false);
+assert.equal(netCreditHistory.code, 'VARIABLE_BILL_SIGN_AMBIGUOUS');
+assert.match(String(netCreditHistory.reason), /not converted with an absolute value/);
+
+const variableSurplus = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  bills: [
+    baseSupported.bills[0],
+    variableBill('Insurance', seasonalHistory)
+  ]
+}));
+assert.equal(variableSurplus.available, true);
+assert.equal(variableSurplus.extraIsAffordable, null);
+assert.equal(variableSurplus.components.variableBillsMonthly, 133.33);
+assert.equal(variableSurplus.components.recurringBillsMonthly, 1000);
+assert.equal(variableSurplus.amount, 2366.67);
+assert.notEqual(variableSurplus.components.variableBillsMonthly, 999);
+assert.equal(variableSurplus.variableBillEstimates.length, 1);
+assert.equal(variableSurplus.variableBillEstimates[0].payee, 'Insurance');
+assert.equal(variableSurplus.variableBillEstimates[0].ytdTotal, 1200);
+assert.equal(variableSurplus.variableBillEstimates[0].completedMonthCount, 9);
+assert.equal(variableSurplus.variableBillEstimates[0].monthlyEquivalent, 133.33);
+assert.equal(variableSurplus.variableBillEstimates[0].label, 'YTD running average');
+assert.match(String(variableSurplus.assumptions.join(' ')), /YTD running average/);
+assert.match(String(variableSurplus.variableBillMethod), /annual or seasonal costs can make it swing/i);
+assert.match(String(variableSurplus.variableBillMethod), /January ÷ 1/);
+
+const withheldHistory = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  bills: [
+    baseSupported.bills[0],
+    variableBill('Insurance', blankInWindow)
+  ]
+}));
+assert.equal(withheldHistory.available, false);
+assert.equal(withheldHistory.amount, null);
+assert.equal(withheldHistory.extraIsAffordable, null);
+assert.equal(withheldHistory.blockers.some(function(row) {
+  return row.code === 'VARIABLE_BILL_HISTORY_INCOMPLETE' && /Insurance/.test(row.reason);
+}), true);
+
+const withheldAmbiguous = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  bills: [baseSupported.bills[0], variableBill('PG&E', ambiguousHistory)]
+}));
+assert.equal(withheldAmbiguous.available, false);
+assert.equal(withheldAmbiguous.blockers[0].code, 'VARIABLE_BILL_MATCH_AMBIGUOUS');
+
+const debtNamedVaries = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  bills: [
+    baseSupported.bills[0],
+    variableBill('Card', monthlyHistory)
+  ]
+}));
+assert.equal(debtNamedVaries.available, true);
+assert.equal(debtNamedVaries.components.variableBillsMonthly, 0);
+assert.equal(debtNamedVaries.components.debtMinimumsMonthly, 500);
+assert.equal(debtNamedVaries.amount, 2500);
+
+const floorNamedVaries = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  bills: [
+    baseSupported.bills[0],
+    variableBill('Samer Robinhood', monthlyHistory, {
+      isInvestmentContribution: true,
+      matchedInvestmentAccount: 'Samer Robinhood'
+    })
+  ],
+  policyFloors: [{ accountName: 'Samer Robinhood', weeklyAmount: 500 }]
+}));
+assert.equal(floorNamedVaries.available, true);
+assert.equal(floorNamedVaries.components.variableBillsMonthly, 0);
+assert.equal(floorNamedVaries.components.policyFloorMonthly, 2166.67);
+assert.notEqual(floorNamedVaries.components.variableBillsMonthly, 50);
+
+const negativeSpend = context.debtPayoffParseKnownCashFlowSpend_(-80, '($80.00)');
+assert.equal(negativeSpend.known, true);
+assert.equal(negativeSpend.signed, -80);
+assert.equal(negativeSpend.cost, 80);
+const creditSpend = context.debtPayoffParseKnownCashFlowSpend_(20, '$20.00');
+assert.equal(creditSpend.known, true);
+assert.equal(creditSpend.signed, 20);
+assert.equal(creditSpend.cost, -20);
+const explicitZeroSpend = context.debtPayoffParseKnownCashFlowSpend_(0, '0.00');
+assert.equal(explicitZeroSpend.known, true);
+assert.equal(explicitZeroSpend.cost, 0);
+const blankCell = context.debtPayoffParseKnownCashFlowSpend_('', '');
+assert.equal(blankCell.known, false);
 
 const missingCadenceHeaders = context.debtPayoffParseConfirmedCashFlowIncome_([
   ['Type', 'Payee', 'Active', 'Jan-26'],
@@ -794,9 +1362,9 @@ assert.doesNotMatch(sliceFunction(incomeSources, 'updateCiscoBonusForecastFields
 assert.match(incomeSources, /Cisco Mid Year Bonus and Cisco End Year Bonus are edited as their own annual income rows/);
 assert.match(help, /Cisco Mid Year Bonus and Cisco End Year Bonus/);
 assert.match(help, /not used for the 90-day cash reserve/);
-assert.match(client, /function renderDebtPayoffDatedBonusScenarioHtml_/);
-assert.match(client, /not cash available each month/);
-assert.match(client, /not used for the 90-day cash reserve/);
+assert.match(debtOverview, /not cash available each month/);
+assert.match(debtOverview, /not used for the 90-day cash reserve/);
+assert.doesNotMatch(client, /function renderDebtPayoffDatedBonusScenarioHtml_/);
 assert.doesNotMatch(sliceFunction(projection, 'compareDebtPayoffStrategies_'),
   /datedBonusScenario|February Bonus Amount|Expected Month/);
 assert.doesNotMatch(sliceFunction(projection, 'simulateDebtPayoffSchedule_'),
@@ -2124,5 +2692,331 @@ assert.doesNotMatch(
   }),
   /\$0(?:\.00)? saved|Same interest as baseline/
 );
+
+const bonusRowsWrap = { innerHTML: '' };
+const resultsWrap = { innerHTML: '' };
+const recommendationWrap = { innerHTML: '' };
+const uiContext = vm.createContext({
+  Date, Math, Number, String, Array, Object, JSON, isFinite,
+  DEBT_PAYOFF_SCENARIO_BONUS_NAMES_: ['Cisco Mid Year Bonus', 'Cisco End Year Bonus'],
+  escapeHtml: function(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  },
+  fmtCurrency: function(value) {
+    const num = Number(value);
+    if (!isFinite(num)) return '—';
+    const sign = num < 0 ? '-' : '';
+    return sign + '$' + Math.abs(num).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  },
+  document: {
+    getElementById: function(id) {
+      if (id === 'debt_payoff_scenario_bonus_rows') return bonusRowsWrap;
+      if (id === 'debt_payoff_strategy_results') return resultsWrap;
+      if (id === 'debt_payoff_recommendation') return recommendationWrap;
+      return null;
+    }
+  }
+});
+vm.runInContext(
+  sliceFunction(client, 'debtPayoffStrategyTitle_') +
+  '\n' + sliceFunction(client, 'formatDebtPayoffInterestVsBaseline_') +
+  '\n' + sliceFunction(client, 'formatDebtPayoffStrategyDate_') +
+  '\n' + sliceFunction(client, 'formatDebtPayoffStrategyOrder_') +
+  '\n' + sliceFunction(client, 'formatDebtPayoffPriority_') +
+  '\n' + sliceFunction(client, 'formatDebtPayoffRecommendedExtraAmount_') +
+  '\n' + sliceFunction(client, 'renderDebtPayoffMissingFactsHtml_') +
+  '\n' + sliceFunction(client, 'debtPayoffSupportedFromProtection_') +
+  '\n' + sliceFunction(client, 'renderDebtPayoffCalculationDetailsHtml_') +
+  '\n' + sliceFunction(client, 'renderDebtPayoffSupportedExtraBreakdownHtml_') +
+  '\n' + sliceFunction(client, 'renderDebtPayoffVariableBillMethodHtml_') +
+  '\n' + sliceFunction(client, 'debtPayoffVariableBillPeriodLabel_') +
+  '\n' + sliceFunction(client, 'renderDebtPayoffVariableBillEstimatesHtml_') +
+  '\n' + sliceFunction(client, 'renderDebtPayoffMonthlyRecommendation_') +
+  '\n' + sliceFunction(client, 'renderDebtPayoffScenarioBonusForm_') +
+  '\n' + sliceFunction(client, 'renderDebtPayoffStrategyCard_') +
+  '\n' + sliceFunction(client, 'renderDebtPayoffStrategyComparison_'),
+  uiContext
+);
+
+const supportedExtraUi = {
+  available: true,
+  amount: 250,
+  label: 'Estimate',
+  reserveProtects: false,
+  deficit: false,
+  source: 'Confirmed Cash Flow recurring income',
+  components: {
+    recurringIncomeMonthly: 4000,
+    recurringBillsMonthly: 1000,
+    variableBillsMonthly: 133.33,
+    debtMinimumsMonthly: 500,
+    policyFloorMonthly: 0,
+    unmatchedInvestmentBillsMonthly: 0
+  },
+  recurringSurplusBeforeReserve: 2366.67,
+  usableCashAfterBuffers: 5000,
+  requiredReserveAmount: 1000,
+  variableBillMethod: 'Variable bills marked Varies use a YTD running average.',
+  variableBillEstimates: [{
+    payee: 'PG&E',
+    periodStart: '2026-01',
+    periodEnd: '2026-09',
+    ytdTotal: 1200,
+    completedMonthCount: 9,
+    monthlyEquivalent: 133.33,
+    label: 'YTD running average'
+  }, {
+    payee: 'Water',
+    periodStart: '2026-01',
+    periodEnd: '2026-09',
+    ytdTotal: 360,
+    completedMonthCount: 9,
+    monthlyEquivalent: 40,
+    label: 'YTD running average'
+  }],
+  assumptions: ['Variable bills marked Varies use a YTD running average.']
+};
+
+uiContext.renderDebtPayoffMonthlyRecommendation_({
+  state: 'WITHHELD',
+  code: 'NO_SURPLUS',
+  reason: 'Recurring commitments leave no surplus after required bills.',
+  monthlyExtra: 0,
+  comparison: null,
+  protection: {
+    recurringIncomeMonthly: 1200,
+    recurringBillsMonthly: 1000,
+    debtMinimumsMonthly: 500,
+    surplusBeforeReserve: -300,
+    requiredReserveAmount: 1000,
+    usableCashAfterBuffers: 5000,
+    reserveProtects: false,
+    deficit: true
+  }
+}, { available: true, amount: 0, deficit: true, components: {
+  recurringIncomeMonthly: 1200,
+  recurringBillsMonthly: 1000,
+  debtMinimumsMonthly: 500
+}, recurringSurplusBeforeReserve: -300, requiredReserveAmount: 1000, usableCashAfterBuffers: 5000 });
+assert.match(recommendationWrap.innerHTML, /This month’s extra-payoff recommendation/);
+assert.match(recommendationWrap.innerHTML, /<strong>\$0\.00<\/strong>/);
+assert.match(recommendationWrap.innerHTML, /Do not pay extra this month/);
+assert.doesNotMatch(recommendationWrap.innerHTML, /Supported monthly extra/);
+assert.doesNotMatch(recommendationWrap.innerHTML, /debt-payoff-strategy-grid/);
+assert.match(recommendationWrap.innerHTML, /<summary>How this amount was calculated<\/summary>/);
+assert.match(recommendationWrap.innerHTML, /Income, commitments, and reserve protection/);
+assert.match(recommendationWrap.innerHTML, /Canonical reserve/);
+assert.match(recommendationWrap.innerHTML, /Missing data is not treated as \$0/);
+
+uiContext.renderDebtPayoffMonthlyRecommendation_({
+  state: 'WITHHELD',
+  code: 'FACTS_MISSING',
+  reason: 'A required variable bill lacks complete YTD history.',
+  monthlyExtra: null,
+  comparison: null
+}, {
+  available: false,
+  amount: null,
+  blockers: [{
+    code: 'VARIABLE_BILL_HISTORY_INCOMPLETE',
+    reason: 'PG&E is missing a completed-month Cash Flow amount.',
+    incompleteRows: [{
+      payee: 'Salary',
+      sheetRow: 12,
+      missing: ['Expected Amount']
+    }]
+  }]
+});
+assert.match(recommendationWrap.innerHTML, /<strong>—<\/strong>/);
+assert.doesNotMatch(recommendationWrap.innerHTML, /debt-payoff-recommendation-amount[\s\S]*\$0\.00/);
+assert.match(recommendationWrap.innerHTML, /A monthly extra cannot be recommended/);
+assert.match(recommendationWrap.innerHTML, /PG&amp;E is missing a completed-month Cash Flow amount/);
+assert.match(recommendationWrap.innerHTML, /Salary[\s\S]*Expected Amount/);
+assert.match(recommendationWrap.innerHTML, /How this amount was calculated/);
+assert.match(recommendationWrap.innerHTML, /Missing data is not treated as \$0/);
+assert.doesNotMatch(recommendationWrap.innerHTML, /Do not pay extra this month/);
+assert.doesNotMatch(recommendationWrap.innerHTML, /debt-payoff-strategy-grid/);
+
+uiContext.renderDebtPayoffMonthlyRecommendation_({
+  state: 'RECOMMENDED',
+  strategyKey: 'avalanche',
+  strategyTitle: 'Avalanche (highest APR first)',
+  why: 'Avalanche applies the estimated monthly extra to the highest-APR debt first.',
+  monthlyExtra: 250,
+  firstExtraDebt: 'High APR Card',
+  nextMilestone: { name: 'High APR Card', monthKey: '2027-08', monthIndex: 11 },
+  debtFreeMonthKey: '2027-08',
+  debtFreeWithinHorizon: true,
+  totalInterest: 500,
+  extraIsAffordable: null,
+  bonusesIncluded: false,
+  protection: {
+    recurringIncomeMonthly: 4000,
+    recurringBillsMonthly: 1000,
+    debtMinimumsMonthly: 500,
+    surplusBeforeReserve: 2500,
+    requiredReserveAmount: 1000,
+    usableCashAfterBuffers: 5000
+  },
+  comparison: {
+    recommendedStrategyKey: 'avalanche',
+    baselineLabel: 'Minimum payments only',
+    assumptions: ['Minimums stay at the current recorded amount.'],
+    scenarioBonuses: { included: false, events: [] },
+    strategies: {
+      minimum_only: {
+        strategy: 'minimum_only',
+        debtFreeWithinHorizon: true,
+        debtFreeMonthKey: '2028-03',
+        debtFreeMonthIndex: 18,
+        totalInterest: 900,
+        interestVsBaselineLabel: 'Same interest as baseline.',
+        monthlyExtra: 250,
+        payoffOrder: [{ name: 'High APR Card', monthKey: '2028-03', monthIndex: 18 }],
+        extraPriorityOrder: []
+      },
+      avalanche: {
+        strategy: 'avalanche',
+        debtFreeWithinHorizon: true,
+        debtFreeMonthKey: '2027-08',
+        debtFreeMonthIndex: 11,
+        totalInterest: 500,
+        interestVsBaselineLabel: '$400.00 less interest than baseline.',
+        monthlyExtra: 250,
+        payoffOrder: [{ name: 'High APR Card', monthKey: '2027-08', monthIndex: 11 }],
+        extraPriorityOrder: ['High APR Card']
+      },
+      snowball: {
+        strategy: 'snowball',
+        debtFreeWithinHorizon: true,
+        debtFreeMonthKey: '2027-09',
+        debtFreeMonthIndex: 12,
+        totalInterest: 980,
+        interestVsBaselineLabel: '$80.00 more interest than baseline.',
+        monthlyExtra: 250,
+        payoffOrder: [{ name: 'Low APR Card', monthKey: '2027-09', monthIndex: 12 }],
+        extraPriorityOrder: ['Low APR Card']
+      }
+    }
+  }
+}, supportedExtraUi);
+const recommendationHtml = recommendationWrap.innerHTML;
+assert.match(recommendationHtml, /This month’s extra-payoff recommendation/);
+assert.match(recommendationHtml, /<strong>\$250\.00<\/strong>/);
+assert.match(recommendationHtml, /Pay an extra \$250\.00 this month using Avalanche/);
+assert.doesNotMatch(recommendationHtml, /Supported monthly extra/);
+assert.doesNotMatch(recommendationHtml, /Use this amount in a what-if/);
+assert.doesNotMatch(recommendationHtml, /<button/);
+assert.match(recommendationHtml, /optional hypothetical scenario/);
+assert.match(recommendationHtml, /<details class="debt-payoff-details">[\s\S]*<summary>How this amount was calculated<\/summary>/);
+assert.match(recommendationHtml, /not a guarantee of affordability/);
+assert.match(recommendationHtml, /Missing data is not treated as \$0/);
+assert.match(recommendationHtml, /Income, commitments, and reserve protection/);
+assert.equal((recommendationHtml.match(/YTD running average for 2026-01 through 2026-09/g) || []).length, 1);
+assert.equal((recommendationHtml.match(/Annual or seasonal costs can make this average swing/g) || []).length, 1);
+assert.match(recommendationHtml, /<th scope="col">Bill<\/th>[\s\S]*<th scope="col">YTD total<\/th>[\s\S]*<th scope="col">Months<\/th>[\s\S]*<th scope="col">Monthly average<\/th>/);
+assert.match(recommendationHtml, /PG&amp;E[\s\S]*\$1,200\.00[\s\S]*9[\s\S]*\$133\.33/);
+assert.match(recommendationHtml, /debt-payoff-strategy-card--recommended/);
+assert.match(recommendationHtml, /High APR Card/);
+assert.doesNotMatch(recommendationHtml, /Annualized monthly equivalent/);
+assert.doesNotMatch(recommendationHtml, /Cisco annual bonuses/);
+assert.doesNotMatch(recommendationHtml, /Three identical \$0-extra/);
+
+uiContext.renderDebtPayoffScenarioBonusForm_({
+  payments: [
+    { name: 'Cisco Mid Year Bonus', known: true, amount: 12000, included: true },
+    { name: 'Cisco End Year Bonus', known: true, amount: 4500, included: true }
+  ],
+  reviewReasons: [],
+  annualizedMonthlyEquivalent: 1375,
+  countedInRecurringIncomeMonthly: false,
+  countedInReserve: false
+});
+const bonusHtml = bonusRowsWrap.innerHTML;
+assert.match(bonusHtml, /data-bonus-include/);
+assert.match(bonusHtml, /data-bonus-month/);
+assert.match(bonusHtml, /data-bonus-year/);
+assert.match(bonusHtml, /data-bonus-repeat value="once"/);
+assert.match(bonusHtml, /data-bonus-repeat value="annual"/);
+assert.match(bonusHtml, /\$12,000\.00[\s\S]*per year/);
+assert.doesNotMatch(bonusHtml, /Annualized monthly equivalent/);
+assert.doesNotMatch(bonusHtml, /not recurring monthly income|not cash available each month|90-day cash reserve/);
+
+uiContext.renderDebtPayoffStrategyComparison_({
+  householdComparisonComplete: true,
+  baselineLabel: 'Minimum payments only',
+  blockers: [],
+  assumptions: ['Minimums stay at the current recorded amount for the forecast.'],
+  scenarioBonuses: {
+    included: true,
+    events: [{
+      name: 'Cisco Mid Year Bonus',
+      monthKey: '2026-10',
+      amount: 12000,
+      repeat: 'once'
+    }]
+  },
+  strategies: {
+    minimum_only: {
+      strategy: 'minimum_only',
+      debtFreeWithinHorizon: true,
+      debtFreeMonthKey: '2028-03',
+      debtFreeMonthIndex: 18,
+      totalInterest: 900,
+      interestVsBaselineLabel: 'Same interest as baseline.',
+      monthlyExtra: 0,
+      payoffOrder: [{ name: 'Card', monthKey: '2028-03', monthIndex: 18 }],
+      extraPriorityOrder: []
+    },
+    avalanche: {
+      strategy: 'avalanche',
+      debtFreeWithinHorizon: true,
+      debtFreeMonthKey: '2027-08',
+      debtFreeMonthIndex: 11,
+      totalInterest: 500,
+      interestVsBaselineLabel: '$400.00 less interest than baseline.',
+      monthlyExtra: 250,
+      payoffOrder: [{ name: 'Card', monthKey: '2027-08', monthIndex: 11 }],
+      extraPriorityOrder: ['Card']
+    },
+    snowball: {
+      strategy: 'snowball',
+      debtFreeWithinHorizon: true,
+      debtFreeMonthKey: '2027-09',
+      debtFreeMonthIndex: 12,
+      totalInterest: 980,
+      interestVsBaselineLabel: '$80.00 more interest than baseline.',
+      monthlyExtra: 250,
+      payoffOrder: [{ name: 'Card', monthKey: '2027-09', monthIndex: 12 }],
+      extraPriorityOrder: ['Card']
+    }
+  }
+});
+const resultsHtml = resultsWrap.innerHTML;
+assert.match(resultsHtml, /<dt>Debt-free<\/dt>/);
+assert.match(resultsHtml, /<dt>Total interest<\/dt>/);
+assert.match(resultsHtml, /<dt>vs baseline<\/dt>/);
+assert.ok(
+  resultsHtml.indexOf('<dt>Debt-free</dt>') < resultsHtml.indexOf('Payoff order and allocation'),
+  'debt-free month, interest, and signed difference must sit above collapsed payoff details'
+);
+assert.match(resultsHtml, /<summary>Payoff order and allocation<\/summary>/);
+assert.match(resultsHtml, /<details class="debt-payoff-details debt-payoff-strategy-assumptions">[\s\S]*<summary>Calculation assumptions<\/summary>/);
+assert.match(resultsHtml, /Selected bonus events/);
+assert.doesNotMatch(resultsHtml, /Avalanche applies monthly extra and bonus payments highest APR first/);
+assert.doesNotMatch(resultsHtml, /Annualized monthly equivalent/);
+assert.doesNotMatch(resultsHtml, /aria-hidden="true"/);
+
+const styles = fs.readFileSync(new URL('../Dashboard_Styles.html', import.meta.url), 'utf8');
+assert.match(styles, /\.debt-payoff-recommendation-amount[\s\S]*font-size:\s*1\.35rem/);
+assert.match(styles, /\.debt-payoff-details\s*>\s*summary[\s\S]*cursor:\s*pointer/);
+assert.match(styles, /@media \(max-width: 900px\)[\s\S]*\.debt-payoff-strategy-grid[\s\S]*minmax\(0,\s*1fr\)/);
 
 console.log('checkDebtPayoffStrategyComparisonRegressions: ok');

@@ -2833,36 +2833,43 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div id="debt_payoff_read_table_wrap" class="activity-table-wrap"></div>
       <div id="debt_payoff_strategy_wrap" class="debt-payoff-strategy info">
         <div class="debt-payoff-overall-head">Household strategy comparison</div>
-        <p>
-          Hypothetical extra-payment scenario using current balances, APRs, and
-          recorded minimums. It is not a payment, is not saved, and does not
-          prove the extra amount is affordable.
+        <p class="debt-payoff-strategy-lede">
+          Debt Overview recommends this month’s extra payment and payoff
+          strategy from current saved facts. It is not a payment, is not saved,
+          and does not prove the extra amount is affordable.
         </p>
-        <p class="muted">
-          Avalanche and snowball use the same monthly extra you enter here.
-          That amount is not taken from This Week and is not assumed to recur
-          from future income. The forecast does not model a cash reserve,
-          future expenses, or changing rates.
-        </p>
-        <div id="debt_payoff_supported_extra" class="debt-payoff-supported-extra" aria-live="polite"></div>
-        <div id="debt_payoff_scenario_bonus_wrap" class="debt-payoff-scenario-bonus">
-          <div class="debt-payoff-overall-head">Optional Cisco bonus payments</div>
-          <p class="muted" style="margin:0 0 8px 0;">
-            Off unless you include a bonus. Hypothetical and unsaved. Not recurring monthly income, not the extra estimate, and not used for the 90-day reserve. Enter the next expected payment month and year; timing is not inferred from the bonus name or a historical payment month.
-          </p>
-          <div id="debt_payoff_scenario_bonus_rows"></div>
-        </div>
-        <div class="debt-payoff-strategy-controls">
-          <label for="debt_payoff_scenario_extra">Monthly extra (scenario only)</label>
-          <input id="debt_payoff_scenario_extra" type="text" inputmode="decimal"
-                 placeholder="0.00" aria-describedby="debt_payoff_scenario_extra_hint">
-          <button type="button" onclick="runDebtPayoffStrategyComparison()">Compare strategies</button>
-        </div>
-        <p id="debt_payoff_scenario_extra_hint" class="muted">
-          Leave blank for $0.00 extra. Negative or non-numeric amounts are rejected and not compared. Changing this value does not write to your accounts. An estimated recurring amount is shown above and is not used until you choose it. Selected bonuses use the same amounts and dates in every scenario. The baseline is minimums plus bonuses, highest APR first. Avalanche applies extra and bonuses highest APR first; snowball applies both smallest balance first. If a strategy costs more interest than the baseline, that additional interest is shown rather than $0 saved. A bonus month before the forecast start is rejected.
-        </p>
-        <div id="debt_payoff_strategy_status" class="status"></div>
-        <div id="debt_payoff_strategy_results" aria-live="polite"></div>
+        <div id="debt_payoff_recommendation" class="debt-payoff-recommendation" aria-live="polite"></div>
+        <details class="debt-payoff-details debt-payoff-what-if">
+          <summary>Optional hypothetical scenario</summary>
+          <div class="debt-payoff-details-body">
+            <p class="muted">
+              This is a separate hypothetical scenario. Type a different extra or
+              include a Cisco bonus to compare strategies without changing this
+              month’s recommendation. This is not a payment and is not saved.
+            </p>
+            <div id="debt_payoff_scenario_bonus_wrap" class="debt-payoff-scenario-bonus">
+              <div class="debt-payoff-overall-head">Optional Cisco bonus</div>
+              <p class="debt-payoff-bonus-caveat">
+                Hypothetical and unsaved. Not recurring monthly income, not cash available each month, not the extra estimate, and not used for the 90-day cash reserve. Off unless you include a bonus and enter the next expected payment month and year.
+              </p>
+              <div id="debt_payoff_scenario_bonus_rows"></div>
+            </div>
+            <div class="debt-payoff-strategy-controls">
+              <label for="debt_payoff_scenario_extra">Monthly extra (hypothetical only)</label>
+              <input id="debt_payoff_scenario_extra" type="text" inputmode="decimal"
+                     placeholder="0.00" aria-describedby="debt_payoff_scenario_extra_hint">
+              <button type="button" onclick="runDebtPayoffStrategyComparison()">Compare strategies</button>
+            </div>
+            <p id="debt_payoff_scenario_extra_hint" class="muted">
+              Leave blank for $0.00 extra. Negative or non-numeric amounts are rejected and not compared.
+              The extra is not taken from This Week. Missing data is not treated as $0.
+              This hypothetical forecast does not model a cash reserve. If a strategy costs more
+              interest than the baseline, that additional interest is shown rather than $0 saved.
+            </p>
+            <div id="debt_payoff_strategy_status" class="status"></div>
+            <div id="debt_payoff_strategy_results" aria-live="polite"></div>
+          </div>
+        </details>
       </div>
       <!--
         Decision-layer "Notes / recommendations" block intentionally removed.

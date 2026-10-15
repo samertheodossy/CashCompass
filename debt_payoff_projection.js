@@ -32,6 +32,8 @@ function getDebtPayoffReadData() {
     !ss.getSheetByName(sheetNames.DEBTS) ||
     !ss.getSheetByName(sheetNames.ACCOUNTS)
   ) {
+    const missingExtra = debtPayoffSupportedMonthlyExtraUnavailable_(
+      'INPUT - Debts or SYS - Accounts is missing.');
     return {
       projectionYears: projectionYears,
       debts: [],
@@ -49,8 +51,10 @@ function getDebtPayoffReadData() {
       recommendations: [],
       warnings: [],
       missingCashFlowSheets: [],
-      supportedMonthlyExtra: debtPayoffSupportedMonthlyExtraUnavailable_(
-        'INPUT - Debts or SYS - Accounts is missing.')
+      supportedMonthlyExtra: missingExtra,
+      monthlyRecommendation: buildDebtPayoffMonthlyRecommendation_([], missingExtra, {
+        asOfDate: today
+      })
     };
   }
 
@@ -146,6 +150,7 @@ function getDebtPayoffReadData() {
     longest: longest
   });
 
+  const supported = readDebtPayoffSupportedMonthlyExtra_(ss, debts, accounts);
   return {
     projectionYears: projectionYears,
     debts: debtsOut,
@@ -153,7 +158,10 @@ function getDebtPayoffReadData() {
     recommendations: recommendations,
     warnings: warnings,
     missingCashFlowSheets: missingCashFlowSheets,
-    supportedMonthlyExtra: readDebtPayoffSupportedMonthlyExtra_(ss, debts, accounts)
+    supportedMonthlyExtra: supported,
+    monthlyRecommendation: buildDebtPayoffMonthlyRecommendation_(debts, supported, {
+      asOfDate: today
+    })
   };
 }
 
@@ -383,6 +391,8 @@ function sumExpensePaymentsForDebtPayee_(ss, debtName, years, aliasMap, missingO
 /** Months of hypothetical extra-payoff forecast. Same cap as Overview amortization. */
 var DEBT_PAYOFF_SCENARIO_HORIZON_MONTHS_ = 600;
 var DEBT_PAYOFF_SCENARIO_ZERO_BAL_ = 0.005;
+var DEBT_PAYOFF_VARIABLE_BILL_METHOD_ =
+  'Variable bills marked Varies use a YTD running average of actual Cash Flow expenses from January through the latest completed month in the current calendar year. Monthly equivalent = YTD known spending ÷ number of completed months (January ÷ 1, January–February ÷ 2, and so on). The current incomplete month is excluded. Every month in that window must be a known number, including explicit $0. A blank or missing month withholds that bill’s estimate; it is not treated as $0 and is not omitted while still dividing by elapsed months. Default Amount is not used as a forecast. This is a YTD running average, not a full-year average; annual or seasonal costs can make it swing as payments occur.';
 
 /**
  * Read-only household strategy comparison from current INPUT - Debts.
@@ -1109,6 +1119,199 @@ function compareDebtPayoffStrategies_(normalizedDebts, monthlyExtra, options) {
   };
 }
 
+function debtPayoffRecommendationProtection_(supported) {
+  if (!supported) return null;
+  var c = supported.components || {};
+  return {
+    recurringIncomeMonthly: c.recurringIncomeMonthly,
+    recurringBillsMonthly: c.recurringBillsMonthly,
+    variableBillsMonthly: c.variableBillsMonthly,
+    debtMinimumsMonthly: c.debtMinimumsMonthly,
+    policyFloorMonthly: c.policyFloorMonthly,
+    unmatchedInvestmentBillsMonthly: c.unmatchedInvestmentBillsMonthly,
+    surplusBeforeReserve: supported.recurringSurplusBeforeReserve,
+    usableCashAfterBuffers: supported.usableCashAfterBuffers,
+    requiredReserveAmount: supported.requiredReserveAmount,
+    reserveProtects: supported.reserveProtects === true,
+    deficit: supported.deficit === true
+  };
+}
+
+function debtPayoffRecommendationWithhold_(code, reason, extras) {
+  extras = extras || {};
+  return {
+    state: 'WITHHELD',
+    code: code,
+    reason: String(reason || 'A monthly extra-payoff recommendation cannot be proven.'),
+    reasons: extras.reasons || [String(reason || 'A monthly extra-payoff recommendation cannot be proven.')],
+    monthlyExtra: extras.monthlyExtra != null ? extras.monthlyExtra : null,
+    extraIsAffordable: null,
+    persisted: false,
+    bonusesIncluded: false,
+    strategyKey: null,
+    why: '',
+    comparison: null,
+    firstExtraDebt: '',
+    nextMilestone: null,
+    debtFreeMonthKey: null,
+    debtFreeWithinHorizon: false,
+    totalInterest: null,
+    protection: extras.protection || null,
+    refreshesFromSavedFacts: true
+  };
+}
+
+function debtPayoffInterestTradeoffLabel_(pickedInterest, otherInterest, otherName) {
+  var delta = round2_(Number(otherInterest) - Number(pickedInterest));
+  if (!isFinite(delta) || Math.abs(delta) <= 0.005) {
+    return 'Modeled interest matches ' + otherName + '.';
+  }
+  if (delta > 0) {
+    return 'It models $' + delta.toFixed(2) + ' less interest than ' + otherName + '.';
+  }
+  return 'It models $' + Math.abs(delta).toFixed(2) + ' more interest than ' + otherName + '.';
+}
+
+function debtPayoffTimeTradeoffLabel_(picked, other, otherName) {
+  if (picked && picked.debtFreeWithinHorizon && other && other.debtFreeWithinHorizon) {
+    if (picked.debtFreeMonthIndex < other.debtFreeMonthIndex) {
+      return 'Estimated debt-free month is ' + picked.debtFreeMonthKey +
+        ', sooner than ' + otherName + ' (' + other.debtFreeMonthKey + ').';
+    }
+    if (picked.debtFreeMonthIndex > other.debtFreeMonthIndex) {
+      return 'Estimated debt-free month is ' + picked.debtFreeMonthKey +
+        ', later than ' + otherName + ' (' + other.debtFreeMonthKey + ').';
+    }
+    return 'Estimated debt-free month is ' + picked.debtFreeMonthKey +
+      ', the same as ' + otherName + '.';
+  }
+  if (picked && picked.debtFreeWithinHorizon) {
+    return 'Estimated debt-free month is ' + picked.debtFreeMonthKey +
+      '. ' + otherName + ' does not finish within the forecast horizon.';
+  }
+  return 'Not debt-free within the forecast horizon.';
+}
+
+function pickDebtPayoffRecommendedStrategy_(comparison) {
+  var avalanche = comparison.strategies.avalanche;
+  var snowball = comparison.strategies.snowball;
+  var avInt = Number(avalanche.totalInterest);
+  var snInt = Number(snowball.totalInterest);
+  var key = 'avalanche';
+  var picked = avalanche;
+  var other = snowball;
+  var otherName = 'snowball';
+  var snEarlier = snowball.debtFreeWithinHorizon && (
+    !avalanche.debtFreeWithinHorizon ||
+    snowball.debtFreeMonthIndex < avalanche.debtFreeMonthIndex);
+  var avEarlier = avalanche.debtFreeWithinHorizon && (
+    !snowball.debtFreeWithinHorizon ||
+    avalanche.debtFreeMonthIndex < snowball.debtFreeMonthIndex);
+  if (snInt + 0.005 < avInt) {
+    key = 'snowball';
+    picked = snowball;
+    other = avalanche;
+    otherName = 'avalanche';
+  } else if (Math.abs(avInt - snInt) <= 0.005 && snEarlier && !avEarlier) {
+    key = 'snowball';
+    picked = snowball;
+    other = avalanche;
+    otherName = 'avalanche';
+  }
+  var title = key === 'avalanche'
+    ? 'Avalanche (highest APR first)'
+    : 'Snowball (smallest balance first)';
+  var method = key === 'avalanche'
+    ? 'Avalanche applies the estimated monthly extra to the highest-APR debt first.'
+    : 'Snowball applies the estimated monthly extra to the smallest balance first.';
+  var why = method + ' ' +
+    formatDebtPayoffInterestVsBaseline_(picked) + ' ' +
+    debtPayoffInterestTradeoffLabel_(picked.totalInterest, other.totalInterest, otherName) + ' ' +
+    debtPayoffTimeTradeoffLabel_(picked, other, otherName);
+  return { key: key, title: title, why: why.trim() };
+}
+
+/**
+ * Monthly extra-payoff recommendation from current saved facts.
+ * Uses the supported extra estimate only. Never includes Cisco bonuses,
+ * never writes, and never treats the estimate as guaranteed affordable.
+ */
+function buildDebtPayoffMonthlyRecommendation_(normalizedDebts, supported, options) {
+  var protection = debtPayoffRecommendationProtection_(supported);
+  if (!supported || supported.available !== true) {
+    var blockers = (supported && supported.blockers) || [];
+    var reasons = blockers.map(function(row) {
+      return row && (row.reason || row.code);
+    }).filter(function(line) { return !!line; });
+    return debtPayoffRecommendationWithhold_(
+      'FACTS_MISSING',
+      reasons.length
+        ? reasons.join(' ')
+        : 'A supported monthly extra cannot be proven from current facts. Missing values were not replaced with $0.',
+      { reasons: reasons, protection: protection }
+    );
+  }
+  if (supported.reserveProtects) {
+    return debtPayoffRecommendationWithhold_(
+      'RESERVE_PROTECTS',
+      'Usable cash after buffers does not yet cover This Week’s canonical reserve, so no extra debt payment is recommended.',
+      { monthlyExtra: 0, protection: protection }
+    );
+  }
+  if (supported.deficit === true || !(Number(supported.amount) > 0.005)) {
+    return debtPayoffRecommendationWithhold_(
+      'NO_SURPLUS',
+      'Recurring commitments leave no surplus after required bills, known debt minimums, and standing investment floors, so no extra debt payment is recommended.',
+      { monthlyExtra: 0, protection: protection }
+    );
+  }
+  var comparison = compareDebtPayoffStrategies_(normalizedDebts, supported.amount, {
+    asOfDate: options && options.asOfDate,
+    bonusEvents: [],
+    bonusPlan: { included: false, events: [], assumptions: [] }
+  });
+  if (!comparison.householdComparisonComplete) {
+    var names = (comparison.blockers || []).map(function(row) {
+      return (row.name || 'A debt') + ' (' + (row.reason || 'missing inputs') + ')';
+    });
+    return debtPayoffRecommendationWithhold_(
+      'HOUSEHOLD_INCOMPLETE',
+      names.length
+        ? ('A household strategy cannot be recommended until these debts have a usable APR and minimum: ' +
+          names.join('; ') + '. Missing values were not replaced with $0 or 0%.')
+        : 'No debts currently have a usable balance, APR, and minimum together.',
+      {
+        monthlyExtra: supported.amount,
+        protection: protection,
+        reasons: names
+      }
+    );
+  }
+  var picked = pickDebtPayoffRecommendedStrategy_(comparison);
+  var strategyRow = comparison.strategies[picked.key];
+  return {
+    state: 'RECOMMENDED',
+    code: '',
+    reason: '',
+    reasons: [],
+    monthlyExtra: supported.amount,
+    extraIsAffordable: null,
+    persisted: false,
+    bonusesIncluded: false,
+    strategyKey: picked.key,
+    strategyTitle: picked.title,
+    why: picked.why,
+    comparison: comparison,
+    firstExtraDebt: (strategyRow.extraPriorityOrder && strategyRow.extraPriorityOrder[0]) || '',
+    nextMilestone: (strategyRow.payoffOrder && strategyRow.payoffOrder[0]) || null,
+    debtFreeMonthKey: strategyRow.debtFreeMonthKey,
+    debtFreeWithinHorizon: strategyRow.debtFreeWithinHorizon === true,
+    totalInterest: strategyRow.totalInterest,
+    protection: protection,
+    refreshesFromSavedFacts: true
+  };
+}
+
 function debtPayoffSupportedMonthlyExtraUnavailable_(reason) {
   return {
     available: false,
@@ -1124,6 +1327,8 @@ function debtPayoffSupportedMonthlyExtraUnavailable_(reason) {
       reason: String(reason || 'Supported monthly extra cannot be proven.')
     }],
     components: {},
+    variableBillEstimates: [],
+    variableBillMethod: DEBT_PAYOFF_VARIABLE_BILL_METHOD_,
     assumptions: [
       'A supported monthly extra is an estimate from recurring recorded facts, not This Week’s weekly extra and not a saved payment.'
     ],
@@ -1396,6 +1601,273 @@ function debtPayoffScenarioPayeeKey_(name) {
   return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+function debtPayoffBillIsVaries_(bill) {
+  return String(bill && bill.varies || '').trim().toLowerCase() === 'yes';
+}
+
+function debtPayoffPadMonthKey_(year, month) {
+  var mm = Number(month);
+  return String(year) + '-' + (mm < 10 ? '0' + mm : String(mm));
+}
+
+function debtPayoffYtdCompletedMonthKeys_(asOfDate) {
+  var asOf = asOfDate instanceof Date && !isNaN(asOfDate.getTime()) ? asOfDate : new Date();
+  var completed = asOf.getMonth();
+  var keys = [];
+  for (var m = 1; m <= completed; m++) {
+    keys.push(debtPayoffPadMonthKey_(asOf.getFullYear(), m));
+  }
+  return keys;
+}
+
+function debtPayoffLatestCompleteMonthKeys_(asOfDate) {
+  return debtPayoffYtdCompletedMonthKeys_(asOfDate);
+}
+
+function debtPayoffMonthKeyFromHeader_(header) {
+  if (typeof parseMonthHeader_ !== 'function') return '';
+  var parsed = parseMonthHeader_(header);
+  if (!(parsed instanceof Date) || isNaN(parsed.getTime())) return '';
+  return debtPayoffPadMonthKey_(parsed.getFullYear(), parsed.getMonth() + 1);
+}
+
+function debtPayoffFindCashFlowMonthColumn_(headerRow, monthKey) {
+  headerRow = headerRow || [];
+  for (var c = 0; c < headerRow.length; c++) {
+    if (debtPayoffMonthKeyFromHeader_(headerRow[c]) === monthKey) return c;
+  }
+  return -1;
+}
+
+function debtPayoffParseKnownCashFlowSpend_(raw, display) {
+  var signed = null;
+  if (typeof raw === 'number' && isFinite(raw)) {
+    signed = raw;
+  } else {
+    var text = String(display == null ? '' : display).replace(/\u00A0/g, ' ').trim();
+    if (!text) text = String(raw == null ? '' : raw).replace(/\u00A0/g, ' ').trim();
+    if (!text) return { known: false, signed: null, cost: null };
+    var sign = 1;
+    if (/^\(.*\)$/.test(text)) {
+      sign = -1;
+      text = text.slice(1, -1);
+    }
+    var normalized = text.replace(/[$,]/g, '').replace(/[—–]/g, '-').trim();
+    if (!normalized || normalized === '-') return { known: false, signed: null, cost: null };
+    var n = Number(normalized);
+    if (!isFinite(n)) return { known: false, signed: null, cost: null };
+    signed = n * sign;
+  }
+  signed = round2_(signed);
+  return {
+    known: true,
+    signed: signed,
+    cost: round2_(-signed)
+  };
+}
+
+function debtPayoffMatchCashFlowExpenseRow_(display, payee) {
+  var name = String(payee || '').trim() || 'A variable bill';
+  display = display || [];
+  if (!display.length) {
+    return {
+      ok: false,
+      code: 'VARIABLE_BILL_MATCH_MISSING',
+      reason: name + ' has no Cash Flow Expense row to match.'
+    };
+  }
+  var headers = (display[0] || []).map(function(value) {
+    return String(value || '').trim().toLowerCase();
+  });
+  var typeCol = headers.indexOf('type');
+  var payeeCol = headers.indexOf('payee');
+  if (typeCol === -1 || payeeCol === -1) {
+    return {
+      ok: false,
+      code: 'VARIABLE_BILL_HISTORY_INCOMPLETE',
+      reason: name + ' cannot be estimated because Cash Flow Type and Payee headers are missing.'
+    };
+  }
+  var want = debtPayoffScenarioPayeeKey_(name);
+  var matches = [];
+  for (var r = 1; r < display.length; r++) {
+    if (String(display[r][typeCol] || '').trim().toLowerCase() !== 'expense') continue;
+    var rowPayee = String(display[r][payeeCol] || '').trim();
+    if (!rowPayee) continue;
+    if (debtPayoffScenarioPayeeKey_(rowPayee) === want) matches.push(r);
+  }
+  if (!matches.length) {
+    return {
+      ok: false,
+      code: 'VARIABLE_BILL_MATCH_MISSING',
+      reason: name + ' has no unambiguous Cash Flow Expense match for the YTD completed months.'
+    };
+  }
+  if (matches.length > 1) {
+    return {
+      ok: false,
+      code: 'VARIABLE_BILL_MATCH_AMBIGUOUS',
+      reason: name + ' matches ' + matches.length +
+        ' Cash Flow Expense rows, so spending was not assigned.'
+    };
+  }
+  return { ok: true, row: matches[0] };
+}
+
+function estimateDebtPayoffVariableBillHistory_(payee, monthKeys, sheetsByYear, missingYears) {
+  missingYears = missingYears || [];
+  monthKeys = monthKeys || [];
+  var name = String(payee || '').trim() || 'A variable bill';
+  if (!monthKeys.length) {
+    return {
+      ok: false,
+      code: 'VARIABLE_BILL_HISTORY_INCOMPLETE',
+      reason: name + ' has no completed Cash Flow month yet this year, so a YTD running average was not used.'
+    };
+  }
+  var periodStart = monthKeys[0];
+  var periodEnd = monthKeys[monthKeys.length - 1];
+  var completedMonthCount = monthKeys.length;
+  if (missingYears.length) {
+    return {
+      ok: false,
+      code: 'VARIABLE_BILL_HISTORY_INCOMPLETE',
+      reason: name + ' cannot be estimated because Cash Flow ' +
+        missingYears.join(', ') + ' is missing for ' + periodStart +
+        ' through ' + periodEnd + '.'
+    };
+  }
+  var ytdTotal = 0;
+  var explicitZeroMonthCount = 0;
+  var creditMonthCount = 0;
+  var rowByYear = {};
+  for (var i = 0; i < monthKeys.length; i++) {
+    var key = monthKeys[i];
+    var year = Number(String(key).slice(0, 4));
+    var sheet = sheetsByYear && sheetsByYear[year];
+    if (!sheet || !sheet.display || !sheet.display.length) {
+      return {
+        ok: false,
+        code: 'VARIABLE_BILL_HISTORY_INCOMPLETE',
+        reason: name + ' cannot be estimated because Cash Flow ' + year +
+          ' is missing for ' + periodStart + ' through ' + periodEnd + '.'
+      };
+    }
+    if (!Object.prototype.hasOwnProperty.call(rowByYear, year)) {
+      var match = debtPayoffMatchCashFlowExpenseRow_(sheet.display, name);
+      if (!match.ok) return match;
+      rowByYear[year] = match.row;
+    }
+    var col = debtPayoffFindCashFlowMonthColumn_(sheet.display[0], key);
+    if (col < 0) {
+      return {
+        ok: false,
+        code: 'VARIABLE_BILL_HISTORY_INCOMPLETE',
+        reason: name + ' is missing Cash Flow month ' + key +
+          ' on INPUT - Cash Flow ' + year + '.'
+      };
+    }
+    var values = sheet.values || sheet.display;
+    var cell = debtPayoffParseKnownCashFlowSpend_(
+      values[rowByYear[year]] && values[rowByYear[year]][col],
+      sheet.display[rowByYear[year]] && sheet.display[rowByYear[year]][col]
+    );
+    if (!cell.known) {
+      return {
+        ok: false,
+        code: 'VARIABLE_BILL_HISTORY_INCOMPLETE',
+        reason: name + ' has a blank or missing Cash Flow amount in ' + key +
+          '. Blank months are unknown and were not treated as $0 or omitted from the YTD denominator. Default Amount was not used as a forecast.'
+      };
+    }
+    var cost = Number(cell.cost);
+    if (!isFinite(cost)) {
+      return {
+        ok: false,
+        code: 'VARIABLE_BILL_SIGN_AMBIGUOUS',
+        reason: name + ' has a Cash Flow amount in ' + key +
+          ' whose sign cannot be used. Expense actuals are stored negative; that cell was not converted with an absolute value.'
+      };
+    }
+    if (Number(cell.signed) > DEBT_PAYOFF_SCENARIO_ZERO_BAL_) creditMonthCount++;
+    if (cost <= DEBT_PAYOFF_SCENARIO_ZERO_BAL_ && cost >= -DEBT_PAYOFF_SCENARIO_ZERO_BAL_) {
+      explicitZeroMonthCount++;
+    }
+    ytdTotal = round2_(ytdTotal + cost);
+  }
+  if (ytdTotal < -DEBT_PAYOFF_SCENARIO_ZERO_BAL_) {
+    return {
+      ok: false,
+      code: 'VARIABLE_BILL_SIGN_AMBIGUOUS',
+      reason: name + ' nets to a YTD credit after documented Expense signs. That amount was not treated as spending and was not converted with an absolute value.'
+    };
+  }
+  return {
+    ok: true,
+    periodStart: periodStart,
+    periodEnd: periodEnd,
+    ytdTotal: round2_(ytdTotal),
+    completedMonthCount: completedMonthCount,
+    monthlyEquivalent: round2_(ytdTotal / completedMonthCount),
+    knownMonthCount: completedMonthCount,
+    blankMonthCount: 0,
+    explicitZeroMonthCount: explicitZeroMonthCount,
+    creditMonthCount: creditMonthCount,
+    label: 'YTD running average'
+  };
+}
+
+function debtPayoffTryCashFlowSheet_(ss, year) {
+  if (typeof tryGetCashFlowSheet_ === 'function') {
+    return tryGetCashFlowSheet_(ss, year);
+  }
+  try {
+    if (typeof getCashFlowSheet_ === 'function') return getCashFlowSheet_(ss, year);
+  } catch (e) { /* read-only: missing year withholds the estimate */ }
+  try {
+    var prefix = (typeof getSheetNames_ === 'function' && getSheetNames_().CASH_FLOW_PREFIX) ||
+      'INPUT - Cash Flow ';
+    return ss.getSheetByName(prefix + String(year));
+  } catch (e2) {
+    return null;
+  }
+}
+
+/**
+ * Read-only. Never self-heal schema or write Cash Flow / Bills cells here.
+ */
+function attachDebtPayoffVariableBillHistory_(ss, bills, asOfDate) {
+  var needed = false;
+  (bills || []).forEach(function(bill) {
+    if (bill && bill.active !== false && debtPayoffBillIsVaries_(bill)) needed = true;
+  });
+  if (!needed) return bills;
+  var monthKeys = debtPayoffYtdCompletedMonthKeys_(asOfDate);
+  var yearSeen = {};
+  var missingYears = [];
+  var sheetsByYear = {};
+  monthKeys.forEach(function(key) {
+    yearSeen[Number(String(key).slice(0, 4))] = true;
+  });
+  Object.keys(yearSeen).forEach(function(year) {
+    var sheet = debtPayoffTryCashFlowSheet_(ss, year);
+    if (!sheet) {
+      missingYears.push(year);
+      return;
+    }
+    sheetsByYear[year] = {
+      display: sheet.getDataRange().getDisplayValues(),
+      values: sheet.getDataRange().getValues()
+    };
+  });
+  (bills || []).forEach(function(bill) {
+    if (!bill || bill.active === false || !debtPayoffBillIsVaries_(bill)) return;
+    bill.variableHistory = estimateDebtPayoffVariableBillHistory_(
+      bill.payee || bill.name, monthKeys, sheetsByYear, missingYears);
+  });
+  return bills;
+}
+
 /**
  * Pure recurring-surplus estimate. Does not use This Week’s weekly extra,
  * current-month Cash Flow net, or Rolling Debt Payoff caps.
@@ -1404,7 +1876,7 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
   input = input || {};
   var blockers = [];
   var source =
-    'Confirmed Cash Flow recurring income, INPUT - Bills scheduled amounts, INPUT - Debts known minimums, SYS - Accounts usable cash after buffers, standing investment policy floors, and This Week’s canonical reserve (including upcoming expenses and property contingency).';
+    'Confirmed Cash Flow recurring income, INPUT - Bills scheduled amounts for fixed bills, Cash Flow YTD running averages for variable bills, INPUT - Debts known minimums, SYS - Accounts usable cash after buffers, standing investment policy floors, and This Week’s canonical reserve (including upcoming expenses and property contingency).';
   var assumptions = [
     'This amount is an estimate of recurring monthly surplus after required bills, known debt minimums, and standing investment policy floors.',
     'It is not This Week’s weekly extra, is not four times any weekly figure, and is not treated as affordable until you choose to use it.',
@@ -1484,6 +1956,8 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
   });
 
   var billsMonthly = 0;
+  var variableBillsMonthly = 0;
+  var variableBillEstimates = [];
   var unmatchedInvestmentBillsMonthly = 0;
   var policyFloorNames = {};
   (input.policyFloors || []).forEach(function(floor) {
@@ -1494,11 +1968,39 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
     if (!bill || bill.active === false) return;
     var payeeKey = debtPayoffScenarioPayeeKey_(bill.payee || bill.name);
     if (bill.debtOwned || debtKeys[payeeKey]) return;
-    if (String(bill.varies || '').toLowerCase() === 'yes') {
-      blockers.push({
-        code: 'VARIABLE_BILL',
-        reason: (bill.payee || bill.name || 'A bill') +
-          ' varies and is not a reliable recurring monthly amount.'
+    var matchedFloor = bill.isInvestmentContribution && (
+      (bill.matchedInvestmentAccount &&
+        policyFloorNames[debtPayoffScenarioPayeeKey_(bill.matchedInvestmentAccount)]) ||
+      policyFloorNames[payeeKey]
+    );
+    if (matchedFloor) return;
+    if (debtPayoffBillIsVaries_(bill)) {
+      if (assumptions.indexOf(DEBT_PAYOFF_VARIABLE_BILL_METHOD_) === -1) {
+        assumptions.push(DEBT_PAYOFF_VARIABLE_BILL_METHOD_);
+      }
+      var hist = bill.variableHistory;
+      if (!hist || hist.ok !== true) {
+        blockers.push({
+          code: (hist && hist.code) || 'VARIABLE_BILL_HISTORY_INCOMPLETE',
+          reason: (hist && hist.reason) || (
+            (bill.payee || bill.name || 'A bill') +
+            ' varies and does not have complete YTD Cash Flow expense history for every completed month this year.'
+          )
+        });
+        return;
+      }
+      variableBillsMonthly = round2_(variableBillsMonthly + Number(hist.monthlyEquivalent || 0));
+      variableBillEstimates.push({
+        payee: bill.payee || bill.name,
+        periodStart: hist.periodStart,
+        periodEnd: hist.periodEnd,
+        ytdTotal: hist.ytdTotal,
+        completedMonthCount: hist.completedMonthCount,
+        monthlyEquivalent: hist.monthlyEquivalent,
+        knownMonthCount: hist.knownMonthCount,
+        blankMonthCount: hist.blankMonthCount,
+        explicitZeroMonthCount: hist.explicitZeroMonthCount,
+        label: hist.label || 'YTD running average'
       });
       return;
     }
@@ -1520,9 +2022,6 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
       return;
     }
     if (bill.isInvestmentContribution) {
-      var matchedFloor = bill.matchedInvestmentAccount &&
-        policyFloorNames[debtPayoffScenarioPayeeKey_(bill.matchedInvestmentAccount)];
-      if (matchedFloor || policyFloorNames[payeeKey]) return;
       unmatchedInvestmentBillsMonthly = round2_(unmatchedInvestmentBillsMonthly + monthly);
       return;
     }
@@ -1543,11 +2042,13 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
     recurringIncomeMonthly: income,
     debtMinimumsMonthly: debtMinimums,
     recurringBillsMonthly: billsMonthly,
+    variableBillsMonthly: variableBillsMonthly,
     policyFloorMonthly: policyFloorMonthly,
     unmatchedInvestmentBillsMonthly: unmatchedInvestmentBillsMonthly
   };
   var commitments = round2_(
-    debtMinimums + billsMonthly + policyFloorMonthly + unmatchedInvestmentBillsMonthly);
+    debtMinimums + billsMonthly + variableBillsMonthly +
+    policyFloorMonthly + unmatchedInvestmentBillsMonthly);
   var surplus = round2_(income - commitments);
   var requiredReserve = input.reserveKnown === false
     ? null
@@ -1578,6 +2079,8 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
       source: source,
       blockers: blockers,
       components: components,
+      variableBillEstimates: [],
+      variableBillMethod: DEBT_PAYOFF_VARIABLE_BILL_METHOD_,
       requiredReserveAmount: requiredReserve,
       usableCashAfterBuffers: isFinite(usable) ? round2_(usable) : null,
       assumptions: assumptions,
@@ -1600,12 +2103,15 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
     source: source,
     blockers: [],
     components: components,
+    variableBillEstimates: variableBillEstimates,
+    variableBillMethod: DEBT_PAYOFF_VARIABLE_BILL_METHOD_,
     requiredReserveAmount: requiredReserve,
     usableCashAfterBuffers: round2_(usable),
     recurringSurplusBeforeReserve: surplus,
     assumptions: assumptions.concat([
       'Recurring income $' + income.toFixed(2) +
         ' − bills $' + billsMonthly.toFixed(2) +
+        ' − variable bills $' + variableBillsMonthly.toFixed(2) +
         ' − debt minimums $' + debtMinimums.toFixed(2) +
         ' − policy floors $' + policyFloorMonthly.toFixed(2) +
         ' − other investment bills $' + unmatchedInvestmentBillsMonthly.toFixed(2) +
@@ -1677,6 +2183,9 @@ function readDebtPayoffSupportedMonthlyExtra_(ss, debts, accounts) {
   }
 
   var billsResult = readDebtPayoffSupportedMonthlyExtraBills_(ss, policyFloors);
+  if (!billsResult.unavailable) {
+    attachDebtPayoffVariableBillHistory_(ss, billsResult.rows, new Date());
+  }
   return buildDebtPayoffSupportedMonthlyExtra_({
     recurringIncomeSources: incomeRead.sources,
     incomeUnavailable: incomeRead.unavailable,
