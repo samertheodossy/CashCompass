@@ -710,6 +710,17 @@ function activityQuickAddSimulateChainAtRow_(targetType, chain, beforeSheetRow) 
   return state;
 }
 
+function activityQuickAddHasLaterActiveOperation_(chain, selectedSheetRow) {
+  var selectedRow = Number(selectedSheetRow || 0);
+  var i;
+  for (i = 0; i < (chain || []).length; i++) {
+    var operation = chain[i] && chain[i].operation;
+    if (!operation || operation.corrected) continue;
+    if (Number(operation.sheetRow || 0) > selectedRow) return true;
+  }
+  return false;
+}
+
 function buildDirectQuickAddCorrectionPlanInSpreadsheet_(ss, operationId) {
   var requested = String(operationId || '').trim();
   var events = findActivityOperationEvents_(ss, requested);
@@ -785,36 +796,48 @@ function buildDirectQuickAddCorrectionPlanInSpreadsheet_(ss, operationId) {
         entry: entry, message: 'The Quick Add history could not be verified.' };
     }
 
+    var hasLaterActive = activityQuickAddHasLaterActiveOperation_(
+      chain,
+      selected.sheetRow
+    );
     for (var chainIndex = 0; chainIndex < chain.length; chainIndex++) {
       var chainItem = chain[chainIndex];
-      var historicalState = activityQuickAddSimulateChainAtRow_(
-        targetType,
-        chain,
-        chainItem.operation.sheetRow
-      );
-      if (!activityQuickAddStatesMatchForChain_(
-        targetType,
-        historicalState,
-        chainItem.target.before
-      )) {
-        return { ok: false, status: 'CHAIN_CHANGED', correctable: false,
-          entry: entry,
-          message: 'The recorded Quick Add sequence has an unexplained value change.' };
+      // Middle corrections still require the recorded Quick Add sequence to
+      // compose. The newest active entry can be corrected from its own
+      // recorded before/after even when an outside write — such as Manage
+      // Debts SET-balance — sits between earlier Quick Adds.
+      if (hasLaterActive) {
+        var historicalState = activityQuickAddSimulateChainAtRow_(
+          targetType,
+          chain,
+          chainItem.operation.sheetRow
+        );
+        if (!activityQuickAddStatesMatchForChain_(
+          targetType,
+          historicalState,
+          chainItem.target.before
+        )) {
+          return { ok: false, status: 'CHAIN_CHANGED', correctable: false,
+            entry: entry,
+            message: 'The recorded Quick Add sequence has an unexplained value change.' };
+        }
       }
-      historicalState = activityQuickAddApplyEffect_(
-        targetType,
-        chainItem.target.before,
-        chainItem.operation,
-        chainItem.target
-      );
-      if (!activityQuickAddStatesMatchForChain_(
-        targetType,
-        historicalState,
-        chainItem.target.after
-      )) {
-        return { ok: false, status: 'CHAIN_INVALID', correctable: false,
-          entry: entry,
-          message: 'The recorded Quick Add sequence is incomplete and remains read-only.' };
+      if (hasLaterActive || chainItem.operation.operationId === requested) {
+        var reconstructedState = activityQuickAddApplyEffect_(
+          targetType,
+          chainItem.target.before,
+          chainItem.operation,
+          chainItem.target
+        );
+        if (!activityQuickAddStatesMatchForChain_(
+          targetType,
+          reconstructedState,
+          chainItem.target.after
+        )) {
+          return { ok: false, status: 'CHAIN_INVALID', correctable: false,
+            entry: entry,
+            message: 'The recorded Quick Add sequence is incomplete and remains read-only.' };
+        }
       }
       if (!chainItem.operation.corrected &&
           chainItem.operation.sheetRow > selected.sheetRow) {
@@ -822,8 +845,15 @@ function buildDirectQuickAddCorrectionPlanInSpreadsheet_(ss, operationId) {
       }
     }
 
-    var expected = activityQuickAddSimulateChain_(targetType, chain, '');
-    var desired = activityQuickAddSimulateChain_(targetType, chain, requested);
+    var expected;
+    var desired;
+    if (hasLaterActive) {
+      expected = activityQuickAddSimulateChain_(targetType, chain, '');
+      desired = activityQuickAddSimulateChain_(targetType, chain, requested);
+    } else {
+      expected = activityQuickAddRelevantState_(targetType, selectedTarget.after);
+      desired = activityQuickAddRelevantState_(targetType, selectedTarget.before);
+    }
     var inspection = inspectActivityOperationTargetInSpreadsheet_(ss, selectedTarget);
     if (!inspection || inspection.supported !== true) {
       return { ok: false, status: 'UNSUPPORTED_TARGET', correctable: false,

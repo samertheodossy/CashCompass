@@ -180,6 +180,7 @@ function getHarnessDirectQuickAddCorrectionScenario_() {
       runMinimalBootstrap_(ctx.ss);
       var cashFlow = buildCashFlowYearSheet_(ctx.ss, year);
       insertCashFlowRow_(cashFlow, 'Expense', 'Harness Visa', 'CREDIT_CARD');
+      insertCashFlowRow_(cashFlow, 'Expense', 'Harness Gap Card', 'CREDIT_CARD');
       insertCashFlowRow_(cashFlow, 'Expense', 'Harness Correction Chain', 'CASH');
 
       ensureOnboardingDebtsSheetFromDashboard('normal', ctx.ss);
@@ -196,6 +197,19 @@ function getHarnessDirectQuickAddCorrectionScenario_() {
         'Credit Left': 1500,
         'Int Rate': 20,
         'Acct PCT Avail': 75,
+        'Active': 'Yes'
+      });
+      totalRow = findDebtTotalRow_(debtSheet, debtMap);
+      harnessInsertBeforeByHeader_(debtSheet, totalRow, {
+        'Account Name': 'Harness Gap Card',
+        'Type': 'Credit Card',
+        'Account Balance': 0,
+        'Due Date': 15,
+        'Credit Limit': 2000,
+        'Minimum Payment': 25,
+        'Credit Left': 2000,
+        'Int Rate': 20,
+        'Acct PCT Avail': 100,
         'Active': 'Yes'
       });
       refreshDebtsTotalRow_(debtSheet, debtMap, findDebtTotalRow_(debtSheet, debtMap));
@@ -466,6 +480,78 @@ function getHarnessDirectQuickAddCorrectionScenario_() {
         state.cashFlow.getRange(cardRow.row, chainCol).getValue()
       );
 
+      // Newest credit-card Quick Add stays correctable after an outside
+      // Manage Debts SET-balance that Quick Add replay cannot explain.
+      ctx.assertWritable();
+      state.gapFirst = quickAddPayment({
+        entryType: 'Expense',
+        payee: 'Harness Gap Card',
+        entryDate: state.date,
+        amount: 520.41,
+        createIfMissing: false,
+        flowSource: 'CREDIT_CARD',
+        activityOrigin: 'direct_quick_add'
+      }, ctx.ss);
+      var gapDebtMap = getDebtsHeaderMap_(state.debtSheet);
+      var gapDebtRows = state.debtSheet.getDataRange().getDisplayValues();
+      var gapDebtRow = 0;
+      for (var gapIndex = 1; gapIndex < gapDebtRows.length; gapIndex++) {
+        if (String(gapDebtRows[gapIndex][gapDebtMap.nameColZero] || '').trim() === 'Harness Gap Card') {
+          gapDebtRow = gapIndex + 1;
+          break;
+        }
+      }
+      ctx.assertWritable();
+      state.debtSheet.getRange(gapDebtRow, gapDebtMap.balanceCol).setValue(520.41);
+      refreshDebtsTotalRow_(state.debtSheet, gapDebtMap, findDebtTotalRow_(state.debtSheet, gapDebtMap));
+      ctx.assertWritable();
+      state.gapLatest = quickAddPayment({
+        entryType: 'Expense',
+        payee: 'Harness Gap Card',
+        entryDate: state.date,
+        amount: 212.82,
+        createIfMissing: false,
+        flowSource: 'CREDIT_CARD',
+        activityOrigin: 'direct_quick_add'
+      }, ctx.ss);
+      state.gapLatestPreview = previewDirectQuickAddCorrectionInSpreadsheet_(
+        ctx.ss,
+        state.gapLatest.activitySnapshot.operationId
+      );
+      state.gapMiddlePreview = previewDirectQuickAddCorrectionInSpreadsheet_(
+        ctx.ss,
+        state.gapFirst.activitySnapshot.operationId
+      );
+      ctx.assertWritable();
+      state.gapLatestCorrection = correctDirectQuickAddOperationInSpreadsheet_(
+        ctx.ss,
+        state.gapLatest.activitySnapshot.operationId,
+        'Wrong amount',
+        '',
+        'change_amount',
+        212.93
+      );
+      var gapRow = findCashFlowRowByTypeAndPayee_(
+        state.cashFlow,
+        'Expense',
+        'Harness Gap Card'
+      );
+      state.gapCashAfterCorrection = Number(
+        state.cashFlow.getRange(gapRow.row, chainCol).getValue()
+      );
+      var gapDebtAfterRows = state.debtSheet.getDataRange().getDisplayValues();
+      state.gapDebtAfterCorrection = null;
+      for (var gapAfterIndex = 1; gapAfterIndex < gapDebtAfterRows.length; gapAfterIndex++) {
+        if (String(gapDebtAfterRows[gapAfterIndex][gapDebtMap.nameColZero] || '').trim() === 'Harness Gap Card') {
+          state.gapDebtAfterCorrection = Number(
+            state.debtSheet.getRange(
+              gapAfterIndex + 1,
+              gapDebtMap.balanceCol
+            ).getValue()
+          );
+        }
+      }
+
       // Amount edits remain one logical entry: edit a middle entry, edit the
       // replacement again, then remove that replacement while later entries
       // stay intact.
@@ -627,6 +713,16 @@ function getHarnessDirectQuickAddCorrectionScenario_() {
       }
       ctx.assert.equals('Credit-card balance preserves matching $100, $30, and $50 effects',
         debtBalanceAfterChain, 320, { module: mod });
+      ctx.assert.equals('Newest card entry stays correctable after an outside balance SET',
+        state.gapLatestPreview.status, 'READY', { module: mod });
+      ctx.assert.equals('Earlier card entry stays blocked while a later Quick Add remains',
+        state.gapMiddlePreview.status, 'CHAIN_CHANGED', { module: mod });
+      ctx.assert.equals('Newest card amount can change after the outside balance SET',
+        state.gapLatestCorrection.status, 'CORRECTED', { module: mod });
+      ctx.assert.equals('Gap-card Cash Flow keeps the first payment plus the corrected amount',
+        state.gapCashAfterCorrection, -733.34, { module: mod });
+      ctx.assert.equals('Gap-card balance keeps the SET starting point minus the corrected amount',
+        state.gapDebtAfterCorrection, 307.48, { module: mod });
       ctx.assert.equals('Identical amount is rejected as a no-op',
         state.editNoChange.status, 'NO_CHANGE', { module: mod });
       ctx.assert.equals('Middle amount edit creates a new actionable operation',
@@ -644,7 +740,7 @@ function getHarnessDirectQuickAddCorrectionScenario_() {
       for (var i = 1; i < rows.length; i++) {
         if (rows[i][1] === 'quick_pay_correction') correctionCount++;
       }
-      ctx.assert.equals('Immutable correction events appended', correctionCount, 9, {
+      ctx.assert.equals('Immutable correction events appended', correctionCount, 10, {
         module: mod,
         location: ACTIVITY_LOG_SHEET_NAME
       });

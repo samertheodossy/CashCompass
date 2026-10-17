@@ -1134,8 +1134,20 @@ assert.match(files['activity_log.js'],
   /activityOrigin\s*!==\s*QUICK_ADD_ACTIVITY_ORIGIN_DIRECT_/,
   'Server correction preview must reject linked, unclassified, and legacy Quick Add operations');
 assert.match(files['activity_log.js'],
-  /function buildDirectQuickAddCorrectionPlanInSpreadsheet_[\s\S]*?activityQuickAddSimulateChain_\(targetType,\s*chain,\s*requested\)/,
+  /function buildDirectQuickAddCorrectionPlanInSpreadsheet_[\s\S]*?activityQuickAddHasLaterActiveOperation_[\s\S]*?activityQuickAddSimulateChain_\(targetType,\s*chain,\s*requested\)/,
   'Direct Quick Add correction must replay the verified operation chain while excluding only the selected entry');
+assert.match(files['activity_log.js'],
+  /function buildDirectQuickAddCorrectionPlanInSpreadsheet_[\s\S]*?selectedTarget\.after[\s\S]*?selectedTarget\.before/,
+  'The newest active Quick Add must restore from its own recorded before/after when no later Quick Add remains');
+assert.match(files['activity_log.js'],
+  /hasLaterActive[\s\S]*?CHAIN_CHANGED/,
+  'Earlier Quick Add corrections must still fail closed when a later recorded sequence does not compose');
+assert.match(files['Dashboard_Help.html'],
+  /newest matching Quick Add can still be corrected[\s\S]*?Manage Debts balance update/,
+  'Help must say the newest Quick Add remains correctable after an earlier Manage Debts balance update');
+assert.match(files['test_harness_scenarios_quick_add.js'],
+  /Harness Gap Card[\s\S]*?520\.41[\s\S]*?212\.82[\s\S]*?212\.93/,
+  'Disposable Quick Add correction must prove a newest credit-card amount change after an outside balance SET');
 assert.match(files['activity_log.js'],
   /writeActivityOperationTargetStateInSpreadsheet_\(\s*ss,\s*writes\[i\]\.target,\s*writes\[i\]\.desired\s*\)/,
   'Correction writer must apply the verified chain result instead of blindly restoring one historical before-state');
@@ -1262,6 +1274,84 @@ assert.equal(
   ).value,
   330,
   'Credit-card correction must preserve later verified balance reductions'
+);
+const gapDebtChain = [
+  {
+    operation: {
+      operationId: 'gap-first',
+      sheetRow: 10,
+      corrected: false,
+      entry: { entryType: 'Expense', amount: 520.41 }
+    },
+    target: { before: { exists: true, value: 0 }, after: { exists: true, value: 0 } }
+  },
+  {
+    operation: {
+      operationId: 'gap-latest',
+      sheetRow: 12,
+      corrected: false,
+      entry: { entryType: 'Expense', amount: 212.82 }
+    },
+    target: { before: { exists: true, value: 520.41 }, after: { exists: true, value: 307.59 } }
+  }
+];
+assert.equal(
+  activityServerContext.activityQuickAddHasLaterActiveOperation_(gapDebtChain, 12),
+  false,
+  'The newest credit-card Quick Add has no later active Quick Add on that balance'
+);
+assert.equal(
+  activityServerContext.activityQuickAddHasLaterActiveOperation_(gapDebtChain, 10),
+  true,
+  'An earlier credit-card Quick Add still has a later active Quick Add'
+);
+assert.equal(
+  activityServerContext.activityQuickAddSimulateChain_(
+    'debt_balance',
+    gapDebtChain,
+    ''
+  ).value,
+  0,
+  'Full Quick Add replay cannot explain a Manage Debts SET between card payments'
+);
+assert.equal(
+  activityServerContext.activityQuickAddRelevantState_(
+    'debt_balance',
+    gapDebtChain[1].target.after
+  ).value,
+  activityServerContext.round2_(307.59),
+  'Newest-entry correction must expect the recorded post-state of that payment'
+);
+assert.equal(
+  activityServerContext.activityQuickAddRelevantState_(
+    'debt_balance',
+    gapDebtChain[1].target.before
+  ).value,
+  activityServerContext.round2_(520.41),
+  'Newest-entry correction must restore the recorded starting balance of that payment'
+);
+assert.equal(
+  activityServerContext.activityQuickAddApplyEffect_(
+    'debt_balance',
+    gapDebtChain[1].target.before,
+    { entry: { entryType: 'Expense', amount: 212.93 } },
+    gapDebtChain[1].target
+  ).value,
+  activityServerContext.round2_(307.48),
+  'Changing the newest Costco-style amount must subtract from the recorded SET balance'
+);
+assert.equal(
+  activityServerContext.activityQuickAddStatesMatchForChain_(
+    'debt_balance',
+    activityServerContext.activityQuickAddSimulateChainAtRow_(
+      'debt_balance',
+      gapDebtChain,
+      12
+    ),
+    gapDebtChain[1].target.before
+  ),
+  false,
+  'Replay of earlier Quick Adds must not match the newest payment before-state after an outside SET'
 );
 
 const quickAddWriterSource = files['quick_add_payment.js'].slice(
