@@ -2105,7 +2105,7 @@
   .debt-payoff-recommendation-blockers {
     margin: 0 0 8px 0;
     padding-left: 1.15rem;
-    color: #9a3412;
+    color: #92400e;
   }
   .debt-payoff-recommendation-blockers li {
     margin-bottom: 0.3rem;
@@ -2114,8 +2114,99 @@
   .debt-payoff-recommendation-metrics {
     margin-bottom: 10px;
   }
+  .debt-payoff-cash-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(12rem, 1fr));
+    gap: 12px;
+    margin: 12px 0 14px;
+  }
+  .debt-payoff-cash-summary-item {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 8px;
+    min-width: 0;
+    min-height: 4.75rem;
+    padding: 12px 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #ffffff;
+  }
+  .debt-payoff-summary-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.35;
+    color: #334155;
+  }
+  .debt-payoff-summary-value {
+    display: block;
+    margin-top: 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.25;
+    color: #0f172a;
+  }
+  .debt-payoff-tone-label {
+    display: inline;
+    margin-left: 4px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .debt-payoff-cash-summary-item .debt-payoff-tone-label {
+    display: block;
+    margin-left: 0;
+    margin-top: 2px;
+  }
+  .debt-payoff-tone-deficit {
+    background: #fef2f2;
+    border-color: #fecaca;
+  }
+  .debt-payoff-tone-deficit .debt-payoff-tone-label,
+  .debt-payoff-tone-deficit.debt-payoff-tone-label {
+    color: #9a3412;
+  }
+  .debt-payoff-tone-unknown {
+    background: #fffbeb;
+    border-color: #fcd34d;
+    color: #92400e;
+  }
+  .debt-payoff-tone-unknown .debt-payoff-tone-label {
+    color: #92400e;
+  }
+  .debt-payoff-tone-available {
+    background: #f0fdf4;
+    border-color: #86efac;
+  }
+  .debt-payoff-tone-available .debt-payoff-tone-label {
+    color: #166534;
+  }
+  .debt-payoff-upcoming-discrepancy {
+    margin: 8px 0 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #0f172a;
+  }
+  @media (max-width: 900px) {
+    .debt-payoff-cash-summary {
+      grid-template-columns: 1fr;
+    }
+  }
+  .debt-payoff-position {
+    margin-top: 12px;
+  }
   .debt-payoff-what-if {
     margin-top: 12px;
+  }
+  .debt-payoff-next-dollar-alt {
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .debt-payoff-next-dollar-alt:last-of-type {
+    border-bottom: 0;
+    margin-bottom: 0;
+    padding-bottom: 0;
   }
   .debt-payoff-strategy-metrics {
     display: grid;
@@ -2188,6 +2279,15 @@
   .debt-payoff-details-body {
     padding: 0 12px 12px;
     overflow-x: auto;
+  }
+  .debt-payoff-nested-details {
+    margin-top: 8px;
+    border-color: #e2e8f0;
+    background: #f8fafc;
+  }
+  .debt-payoff-nested-details > summary {
+    font-size: 13px;
+    font-weight: 600;
   }
   .debt-payoff-card-details {
     margin-top: 4px;

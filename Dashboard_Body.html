@@ -2809,30 +2809,8 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         <button type="button" onclick="loadDebtPayoffReadSection()">Refresh</button>
       </div>
       <div id="debt_payoff_read_status" class="status"></div>
-      <div id="debt_payoff_read_summary" class="info" style="margin-bottom:14px;"></div>
-      <div id="debt_payoff_read_meta" class="muted" style="margin-bottom:10px;"></div>
-      <div class="debt-payoff-toolbar" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
-        <label for="debt_payoff_sort" style="margin:0;font-weight:600;">Sort by</label>
-        <select id="debt_payoff_sort" onchange="onDebtPayoffSortChange()" style="min-width:220px;padding:6px 8px;border-radius:8px;border:1px solid #cbd5e1;">
-          <option value="payoffAsc" selected>Est. payoff — fewest months first</option>
-          <option value="payoffDesc">Est. payoff — most months first</option>
-          <option value="type">Type (A–Z), then account</option>
-          <option value="balanceDesc">Balance — high to low</option>
-          <option value="balanceAsc">Balance — low to high</option>
-          <option value="minDesc">Min payment — high to low</option>
-          <option value="minAsc">Min payment — low to high</option>
-        </select>
-        <label for="debt_payoff_chart_metric" style="margin:0 0 0 8px;font-weight:600;">Chart</label>
-        <select id="debt_payoff_chart_metric" onchange="onDebtPayoffChartMetricChange()" style="min-width:200px;padding:6px 8px;border-radius:8px;border:1px solid #cbd5e1;">
-          <option value="payoff" selected>Est. payoff (months)</option>
-          <option value="balance">Balance</option>
-        </select>
-      </div>
-      <div id="debt_payoff_read_filter_note" class="muted" style="margin-bottom:8px;"></div>
-      <div id="debt_payoff_read_chart_wrap" class="debt-payoff-chart-panel" aria-live="polite"></div>
-      <div id="debt_payoff_read_table_wrap" class="activity-table-wrap"></div>
       <div id="debt_payoff_strategy_wrap" class="debt-payoff-strategy info">
-        <div class="debt-payoff-overall-head">Household strategy comparison</div>
+        <div class="debt-payoff-overall-head">This month’s extra-payoff recommendation</div>
         <p class="debt-payoff-strategy-lede">
           Debt Overview recommends this month’s extra payment and payoff
           strategy from current saved facts. It is not a payment, is not saved,
@@ -2871,6 +2849,33 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           </div>
         </details>
       </div>
+      <details class="debt-payoff-details debt-payoff-position">
+        <summary>Debt position and payoff estimates</summary>
+        <div class="debt-payoff-details-body">
+          <div id="debt_payoff_read_summary" class="info" style="margin-bottom:14px;"></div>
+          <div id="debt_payoff_read_meta" class="muted" style="margin-bottom:10px;"></div>
+          <div class="debt-payoff-toolbar" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+            <label for="debt_payoff_sort" style="margin:0;font-weight:600;">Sort by</label>
+            <select id="debt_payoff_sort" onchange="onDebtPayoffSortChange()" style="min-width:220px;padding:6px 8px;border-radius:8px;border:1px solid #cbd5e1;">
+              <option value="payoffAsc" selected>Est. payoff — fewest months first</option>
+              <option value="payoffDesc">Est. payoff — most months first</option>
+              <option value="type">Type (A–Z), then account</option>
+              <option value="balanceDesc">Balance — high to low</option>
+              <option value="balanceAsc">Balance — low to high</option>
+              <option value="minDesc">Min payment — high to low</option>
+              <option value="minAsc">Min payment — low to high</option>
+            </select>
+            <label for="debt_payoff_chart_metric" style="margin:0 0 0 8px;font-weight:600;">Chart</label>
+            <select id="debt_payoff_chart_metric" onchange="onDebtPayoffChartMetricChange()" style="min-width:200px;padding:6px 8px;border-radius:8px;border:1px solid #cbd5e1;">
+              <option value="payoff" selected>Est. payoff (months)</option>
+              <option value="balance">Balance</option>
+            </select>
+          </div>
+          <div id="debt_payoff_read_filter_note" class="muted" style="margin-bottom:8px;"></div>
+          <div id="debt_payoff_read_chart_wrap" class="debt-payoff-chart-panel" aria-live="polite"></div>
+          <div id="debt_payoff_read_table_wrap" class="activity-table-wrap"></div>
+        </div>
+      </details>
       <!--
         Decision-layer "Notes / recommendations" block intentionally removed.
         Cash snapshot, safe-to-use vs minimums, projected cash flow, highest-APR
