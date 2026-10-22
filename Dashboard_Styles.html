@@ -2192,6 +2192,39 @@
       grid-template-columns: 1fr;
     }
   }
+  .debt-payoff-one-time {
+    margin: 14px 0;
+    padding: 12px 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+  .debt-payoff-one-time-compare {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(12rem, 1fr));
+    gap: 12px;
+    margin: 12px 0 4px;
+  }
+  .debt-payoff-one-time-compare-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    padding: 12px 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #ffffff;
+  }
+  .debt-payoff-one-time-outcome {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  @media (max-width: 900px) {
+    .debt-payoff-one-time-compare {
+      grid-template-columns: 1fr;
+    }
+  }
   .debt-payoff-position {
     margin-top: 12px;
   }

@@ -399,8 +399,9 @@ var DEBT_PAYOFF_CASH_SAFETY_HORIZON_MONTHS_ = 3;
 var DEBT_PAYOFF_CASH_SAFETY_LOCATION_ = 'Cash Flow → Upcoming';
 var DEBT_PAYOFF_CASH_SAFETY_HORIZON_LABEL_ =
   '3-month cash-safety forecast (aligned with This Week’s 90-day reserve)';
-var DEBT_PAYOFF_ONE_TIME_NOT_EVALUATED_ =
-  'One-time use of cash above the reserve is not evaluated here.';
+var DEBT_PAYOFF_ONE_TIME_HORIZON_MONTHS_ = 12;
+var DEBT_PAYOFF_ONE_TIME_HORIZON_LABEL_ =
+  '12-month cash-safety forecast from current recurring surplus and known Planned upcoming expenses';
 
 /**
  * Read-only household strategy comparison from current INPUT - Debts.
@@ -927,6 +928,9 @@ function simulateDebtPayoffSchedule_(normalizedDebts, monthlyTotalToExtra, strat
   const extra = strategy === 'minimum_only'
     ? 0
     : Math.max(0, round2_(monthlyTotalToExtra));
+  const oneTimeExtra = strategy === 'minimum_only'
+    ? 0
+    : Math.max(0, round2_(Number(options.oneTimeExtra) || 0));
   const asOfDate = options.asOfDate;
   const bonusEvents = options.bonusEvents || [];
   const bonusByMonth = {};
@@ -940,7 +944,8 @@ function simulateDebtPayoffSchedule_(normalizedDebts, monthlyTotalToExtra, strat
   const working = copyDebtPayoffScenarioWorkingDebts_(normalizedDebts);
   const allocStrategy = debtPayoffScenarioAllocStrategy_(strategy);
   const extraTargetNames = options.extraTargetNames;
-  const extraPriorityOrder = (strategy === 'minimum_only' && !bonusEvents.length)
+  const extraPriorityOrder = (strategy === 'minimum_only' && !bonusEvents.length &&
+      !(oneTimeExtra > DEBT_PAYOFF_SCENARIO_ZERO_BAL_))
     ? []
     : debtPayoffScenarioSortTargets_(
         working.filter(function(row) {
@@ -996,6 +1001,10 @@ function simulateDebtPayoffSchedule_(normalizedDebts, monthlyTotalToExtra, strat
         firstTarget: bonusApplied[0].name,
         allocations: bonusApplied
       });
+    }
+    if (m === 1 && oneTimeExtra > DEBT_PAYOFF_SCENARIO_ZERO_BAL_) {
+      applyDebtPayoffScenarioLeftover_(
+        remaining, oneTimeExtra, allocStrategy, extraTargetNames);
     }
     if (extra > DEBT_PAYOFF_SCENARIO_ZERO_BAL_) {
       applyDebtPayoffScenarioLeftover_(
@@ -1173,7 +1182,17 @@ function debtPayoffRecommendationProtection_(supported) {
     protectedReserveFloor: safety && safety.protectedReserveFloor,
     cashSafetyReconciliation: safety && safety.reconciliation || null,
     cashSafetyInWindowUpcoming: safety && safety.inWindowUpcoming || null,
-    oneTimeAllocationEvaluated: safety ? safety.oneTimeAllocationEvaluated === true : false
+    oneTimeAllocationEvaluated: safety ? safety.oneTimeAllocationEvaluated === true : false,
+    oneTimeAmount: safety && safety.oneTimeAmount != null ? safety.oneTimeAmount : null,
+    oneTimeTightMonthKey: safety && safety.oneTimeTightMonthKey || '',
+    oneTimeHorizonMonths: safety && safety.oneTimeHorizonMonths,
+    oneTimeBaselineSafe: safety ? safety.oneTimeBaselineSafe === true : false,
+    oneTimeBaselineBreachMonthKey: safety && safety.oneTimeBaselineBreachMonthKey || '',
+    oneTimeBaselineBreachObligation: safety && safety.oneTimeBaselineBreachObligation || '',
+    oneTimeLimitedToThreeMonths: safety ? safety.oneTimeLimitedToThreeMonths === true : false,
+    oneTimeThreeMonthAmount: safety && safety.oneTimeThreeMonthAmount != null
+      ? safety.oneTimeThreeMonthAmount
+      : null
   };
 }
 
@@ -1329,6 +1348,7 @@ function readDebtPayoffSavedPlanningAssumptions_(ss) {
   var result = {
     cashYieldKnown: false,
     cashYieldStatus: 'CASH_YIELD_DATA_REQUIRED',
+    cashYieldPct: null,
     cashYieldLocation: 'Cash accounts do not yet store an authoritative APY for this comparison.',
     expectedInvestmentReturnKnown: false,
     expectedInvestmentReturnPct: null,
@@ -1394,8 +1414,7 @@ function debtPayoffNextDollarModeledOutcome_(minOnly, targeted, label) {
   var outcome = 'Modeled interest is ' +
     formatDebtPayoffInterestVsBaseline_({
       interestSavedVsMinimumOnly: interestSaved
-    }) +
-    ' versus paying minimums only.';
+    });
   if (targeted && targeted.debtFreeWithinHorizon) {
     outcome += ' Estimated debt-free month is ' + targeted.debtFreeMonthKey + '.';
   } else {
@@ -1705,7 +1724,7 @@ function buildDebtPayoffNextDollarComparison_(normalizedDebts, supported, rec, o
     cashAlt.why = rec.reason ||
       'No recurring extra remains after required bills, known debt minimums, and standing floors.';
     cashAlt.liquidity = '';
-    cashAlt.outcome = DEBT_PAYOFF_ONE_TIME_NOT_EVALUATED_;
+    cashAlt.outcome = '';
   }
   var alternatives = noRecurringExtra
     ? []
@@ -1760,7 +1779,7 @@ function buildDebtPayoffNextDollarComparison_(normalizedDebts, supported, rec, o
     firstTarget: action.firstTarget || '',
     persisted: false,
     extraIsAffordable: null,
-    oneTimeAllocationEvaluated: false,
+    oneTimeAllocationEvaluated: !!(safety && safety.oneTimeAllocationEvaluated === true),
     remainingAboveReserve: remainingAboveReserve,
     reconciliation: safety && safety.reconciliation || null,
     alternatives: alternatives,
@@ -1774,10 +1793,392 @@ function buildDebtPayoffNextDollarComparison_(normalizedDebts, supported, rec, o
   };
 }
 
+function debtPayoffOneTimeWithheld_(code, reason, extras) {
+  extras = extras || {};
+  return {
+    state: 'WITHHELD',
+    code: code || 'FACTS_MISSING',
+    evaluated: false,
+    persisted: false,
+    extraIsAffordable: null,
+    amount: extras.amount != null ? extras.amount : null,
+    actionKey: 'NONE',
+    actionTitle: 'A one-time extra cannot be evaluated',
+    why: String(reason ||
+      'One-time extra cannot be evaluated until required facts are saved. Unknown values are not treated as $0.'),
+    horizonMonths: DEBT_PAYOFF_CASH_SAFETY_HORIZON_MONTHS_,
+    horizonLabel: DEBT_PAYOFF_CASH_SAFETY_HORIZON_LABEL_,
+    payoffHorizonMonths: DEBT_PAYOFF_SCENARIO_HORIZON_MONTHS_,
+    tightMonthKey: '',
+    cashYieldKnown: extras.cashYieldKnown === true,
+    cashYieldStatus: extras.cashYieldStatus || 'CASH_YIELD_DATA_REQUIRED',
+    ranked: false,
+    keepCash: null,
+    payHighApr: null,
+    missingAssumptions: extras.missingAssumptions || [],
+    assumptions: extras.assumptions || [
+      'Unknown upcoming dates or amounts are not treated as $0.',
+      'This one-time check is separate from the monthly extra recommendation and the optional hypothetical scenario.'
+    ]
+  };
+}
+
+function buildDebtPayoffOneTimeAllocation_(normalizedDebts, supported, rec, options) {
+  options = options || {};
+  rec = rec || {};
+  var saved = options.savedAssumptions || {};
+  var safety = (supported && supported.cashSafety) || rec.cashSafety || null;
+  var cashYieldStatus = saved.cashYieldStatus || 'CASH_YIELD_DATA_REQUIRED';
+  var cashYieldKnown = saved.cashYieldKnown === true &&
+    saved.cashYieldPct != null && isFinite(Number(saved.cashYieldPct));
+  var assumptions = [
+    'This one-time amount is separate from the monthly extra recommendation and the optional hypothetical scenario. It is not added on top of a recurring extra. Optional Cisco bonuses are not assumed.',
+    'The one-time check projects 12 months from current recurring surplus and known Planned upcoming expenses. It does not invent future income. Recurring bills and debt minimums stay in the surplus and are not subtracted again.',
+    'Each month-end must stay at or above the protected reserve floor from This Week’s canonical 90-day reserve. Upcoming already included in that reserve is removed from the floor so those expenses are counted once.',
+    'If even $0 extra would fall below the reserve in a later month, no lump is labeled safe. A lump that only holds for three months is not used when the 12-month baseline later breaches.',
+    'Modeled interest uses current balances, APRs, and minimums over the payoff forecast. Cash APY is used only when an authoritative saved yield exists.'
+  ];
+  if (!supported || supported.available !== true) {
+    var blockers = (supported && supported.blockers) || [];
+    return debtPayoffOneTimeWithheld_(
+      'FACTS_MISSING',
+      blockers.length
+        ? ('One-time extra cannot be evaluated: ' + blockers.map(function(row) {
+          return row && (row.reason || row.code);
+        }).filter(function(line) { return !!line; }).join(' '))
+        : 'One-time extra cannot be evaluated until required facts are saved. Unknown values are not treated as $0.',
+      {
+        missingAssumptions: blockers,
+        cashYieldStatus: cashYieldStatus,
+        assumptions: assumptions
+      }
+    );
+  }
+  if (supported.reserveProtects) {
+    return {
+      state: 'EVALUATED',
+      code: 'RESERVE_PROTECTS',
+      evaluated: true,
+      persisted: false,
+      extraIsAffordable: null,
+      amount: 0,
+      actionKey: 'NONE',
+      actionTitle: 'No one-time extra',
+      why: 'Usable cash after buffers does not yet cover This Week’s canonical reserve, so no one-time extra debt payment is evaluated.',
+      horizonMonths: DEBT_PAYOFF_CASH_SAFETY_HORIZON_MONTHS_,
+      horizonLabel: DEBT_PAYOFF_CASH_SAFETY_HORIZON_LABEL_,
+      payoffHorizonMonths: DEBT_PAYOFF_SCENARIO_HORIZON_MONTHS_,
+      tightMonthKey: (safety && safety.oneTimeTightMonthKey) || '',
+      cashYieldKnown: cashYieldKnown,
+      cashYieldStatus: cashYieldStatus,
+      ranked: false,
+      keepCash: null,
+      payHighApr: null,
+      missingAssumptions: cashYieldKnown ? [] : [{
+        code: cashYieldStatus,
+        reason: saved.cashYieldLocation ||
+          'Cash accounts do not yet store an authoritative APY for this comparison.'
+      }],
+      assumptions: assumptions
+    };
+  }
+  if (!safety || safety.oneTimeAllocationEvaluated !== true) {
+    return debtPayoffOneTimeWithheld_(
+      'CASH_SAFETY_FACTS_MISSING',
+      (safety && safety.oneTimeReason) ||
+        'Usable cash, recurring surplus, or the canonical reserve could not be proven for the one-time cash-safety check. Missing values were not replaced with $0.',
+      { cashYieldStatus: cashYieldStatus, assumptions: assumptions }
+    );
+  }
+  if (safety.oneTimeLimitedToThreeMonths === true) {
+    return {
+      state: 'EVALUATED',
+      code: 'HORIZON_LIMITED',
+      evaluated: true,
+      persisted: false,
+      extraIsAffordable: null,
+      amount: 0,
+      actionKey: 'NONE',
+      actionTitle: 'No one-time extra is labeled safe',
+      why: safety.oneTimeReason ||
+        'The one-time check is limited to three months and no lump is labeled safe beyond that horizon.',
+      horizonMonths: DEBT_PAYOFF_ONE_TIME_HORIZON_MONTHS_,
+      horizonLabel: DEBT_PAYOFF_ONE_TIME_HORIZON_LABEL_,
+      payoffHorizonMonths: DEBT_PAYOFF_SCENARIO_HORIZON_MONTHS_,
+      tightMonthKey: '',
+      baselineBreachMonthKey: '',
+      limitedToThreeMonths: true,
+      cashYieldKnown: cashYieldKnown,
+      cashYieldStatus: cashYieldStatus,
+      ranked: false,
+      keepCash: null,
+      payHighApr: null,
+      missingAssumptions: cashYieldKnown ? [] : [{
+        code: cashYieldStatus,
+        reason: saved.cashYieldLocation ||
+          'Cash accounts do not yet store an authoritative APY for this comparison.'
+      }],
+      assumptions: assumptions
+    };
+  }
+  if (safety.oneTimeBaselineSafe !== true) {
+    return {
+      state: 'EVALUATED',
+      code: 'BASELINE_RESERVE_BREACH',
+      evaluated: true,
+      persisted: false,
+      extraIsAffordable: null,
+      amount: 0,
+      actionKey: 'NONE',
+      actionTitle: 'No one-time extra is labeled safe',
+      why: safety.oneTimeReason ||
+        'Even with no one-time extra, the 12-month projection falls below the protected reserve. No lump payment is labeled safe.',
+      horizonMonths: DEBT_PAYOFF_ONE_TIME_HORIZON_MONTHS_,
+      horizonLabel: DEBT_PAYOFF_ONE_TIME_HORIZON_LABEL_,
+      payoffHorizonMonths: DEBT_PAYOFF_SCENARIO_HORIZON_MONTHS_,
+      tightMonthKey: safety.oneTimeTightMonthKey || safety.oneTimeBaselineBreachMonthKey || '',
+      baselineBreachMonthKey: safety.oneTimeBaselineBreachMonthKey || '',
+      baselineBreachObligation: safety.oneTimeBaselineBreachObligation || '',
+      threeMonthAmount: safety.oneTimeThreeMonthAmount,
+      limitedToThreeMonths: false,
+      cashYieldKnown: cashYieldKnown,
+      cashYieldStatus: cashYieldStatus,
+      ranked: false,
+      keepCash: null,
+      payHighApr: null,
+      missingAssumptions: cashYieldKnown ? [] : [{
+        code: cashYieldStatus,
+        reason: saved.cashYieldLocation ||
+          'Cash accounts do not yet store an authoritative APY for this comparison.'
+      }],
+      assumptions: assumptions
+    };
+  }
+  var amount = round2_(Math.max(0, Number(safety.oneTimeAmount) || 0));
+  var highApr = debtPayoffUsableNamedDebts_(normalizedDebts, function(debt) {
+    return !debtPayoffIsMortgage_(debt) && !debtPayoffIsHeloc_(debt);
+  });
+  var incompleteHighApr = debtPayoffIncompleteNamedDebts_(normalizedDebts, function(debt) {
+    return !debtPayoffIsMortgage_(debt) && !debtPayoffIsHeloc_(debt);
+  });
+  var horizonMonths = debtPayoffNextDollarHorizonMonths_(options);
+  var asOfDate = options.asOfDate;
+  var simOptions = {
+    asOfDate: asOfDate,
+    horizonMonths: horizonMonths,
+    bonusEvents: []
+  };
+  var classified = classifyDebtPayoffScenarioDebts_(normalizedDebts);
+  var modeled = classified.modeled || [];
+  var minOnly = modeled.length
+    ? simulateDebtPayoffSchedule_(modeled, 0, 'minimum_only', simOptions)
+    : null;
+  var missingAssumptions = [];
+  if (!cashYieldKnown) {
+    missingAssumptions.push({
+      code: cashYieldStatus,
+      reason: saved.cashYieldLocation ||
+        'Cash accounts do not yet store an authoritative APY for this comparison.'
+    });
+    assumptions = assumptions.concat([
+      'Cash yield is labeled ' + cashYieldStatus +
+        ', so keeping cash is not ranked against paying high-APR debt.'
+    ]);
+  }
+
+  var payHighApr;
+  if (incompleteHighApr.length) {
+    payHighApr = buildDebtPayoffNextDollarAlternative_(
+      'PAY_HIGH_APR_DEBT',
+      'Pay high-APR debt once',
+      {
+        status: 'CONDITIONAL',
+        amount: amount,
+        missingAssumption: incompleteHighApr.map(function(row) {
+          return row.name + ' (' + row.reason + ')';
+        }).join('; '),
+        location: 'Assets & Liabilities → Debt accounts',
+        why: 'High-APR extra cannot be ranked until every non-mortgage, non-HELOC debt with a balance has a usable APR and minimum. Missing values were not replaced with $0 or 0%.',
+        liquidity: 'Paying this one-time extra would reduce cash that is currently above the protected reserve.',
+        outcome: 'Not modeled.',
+        outcomeKind: 'MODELED_INTEREST'
+      }
+    );
+  } else if (!highApr.length) {
+    payHighApr = buildDebtPayoffNextDollarAlternative_(
+      'PAY_HIGH_APR_DEBT',
+      'Pay high-APR debt once',
+      {
+        status: 'NOT_APPLICABLE',
+        amount: amount,
+        why: 'No non-mortgage, non-HELOC debt currently has a usable balance, APR, and minimum together.',
+        location: 'Assets & Liabilities → Debt accounts',
+        liquidity: 'No one-time high-APR extra payment is modeled.',
+        outcome: 'Not applicable.',
+        outcomeKind: 'MODELED_INTEREST'
+      }
+    );
+  } else if (!(amount > 0.005)) {
+    payHighApr = buildDebtPayoffNextDollarAlternative_(
+      'PAY_HIGH_APR_DEBT',
+      'Pay high-APR debt once',
+      {
+        status: 'READY',
+        amount: 0,
+        why: 'No one-time extra keeps usable cash at or above the protected reserve in every month of the 12-month check.',
+        liquidity: 'Cash stays available for required obligations and the reserve.',
+        outcome: 'No one-time high-APR payment.',
+        outcomeKind: 'MODELED_INTEREST',
+        firstTarget: highApr[0].name
+      }
+    );
+  } else {
+    var highAprSim = simulateDebtPayoffSchedule_(
+      modeled, 0, 'avalanche', Object.assign({}, simOptions, {
+        oneTimeExtra: amount,
+        extraTargetNames: highApr.map(function(row) { return row.name; })
+      })
+    );
+    var highAprModeled = debtPayoffNextDollarModeledOutcome_(
+      minOnly, highAprSim, 'Pay high-APR debt once');
+    payHighApr = buildDebtPayoffNextDollarAlternative_(
+      'PAY_HIGH_APR_DEBT',
+      'Pay high-APR debt once',
+      {
+        status: 'READY',
+        amount: amount,
+        why: 'This one-time extra is applied to the highest-APR non-mortgage, non-HELOC debt after contractual minimums. ' +
+          highAprModeled.outcome,
+        liquidity: 'The one-time extra leaves cash and is not kept as a reserve.',
+        outcome: highAprModeled.outcome,
+        outcomeKind: 'MODELED_INTEREST',
+        firstTarget: highAprModeled.firstExtraDebt,
+        interestSavedVsMinimumOnly: highAprModeled.interestSavedVsMinimumOnly
+      }
+    );
+    payHighApr.debtFreeMonthKey = highAprModeled.debtFreeMonthKey;
+    payHighApr.debtFreeWithinHorizon = highAprModeled.debtFreeWithinHorizon === true;
+    payHighApr.minOnlyDebtFreeMonthKey = minOnly && minOnly.debtFreeMonthKey || null;
+    payHighApr.minOnlyDebtFreeWithinHorizon = !!(minOnly && minOnly.debtFreeWithinHorizon);
+    payHighApr.firstTargetApr = null;
+    var firstTarget = highApr.filter(function(row) {
+      return row.name === highAprModeled.firstExtraDebt;
+    })[0] || highApr[0];
+    if (firstTarget && isFinite(Number(firstTarget.interestRate))) {
+      payHighApr.firstTargetApr = Number(firstTarget.interestRate);
+    }
+  }
+
+  var keepCash = buildDebtPayoffNextDollarAlternative_(
+    'KEEP_CASH',
+    'Keep the money in cash',
+    {
+      status: 'READY',
+      amount: amount,
+      why: cashYieldKnown
+        ? 'Keeping this one-time amount in cash preserves liquidity. Saved cash yield is a labeled fact and is not treated as guaranteed.'
+        : 'Keeping this one-time amount in cash preserves liquidity. Cash yield is not modeled because no authoritative APY is saved.',
+      liquidity: amount > 0.005
+        ? 'The amount stays available as cash after the protected reserve and known upcoming expenses.'
+        : 'No one-time extra stays above the protected reserve.',
+      outcome: cashYieldKnown
+        ? ('Cash remains available. Saved cash yield is ' +
+          Number(saved.cashYieldPct).toFixed(2) + '% APY.')
+        : 'Cash remains available. No growth is modeled (' + cashYieldStatus + ').',
+      outcomeKind: 'CASH_LIQUIDITY',
+      cashYieldStatus: cashYieldStatus,
+      missingAssumption: cashYieldKnown
+        ? ''
+        : (saved.cashYieldLocation || 'Cash APY is not an authoritative saved fact.')
+    }
+  );
+
+  var actionKey = 'UNRANKED';
+  var actionTitle = 'Cash versus high-APR debt is not ranked';
+  var ranked = false;
+  var why = 'A one-time extra of ' +
+    (typeof fmtCurrency_ === 'function' ? fmtCurrency_(amount) : String(amount)) +
+    ' still leaves cash at or above the protected reserve in each of the next 12 months after required payments and known Planned upcoming expenses counted once.';
+  if (!(amount > 0.005)) {
+    actionKey = 'NONE';
+    actionTitle = 'No one-time extra';
+    ranked = false;
+    why = 'No one-time extra keeps usable cash at or above the protected reserve in every month of the 12-month cash-safety forecast after required payments and known Planned upcoming expenses.';
+  } else if (payHighApr.status === 'NOT_APPLICABLE') {
+    actionKey = 'KEEP_CASH';
+    actionTitle = keepCash.title;
+    ranked = true;
+    why = payHighApr.why;
+  } else if (payHighApr.status === 'CONDITIONAL' || payHighApr.status !== 'READY') {
+    actionKey = 'UNRANKED';
+    actionTitle = 'Cash versus high-APR debt is not ranked';
+    ranked = false;
+    why += ' High-APR payoff is not modeled until missing debt facts are saved.';
+  } else if (!cashYieldKnown) {
+    actionKey = 'UNRANKED';
+    actionTitle = 'Cash versus high-APR debt is not ranked';
+    ranked = false;
+    why += ' Modeled interest if paid to high-APR debt is shown. Cash yield is ' +
+      cashYieldStatus +
+      ', so this is not ranked as better or worse than keeping the cash.';
+  } else {
+    var apr = Number(payHighApr.firstTargetApr);
+    var apy = Number(saved.cashYieldPct);
+    if (isFinite(apr) && apr > apy + 0.005) {
+      actionKey = 'PAY_HIGH_APR_DEBT';
+      actionTitle = payHighApr.title;
+      ranked = true;
+      why += ' The first extra target APR of ' + apr.toFixed(2) +
+        '% is higher than the saved cash yield of ' + apy.toFixed(2) + '% APY.';
+    } else {
+      actionKey = 'KEEP_CASH';
+      actionTitle = keepCash.title;
+      ranked = true;
+      why += ' Saved cash yield is not lower than the first extra target APR, so the cash stays unranked as a debt-payoff winner.';
+      if (isFinite(apr) && isFinite(apy) && apy + 0.005 >= apr) {
+        why = 'The saved cash yield of ' + apy.toFixed(2) +
+          '% APY is at least the first extra target APR of ' + apr.toFixed(2) +
+          '%, so this one-time extra stays in cash.';
+      }
+    }
+  }
+
+  return {
+    state: 'EVALUATED',
+    code: amount > 0.005 ? '' : 'NO_HEADROOM',
+    evaluated: true,
+    persisted: false,
+    extraIsAffordable: null,
+    amount: amount,
+    actionKey: actionKey,
+    actionTitle: actionTitle,
+    why: why,
+    horizonMonths: DEBT_PAYOFF_ONE_TIME_HORIZON_MONTHS_,
+    horizonLabel: DEBT_PAYOFF_ONE_TIME_HORIZON_LABEL_,
+    payoffHorizonMonths: horizonMonths,
+    tightMonthKey: safety.oneTimeTightMonthKey || '',
+    baselineBreachMonthKey: '',
+    threeMonthAmount: safety.oneTimeThreeMonthAmount,
+    cashYieldKnown: cashYieldKnown,
+    cashYieldStatus: cashYieldStatus,
+    cashYieldPct: cashYieldKnown ? Number(saved.cashYieldPct) : null,
+    ranked: ranked,
+    keepCash: keepCash,
+    payHighApr: payHighApr,
+    missingAssumptions: missingAssumptions,
+    assumptions: assumptions
+  };
+}
+
 function attachDebtPayoffNextDollar_(rec, normalizedDebts, supported, options) {
   rec = rec || {};
+  rec.oneTimeAllocation = buildDebtPayoffOneTimeAllocation_(
+    normalizedDebts, supported, rec, options);
   rec.nextDollar = buildDebtPayoffNextDollarComparison_(
     normalizedDebts, supported, rec, options);
+  if (rec.oneTimeAllocation && rec.oneTimeAllocation.evaluated === true) {
+    rec.nextDollar.oneTimeAllocationEvaluated = true;
+  }
   return rec;
 }
 
@@ -2453,6 +2854,40 @@ function debtPayoffCashSafetyMoneyLabel_(amount) {
   return '$' + round2_(n).toFixed(2);
 }
 
+function debtPayoffFormatCashSafetyCurrency_(amount) {
+  var n = Number(amount);
+  if (!isFinite(n)) return 'an unknown amount';
+  var text = Math.abs(round2_(n)).toFixed(2);
+  var dot = text.indexOf('.');
+  var whole = text.substring(0, dot);
+  var frac = text.substring(dot);
+  var grouped = '';
+  while (whole.length > 3) {
+    grouped = ',' + whole.slice(-3) + grouped;
+    whole = whole.slice(0, -3);
+  }
+  return '$' + whole + grouped + frac;
+}
+
+function debtPayoffCashSafetyNamedObligation_(label) {
+  var text = String(label || '').trim();
+  if (!text || text === 'required payments and the protected reserve') return '';
+  return text;
+}
+
+function debtPayoffCashSafetySurplusContinuation_(surplus) {
+  var n = Number(surplus);
+  if (!isFinite(n)) {
+    return 'after the current recurring surplus of an unknown amount continues';
+  }
+  if (n < -0.005) {
+    return 'as the monthly deficit of ' +
+      debtPayoffFormatCashSafetyCurrency_(n) + ' continues';
+  }
+  return 'after the current recurring surplus of ' +
+    debtPayoffCashSafetyMoneyLabel_(n) + ' continues';
+}
+
 function debtPayoffIsoDateFromSheetValue_(raw, display) {
   if (Object.prototype.toString.call(raw) === '[object Date]' &&
       !isNaN(raw.getTime())) {
@@ -2780,12 +3215,24 @@ function debtPayoffOutsideHorizonLabel_(rows) {
   }).join('; ');
 }
 
-function debtPayoffWalkCashSafety_(start, surplus, extra, reserve, months) {
+function debtPayoffWalkCashSafety_(start, surplus, extra, reserve, months, options) {
+  options = options || {};
+  var oneTime = options.oneTime === true;
   var cash = round2_(start);
   var firstBreach = null;
+  var walks = [];
   var i;
   for (i = 0; i < months.length; i++) {
-    cash = round2_(cash + surplus - extra - months[i].upcomingAmount);
+    var monthExtra = oneTime ? (i === 0 ? extra : 0) : extra;
+    cash = round2_(cash + surplus - monthExtra - months[i].upcomingAmount);
+    var headroom = round2_(cash - reserve);
+    walks.push({
+      monthKey: months[i].key,
+      endingCash: cash,
+      upcomingAmount: round2_(Number(months[i].upcomingAmount) || 0),
+      headroom: headroom,
+      ok: cash + 0.005 >= reserve
+    });
     if (!firstBreach && cash + 0.005 < reserve) {
       firstBreach = {
         monthKey: months[i].key,
@@ -2800,7 +3247,47 @@ function debtPayoffWalkCashSafety_(start, surplus, extra, reserve, months) {
     endingCash: cash,
     monthKey: firstBreach ? firstBreach.monthKey : '',
     obligationLabel: firstBreach ? firstBreach.obligationLabel : '',
-    obligations: firstBreach ? firstBreach.obligations : []
+    obligations: firstBreach ? firstBreach.obligations : [],
+    walks: walks
+  };
+}
+
+function debtPayoffMaxOneTimePreservingReserve_(start, surplus, reserve, months) {
+  var atZero = debtPayoffWalkCashSafety_(start, surplus, 0, reserve, months);
+  var walks = atZero.walks || [];
+  if (!walks.length) {
+    return { amount: 0, tightMonthKey: '', ok: atZero.ok, walks: [] };
+  }
+  var minHeadroom = walks[0].headroom;
+  var tightMonthKey = walks[0].monthKey;
+  walks.forEach(function(row) {
+    if (Number(row.headroom) < minHeadroom) {
+      minHeadroom = Number(row.headroom);
+      tightMonthKey = row.monthKey;
+    }
+  });
+  if (!(minHeadroom > 0.005)) {
+    return { amount: 0, tightMonthKey: tightMonthKey, ok: atZero.ok, walks: walks };
+  }
+  var lo = 0;
+  var hi = Math.round(minHeadroom * 100);
+  var best = 0;
+  while (lo <= hi) {
+    var midCents = Math.floor((lo + hi) / 2);
+    var mid = round2_(midCents / 100);
+    if (debtPayoffWalkCashSafety_(start, surplus, mid, reserve, months, { oneTime: true }).ok) {
+      best = mid;
+      lo = midCents + 1;
+    } else {
+      hi = midCents - 1;
+    }
+  }
+  var atCap = debtPayoffWalkCashSafety_(start, surplus, best, reserve, months, { oneTime: true });
+  return {
+    amount: round2_(best),
+    tightMonthKey: tightMonthKey,
+    ok: atCap.ok,
+    walks: atCap.walks
   };
 }
 
@@ -2827,6 +3314,134 @@ function debtPayoffMaxExtraPreservingReserve_(start, surplus, reserve, months) {
     }
   }
   return round2_(best);
+}
+
+function debtPayoffCollectOneTimeUpcomingBlockers_(input) {
+  var blockers = [];
+  if (input.upcomingUnavailable) {
+    blockers.push({
+      code: 'UPCOMING_UNAVAILABLE',
+      reason: String(input.upcomingUnavailableReason ||
+        ('Dated upcoming expenses could not be read, so they were not treated as $0. Update ' +
+          DEBT_PAYOFF_CASH_SAFETY_LOCATION_ + '.')),
+      location: input.upcomingLocation || DEBT_PAYOFF_CASH_SAFETY_LOCATION_
+    });
+    return blockers;
+  }
+  var rows = input.upcomingExpenses || [];
+  if (!rows.length) return blockers;
+  var asOfDate = input.asOfDate;
+  if (!(asOfDate instanceof Date) || isNaN(asOfDate.getTime())) {
+    blockers.push({
+      code: 'CASH_SAFETY_ASOF_UNKNOWN',
+      reason: 'The 12-month one-time cash-safety forecast has no as-of date, so upcoming due dates were not placed into months. Unknown timing was not treated as $0.'
+    });
+    return blockers;
+  }
+  var lastKey = debtPayoffScenarioMonthKey_(asOfDate, DEBT_PAYOFF_ONE_TIME_HORIZON_MONTHS_);
+  rows.forEach(function(row) {
+    if (!row) return;
+    var name = row.name || 'An upcoming expense';
+    if (row.dueDateKnown !== true || !debtPayoffIsoDateIsValid_(row.dueDate)) {
+      blockers.push({
+        code: 'UPCOMING_DATE_UNKNOWN',
+        reason: name +
+          ' is Planned but has no usable due date, so it was not placed in the 12-month one-time cash-safety forecast or treated as $0. Update ' +
+          DEBT_PAYOFF_CASH_SAFETY_LOCATION_ + '.',
+        location: DEBT_PAYOFF_CASH_SAFETY_LOCATION_
+      });
+      return;
+    }
+    var monthKey = debtPayoffMonthKeyFromIsoDate_(row.dueDate);
+    if (monthKey && lastKey && monthKey > lastKey) return;
+    if (row.amountKnown !== true) {
+      blockers.push({
+        code: 'UPCOMING_AMOUNT_UNKNOWN',
+        reason: name +
+          ' is Planned with a due date in the 12-month one-time cash-safety forecast but has no usable Amount, so it was not treated as $0. Update ' +
+          DEBT_PAYOFF_CASH_SAFETY_LOCATION_ + '.',
+        location: DEBT_PAYOFF_CASH_SAFETY_LOCATION_
+      });
+    }
+  });
+  return blockers;
+}
+
+function evaluateDebtPayoffOneTimeHorizon_(input, reserveFloor) {
+  input = input || {};
+  var start = round2_(Number(input.startingCash));
+  var surplus = round2_(Number(input.surplus));
+  var result = {
+    evaluated: false,
+    amount: null,
+    tightMonthKey: '',
+    limitedToThreeMonths: false,
+    baselineSafe: false,
+    baselineBreachMonthKey: '',
+    baselineBreachObligation: '',
+    threeMonthAmount: 0,
+    horizonMonths: DEBT_PAYOFF_ONE_TIME_HORIZON_MONTHS_,
+    horizonLabel: DEBT_PAYOFF_ONE_TIME_HORIZON_LABEL_,
+    reason: '',
+    blockers: []
+  };
+  if (!isFinite(start) || !isFinite(surplus) || reserveFloor == null) {
+    result.reason = 'Usable cash, recurring surplus, or the canonical reserve could not be proven for the 12-month one-time cash-safety check. Missing values were not replaced with $0.';
+    return result;
+  }
+  var asOfDate = input.asOfDate;
+  var hasAsOf = asOfDate instanceof Date && !isNaN(asOfDate.getTime());
+  if (!hasAsOf) {
+    result.evaluated = true;
+    result.amount = 0;
+    result.limitedToThreeMonths = true;
+    result.reason =
+      'A 12-month one-time check needs an as-of date to place recurring surplus and Planned upcoming expenses into months. The result is limited to three months and no lump is labeled safe beyond that horizon.';
+    return result;
+  }
+  var blockers = debtPayoffCollectOneTimeUpcomingBlockers_(input);
+  if (blockers.length) {
+    result.blockers = blockers;
+    result.reason = blockers[0] && blockers[0].reason ||
+      'Unknown Planned upcoming expenses were not treated as $0.';
+    return result;
+  }
+  var months3 = debtPayoffBuildCashSafetyMonths_(
+    asOfDate, DEBT_PAYOFF_CASH_SAFETY_HORIZON_MONTHS_, input.upcomingExpenses);
+  var months12 = debtPayoffBuildCashSafetyMonths_(
+    asOfDate, DEBT_PAYOFF_ONE_TIME_HORIZON_MONTHS_, input.upcomingExpenses);
+  var threeMonth = debtPayoffMaxOneTimePreservingReserve_(
+    start, surplus, reserveFloor, months3);
+  result.threeMonthAmount = threeMonth.amount;
+  var atZero12 = debtPayoffWalkCashSafety_(start, surplus, 0, reserveFloor, months12);
+  if (!atZero12.ok) {
+    result.evaluated = true;
+    result.amount = 0;
+    result.tightMonthKey = atZero12.monthKey;
+    result.baselineSafe = false;
+    result.baselineBreachMonthKey = atZero12.monthKey;
+    result.baselineBreachObligation = atZero12.obligationLabel;
+    var namedObligation = debtPayoffCashSafetyNamedObligation_(atZero12.obligationLabel);
+    result.reason =
+      'Even with no one-time extra, usable cash would fall below the protected reserve of ' +
+      debtPayoffCashSafetyMoneyLabel_(reserveFloor) + ' in ' +
+      atZero12.monthKey +
+      (namedObligation ? ', when ' + namedObligation + ' is due, ' : ' ') +
+      debtPayoffCashSafetySurplusContinuation_(surplus) +
+      '. No lump payment is labeled safe. A recurring surplus, lower commitments, or additional confirmed income is needed. Optional Cisco bonuses are not assumed.';
+    return result;
+  }
+  var oneTime12 = debtPayoffMaxOneTimePreservingReserve_(
+    start, surplus, reserveFloor, months12);
+  result.evaluated = true;
+  result.amount = oneTime12.amount;
+  result.tightMonthKey = oneTime12.tightMonthKey;
+  result.baselineSafe = true;
+  result.reason = oneTime12.amount > 0.005
+    ? ('A one-time extra of ' + debtPayoffCashSafetyMoneyLabel_(oneTime12.amount) +
+      ' still leaves cash at or above the protected reserve in each of the next 12 months after required payments and known Planned upcoming expenses counted once.')
+    : ('No one-time extra keeps usable cash at or above the protected reserve in every month of the 12-month cash-safety forecast.');
+  return result;
 }
 
 function debtPayoffCollectCashSafetyBlockers_(input) {
@@ -2901,6 +3516,15 @@ function evaluateDebtPayoffFutureCashSafety_(input) {
     breachMonthKey: '',
     breachObligation: '',
     outsideHorizon: [],
+    oneTimeAllocationEvaluated: false,
+    oneTimeAmount: null,
+    oneTimeTightMonthKey: '',
+    oneTimeHorizonMonths: DEBT_PAYOFF_ONE_TIME_HORIZON_MONTHS_,
+    oneTimeBaselineSafe: false,
+    oneTimeBaselineBreachMonthKey: '',
+    oneTimeBaselineBreachObligation: '',
+    oneTimeLimitedToThreeMonths: false,
+    oneTimeThreeMonthAmount: null,
     reason: ''
   };
   if (!isFinite(start) || !isFinite(surplus) || !isFinite(reserve) ||
@@ -2975,9 +3599,29 @@ function evaluateDebtPayoffFutureCashSafety_(input) {
     inWindowUpcomingTotal: reconciliation.inWindowUpcomingTotal,
     reserveUpcomingAmount: reconciliation.reserveUpcomingAmount,
     reconciliation: reconciliation,
-    oneTimeAllocationEvaluated: false,
+    oneTimeAllocationEvaluated: true,
+    oneTimeAmount: 0,
+    oneTimeTightMonthKey: '',
+    oneTimeHorizonMonths: DEBT_PAYOFF_ONE_TIME_HORIZON_MONTHS_,
+    oneTimeBaselineSafe: false,
+    oneTimeBaselineBreachMonthKey: '',
+    oneTimeBaselineBreachObligation: '',
+    oneTimeLimitedToThreeMonths: false,
+    oneTimeThreeMonthAmount: 0,
     reason: ''
   };
+  var oneTime = evaluateDebtPayoffOneTimeHorizon_(input, reserveFloor);
+  cashSafety.oneTimeAllocationEvaluated = oneTime.evaluated === true;
+  cashSafety.oneTimeAmount = oneTime.amount;
+  cashSafety.oneTimeTightMonthKey = oneTime.tightMonthKey || '';
+  cashSafety.oneTimeHorizonMonths = oneTime.horizonMonths;
+  cashSafety.oneTimeHorizonLabel = oneTime.horizonLabel;
+  cashSafety.oneTimeBaselineSafe = oneTime.baselineSafe === true;
+  cashSafety.oneTimeBaselineBreachMonthKey = oneTime.baselineBreachMonthKey || '';
+  cashSafety.oneTimeBaselineBreachObligation = oneTime.baselineBreachObligation || '';
+  cashSafety.oneTimeLimitedToThreeMonths = oneTime.limitedToThreeMonths === true;
+  cashSafety.oneTimeThreeMonthAmount = oneTime.threeMonthAmount;
+  cashSafety.oneTimeReason = oneTime.reason || '';
   var outsideSentence = outsideLabel
     ? ' Outside this 3-month check: ' + outsideLabel + '.'
     : '';
@@ -2990,8 +3634,7 @@ function evaluateDebtPayoffFutureCashSafety_(input) {
         debtPayoffCashSafetyMoneyLabel_(reserveFloor) +
         ', and ' +
         debtPayoffCashSafetyMoneyLabel_(remainingAboveReserve) +
-        ' remains above that reserve. ' +
-        DEBT_PAYOFF_ONE_TIME_NOT_EVALUATED_ + outsideSentence;
+        ' remains above that reserve.' + outsideSentence;
     } else {
       cashSafety.reason =
         'After the 3-month cash-safety forecast, usable cash would not stay above the protected reserve of ' +
@@ -3000,7 +3643,7 @@ function evaluateDebtPayoffFutureCashSafety_(input) {
           ? (' in ' + atZero.monthKey +
             (atZero.obligationLabel ? ', when ' + atZero.obligationLabel + ' is due' : ''))
           : '') +
-        '. ' + DEBT_PAYOFF_ONE_TIME_NOT_EVALUATED_ + outsideSentence;
+        '.' + outsideSentence;
     }
   } else if (cashSafety.withheld) {
     cashSafety.reason =
@@ -3008,8 +3651,7 @@ function evaluateDebtPayoffFutureCashSafety_(input) {
       debtPayoffCashSafetyMoneyLabel_(reserveFloor) + ' in ' +
       cashSafety.breachMonthKey + ', when ' + cashSafety.breachObligation +
       ' is due. Update ' + DEBT_PAYOFF_CASH_SAFETY_LOCATION_ +
-      ' if that obligation changed. ' +
-      DEBT_PAYOFF_ONE_TIME_NOT_EVALUATED_ + outsideSentence;
+      ' if that obligation changed.' + outsideSentence;
   } else if (cashSafety.reduced) {
     cashSafety.reason =
       'The recommended recurring extra was reduced from ' +
@@ -3018,7 +3660,7 @@ function evaluateDebtPayoffFutureCashSafety_(input) {
       ' so usable cash stays at or above the protected reserve floor of ' +
       debtPayoffCashSafetyMoneyLabel_(reserveFloor) + ' in ' +
       cashSafety.breachMonthKey + ', when ' + cashSafety.breachObligation +
-      ' is due. ' + DEBT_PAYOFF_ONE_TIME_NOT_EVALUATED_ + outsideSentence;
+      ' is due.' + outsideSentence;
   } else {
     cashSafety.reason =
       'The cash-safety check covers three months through ' +
@@ -3029,7 +3671,7 @@ function evaluateDebtPayoffFutureCashSafety_(input) {
       debtPayoffCashSafetyMoneyLabel_(remainingAboveReserve) +
       ' remains above the protected reserve of ' +
       debtPayoffCashSafetyMoneyLabel_(reserveFloor) +
-      '. ' + DEBT_PAYOFF_ONE_TIME_NOT_EVALUATED_ + outsideSentence;
+      '.' + outsideSentence;
   }
   return {
     ok: true,

@@ -143,11 +143,39 @@ assert.match(help, /3-month cash-safety forecast/);
 assert.match(help, /Cash Flow → Upcoming/);
 assert.match(help, /counted once/);
 assert.match(help, /outside this check/);
-assert.match(help, /One-time use of cash above the reserve is not evaluated here/);
+assert.match(help, /one-time extra from cash above the protected reserve/);
+assert.match(help, /12-month month-by-month projection/);
+assert.match(help, /no lump is labeled safe/);
+assert.match(help, /Above reserve at month 3 — not safe to spend/);
+assert.match(help, /not available to spend/);
+assert.match(help, /continuing monthly deficit is shown as a currency amount/);
+assert.doesNotMatch(help, /Projected cash above reserve is not labeled or colored as spendable/);
+assert.match(help, /limited to three months/);
+assert.match(help, /CASH_YIELD_DATA_REQUIRED/);
+assert.doesNotMatch(help, /One-time use of cash above the reserve is not evaluated here/);
 assert.doesNotMatch(help, /not recommended as a one-time extra payment/);
 assert.doesNotMatch(client, /not recommended as a one-time extra payment/);
 assert.doesNotMatch(client, /No recurring extra to compare/);
-assert.match(client, /One-time use of cash above the reserve is not evaluated here/);
+assert.match(client, /function renderDebtPayoffOneTimeAllocationHtml_/);
+assert.doesNotMatch(client, /One-time use of cash above the reserve is not evaluated here/);
+assert.match(projection, /function buildDebtPayoffOneTimeAllocation_/);
+assert.match(projection, /function debtPayoffMaxOneTimePreservingReserve_/);
+assert.match(projection, /function evaluateDebtPayoffOneTimeHorizon_/);
+assert.match(projection, /DEBT_PAYOFF_ONE_TIME_HORIZON_MONTHS_ = 12/);
+assert.doesNotMatch(sliceFunction(projection, 'evaluateDebtPayoffOneTimeHorizon_'),
+  /bonusEvents/);
+assert.match(sliceFunction(projection, 'evaluateDebtPayoffOneTimeHorizon_'),
+  /Optional Cisco bonuses are not assumed/);
+assert.match(projection, /function debtPayoffFormatCashSafetyCurrency_/);
+assert.match(projection, /function debtPayoffCashSafetySurplusContinuation_/);
+assert.match(sliceFunction(projection, 'evaluateDebtPayoffOneTimeHorizon_'),
+  /debtPayoffCashSafetySurplusContinuation_/);
+assert.doesNotMatch(sliceFunction(projection, 'evaluateDebtPayoffOneTimeHorizon_'),
+  /when required payments and the protected reserve is due/);
+assert.doesNotMatch(sliceFunction(projection, 'compareDebtPayoffStrategies_'),
+  /oneTimeExtra/);
+assert.doesNotMatch(capital, /buildDebtPayoffOneTimeAllocation_|debtPayoffMaxOneTimePreservingReserve_/);
+assert.doesNotMatch(rolling, /buildDebtPayoffOneTimeAllocation_|debtPayoffMaxOneTimePreservingReserve_/);
 assert.doesNotMatch(projection, /not recommended as a one-time extra payment/);
 assert.match(client, /function renderDebtPayoffCashSafetyHtml_/);
 assert.match(client, /function renderDebtPayoffCashSafetyReconciliationHtml_/);
@@ -174,7 +202,11 @@ assert.match(client, /function renderDebtPayoffCashSafetySummaryHtml_/);
 assert.match(sliceFunction(client, 'renderDebtPayoffCashSafetySummaryHtml_'),
   /Projected cash after three months/);
 assert.match(sliceFunction(client, 'renderDebtPayoffCashSafetySummaryHtml_'),
+  /Above reserve at month 3 — not safe to spend/);
+assert.doesNotMatch(sliceFunction(client, 'renderDebtPayoffCashSafetySummaryHtml_'),
   /Projected cash above reserve/);
+assert.match(sliceFunction(client, 'renderDebtPayoffOneTimeAllocationHtml_'),
+  /required payments and the protected reserve/);
 assert.match(sliceFunction(client, 'renderDebtPayoffCashSafetySummaryHtml_'),
   /debt-payoff-cash-summary-item[\s\S]*debt-payoff-summary-label[\s\S]*debt-payoff-summary-value/);
 assert.doesNotMatch(sliceFunction(client, 'renderDebtPayoffCashSafetySummaryHtml_'),
@@ -865,13 +897,18 @@ assert.notEqual(surplus.amount, 1000 * 4,
   'must not invent extra by multiplying a weekly figure by four');
 
 const deficit = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  asOfDate: asOf,
   recurringIncomeSources: [confirmedIncome('Salary', 1200)]
 }));
 assert.equal(deficit.available, true);
 assert.equal(deficit.deficit, true);
 assert.equal(deficit.amount, 0);
 assert.ok(deficit.cashSafety);
-assert.equal(deficit.cashSafety.oneTimeAllocationEvaluated, false);
+assert.equal(deficit.cashSafety.oneTimeAllocationEvaluated, true);
+assert.equal(deficit.cashSafety.oneTimeBaselineSafe, true);
+assert.equal(deficit.cashSafety.oneTimeLimitedToThreeMonths, false);
+assert.ok(deficit.cashSafety.oneTimeAmount > 0);
+assert.ok(deficit.cashSafety.oneTimeAmount <= deficit.cashSafety.remainingAboveReserve);
 assert.ok(deficit.cashSafety.remainingAboveReserve > 0);
 
 const missingIncome = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
@@ -1062,6 +1099,24 @@ assert.match(String(missingUpcomingAmount.blockers[0].reason), /not treated as \
 assert.equal(missingUpcomingAmount.cashSafety, null,
   'unknown upcoming amounts withhold extra and are not walked as $0');
 
+const laterUnknownUpcoming = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  asOfDate: cashSafetyAsOf,
+  upcomingExpenses: [{
+    name: 'Future tax',
+    status: 'Planned',
+    dueDate: '2027-04-15',
+    dueDateKnown: true,
+    amount: null,
+    amountKnown: false
+  }]
+}));
+assert.equal(laterUnknownUpcoming.available, true,
+  'unknown Planned amounts after month three do not withhold the monthly extra');
+assert.equal(laterUnknownUpcoming.amount, 2500);
+assert.equal(laterUnknownUpcoming.cashSafety.oneTimeAllocationEvaluated, false);
+assert.equal(laterUnknownUpcoming.cashSafety.oneTimeAmount, null);
+assert.match(String(laterUnknownUpcoming.cashSafety.oneTimeReason), /not treated as \$0/);
+
 const pendingImportDoesNotBlock = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
   asOfDate: cashSafetyAsOf,
   pendingImport: true,
@@ -1089,9 +1144,13 @@ assert.equal(negativeSurplusCashAbove.amount, 0);
 assert.equal(negativeSurplusCashAbove.recurringSurplusBeforeReserve, -300);
 assert.ok(negativeSurplusCashAbove.usableCashAfterBuffers > negativeSurplusCashAbove.requiredReserveAmount);
 assert.ok(negativeSurplusCashAbove.cashSafety.remainingAboveReserve > 0);
-assert.equal(negativeSurplusCashAbove.cashSafety.oneTimeAllocationEvaluated, false);
+assert.equal(negativeSurplusCashAbove.cashSafety.oneTimeAllocationEvaluated, true);
+assert.equal(negativeSurplusCashAbove.cashSafety.oneTimeBaselineSafe, true);
+assert.ok(negativeSurplusCashAbove.cashSafety.oneTimeAmount > 0);
+assert.ok(negativeSurplusCashAbove.cashSafety.oneTimeAmount <=
+  negativeSurplusCashAbove.cashSafety.remainingAboveReserve);
 assert.match(String(negativeSurplusCashAbove.cashSafety.reason), /remains above that reserve/);
-assert.match(String(negativeSurplusCashAbove.cashSafety.reason),
+assert.doesNotMatch(String(negativeSurplusCashAbove.cashSafety.reason),
   /One-time use of cash above the reserve is not evaluated here/);
 assert.doesNotMatch(String(negativeSurplusCashAbove.cashSafety.reason),
   /not recommended as a one-time/);
@@ -1204,9 +1263,159 @@ assert.equal(
   context.round2_(displayedRecon.endingCash - displayedRecon.protectedReserveFloor),
   displayedRecon.remainingAboveReserve
 );
-assert.match(String(displayedSafety.cashSafety.reason),
+assert.equal(displayedSafety.cashSafety.oneTimeAllocationEvaluated, true);
+assert.equal(displayedSafety.cashSafety.oneTimeAmount, 0);
+assert.equal(displayedSafety.cashSafety.oneTimeBaselineSafe, false);
+assert.equal(displayedSafety.cashSafety.oneTimeBaselineBreachMonthKey, '2027-04');
+assert.equal(displayedSafety.cashSafety.oneTimeThreeMonthAmount, 35133.46);
+assert.ok(displayedSafety.cashSafety.oneTimeThreeMonthAmount >
+  displayedSafety.cashSafety.oneTimeAmount);
+assert.match(String(displayedSafety.cashSafety.oneTimeReason), /2027-04/);
+assert.match(String(displayedSafety.cashSafety.oneTimeReason), /No lump payment is labeled safe/);
+assert.match(String(displayedSafety.cashSafety.oneTimeReason),
+  /as the monthly deficit of \$11,233\.45 continues/);
+assert.doesNotMatch(String(displayedSafety.cashSafety.oneTimeReason),
+  /required payments and the protected reserve is due/);
+assert.doesNotMatch(String(displayedSafety.cashSafety.oneTimeReason), /\$\-11/);
+assert.doesNotMatch(String(displayedSafety.cashSafety.oneTimeReason),
+  /recurring surplus of -/);
+assert.equal(context.debtPayoffFormatCashSafetyCurrency_(-11233.45), '$11,233.45');
+assert.equal(
+  context.debtPayoffCashSafetySurplusContinuation_(-11233.45),
+  'as the monthly deficit of $11,233.45 continues'
+);
+assert.doesNotMatch(String(displayedSafety.cashSafety.reason),
   /One-time use of cash above the reserve is not evaluated here/);
 assert.doesNotMatch(String(displayedSafety.cashSafety.reason), /not recommended as a one-time/);
+const displayedMonths3 = context.debtPayoffBuildCashSafetyMonths_(
+  cashSafetyAsOf, 3, displayedUpcoming);
+const displayedMonths12 = context.debtPayoffBuildCashSafetyMonths_(
+  cashSafetyAsOf, 12, displayedUpcoming);
+const displayedOneTimeWalk = context.debtPayoffWalkCashSafety_(
+  110139.19, -11233.45, 35133.46, 1805.38, displayedMonths3, { oneTime: true });
+assert.equal(displayedOneTimeWalk.ok, true,
+  'the former 3-month lump still holds through month three');
+assert.equal(
+  displayedOneTimeWalk.walks.reduce(function(sum, row) {
+    return context.round2_(sum + row.upcomingAmount);
+  }, 0),
+  39500
+);
+const displayedBaseline12 = context.debtPayoffWalkCashSafety_(
+  110139.19, -11233.45, 0, 1805.38, displayedMonths12);
+assert.equal(displayedBaseline12.ok, false,
+  'continuing the -$11,233.45 deficit breaches the reserve after month three even with no lump');
+assert.equal(displayedBaseline12.monthKey, '2027-04');
+assert.ok(displayedBaseline12.walks.length >= 7);
+assert.equal(displayedBaseline12.walks[2].ok, true,
+  'month three still holds on the no-lump baseline');
+assert.equal(displayedBaseline12.walks[6].ok, false);
+assert.ok(displayedBaseline12.walks.every(function(row, i) {
+  if (i === 0) return true;
+  return row.endingCash < displayedBaseline12.walks[i - 1].endingCash;
+}), 'continuing negative monthly cash flow reduces ending cash every month');
+const displayedThreeMonthLumpFailsLater = context.debtPayoffWalkCashSafety_(
+  110139.19, -11233.45, 35133.46, 1805.38, displayedMonths12, { oneTime: true });
+assert.equal(displayedThreeMonthLumpFailsLater.ok, false,
+  'a lump that only holds for three months is not safe through 12 months');
+assert.ok(displayedThreeMonthLumpFailsLater.monthKey > '2026-12');
+const displayedOneTimeOver = context.debtPayoffWalkCashSafety_(
+  110139.19, -11233.45, 35133.47, 1805.38, displayedMonths3, { oneTime: true });
+assert.equal(displayedOneTimeOver.ok, false);
+
+const earlierMonthTighter = context.evaluateDebtPayoffFutureCashSafety_({
+  asOfDate: cashSafetyAsOf,
+  startingCash: 5000,
+  surplus: 1000,
+  requiredReserve: 4000,
+  reserveUpcomingAmount: 0,
+  upcomingExpenses: []
+});
+assert.equal(earlierMonthTighter.ok, true);
+assert.equal(earlierMonthTighter.cashSafety.remainingAboveReserve, 4000);
+assert.equal(earlierMonthTighter.cashSafety.oneTimeAmount, 2000);
+assert.ok(earlierMonthTighter.cashSafety.oneTimeAmount <
+  earlierMonthTighter.cashSafety.remainingAboveReserve);
+
+const oneTimeCountsUpcomingOnce = context.evaluateDebtPayoffFutureCashSafety_({
+  asOfDate: cashSafetyAsOf,
+  startingCash: 5000,
+  surplus: 1000,
+  requiredReserve: 4000,
+  reserveUpcomingAmount: 0,
+  upcomingExpenses: [{
+    name: 'Insurance',
+    status: 'Planned',
+    dueDate: '2026-10-28',
+    dueDateKnown: true,
+    amount: 800,
+    amountKnown: true
+  }]
+});
+assert.equal(
+  context.round2_(earlierMonthTighter.cashSafety.oneTimeAmount -
+    oneTimeCountsUpcomingOnce.cashSafety.oneTimeAmount),
+  800
+);
+
+const passesThreeFailsLater = context.evaluateDebtPayoffFutureCashSafety_({
+  asOfDate: cashSafetyAsOf,
+  startingCash: 20000,
+  surplus: -500,
+  requiredReserve: 2000,
+  reserveUpcomingAmount: 0,
+  upcomingExpenses: []
+});
+assert.equal(passesThreeFailsLater.ok, true);
+assert.equal(passesThreeFailsLater.cashSafety.oneTimeBaselineSafe, true);
+assert.equal(passesThreeFailsLater.cashSafety.remainingAboveReserve, 16500);
+assert.equal(passesThreeFailsLater.cashSafety.oneTimeThreeMonthAmount, 16500);
+assert.equal(passesThreeFailsLater.cashSafety.oneTimeAmount, 12000);
+assert.ok(passesThreeFailsLater.cashSafety.oneTimeThreeMonthAmount >
+  passesThreeFailsLater.cashSafety.oneTimeAmount);
+const laterMonths = context.debtPayoffBuildCashSafetyMonths_(cashSafetyAsOf, 12, []);
+assert.equal(context.debtPayoffWalkCashSafety_(
+  20000, -500, 16500, 2000, laterMonths, { oneTime: true }).ok, false);
+assert.equal(context.debtPayoffWalkCashSafety_(
+  20000, -500, 12000, 2000, laterMonths, { oneTime: true }).ok, true);
+assert.equal(context.debtPayoffWalkCashSafety_(
+  20000, -500, 16500, 2000,
+  context.debtPayoffBuildCashSafetyMonths_(cashSafetyAsOf, 3, []),
+  { oneTime: true }).ok, true);
+
+const limitedHorizon = context.evaluateDebtPayoffFutureCashSafety_({
+  startingCash: 20000,
+  surplus: 500,
+  requiredReserve: 2000,
+  reserveUpcomingAmount: 0,
+  upcomingExpenses: []
+});
+assert.equal(limitedHorizon.cashSafety.oneTimeLimitedToThreeMonths, true);
+assert.equal(limitedHorizon.cashSafety.oneTimeAmount, 0);
+assert.equal(limitedHorizon.cashSafety.oneTimeAllocationEvaluated, true);
+assert.match(String(limitedHorizon.cashSafety.oneTimeReason), /limited to three months/);
+
+const unknownLaterUpcoming = context.evaluateDebtPayoffFutureCashSafety_({
+  asOfDate: cashSafetyAsOf,
+  startingCash: 20000,
+  surplus: 500,
+  requiredReserve: 2000,
+  reserveUpcomingAmount: 0,
+  upcomingExpenses: [{
+    name: 'Summer camp',
+    status: 'Planned',
+    dueDate: '2027-05-15',
+    dueDateKnown: true,
+    amount: null,
+    amountKnown: false
+  }]
+});
+assert.equal(unknownLaterUpcoming.ok, true);
+assert.equal(unknownLaterUpcoming.extraCap, 500);
+assert.equal(unknownLaterUpcoming.cashSafety.oneTimeAllocationEvaluated, false);
+assert.equal(unknownLaterUpcoming.cashSafety.oneTimeAmount, null);
+assert.match(String(unknownLaterUpcoming.cashSafety.oneTimeReason), /Summer camp/);
+assert.match(String(unknownLaterUpcoming.cashSafety.oneTimeReason), /12-month/);
 
 const identifiedGapUpcoming = [{
   name: 'Home insurance',
@@ -1399,6 +1608,10 @@ const missingUpcomingRec = context.buildDebtPayoffMonthlyRecommendation_(
 assert.equal(missingUpcomingRec.state, 'WITHHELD');
 assert.equal(missingUpcomingRec.code, 'FACTS_MISSING');
 assert.match(String(missingUpcomingRec.reason), /Cash Flow → Upcoming/);
+assert.equal(missingUpcomingRec.oneTimeAllocation.evaluated, false);
+assert.equal(missingUpcomingRec.oneTimeAllocation.amount, null);
+assert.equal(missingUpcomingRec.oneTimeAllocation.actionKey, 'NONE');
+assert.match(String(missingUpcomingRec.oneTimeAllocation.why), /treated as \$0/);
 
 const dedupRec = context.buildDebtPayoffMonthlyRecommendation_([
   usableDebt('Visa', 1200, 19.99, 200)
@@ -1451,7 +1664,9 @@ assert.equal(zeroRec.nextDollar.actionKey, 'KEEP_CASH');
 assert.equal(zeroRec.nextDollar.amount, 0);
 assert.match(String(zeroRec.nextDollar.why), /no extra|no surplus|recurring extra|monthly extra remains/i);
 assert.equal(zeroRec.nextDollar.alternatives.length, 0);
-assert.equal(zeroRec.nextDollar.oneTimeAllocationEvaluated, false);
+assert.equal(zeroRec.nextDollar.oneTimeAllocationEvaluated, true);
+assert.equal(zeroRec.oneTimeAllocation.evaluated, true);
+assert.ok(zeroRec.oneTimeAllocation.amount > 0);
 assert.doesNotMatch(String(zeroRec.nextDollar.liquidity), /already use available cash/);
 
 const noLumpSumRec = context.buildDebtPayoffMonthlyRecommendation_(
@@ -1460,25 +1675,94 @@ assert.equal(noLumpSumRec.state, 'WITHHELD');
 assert.equal(noLumpSumRec.code, 'NO_SURPLUS');
 assert.equal(noLumpSumRec.monthlyExtra, 0);
 assert.equal(noLumpSumRec.nextDollar.alternatives.length, 0);
-assert.equal(noLumpSumRec.nextDollar.oneTimeAllocationEvaluated, false);
+assert.equal(noLumpSumRec.nextDollar.oneTimeAllocationEvaluated, true);
 assert.equal(noLumpSumRec.nextDollar.actionKey, 'KEEP_CASH');
 assert.doesNotMatch(JSON.stringify(noLumpSumRec), /lump-sum|PAY_LUMP|one-time extra payment is recommended/i);
 assert.match(String(noLumpSumRec.reason), /no monthly extra remains|no surplus|exceed recurring income/i);
 assert.doesNotMatch(String(noLumpSumRec.reason), /not recommended as a one-time/);
 assert.equal(noLumpSumRec.nextDollar.liquidity, '');
-assert.equal(noLumpSumRec.nextDollar.outcome,
-  'One-time use of cash above the reserve is not evaluated here.');
+assert.equal(noLumpSumRec.nextDollar.outcome, '');
 assert.doesNotMatch(String(noLumpSumRec.nextDollar.liquidity), /already use available cash/);
+assert.equal(noLumpSumRec.oneTimeAllocation.evaluated, true);
+assert.equal(noLumpSumRec.oneTimeAllocation.state, 'EVALUATED');
+assert.equal(
+  noLumpSumRec.oneTimeAllocation.amount,
+  negativeSurplusCashAbove.cashSafety.oneTimeAmount
+);
+assert.ok(noLumpSumRec.oneTimeAllocation.amount > 0);
+assert.equal(noLumpSumRec.oneTimeAllocation.actionKey, 'UNRANKED');
+assert.equal(noLumpSumRec.oneTimeAllocation.ranked, false);
+assert.equal(noLumpSumRec.oneTimeAllocation.cashYieldStatus, 'CASH_YIELD_DATA_REQUIRED');
+assert.equal(noLumpSumRec.oneTimeAllocation.payHighApr.status, 'READY');
+assert.ok(noLumpSumRec.oneTimeAllocation.payHighApr.interestSavedVsMinimumOnly > 0);
+assert.match(String(noLumpSumRec.oneTimeAllocation.payHighApr.outcome), /less interest than baseline|Modeled interest/);
+assert.match(String(noLumpSumRec.oneTimeAllocation.why), /not ranked/);
+assert.doesNotMatch(JSON.stringify(noLumpSumRec.oneTimeAllocation), /buildCapitalAllocationPlan_/);
+
+const displayedHouseholdSupported = Object.assign({}, negativeSurplusCashAbove, {
+  amount: 0,
+  deficit: true,
+  recurringSurplusBeforeReserve: -11233.45,
+  usableCashAfterBuffers: 110139.19,
+  requiredReserveAmount: 41252.04,
+  cashSafety: displayedSafety.cashSafety
+});
+const displayedHouseholdRec = context.buildDebtPayoffMonthlyRecommendation_(
+  recDebts, displayedHouseholdSupported, { asOfDate: cashSafetyAsOf });
+assert.equal(displayedHouseholdRec.monthlyExtra, 0);
+assert.equal(displayedHouseholdRec.oneTimeAllocation.amount, 0);
+assert.equal(displayedHouseholdRec.oneTimeAllocation.code, 'BASELINE_RESERVE_BREACH');
+assert.equal(displayedHouseholdRec.oneTimeAllocation.actionKey, 'NONE');
+assert.equal(displayedHouseholdRec.oneTimeAllocation.baselineBreachMonthKey, '2027-04');
+assert.equal(displayedHouseholdRec.oneTimeAllocation.threeMonthAmount, 35133.46);
+assert.match(String(displayedHouseholdRec.oneTimeAllocation.why), /No lump payment is labeled safe/);
+assert.match(String(displayedHouseholdRec.oneTimeAllocation.why),
+  /as the monthly deficit of \$11,233\.45 continues/);
+assert.doesNotMatch(String(displayedHouseholdRec.oneTimeAllocation.why),
+  /required payments and the protected reserve is due/);
+assert.doesNotMatch(String(displayedHouseholdRec.oneTimeAllocation.why), /still leaves cash at or above/);
+
+const rankedOneTime = context.buildDebtPayoffMonthlyRecommendation_(
+  recDebts, negativeSurplusCashAbove, {
+    asOfDate: cashSafetyAsOf,
+    savedAssumptions: {
+      cashYieldKnown: true,
+      cashYieldPct: 0.5,
+      cashYieldStatus: 'SAVED_APY',
+      cashYieldLocation: 'SYS - Financial Facts APY'
+    }
+  });
+assert.equal(rankedOneTime.oneTimeAllocation.ranked, true);
+assert.equal(rankedOneTime.oneTimeAllocation.actionKey, 'PAY_HIGH_APR_DEBT');
+assert.equal(rankedOneTime.monthlyExtra, 0);
+
+const keepCashOneTime = context.buildDebtPayoffMonthlyRecommendation_(
+  recDebts, negativeSurplusCashAbove, {
+    asOfDate: cashSafetyAsOf,
+    savedAssumptions: {
+      cashYieldKnown: true,
+      cashYieldPct: 25,
+      cashYieldStatus: 'SAVED_APY',
+      cashYieldLocation: 'SYS - Financial Facts APY'
+    }
+  });
+assert.equal(keepCashOneTime.oneTimeAllocation.ranked, true);
+assert.equal(keepCashOneTime.oneTimeAllocation.actionKey, 'KEEP_CASH');
+assert.equal(keepCashOneTime.monthlyExtra, 0);
 
 assert.equal(missingRec.nextDollar.actionKey, 'NONE');
 assert.equal(missingRec.nextDollar.amount, null);
 assert.match(String(missingRec.nextDollar.why), /income|proven|missing|\$0/i);
+assert.equal(missingRec.oneTimeAllocation.evaluated, false);
+assert.equal(missingRec.oneTimeAllocation.amount, null);
 
 assert.equal(reserveRec.nextDollar.actionKey, 'KEEP_CASH');
 assert.equal(reserveRec.nextDollar.amount, 0);
 assert.match(String(reserveRec.nextDollar.why), /reserve/i);
 assert.equal(reserveRec.nextDollar.alternatives.length, 0);
-assert.equal(reserveRec.nextDollar.oneTimeAllocationEvaluated, false);
+assert.equal(reserveRec.oneTimeAllocation.evaluated, true);
+assert.equal(reserveRec.oneTimeAllocation.amount, 0);
+assert.equal(reserveRec.oneTimeAllocation.actionKey, 'NONE');
 
 const house = usableDebt('Loan Depot - San Jose House', 400000, 2.25, 1800);
 house.type = 'Loan';
@@ -3437,6 +3721,7 @@ vm.runInContext(
   '\n' + sliceFunction(client, 'renderDebtPayoffVariableBillMethodHtml_') +
   '\n' + sliceFunction(client, 'debtPayoffVariableBillPeriodLabel_') +
   '\n' + sliceFunction(client, 'renderDebtPayoffVariableBillEstimatesHtml_') +
+  '\n' + sliceFunction(client, 'renderDebtPayoffOneTimeAllocationHtml_') +
   '\n' + sliceFunction(client, 'renderDebtPayoffMonthlyRecommendation_') +
   '\n' + sliceFunction(client, 'renderDebtPayoffNextDollarLead_') +
   '\n' + sliceFunction(client, 'renderDebtPayoffNextDollarDetailsHtml_') +
@@ -3533,12 +3818,36 @@ uiContext.renderDebtPayoffMonthlyRecommendation_({
     amount: 0,
     why: 'Recurring commitments leave no surplus after required bills.',
     liquidity: '',
-    outcome: 'One-time use of cash above the reserve is not evaluated here.',
+    outcome: '',
     remainingAboveReserve: 35133.46,
-    oneTimeAllocationEvaluated: false,
+    oneTimeAllocationEvaluated: true,
     alternatives: [],
     horizonLabel: '3-month cash-safety forecast (aligned with This Week’s 90-day reserve)',
     reconciliation: displayedRecon
+  },
+  oneTimeAllocation: {
+    state: 'EVALUATED',
+    code: 'BASELINE_RESERVE_BREACH',
+    evaluated: true,
+    amount: 0,
+    actionKey: 'NONE',
+    actionTitle: 'No one-time extra is labeled safe',
+    why: 'Even with no one-time extra, usable cash would fall below the protected reserve of $1,805.38 in 2027-04 as the monthly deficit of $11,233.45 continues. No lump payment is labeled safe. A recurring surplus, lower commitments, or additional confirmed income is needed. Optional Cisco bonuses are not assumed.',
+    baselineBreachMonthKey: '2027-04',
+    baselineBreachObligation: 'required payments and the protected reserve',
+    threeMonthAmount: 35133.46,
+    cashYieldKnown: false,
+    cashYieldStatus: 'CASH_YIELD_DATA_REQUIRED',
+    ranked: false,
+    keepCash: null,
+    payHighApr: null,
+    assumptions: [
+      'If even $0 extra would fall below the reserve in a later month, no lump is labeled safe.'
+    ],
+    missingAssumptions: [{
+      code: 'CASH_YIELD_DATA_REQUIRED',
+      reason: 'Cash accounts do not yet store an authoritative APY for this comparison.'
+    }]
   },
   protection: {
     surplusBeforeReserve: -11233.45,
@@ -3558,9 +3867,13 @@ uiContext.renderDebtPayoffMonthlyRecommendation_({
   cashSafety: {
     horizonLabel: '3-month cash-safety forecast (aligned with This Week’s 90-day reserve)',
     remainingAboveReserve: 35133.46,
-    oneTimeAllocationEvaluated: false,
+    oneTimeAllocationEvaluated: true,
+    oneTimeAmount: 0,
+    oneTimeBaselineSafe: false,
+    oneTimeBaselineBreachMonthKey: '2027-04',
+    oneTimeThreeMonthAmount: 35133.46,
     reconciliation: displayedRecon,
-    reason: 'After the 3-month cash-safety forecast, ending cash is $36,938.84, remaining protected reserve is $1,805.38, and $35,133.46 remains above that reserve. One-time use of cash above the reserve is not evaluated here.'
+    reason: 'After the 3-month cash-safety forecast, ending cash is $36,938.84, remaining protected reserve is $1,805.38, and $35,133.46 remains above that reserve.'
   }
 });
 const zeroExtraHtml = recommendationWrap.innerHTML;
@@ -3568,16 +3881,29 @@ assert.match(zeroExtraHtml, /No recurring extra this month/);
 assert.equal((zeroExtraHtml.match(/No recurring extra this month/g) || []).length, 1);
 assert.doesNotMatch(zeroExtraHtml, /not recommended as a one-time extra payment/);
 assert.doesNotMatch(zeroExtraHtml, /<summary>No recurring extra to compare<\/summary>/);
-assert.match(zeroExtraHtml, /One-time use of cash above the reserve is not evaluated here/);
-assert.equal((zeroExtraHtml.match(
-  /One-time use of cash above the reserve is not evaluated here/g) || []).length, 1);
+assert.doesNotMatch(zeroExtraHtml, /One-time use of cash above the reserve is not evaluated here/);
 assert.doesNotMatch(zeroExtraHtml, /Projected; one-time use is not evaluated/);
-assert.equal((zeroExtraHtml.match(/one-time use/gi) || []).length, 1);
+assert.match(zeroExtraHtml, /One-time extra from cash above reserve/);
+assert.match(zeroExtraHtml, /No one-time extra is labeled safe/);
+assert.match(zeroExtraHtml, /Shortfall month: 2027-04/);
+assert.match(zeroExtraHtml, /as the monthly deficit of \$11,233\.45 continues/);
+assert.doesNotMatch(zeroExtraHtml, /required payments and the protected reserve is due/);
+assert.doesNotMatch(zeroExtraHtml, /Obligation: required payments and the protected reserve/);
+assert.doesNotMatch(zeroExtraHtml, /\$\-11/);
+assert.match(zeroExtraHtml, /\$35,133\.46/);
+assert.doesNotMatch(zeroExtraHtml, /Cash versus high-APR debt is not ranked/);
+assert.doesNotMatch(zeroExtraHtml, /If paid to high-APR debt/);
+assert.doesNotMatch(zeroExtraHtml, /If kept in cash/);
+assert.match(zeroExtraHtml, /separate from this month’s extra-payoff recommendation/);
+assert.doesNotMatch(zeroExtraHtml, /id="debt_payoff_scenario_extra"/);
+assert.match(zeroExtraHtml, /<summary>One-time extra assumptions<\/summary>/);
+assert.doesNotMatch(zeroExtraHtml, /debt-payoff-one-time[\s\S]*\sopen/);
 assert.match(zeroExtraHtml, /Projected cash after three months/);
 assert.match(zeroExtraHtml, /Protected reserve/);
-assert.match(zeroExtraHtml, /Projected cash above reserve/);
+assert.match(zeroExtraHtml, /Above reserve at month 3 — not safe to spend/);
+assert.doesNotMatch(zeroExtraHtml, /Projected cash above reserve/);
 assert.match(zeroExtraHtml,
-  /<div class="debt-payoff-cash-summary-item">[\s\S]*?<span class="debt-payoff-summary-label">Projected cash after three months<\/span><span class="debt-payoff-summary-value">[\s\S]*?<div class="debt-payoff-cash-summary-item">[\s\S]*?<span class="debt-payoff-summary-label">Protected reserve<\/span><span class="debt-payoff-summary-value">[\s\S]*?<div class="debt-payoff-cash-summary-item[\s\S]*?<span class="debt-payoff-summary-label">Projected cash above reserve<\/span><span class="debt-payoff-summary-value">/);
+  /<div class="debt-payoff-cash-summary-item">[\s\S]*?<span class="debt-payoff-summary-label">Projected cash after three months<\/span><span class="debt-payoff-summary-value">[\s\S]*?<div class="debt-payoff-cash-summary-item">[\s\S]*?<span class="debt-payoff-summary-label">Protected reserve<\/span><span class="debt-payoff-summary-value">[\s\S]*?<div class="debt-payoff-cash-summary-item[\s\S]*?<span class="debt-payoff-summary-label">Above reserve at month 3 — not safe to spend<\/span><span class="debt-payoff-summary-value">/);
 assert.match(zeroExtraHtml,
   /<details class="debt-payoff-details"><summary>How this was calculated<\/summary>/);
 assert.doesNotMatch(zeroExtraHtml, /<details class="debt-payoff-details"[^>]*\sopen/);
@@ -3608,9 +3934,11 @@ assert.doesNotMatch(zeroExtraHtml, /<strong>Liquidity:<\/strong>/);
 assert.doesNotMatch(zeroExtraHtml, /<strong>Estimated outcome:<\/strong>/);
 assert.doesNotMatch(zeroExtraHtml, /<summary>Compare other uses of this extra<\/summary>/);
 assert.doesNotMatch(zeroExtraHtml, /already use available cash/);
-assert.doesNotMatch(zeroExtraHtml, /Pay high-APR debt/);
+assert.doesNotMatch(zeroExtraHtml, /<summary>Compare other uses of this extra<\/summary>[\s\S]*Pay high-APR debt/);
 assert.doesNotMatch(zeroExtraHtml, /The cash-safety check covers three months/);
-assert.doesNotMatch(zeroExtraHtml, /not a payment and is not saved/);
+assert.match(zeroExtraHtml, /class="debt-payoff-one-time"[\s\S]*not a payment and is not saved/);
+assert.doesNotMatch(zeroExtraHtml.replace(/<section class="debt-payoff-one-time"[\s\S]*?<\/section>/, ''),
+  /not a payment and is not saved/);
 assert.equal((zeroExtraHtml.match(/Unknown values are not treated as \$0/g) || []).length, 1);
 
 uiContext.renderDebtPayoffMonthlyRecommendation_({
