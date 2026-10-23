@@ -402,6 +402,14 @@ var DEBT_PAYOFF_CASH_SAFETY_HORIZON_LABEL_ =
 var DEBT_PAYOFF_ONE_TIME_HORIZON_MONTHS_ = 12;
 var DEBT_PAYOFF_ONE_TIME_HORIZON_LABEL_ =
   '12-month cash-safety forecast from current recurring surplus and known Planned upcoming expenses';
+var DEBT_PAYOFF_BREAK_EVEN_CATEGORIES_ = [
+  { key: 'recurringIncomeMonthly', label: 'Recurring income', kind: 'income' },
+  { key: 'recurringBillsMonthly', label: 'Required bills', kind: 'commitment' },
+  { key: 'variableBillsMonthly', label: 'Variable bills', kind: 'commitment' },
+  { key: 'debtMinimumsMonthly', label: 'Debt minimums', kind: 'commitment' },
+  { key: 'policyFloorMonthly', label: 'Investment policy floors', kind: 'commitment' },
+  { key: 'unmatchedInvestmentBillsMonthly', label: 'Other investment bills', kind: 'commitment' }
+];
 
 /**
  * Read-only household strategy comparison from current INPUT - Debts.
@@ -2170,8 +2178,76 @@ function buildDebtPayoffOneTimeAllocation_(normalizedDebts, supported, rec, opti
   };
 }
 
+function buildDebtPayoffBreakEvenExplanation_(supported) {
+  var extraUntil =
+    'recurring commitments are covered and the reserve forecast passes';
+  var empty = {
+    state: 'FACTS_MISSING',
+    gapToBreakEven: null,
+    surplusBeforeReserve: null,
+    income: null,
+    commitmentsTotal: null,
+    categories: [],
+    canIdentifySafeReduction: false,
+    extraRemainsZeroUntil: extraUntil
+  };
+  if (!supported || supported.available !== true) return empty;
+  var c = supported.components || {};
+  var categories = [];
+  var income = null;
+  var commitmentsTotal = 0;
+  var hasCommitments = false;
+  DEBT_PAYOFF_BREAK_EVEN_CATEGORIES_.forEach(function(row) {
+    var amount = c[row.key];
+    if (amount == null || !isFinite(Number(amount))) return;
+    var n = round2_(Number(amount));
+    categories.push({
+      key: row.key,
+      label: row.label,
+      kind: row.kind,
+      amount: n
+    });
+    if (row.kind === 'income') {
+      income = n;
+      return;
+    }
+    commitmentsTotal = round2_(commitmentsTotal + n);
+    hasCommitments = true;
+  });
+  var surplus = supported.recurringSurplusBeforeReserve;
+  var surplusKnown = surplus != null && isFinite(Number(surplus));
+  var surplusN = surplusKnown ? round2_(Number(surplus)) : null;
+  var deficit = supported.deficit === true ||
+    (surplusKnown && surplusN <= 0.005);
+  if (!deficit) {
+    return {
+      state: 'BALANCED',
+      gapToBreakEven: 0,
+      surplusBeforeReserve: surplusN,
+      income: income,
+      commitmentsTotal: hasCommitments ? commitmentsTotal : null,
+      categories: categories,
+      canIdentifySafeReduction: false,
+      extraRemainsZeroUntil: extraUntil
+    };
+  }
+  return {
+    state: 'DEFICIT',
+    gapToBreakEven: surplusKnown && surplusN < -0.005
+      ? round2_(Math.abs(surplusN))
+      : 0,
+    surplusBeforeReserve: surplusN,
+    income: income,
+    commitmentsTotal: hasCommitments ? commitmentsTotal : null,
+    categories: categories,
+    canIdentifySafeReduction: false,
+    extraRemainsZeroUntil: extraUntil
+  };
+}
+
 function attachDebtPayoffNextDollar_(rec, normalizedDebts, supported, options) {
   rec = rec || {};
+  rec.breakEven = buildDebtPayoffBreakEvenExplanation_(supported);
   rec.oneTimeAllocation = buildDebtPayoffOneTimeAllocation_(
     normalizedDebts, supported, rec, options);
   rec.nextDollar = buildDebtPayoffNextDollarComparison_(
@@ -2228,10 +2304,15 @@ function buildDebtPayoffMonthlyRecommendation_(normalizedDebts, supported, optio
     );
   }
   if (supported.deficit === true || !(Number(supported.amount) > 0.005)) {
+    var breakEven = buildDebtPayoffBreakEvenExplanation_(supported);
+    var gapPhrase = breakEven && breakEven.gapToBreakEven > 0.005
+      ? (' by ' + debtPayoffFormatCashSafetyCurrency_(breakEven.gapToBreakEven))
+      : '';
     return attachDebtPayoffNextDollar_(
       debtPayoffRecommendationWithhold_(
         'NO_SURPLUS',
-        'Recurring commitments exceed recurring income after required bills, known debt minimums, and standing floors, so no monthly extra remains.',
+        'Recurring commitments exceed recurring income' + gapPhrase +
+          ' after required bills, known debt minimums, and standing floors, so no monthly extra remains.',
         { monthlyExtra: 0, protection: protection, cashSafety: supported.cashSafety || null }
       ),
       normalizedDebts, supported, options

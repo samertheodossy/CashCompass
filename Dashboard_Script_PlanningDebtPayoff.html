@@ -529,7 +529,13 @@ function renderDebtPayoffNestedDetailsHtml_(summary, bodyHtml) {
 
 function renderDebtPayoffDetailsSummaryHtml_(supported, rec) {
   if (rec && (rec.code === 'FACTS_MISSING' || (supported && supported.available !== true))) {
-    return '<p>Required facts are missing. Unknown values are not treated as $0.</p>';
+    return '<p>Required facts are missing. Unknown values are not treated as $0. The monthly gap to break even cannot be proven, and CashCompass cannot identify a safe reduction from the saved facts.</p>';
+  }
+  var breakEven = rec && rec.breakEven;
+  if ((breakEven && breakEven.state === 'DEFICIT') ||
+      (rec && rec.code === 'NO_SURPLUS') ||
+      (supported && supported.deficit === true)) {
+    return '<p>Income, required bills, and known Upcoming rows used in this estimate are in the sections below. The monthly gap to break even uses those same category totals. Extra debt payments remain $0.00 until recurring commitments are covered and the reserve forecast passes. CashCompass cannot identify a safe reduction from the saved facts. Unknown values are not treated as $0.</p>';
   }
   return '<p>Income, required bills, and known Upcoming rows used in this estimate are in the sections below. Unknown values are not treated as $0.</p>';
 }
@@ -649,6 +655,92 @@ function renderDebtPayoffOneTimeAllocationHtml_(oneTime) {
   return parts.join('');
 }
 
+function resolveDebtPayoffBreakEven_(rec, supported) {
+  if (rec && rec.breakEven && rec.breakEven.state) return rec.breakEven;
+  if (rec && (rec.code === 'FACTS_MISSING' || (supported && supported.available !== true))) {
+    return {
+      state: 'FACTS_MISSING',
+      gapToBreakEven: null,
+      categories: [],
+      canIdentifySafeReduction: false
+    };
+  }
+  if (rec && (rec.code === 'RESERVE_PROTECTS' || rec.code === 'FUTURE_RESERVE_BREACH')) {
+    return { state: 'NOT_APPLICABLE', categories: [] };
+  }
+  var source = (supported && supported.components)
+    ? supported
+    : debtPayoffSupportedFromProtection_(rec && rec.protection);
+  var c = (source && source.components) || {};
+  var defs = [
+    { key: 'recurringIncomeMonthly', label: 'Recurring income', kind: 'income' },
+    { key: 'recurringBillsMonthly', label: 'Required bills', kind: 'commitment' },
+    { key: 'variableBillsMonthly', label: 'Variable bills', kind: 'commitment' },
+    { key: 'debtMinimumsMonthly', label: 'Debt minimums', kind: 'commitment' },
+    { key: 'policyFloorMonthly', label: 'Investment policy floors', kind: 'commitment' },
+    { key: 'unmatchedInvestmentBillsMonthly', label: 'Other investment bills', kind: 'commitment' }
+  ];
+  var categories = [];
+  defs.forEach(function(row) {
+    if (c[row.key] == null || !isFinite(Number(c[row.key]))) return;
+    categories.push({
+      key: row.key,
+      label: row.label,
+      kind: row.kind,
+      amount: Number(c[row.key])
+    });
+  });
+  var surplus = source && source.recurringSurplusBeforeReserve;
+  var surplusKnown = surplus != null && isFinite(Number(surplus));
+  var surplusN = surplusKnown ? Number(surplus) : null;
+  var deficit = (supported && supported.deficit === true) ||
+    (rec && rec.code === 'NO_SURPLUS') ||
+    (surplusKnown && surplusN <= 0.005);
+  if (!deficit) {
+    return { state: 'BALANCED', gapToBreakEven: 0, categories: categories };
+  }
+  return {
+    state: 'DEFICIT',
+    gapToBreakEven: surplusKnown && surplusN < -0.005 ? Math.abs(surplusN) : 0,
+    categories: categories,
+    canIdentifySafeReduction: false
+  };
+}
+
+function renderDebtPayoffBreakEvenHtml_(rec, supported) {
+  var row = resolveDebtPayoffBreakEven_(rec, supported);
+  if (!row || row.state === 'BALANCED' || row.state === 'NOT_APPLICABLE') return '';
+  var parts = [];
+  parts.push('<section class="debt-payoff-break-even" aria-label="Monthly gap to break even">');
+  if (row.state === 'FACTS_MISSING') {
+    parts.push('<p><strong>The monthly gap to break even cannot be proven from the saved facts.</strong></p>');
+    parts.push('<p>Missing values were not treated as $0. CashCompass cannot identify a safe reduction from the saved facts.</p>');
+    parts.push('</section>');
+    return parts.join('');
+  }
+  var gapText = row.gapToBreakEven == null
+    ? '—'
+    : (typeof fmtCurrency === 'function' ? fmtCurrency(row.gapToBreakEven) : String(row.gapToBreakEven));
+  parts.push('<p class="debt-payoff-recommendation-lead"><strong>Monthly gap to break even: ' +
+    gapText + '</strong></p>');
+  if (row.categories && row.categories.length) {
+    parts.push('<ul class="debt-payoff-break-even-categories">');
+    row.categories.forEach(function(item) {
+      var amountText = typeof fmtCurrency === 'function'
+        ? fmtCurrency(item.amount)
+        : String(item.amount);
+      parts.push('<li><span class="debt-payoff-summary-label">' +
+        escapeHtml(item.label) + '</span><span class="debt-payoff-summary-value">' +
+        amountText + '</span></li>');
+    });
+    parts.push('</ul>');
+  }
+  parts.push('<p>The shortfall requires more income or lower commitments, but CashCompass cannot identify a safe reduction from the saved facts.</p>');
+  parts.push('<p>Extra debt payments remain $0.00 until recurring commitments are covered and the reserve forecast passes.</p>');
+  parts.push('</section>');
+  return parts.join('');
+}
+
 function renderDebtPayoffMonthlyRecommendation_(rec, supported) {
   var wrap = document.getElementById('debt_payoff_recommendation');
   if (!wrap) return;
@@ -672,6 +764,7 @@ function renderDebtPayoffMonthlyRecommendation_(rec, supported) {
       '</strong></p>');
     if (zeroExtra) {
       if (rec.reason) parts.push('<p>' + escapeHtml(rec.reason) + '</p>');
+      parts.push(renderDebtPayoffBreakEvenHtml_(rec, supported));
       parts.push(renderDebtPayoffCashSafetySummaryHtml_(supported, rec));
     } else {
       if (next.why) parts.push('<p>' + escapeHtml(next.why) + '</p>');
@@ -696,11 +789,13 @@ function renderDebtPayoffMonthlyRecommendation_(rec, supported) {
   } else if (!factsMissing && rec.monthlyExtra === 0) {
     parts.push('<p class="debt-payoff-recommendation-lead"><strong>No recurring extra this month.</strong></p>');
     if (rec.reason) parts.push('<p>' + escapeHtml(rec.reason) + '</p>');
+    parts.push(renderDebtPayoffBreakEvenHtml_(rec, supported));
     parts.push(renderDebtPayoffCashSafetySummaryHtml_(supported, rec));
   } else {
     parts.push('<p class="debt-payoff-recommendation-lead"><strong>A monthly extra cannot be recommended.</strong></p>');
     parts.push('<p>' + escapeHtml(rec.reason ||
       'Required facts are missing or ambiguous. Missing values were not replaced with $0.') + '</p>');
+    parts.push(renderDebtPayoffBreakEvenHtml_(rec, supported));
     parts.push(renderDebtPayoffMissingFactsHtml_(supported, rec));
   }
   parts.push(renderDebtPayoffOneTimeAllocationHtml_(oneTime));

@@ -146,6 +146,9 @@ assert.match(help, /outside this check/);
 assert.match(help, /one-time extra from cash above the protected reserve/);
 assert.match(help, /12-month month-by-month projection/);
 assert.match(help, /no lump is labeled safe/);
+assert.match(help, /monthly gap to break even/);
+assert.match(help, /cannot identify a safe reduction from the saved facts/);
+assert.match(help, /Extra debt payments remain \$0\.00 until recurring commitments are covered/);
 assert.match(help, /Above reserve at month 3 — not safe to spend/);
 assert.match(help, /not available to spend/);
 assert.match(help, /continuing monthly deficit is shown as a currency amount/);
@@ -161,6 +164,14 @@ assert.doesNotMatch(client, /One-time use of cash above the reserve is not evalu
 assert.match(projection, /function buildDebtPayoffOneTimeAllocation_/);
 assert.match(projection, /function debtPayoffMaxOneTimePreservingReserve_/);
 assert.match(projection, /function evaluateDebtPayoffOneTimeHorizon_/);
+assert.match(projection, /function buildDebtPayoffBreakEvenExplanation_/);
+assert.match(client, /function renderDebtPayoffBreakEvenHtml_/);
+assert.match(sliceFunction(client, 'renderDebtPayoffMonthlyRecommendation_'),
+  /renderDebtPayoffBreakEvenHtml_/);
+assert.doesNotMatch(sliceFunction(client, 'renderDebtPayoffBreakEvenHtml_'),
+  /optional|adjustable|safe to reduce/i);
+assert.doesNotMatch(sliceFunction(projection, 'buildDebtPayoffBreakEvenExplanation_'),
+  /optional|adjustable|safe to reduce/i);
 assert.match(projection, /DEBT_PAYOFF_ONE_TIME_HORIZON_MONTHS_ = 12/);
 assert.doesNotMatch(sliceFunction(projection, 'evaluateDebtPayoffOneTimeHorizon_'),
   /bonusEvents/);
@@ -1572,11 +1583,33 @@ assert.equal(zeroRec.code, 'NO_SURPLUS');
 assert.equal(zeroRec.monthlyExtra, 0);
 assert.equal(zeroRec.comparison, null);
 assert.equal(zeroRec.strategyKey, null);
+assert.equal(zeroRec.breakEven.state, 'DEFICIT');
+assert.equal(zeroRec.breakEven.gapToBreakEven,
+  context.round2_(Math.abs(deficit.recurringSurplusBeforeReserve)));
+assert.equal(zeroRec.breakEven.income, deficit.components.recurringIncomeMonthly);
+assert.equal(zeroRec.breakEven.commitmentsTotal, context.round2_(
+  deficit.components.recurringBillsMonthly + deficit.components.debtMinimumsMonthly));
+assert.equal(
+  context.round2_(zeroRec.breakEven.income - zeroRec.breakEven.commitmentsTotal),
+  deficit.recurringSurplusBeforeReserve
+);
+assert.equal(zeroRec.breakEven.canIdentifySafeReduction, false);
+assert.doesNotMatch(JSON.stringify(zeroRec.breakEven), /optional|adjustable|safe to reduce/i);
+assert.match(String(zeroRec.reason), /by \$300\.00/);
+
+assert.equal(monthlyRec.breakEven.state, 'BALANCED');
+assert.equal(monthlyRec.breakEven.gapToBreakEven, 0);
+assert.equal(monthlyRec.breakEven.income, recSupported.components.recurringIncomeMonthly);
+assert.equal(monthlyRec.breakEven.canIdentifySafeReduction, false);
 
 const missingRec = context.buildDebtPayoffMonthlyRecommendation_(recDebts, missingIncome, { asOfDate: asOf });
 assert.equal(missingRec.state, 'WITHHELD');
 assert.equal(missingRec.code, 'FACTS_MISSING');
 assert.equal(missingRec.comparison, null);
+assert.equal(missingRec.breakEven.state, 'FACTS_MISSING');
+assert.equal(missingRec.breakEven.gapToBreakEven, null);
+assert.equal(missingRec.breakEven.categories.length, 0);
+assert.equal(missingRec.breakEven.canIdentifySafeReduction, false);
 
 const reserveRec = context.buildDebtPayoffMonthlyRecommendation_(recDebts, reserveProtected, { asOfDate: asOf });
 assert.equal(reserveRec.state, 'WITHHELD');
@@ -1715,6 +1748,12 @@ assert.equal(displayedHouseholdRec.oneTimeAllocation.code, 'BASELINE_RESERVE_BRE
 assert.equal(displayedHouseholdRec.oneTimeAllocation.actionKey, 'NONE');
 assert.equal(displayedHouseholdRec.oneTimeAllocation.baselineBreachMonthKey, '2027-04');
 assert.equal(displayedHouseholdRec.oneTimeAllocation.threeMonthAmount, 35133.46);
+assert.equal(displayedHouseholdRec.breakEven.state, 'DEFICIT');
+assert.equal(displayedHouseholdRec.breakEven.gapToBreakEven, 11233.45);
+assert.equal(
+  displayedHouseholdRec.breakEven.gapToBreakEven,
+  context.round2_(Math.abs(displayedHouseholdSupported.recurringSurplusBeforeReserve))
+);
 assert.match(String(displayedHouseholdRec.oneTimeAllocation.why), /No lump payment is labeled safe/);
 assert.match(String(displayedHouseholdRec.oneTimeAllocation.why),
   /as the monthly deficit of \$11,233\.45 continues/);
@@ -3722,6 +3761,8 @@ vm.runInContext(
   '\n' + sliceFunction(client, 'debtPayoffVariableBillPeriodLabel_') +
   '\n' + sliceFunction(client, 'renderDebtPayoffVariableBillEstimatesHtml_') +
   '\n' + sliceFunction(client, 'renderDebtPayoffOneTimeAllocationHtml_') +
+  '\n' + sliceFunction(client, 'resolveDebtPayoffBreakEven_') +
+  '\n' + sliceFunction(client, 'renderDebtPayoffBreakEvenHtml_') +
   '\n' + sliceFunction(client, 'renderDebtPayoffMonthlyRecommendation_') +
   '\n' + sliceFunction(client, 'renderDebtPayoffNextDollarLead_') +
   '\n' + sliceFunction(client, 'renderDebtPayoffNextDollarDetailsHtml_') +
@@ -3793,6 +3834,14 @@ uiContext.renderDebtPayoffMonthlyRecommendation_({
 }, recurringSurplusBeforeReserve: -300, requiredReserveAmount: 1000, usableCashAfterBuffers: 5000 });
 assert.match(recommendationWrap.innerHTML, /<strong>\$0\.00<\/strong>/);
 assert.match(recommendationWrap.innerHTML, /No recurring extra this month/);
+assert.match(recommendationWrap.innerHTML, /Monthly gap to break even: \$300\.00/);
+assert.match(recommendationWrap.innerHTML, /<span class="debt-payoff-summary-label">Recurring income<\/span><span class="debt-payoff-summary-value">\$1,200\.00<\/span>/);
+assert.match(recommendationWrap.innerHTML, /<span class="debt-payoff-summary-label">Required bills<\/span><span class="debt-payoff-summary-value">\$1,000\.00<\/span>/);
+assert.match(recommendationWrap.innerHTML, /<span class="debt-payoff-summary-label">Debt minimums<\/span><span class="debt-payoff-summary-value">\$500\.00<\/span>/);
+assert.match(recommendationWrap.innerHTML, /cannot identify a safe reduction from the saved facts/);
+assert.match(recommendationWrap.innerHTML, /Extra debt payments remain \$0\.00 until recurring commitments are covered and the reserve forecast passes/);
+assert.doesNotMatch(recommendationWrap.innerHTML, /safe to reduce|adjustable|optional bill/i);
+assert.equal((recommendationWrap.innerHTML.match(/Income, commitments, and reserve protection/g) || []).length, 1);
 assert.doesNotMatch(recommendationWrap.innerHTML, /Do not pay extra this month/);
 assert.doesNotMatch(recommendationWrap.innerHTML, /Supported monthly extra/);
 assert.doesNotMatch(recommendationWrap.innerHTML, /debt-payoff-strategy-grid/);
@@ -3885,6 +3934,10 @@ assert.doesNotMatch(zeroExtraHtml, /One-time use of cash above the reserve is no
 assert.doesNotMatch(zeroExtraHtml, /Projected; one-time use is not evaluated/);
 assert.match(zeroExtraHtml, /One-time extra from cash above reserve/);
 assert.match(zeroExtraHtml, /No one-time extra is labeled safe/);
+assert.match(zeroExtraHtml, /Monthly gap to break even: \$11,233\.45/);
+assert.match(zeroExtraHtml, /cannot identify a safe reduction from the saved facts/);
+assert.match(zeroExtraHtml, /Extra debt payments remain \$0\.00 until recurring commitments are covered and the reserve forecast passes/);
+assert.doesNotMatch(zeroExtraHtml, /safe to reduce|adjustable|optional bill/i);
 assert.match(zeroExtraHtml, /Shortfall month: 2027-04/);
 assert.match(zeroExtraHtml, /as the monthly deficit of \$11,233\.45 continues/);
 assert.doesNotMatch(zeroExtraHtml, /required payments and the protected reserve is due/);
@@ -3963,6 +4016,10 @@ uiContext.renderDebtPayoffMonthlyRecommendation_({
 assert.match(recommendationWrap.innerHTML, /<strong>—<\/strong>/);
 assert.doesNotMatch(recommendationWrap.innerHTML, /debt-payoff-recommendation-amount[\s\S]*\$0\.00/);
 assert.match(recommendationWrap.innerHTML, /A monthly extra cannot be recommended/);
+assert.match(recommendationWrap.innerHTML, /The monthly gap to break even cannot be proven from the saved facts/);
+assert.doesNotMatch(recommendationWrap.innerHTML, /Monthly gap to break even: \$/);
+assert.match(recommendationWrap.innerHTML, /cannot identify a safe reduction from the saved facts/);
+assert.doesNotMatch(recommendationWrap.innerHTML, /safe to reduce|adjustable|optional bill/i);
 assert.match(recommendationWrap.innerHTML, /PG&amp;E is missing a completed-month Cash Flow amount/);
 assert.match(recommendationWrap.innerHTML, /Salary[\s\S]*Expected Amount/);
 assert.match(recommendationWrap.innerHTML, /How this was calculated/);
@@ -4012,6 +4069,7 @@ uiContext.renderDebtPayoffMonthlyRecommendation_({
   }
 });
 assert.match(recommendationWrap.innerHTML, /No recurring extra this month/);
+assert.doesNotMatch(recommendationWrap.innerHTML, /Monthly gap to break even/);
 assert.match(recommendationWrap.innerHTML, /2026-12/);
 assert.match(recommendationWrap.innerHTML, /Insurance \(\$12000\.00\)/);
 assert.doesNotMatch(recommendationWrap.innerHTML, /The cash-safety check covers three months/);
@@ -4087,6 +4145,8 @@ uiContext.renderDebtPayoffMonthlyRecommendation_({
 const recommendationHtml = recommendationWrap.innerHTML;
 assert.match(recommendationHtml, /<strong>\$250\.00<\/strong>/);
 assert.match(recommendationHtml, /Pay an extra \$250\.00 this month using Avalanche/);
+assert.doesNotMatch(recommendationHtml, /Monthly gap to break even/);
+assert.doesNotMatch(recommendationHtml, /cannot identify a safe reduction/);
 assert.doesNotMatch(recommendationHtml, /Supported monthly extra/);
 assert.doesNotMatch(recommendationHtml, /Use this amount in a what-if/);
 assert.doesNotMatch(recommendationHtml, /<button/);
