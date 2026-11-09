@@ -863,14 +863,16 @@ function clearSurfaceState_(target, baseClass) {
 /**
  * True only for transient browser-to-Apps-Script failures that are safe to
  * retry when the caller is an explicitly read-only operation. This includes
- * the narrow Apps Script storage precondition failure observed while loading
- * the Overview. Business errors, authorization failures, and unrelated server
- * exceptions are deliberately excluded.
+ * the narrow Apps Script "reading from storage" failures observed after
+ * Overview paint and while switching Bank accounts: FAILED_PRECONDITION and
+ * DEADLINE_EXCEEDED. Business errors, authorization failures, unrelated
+ * deadlines (for example UrlFetch), and other server exceptions are
+ * deliberately excluded.
  */
 function isTransientRpcTransportError_(value) {
   const raw = String(value && value.message ? value.message : (value == null ? '' : value));
   return /(?:\bHTTP\s*0\b|NetworkError|Connection failure|Failed to fetch|Network request failed)/i.test(raw) ||
-    /server error occurred while reading from storage[\s\S]*?FAILED_PRECONDITION/i.test(raw);
+    /server error occurred while reading from storage[\s\S]*?(FAILED_PRECONDITION|DEADLINE_EXCEEDED)/i.test(raw);
 }
 
 /**
@@ -1869,86 +1871,84 @@ function focusBankTarget_(obj) {
   if (typeof setBankPanelMode === 'function') {
     setBankPanelMode('update');
   }
+  const loadState = select && select.dataset
+    ? String(select.dataset.loadState || '')
+    : '';
+  // showTab() already started loadBankSection(). A second overlapping
+  // getBankAccountUiData can rebuild the picker empty after details paint.
+  if (loadState === 'loading') return;
+  applyFocusDate_('bank_date', obj);
   if ((!select || !name || !select.options || select.options.length <= 1) &&
       typeof loadBankSectionThenSelect_ === 'function' && name) {
     loadBankSectionThenSelect_(name);
-    setTimeout(function() {
-      applyFocusDate_('bank_date', obj);
-      pendingFocus = null;
-    }, 50);
     return;
   }
   if (!select || !name) return;
-
-  setTimeout(function() {
-    const opt = Array.from(select.options).find(function(x) {
-      return x.value === name;
-    });
-    applyFocusDate_('bank_date', obj);
-    if (!opt) return;
-    select.value = name;
-    if (!document.getElementById('bank_date').value) {
-      document.getElementById('bank_date').value = new Date().toISOString().slice(0, 10);
-    }
-    loadBankData();
-    pendingFocus = null;
-  }, 50);
+  const opt = Array.from(select.options).find(function(x) {
+    return x.value === name;
+  });
+  if (!opt) return;
+  select.value = name;
+  if (!document.getElementById('bank_date').value) {
+    document.getElementById('bank_date').value = new Date().toISOString().slice(0, 10);
+  }
+  loadBankData();
+  pendingFocus = null;
 }
 
 function focusHouseTarget_(obj) {
   if (typeof setHousePanelMode === 'function') setHousePanelMode('update');
   const select = document.getElementById('house_house');
   const name = obj && obj.accountName;
+  const loadState = select && select.dataset
+    ? String(select.dataset.loadState || '')
+    : '';
+  if (loadState === 'loading') return;
+  applyFocusDate_('house_date', obj);
   if ((!select || !select.options || select.options.length <= 1) &&
       typeof loadHouseSectionThenSelect_ === 'function' && name) {
     loadHouseSectionThenSelect_(name);
-    setTimeout(function() {
-      applyFocusDate_('house_date', obj);
-      pendingFocus = null;
-    }, 50);
     return;
   }
-  setTimeout(function() {
-    applyFocusDate_('house_date', obj);
-    if (select && name) {
-      const opt = Array.from(select.options).find(function(x) {
-        return x.value === name;
-      });
-      if (opt) {
-        select.value = name;
-        if (typeof loadHouseData === 'function') loadHouseData();
-      }
+  if (select && name) {
+    const opt = Array.from(select.options).find(function(x) {
+      return x.value === name;
+    });
+    if (opt) {
+      select.value = name;
+      if (typeof loadHouseData === 'function') loadHouseData();
     }
-    pendingFocus = null;
-  }, 50);
+  }
+  pendingFocus = null;
 }
 
 function focusInvestmentTarget_(obj) {
   if (typeof setInvestmentPanelMode === 'function') setInvestmentPanelMode('update');
   const select = document.getElementById('inv_account');
   const name = obj && obj.accountName;
-  if ((!select || !select.options || select.options.length <= 1) &&
+  const loadState = select && select.dataset
+    ? String(select.dataset.loadState || '')
+    : '';
+  // showTab() already started loadInvestmentSection(). A second overlapping
+  // getInvestmentUiData can leave the picker empty while the info panel still
+  // shows the focused account's current balance. Wait for that in-flight
+  // load; loadInvestmentSection applies pendingFocus when it finishes.
+  if (loadState === 'loading') return;
+  applyFocusDate_('inv_date', obj);
+  if ((!select || !name || !select.options || select.options.length <= 1) &&
       typeof loadInvestmentSectionThenSelect_ === 'function' && name) {
     loadInvestmentSectionThenSelect_(name);
-    setTimeout(function() {
-      applyFocusDate_('inv_date', obj);
-      pendingFocus = null;
-    }, 50);
     return;
   }
-  setTimeout(function() {
-    applyFocusDate_('inv_date', obj);
-    if (select && name) {
-      const opt = Array.from(select.options).find(function(x) {
-        return x.value === name;
-      });
-      if (opt) {
-        select.value = name;
-        if (typeof loadInvestmentData === 'function') loadInvestmentData();
-      }
-    }
-    pendingFocus = null;
-  }, 50);
+  if (!select || !name) return;
+  const opt = Array.from(select.options).find(function(x) {
+    return x.value === name;
+  });
+  if (opt) {
+    select.value = name;
+    if (typeof loadInvestmentData === 'function') loadInvestmentData();
+  }
+  pendingFocus = null;
 }
 
 function focusDebtTarget_(obj) {

@@ -495,6 +495,7 @@ function debtPayoffSupportedFromProtection_(protection) {
       policyFloorMonthly: protection.policyFloorMonthly,
       unmatchedInvestmentBillsMonthly: protection.unmatchedInvestmentBillsMonthly
     },
+    debtMinimumsByType: protection.debtMinimumsByType || null,
     recurringSurplusBeforeReserve: protection.surplusBeforeReserve,
     usableCashAfterBuffers: protection.usableCashAfterBuffers,
     requiredReserveAmount: protection.requiredReserveAmount,
@@ -563,6 +564,8 @@ function renderDebtPayoffCalculationDetailsHtml_(supported, rec) {
   parts.push(renderDebtPayoffDetailsSummaryHtml_(supported, rec));
   parts.push(missing);
   parts.push(renderDebtPayoffNestedDetailsHtml_('Monthly income and commitments', table));
+  parts.push(renderDebtPayoffNestedDetailsHtml_('Debt minimums by account',
+    renderDebtPayoffDebtMinimumDetailsHtml_(supported, rec)));
   parts.push(renderDebtPayoffNestedDetailsHtml_('Upcoming expenses', cashSafety));
   parts.push(renderDebtPayoffNestedDetailsHtml_('Variable bills', variable));
   parts.push(source);
@@ -707,6 +710,84 @@ function resolveDebtPayoffBreakEven_(rec, supported) {
   };
 }
 
+function debtPayoffBreakEvenMinimumsByType_(rec, supported) {
+  return (rec && rec.breakEven && rec.breakEven.debtMinimumsByType) ||
+    (supported && supported.debtMinimumsByType) ||
+    (rec && rec.protection && rec.protection.debtMinimumsByType) ||
+    null;
+}
+
+function renderDebtPayoffMinimumTypeSubtotalsHtml_(minByType) {
+  if (!minByType || !minByType.subtotals || !minByType.subtotals.length) return '';
+  var parts = [];
+  var shown = 0;
+  parts.push('<ul class="debt-payoff-break-even-subtotals">');
+  minByType.subtotals.forEach(function(bucket) {
+    var hasUnknown = (minByType.unknownMinimums || []).some(function(row) {
+      return row && row.typeKey === bucket.key;
+    });
+    if (!(Number(bucket.amount) > 0.005) && !(bucket.accounts && bucket.accounts.length) && !hasUnknown) {
+      return;
+    }
+    shown += 1;
+    var unknownOnly = hasUnknown && !(Number(bucket.amount) > 0.005);
+    var amountText = unknownOnly
+      ? 'unknown'
+      : (typeof fmtCurrency === 'function'
+        ? fmtCurrency(bucket.amount)
+        : String(bucket.amount));
+    parts.push('<li><span class="debt-payoff-summary-label">' +
+      escapeHtml(bucket.label) + '</span><span class="debt-payoff-summary-value">' +
+      amountText + '</span></li>');
+  });
+  parts.push('</ul>');
+  return shown ? parts.join('') : '';
+}
+
+function renderDebtPayoffDebtMinimumDetailsHtml_(supported, rec) {
+  var minByType = debtPayoffBreakEvenMinimumsByType_(rec, supported);
+  if (!minByType) return '';
+  var accounts = [];
+  (minByType.subtotals || []).forEach(function(bucket) {
+    (bucket.accounts || []).forEach(function(row) {
+      accounts.push({
+        name: row.name,
+        type: row.type || bucket.label,
+        amount: row.amount,
+        known: row.minimumPaymentKnown !== false
+      });
+    });
+  });
+  (minByType.unknownMinimums || []).forEach(function(row) {
+    accounts.push({
+      name: row.name,
+      type: row.type || 'Unknown',
+      amount: null,
+      known: false
+    });
+  });
+  if (!accounts.length) return '';
+  var parts = [];
+  parts.push('<table class="debt-payoff-estimate-breakdown">');
+  parts.push('<caption>Saved Type and recorded minimums used in the monthly gap</caption>');
+  parts.push('<thead><tr><th scope="col">Account</th><th scope="col">Type</th><th scope="col">Monthly minimum</th></tr></thead><tbody>');
+  accounts.forEach(function(row) {
+    var amountText = row.known === false
+      ? 'unknown'
+      : (typeof fmtCurrency === 'function' ? fmtCurrency(row.amount) : String(row.amount));
+    parts.push('<tr><th scope="row">' + escapeHtml(row.name) + '</th><td>' +
+      escapeHtml(row.type) + '</td><td>' + amountText + '</td></tr>');
+  });
+  if (minByType.total != null && isFinite(Number(minByType.total))) {
+    parts.push('<tr><th scope="row">Debt minimums total</th><td></td><td>' +
+      (typeof fmtCurrency === 'function' ? fmtCurrency(minByType.total) : String(minByType.total)) +
+      '</td></tr>');
+  }
+  parts.push('</tbody></table>');
+  parts.push('<p class="muted">Type comes from the saved debt Type field. Account names are not used to infer Credit Card, HELOC, or Loan/Mortgage. Missing Type stays Other/Unknown. A missing minimum stays unknown and is not treated as $0.</p>');
+  return parts.join('');
+}
+
 function renderDebtPayoffBreakEvenHtml_(rec, supported) {
   var row = resolveDebtPayoffBreakEven_(rec, supported);
   if (!row || row.state === 'BALANCED' || row.state === 'NOT_APPLICABLE') return '';
@@ -723,19 +804,32 @@ function renderDebtPayoffBreakEvenHtml_(rec, supported) {
     : (typeof fmtCurrency === 'function' ? fmtCurrency(row.gapToBreakEven) : String(row.gapToBreakEven));
   parts.push('<p class="debt-payoff-recommendation-lead"><strong>Monthly gap to break even: ' +
     gapText + '</strong></p>');
+  var minByType = debtPayoffBreakEvenMinimumsByType_(rec, supported) || row.debtMinimumsByType;
   if (row.categories && row.categories.length) {
     parts.push('<ul class="debt-payoff-break-even-categories">');
     row.categories.forEach(function(item) {
       var amountText = typeof fmtCurrency === 'function'
         ? fmtCurrency(item.amount)
         : String(item.amount);
-      parts.push('<li><span class="debt-payoff-summary-label">' +
+      parts.push('<li>');
+      parts.push('<span class="debt-payoff-summary-label">' +
         escapeHtml(item.label) + '</span><span class="debt-payoff-summary-value">' +
-        amountText + '</span></li>');
+        amountText + '</span>');
+      if (item.key === 'debtMinimumsMonthly') {
+        parts.push(renderDebtPayoffMinimumTypeSubtotalsHtml_(minByType));
+      }
+      parts.push('</li>');
     });
     parts.push('</ul>');
   }
   parts.push('<p>The shortfall requires more income or lower commitments, but CashCompass cannot identify a safe reduction from the saved facts.</p>');
+  parts.push('<p>Paying off a credit card could eventually free its current recorded minimum and reduce the monthly gap once the paid-off balance and new minimum are reflected in saved facts. CashCompass does not estimate card minimums as a percentage of a declining balance; issuer formulas vary.</p>');
+  parts.push('<p>Extra principal on a loan or mortgage generally shortens payoff and reduces interest. It is not shown as lowering the scheduled monthly payment unless saved facts confirm a recast or refinance.</p>');
+  parts.push('<p>Paying off a card requires cash.');
+  if (row.noSafeLump !== false) {
+    parts.push(' No one-time lump payment is labeled safe from cash above the reserve, so reserve cash should not be used to pay cards now.');
+  }
+  parts.push('</p>');
   parts.push('<p>Extra debt payments remain $0.00 until recurring commitments are covered and the reserve forecast passes.</p>');
   parts.push('</section>');
   return parts.join('');

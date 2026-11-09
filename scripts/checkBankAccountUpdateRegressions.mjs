@@ -39,6 +39,19 @@ assert.match(
   bankSource,
   /function updateBankAccountValueByDate_\(payload, trustedProvenance\)[\s\S]*?const updateAvailableNow = !!payload\.updateAvailableNow/
 );
+assert.match(bankSource, /function getAccountsRowData_\(accountName, optionalSs\)/);
+assert.match(bankSource, /getAccountsRowData_\(name, ss\)/);
+assert.match(bankSource, /function getMonthColumnFromBankDisplay_/);
+assert.doesNotMatch(
+  bankSource.slice(
+    bankSource.indexOf('function getAccountsRowData_'),
+    bankSource.indexOf('function updateAccountsSheetFields_')
+  ),
+  /getDataRange\(\)[\s\S]*getDataRange\(\)/,
+  'SYS - Accounts details must not re-read the sheet for values, display, and headers'
+);
+assert.match(client, /bankUpdateDetailsFailed_/);
+assert.match(client, /Couldn’t load this account’s details/);
 
 const bankAdd = body.slice(body.indexOf('id="bank_mode_add_wrap"'), body.indexOf('id="bank_mode_manage_wrap"'));
 const sidebarAdd = sidebar.slice(sidebar.indexOf('id="bank_mode_add_wrap"'), sidebar.indexOf('id="bank_status"'));
@@ -501,5 +514,49 @@ assert.deepEqual(snapshotRows(['Old Checking', 'Checking', 'Savings']), historyB
   'Add new must preserve existing account history');
 assert.equal(JSON.stringify(accountRow('Checking')), checkingBeforeAdd);
 assert.equal(JSON.stringify(accountRow('Savings')), savingsBeforeAdd);
+
+let bankDataRangeCalls = 0;
+let accountsDataRangeCalls = 0;
+let bankCellGetValueCalls = 0;
+const origBankDataRange = bankAccounts.getDataRange.bind(bankAccounts);
+bankAccounts.getDataRange = function() {
+  bankDataRangeCalls += 1;
+  return origBankDataRange();
+};
+const origAccountsDataRange = accounts.getDataRange.bind(accounts);
+accounts.getDataRange = function() {
+  accountsDataRangeCalls += 1;
+  return origAccountsDataRange();
+};
+const origBankGetRange = bankAccounts.getRange.bind(bankAccounts);
+bankAccounts.getRange = function(row, col, numRows, numCols) {
+  const range = origBankGetRange(row, col, numRows, numCols);
+  const origGetValue = range.getValue.bind(range);
+  range.getValue = function() {
+    bankCellGetValueCalls += 1;
+    return origGetValue();
+  };
+  return range;
+};
+
+const details = context.getBankAccountValueForDate('Checking', isoDate);
+assert.equal(details.accountName, 'Checking');
+assert.equal(details.selectedMonthValue, 2300);
+assert.equal(details.currentBalance, 2300);
+assert.equal(details.availableNow, 2300);
+assert.equal(details.minBuffer, 400);
+assert.equal(details.type, 'Checking');
+assert.equal(details.usePolicy, 'USE_FOR_BILLS');
+assert.equal(details.selectedMonth, context.Utilities.formatDate(
+  context.parseIsoDateLocal_(isoDate),
+  'America/Los_Angeles',
+  'MMM-yy'
+));
+assert.equal(bankDataRangeCalls, 1,
+  'BANK_ACCOUNTS must be read once per account/date RPC');
+assert.equal(accountsDataRangeCalls, 1,
+  'SYS - Accounts must be read once per account/date RPC');
+assert.equal(bankCellGetValueCalls, 0,
+  'month amounts must come from the batched values snapshot');
 
 console.log('bank account update regressions passed');

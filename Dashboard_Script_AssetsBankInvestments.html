@@ -1,7 +1,10 @@
 /* Assets — Bank Accounts & Investments tabs */
 var bankUpdateDetailsReady_ = false;
+var bankUpdateDetailsFailed_ = false;
 var bankUpdateDetailsRequestId_ = 0;
 var bankSectionRequestId_ = 0;
+var investmentUpdateDetailsRequestId_ = 0;
+var investmentSectionRequestId_ = 0;
 var __bankUiData = null;
 var __bankManagementRows = [];
 var __bankManagementByName = Object.create(null);
@@ -31,6 +34,7 @@ function fillBankAccountDropdownFromData_(data) {
   const sel = document.getElementById('bank_account');
   if (!sel) return;
   bankUpdateDetailsReady_ = false;
+  bankUpdateDetailsFailed_ = false;
   sel.dataset.loadState = 'ready';
   sel.innerHTML = '<option value=""></option>';
   sel.disabled = false;
@@ -79,7 +83,9 @@ function updateBankUpdateAvailability_() {
       : (loadState === 'error'
         ? 'Couldn’t load bank accounts.'
         : (hasSelection
-          ? 'Loading account details…'
+          ? (bankUpdateDetailsFailed_
+            ? 'Couldn’t load this account’s details. Select the account again to retry.'
+            : 'Loading account details…')
           : (hasAccounts
             ? 'Select a bank account to update it.'
             : 'Add your first bank account to start tracking balances.')));
@@ -1363,6 +1369,7 @@ function loadBankSection() {
   const sectionRequestId = ++bankSectionRequestId_;
   document.getElementById('bank_date').value = new Date().toISOString().slice(0, 10);
   bankUpdateDetailsReady_ = false;
+  bankUpdateDetailsFailed_ = false;
   setSelectLoading('bank_account', 'Loading bank accounts…');
   __bankInactiveRows = null;
   renderInactiveBankAccounts_();
@@ -1423,6 +1430,7 @@ function loadBankSectionThenSelect_(accountName) {
   document.getElementById('bank_date').value =
     document.getElementById('bank_date').value || new Date().toISOString().slice(0, 10);
   bankUpdateDetailsReady_ = false;
+  bankUpdateDetailsFailed_ = false;
   setSelectLoading('bank_account', 'Loading bank accounts…');
   __bankInactiveRows = null;
   renderInactiveBankAccounts_();
@@ -1514,30 +1522,38 @@ function evaluateBankBufferWarning() {
 // The normal user-triggered path (account/date dropdown change) calls
 // this with no argument and keeps the existing Loading… → '' status
 // cycle. Mirrors loadDebtFieldValue(quiet) on the Debts page.
+function resetBankUpdateDetailsPanel_() {
+  document.getElementById('bank_selectedMonth').textContent = '—';
+  document.getElementById('bank_selectedMonthValue').textContent = '—';
+  document.getElementById('bank_currentBalance').textContent = '—';
+  document.getElementById('bank_availableNow').textContent = '—';
+  document.getElementById('bank_minBuffer').textContent = '—';
+  document.getElementById('bank_type').textContent = '—';
+  document.getElementById('bank_usePolicy').textContent = '—';
+  const bankDeltaEl = document.getElementById('bank_deltaPriorMonth');
+  if (bankDeltaEl) bankDeltaEl.textContent = '—';
+  document.getElementById('bank_value').value = '';
+  setWarning('bank_bufferWarning', '', '');
+}
+
 function loadBankData(quiet) {
   const account = document.getElementById('bank_account').value;
   const date = document.getElementById('bank_date').value;
   const requestId = ++bankUpdateDetailsRequestId_;
   bankUpdateDetailsReady_ = false;
+  bankUpdateDetailsFailed_ = false;
   bankCurrentData = null;
   updateBankUpdateAvailability_();
 
   if (!account || !date) {
-    document.getElementById('bank_selectedMonth').textContent = '—';
-    document.getElementById('bank_selectedMonthValue').textContent = '—';
-    document.getElementById('bank_currentBalance').textContent = '—';
-    document.getElementById('bank_availableNow').textContent = '—';
-    document.getElementById('bank_minBuffer').textContent = '—';
-    document.getElementById('bank_type').textContent = '—';
-    document.getElementById('bank_usePolicy').textContent = '—';
-    const bankDeltaEl = document.getElementById('bank_deltaPriorMonth');
-    if (bankDeltaEl) bankDeltaEl.textContent = '—';
-    document.getElementById('bank_value').value = '';
-    setWarning('bank_bufferWarning', '', '');
+    resetBankUpdateDetailsPanel_();
     return;
   }
 
-  if (!quiet) setStatusLoading('bank_status');
+  if (!quiet) {
+    resetBankUpdateDetailsPanel_();
+    setStatusLoading('bank_status');
+  }
   runReadOnlyRpcWithRetry_({
     isCurrent: function() {
       return requestId === bankUpdateDetailsRequestId_ &&
@@ -1584,6 +1600,7 @@ function loadBankData(quiet) {
       }
 
       bankUpdateDetailsReady_ = true;
+      bankUpdateDetailsFailed_ = false;
       updateBankUpdateAvailability_();
       evaluateBankBufferWarning();
       if (!quiet) setStatus('bank_status', '', false);
@@ -1594,6 +1611,7 @@ function loadBankData(quiet) {
     onFailure: function(err) {
       if (requestId !== bankUpdateDetailsRequestId_) return;
       bankUpdateDetailsReady_ = false;
+      bankUpdateDetailsFailed_ = true;
       updateBankUpdateAvailability_();
       // Even in quiet mode, surface failures so users aren't left
       // with a stale info panel and no signal that something went wrong.
@@ -3804,12 +3822,21 @@ function reactivateInvestmentFromManage_(row) {
 
 function loadInvestmentSection() {
   const initialLoadTiming = startDashboardInitialLoadStage_('investments');
-  document.getElementById('inv_date').value = new Date().toISOString().slice(0, 10);
+  const sectionRequestId = ++investmentSectionRequestId_;
+  if (pendingFocus && pendingFocus.tab === 'investments' &&
+      typeof applyFocusDate_ === 'function') {
+    applyFocusDate_('inv_date', pendingFocus);
+  }
+  const dateEl = document.getElementById('inv_date');
+  if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0, 10);
   setSelectLoading('inv_account', 'Loading investment accounts…');
   __investmentInactiveRows = null;
   renderInactiveInvestmentAccounts_();
   updateInvestmentUpdateAvailability_();
   runReadOnlyRpcWithRetry_({
+    isCurrent: function() {
+      return sectionRequestId === investmentSectionRequestId_;
+    },
     invoke: function(onSuccess, onFailure) {
       google.script.run
         .withSuccessHandler(onSuccess)
@@ -3817,16 +3844,24 @@ function loadInvestmentSection() {
         .getInvestmentUiData();
     },
     onSuccess: function(data) {
-      fillInvestmentAccountDropdownFromData_(data);
       finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
+      if (sectionRequestId !== investmentSectionRequestId_) return;
+      fillInvestmentAccountDropdownFromData_(data);
+      if (pendingFocus && pendingFocus.tab === 'investments') {
+        focusInvestmentTarget_(pendingFocus);
+      }
     },
     onRetry: function(info) {
+      if (sectionRequestId !== investmentSectionRequestId_) return;
       setStatusLoading('inv_status', info.message);
     },
     onRecovered: function() {
+      if (sectionRequestId !== investmentSectionRequestId_) return;
       setStatus('inv_status', '', false);
     },
     onFailure: function(err) {
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
+      if (sectionRequestId !== investmentSectionRequestId_) return;
       setSelectLoadFailure('inv_account', 'Couldn’t load investment accounts');
       updateInvestmentUpdateAvailability_();
       renderInvestmentManageList_();
@@ -3838,12 +3873,12 @@ function loadInvestmentSection() {
         actionLabel: 'Try again',
         onAction: loadInvestmentSection
       });
-      finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
     }
   });
 }
 
 function loadInvestmentSectionThenSelect_(accountName) {
+  const sectionRequestId = ++investmentSectionRequestId_;
   document.getElementById('inv_date').value =
     document.getElementById('inv_date').value || new Date().toISOString().slice(0, 10);
   setSelectLoading('inv_account', 'Loading investment accounts…');
@@ -3851,6 +3886,9 @@ function loadInvestmentSectionThenSelect_(accountName) {
   renderInactiveInvestmentAccounts_();
   updateInvestmentUpdateAvailability_();
   runReadOnlyRpcWithRetry_({
+    isCurrent: function() {
+      return sectionRequestId === investmentSectionRequestId_;
+    },
     invoke: function(onSuccess, onFailure) {
       google.script.run
         .withSuccessHandler(onSuccess)
@@ -3858,20 +3896,25 @@ function loadInvestmentSectionThenSelect_(accountName) {
         .getInvestmentUiData();
     },
     onSuccess: function(data) {
+      if (sectionRequestId !== investmentSectionRequestId_) return;
       fillInvestmentAccountDropdownFromData_(data);
       const sel = document.getElementById('inv_account');
       if (sel && accountName) {
         sel.value = accountName;
         loadInvestmentData();
       }
+      if (pendingFocus && pendingFocus.tab === 'investments') pendingFocus = null;
     },
     onRetry: function(info) {
+      if (sectionRequestId !== investmentSectionRequestId_) return;
       setStatusLoading('inv_status', info.message);
     },
     onRecovered: function() {
+      if (sectionRequestId !== investmentSectionRequestId_) return;
       setStatus('inv_status', '', false);
     },
     onFailure: function(err) {
+      if (sectionRequestId !== investmentSectionRequestId_) return;
       setSelectLoadFailure('inv_account', 'Couldn’t load investment accounts');
       updateInvestmentUpdateAvailability_();
       renderSurfaceState_('inv_status', {
@@ -3889,24 +3932,34 @@ function loadInvestmentSectionThenSelect_(accountName) {
 // `quiet` lets the post-save refresh repaint the right-side info panel
 // without trampling the "Investment value saved." status set by
 // saveInvestment(). Mirrors loadBankData(quiet) and loadDebtFieldValue.
+function resetInvestmentUpdateDetailsPanel_() {
+  document.getElementById('inv_selectedMonth').textContent = '—';
+  document.getElementById('inv_selectedMonthValue').textContent = '—';
+  document.getElementById('inv_currentBalance').textContent = '—';
+  document.getElementById('inv_type').textContent = '—';
+  const invDeltaEl = document.getElementById('inv_deltaPriorMonth');
+  if (invDeltaEl) invDeltaEl.textContent = '—';
+  document.getElementById('inv_value').value = '';
+}
+
 function loadInvestmentData(quiet) {
   const account = document.getElementById('inv_account').value;
   const date = document.getElementById('inv_date').value;
+  const requestId = ++investmentUpdateDetailsRequestId_;
   updateInvestmentUpdateAvailability_();
 
   if (!account || !date) {
-    document.getElementById('inv_selectedMonth').textContent = '—';
-    document.getElementById('inv_selectedMonthValue').textContent = '—';
-    document.getElementById('inv_currentBalance').textContent = '—';
-    document.getElementById('inv_type').textContent = '—';
-    const invDeltaEl = document.getElementById('inv_deltaPriorMonth');
-    if (invDeltaEl) invDeltaEl.textContent = '—';
-    document.getElementById('inv_value').value = '';
+    resetInvestmentUpdateDetailsPanel_();
     return;
   }
 
   if (!quiet) setStatusLoading('inv_status');
   runReadOnlyRpcWithRetry_({
+    isCurrent: function() {
+      return requestId === investmentUpdateDetailsRequestId_ &&
+        document.getElementById('inv_account').value === account &&
+        document.getElementById('inv_date').value === date;
+    },
     invoke: function(onSuccess, onFailure) {
       google.script.run
         .withSuccessHandler(onSuccess)
@@ -3914,6 +3967,11 @@ function loadInvestmentData(quiet) {
         .getInvestmentValueForDate(account, date);
     },
     onSuccess: function(data) {
+      if (requestId !== investmentUpdateDetailsRequestId_ ||
+          document.getElementById('inv_account').value !== account ||
+          document.getElementById('inv_date').value !== date) {
+        return;
+      }
       document.getElementById('inv_selectedMonth').textContent = data.selectedMonth || '—';
       document.getElementById('inv_selectedMonthValue').textContent =
         data.selectedMonthValue !== '' ? fmtCurrency(data.selectedMonthValue) : '—';
@@ -3940,6 +3998,7 @@ function loadInvestmentData(quiet) {
       if (!quiet) setStatusLoading('inv_status', info.message);
     },
     onFailure: function(err) {
+      if (requestId !== investmentUpdateDetailsRequestId_) return;
       // Surface failures even in quiet mode so users aren't left with
       // a stale info panel and no signal that something went wrong.
       setStatus('inv_status', (err.message || String(err)), true);

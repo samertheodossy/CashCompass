@@ -37,6 +37,18 @@ Compare eligible uses of the supported amount, or the explicit missing-fact resu
 
 The optional Cisco overlay does not complete this item. Remaining work is RSU/ESPP, rental-surplus, HELOC, and mortgage-acceleration scenarios, plus any further bonus timing improvements, only with explicit timing and assumptions. Keep variable income separate from recurring income.
 
+### LATER — Bank of America mortgage extra-principal proposal
+
+This is a **proposal**, not an active payment and not an affordable recommendation. Current Debt Overview facts show a recurring monthly deficit, a projected reserve breach, and no one-time amount labeled safe. Do **not** recommend or include $400/month as affordable until the existing cash-safety checks pass or the user explicitly updates this plan’s budget assumptions.
+
+**Proposed plan:** schedule an extra **$400/month** toward Bank of America mortgage principal because weekly $100 principal payments are not available. $400 monthly is $4,800 per year; $100 weekly would be $5,200 per year, so they are not equivalent.
+
+**Future work, on existing Debt Overview and scheduling surfaces only:** estimate interest saved and payoff-date impact; identify which Bank of America mortgage receives the extra; and distinguish principal-only extra payments from the required monthly payment. If this commitment is later activated, include the recurring $400 in the existing affordability and reserve forecast, and prevent double-counting it with debt minimums or Cash Flow bills.
+
+Do **not** create a new page, tab, or payment flow. Do **not** initiate or automate payments. Keep frozen This Week / RFP-3 and Rolling Debt Payoff unchanged.
+
+**Open until confirmed:** lender eligibility, payment timing, and whether the $400 is a household total or per mortgage.
+
 ### LATER — Debt-to-retirement integration
 
 Use editable Education inputs for each child’s 529 and school costs, and include future RSUs and retirement contribution/match assumptions in retirement scenarios. Keep estimates labeled and editable; do not hardcode financial values. Education forecasts are not calculated yet.
@@ -1096,8 +1108,9 @@ is labeled safe. Missing cash APY is not invented into a winner.
 When extra can be proven, Debt Overview
 automatically recommends avalanche or snowball using that estimate. When
 recurring commitments exceed income, Debt Overview names the monthly gap to
-break even from the same supported category totals and does not invent a
-safe reduction. Typed
+break even from the same supported category totals, splits debt minimums by
+saved Type, and does not invent a declining card minimum or a loan recast.
+Typed
 extra remains an optional hypothetical scenario and is not auto-filled. The
 estimate is not guaranteed affordable. Next-dollar comparison of that extra
 is in Area 6.
@@ -1166,6 +1179,15 @@ Model extra principal, refinancing, interest savings, cash-flow effects,
 opportunity cost, rental-property treatment, and prepayment constraints.
 Property Performance financing accuracy is already V1; this layer is decision
 support, not a second mortgage calculator.
+
+**Named later slice (proposal only):** extra $400/month toward Bank of America
+mortgage principal because weekly $100 principal payments are not available.
+$400/month ($4,800/year) is not equivalent to $100/week ($5,200/year). This is
+not an affordable recommendation under current Debt Overview cash-safety facts
+(recurring monthly deficit, projected reserve breach, no one-time amount
+labeled safe). Reuse existing Debt Overview and scheduling surfaces; do not
+create a payment flow or automate payments. See **Decision roadmap → LATER —
+Bank of America mortgage extra-principal proposal**.
 
 ### Area 10 — Retirement and income planning
 
@@ -1243,7 +1265,7 @@ frozen-candidate evidence `8a`–`8f`.
 | **DE-4** | Debt-payoff optimizer | Current valid facts; frozen This Week / RFP-3 safety; existing Rolling Debt Payoff unchanged | **Completed:** Debt Overview min/avalanche/snowball comparison and optional Cisco bonus overlay (hypothetical; Central-tested; non-writing; not affordability). **In source, local tests; Central proof separate:** supported extra estimate including Varies YTD running average; automatic monthly extra-payoff recommendation from that estimate; optional hypothetical extra not auto-filled; withhold $0/missing-fact results; name the monthly gap to break even from the same category totals without inventing a safe reduction. **LATER:** further bonus/RSU/rental/HELOC/mortgage scenarios with explicit timing |
 | **DE-5** | Idle-cash / next-dollar allocation | Supported extra estimate or explicit missing-fact result; hard reserve + preferred liquidity | **In source, local tests; Central proof separate:** compare high-APR payoff, holding cash/reserve, extra mortgage principal, or investing on Debt Overview; show amount, timing, interest/return assumptions, liquidity, and tradeoffs. A separate one-time extra from cash above reserve is sized on a 12-month walk of current recurring surplus and known Planned upcoming; if the no-lump baseline later breaches the reserve, no lump is labeled safe. Missing cash APY is not invented into a winner. Does not change This Week’s frozen kernel, auto-fill the scenario extra, or initiate payments/transfers. Does **not** wait on DE-3 history |
 | **DE-6** | HELOC analysis | Remaining DE-4; house financing identity | **LATER:** cash vs HELOC vs staged use; variable-rate, repayment, reserve, liquidity, tax; never “because credit exists” |
-| **DE-7** | Mortgage acceleration | Remaining DE-4; Property Performance V1 | **LATER:** extra principal, refinance, interest, cash-flow, opportunity cost, rental treatment, prepayment limits |
+| **DE-7** | Mortgage acceleration | Remaining DE-4; Property Performance V1 | **LATER:** extra principal, refinance, interest, cash-flow, opportunity cost, rental treatment, prepayment limits. Named later proposal: extra $400/month Bank of America mortgage principal because weekly $100 is unavailable ($400/month = $4,800/year; $100/week = $5,200/year; not equivalent). Proposal only — not affordable until existing cash-safety checks pass or the user explicitly updates budget assumptions. See **Decision roadmap** |
 | **DE-8** | Tax-aware portfolio actions | DE-2, DE-3 tax lots; Robinhood protection policy | Candidate lots, ST/LT, basis, RSU/ESPP, concentration, taxable vs retirement, estimated tax; no auto-sell |
 | **DE-9** | Robinhood funding optimization | DE-3, DE-5; current Robinhood policy floor | Contribution, capacity, allocation, dividends, total return, tax, concentration, time-to-income; not yield-only |
 | **DE-10** | Retirement and income planning | Current Retirement and Education surfaces; current valid facts | **LATER — Debt-to-retirement integration:** editable Education 529/school-cost inputs, future RSUs, contribution/match assumptions; estimates labeled and editable; no hardcoded financial values. Remaining: wrappers, sequencing, SS/pension when present, cash-flow gap. Already done: Retirement investable assets exclude SYS - Assets rows typed Education or 529; Overview uses that filtered total; Education saved inputs exist without forecasts. Additional 401(k)/history imports are **not** a prerequisite |

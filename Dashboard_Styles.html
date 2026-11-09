@@ -2122,13 +2122,28 @@
     margin: 8px 0;
     padding: 0;
   }
-  .debt-payoff-break-even-categories li {
+  .debt-payoff-break-even-categories > li {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     gap: 12px;
     padding: 4px 0;
     border-bottom: 1px solid var(--cc-border);
     font-size: 14px;
+  }
+  .debt-payoff-break-even-subtotals {
+    list-style: none;
+    flex: 1 0 100%;
+    margin: 4px 0 0 12px;
+    padding: 0;
+  }
+  .debt-payoff-break-even-subtotals li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 2px 0;
+    font-size: 13px;
+    color: var(--cc-muted);
   }
   .debt-payoff-cash-summary {
     display: grid;

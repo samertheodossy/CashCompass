@@ -2549,7 +2549,7 @@ assert.match(files['dashboard_data.js'],
   /cashFlowSheet:\s*hasCashFlowTarget \? info\.sheet\.getName\(\) : ''[\s\S]*?cashFlowTargetResolved:\s*hasCashFlowTarget/,
   'Marker-only Skip must record whether a Cash Flow target was resolved without inventing a ledger target');
 assert.match(files['dashboard_data.js'],
-  /if \(hasCashFlowTarget\)[\s\S]*?if \(isBlank\)[\s\S]*?cell\.setValue\(0\)/,
+  /if \(hasCashFlowTarget\)[\s\S]*?if \(isBlank\)[\s\S]*?writeCashFlowSkippedMonthZero_\(info\.sheet, info\.row, info\.col\)/,
   'Skip must keep its zero write behind both a resolved Cash Flow target and the existing blank-cell guard');
 assert.match(files['dashboard_data.js'],
   /const activeInputBillPayees = getInputBillsPayeeMap_\(ss\)[\s\S]*?filterDebtBillsShadowedByTrackedBills_\([\s\S]*?const allRows = visibleDebtRows\.concat\(inputBillRows\)/,
@@ -3904,6 +3904,12 @@ assert.equal(retryCtx.isTransientRpcTransportError_(
   new Error("We're sorry, a server error occurred while reading from storage. Error code FAILED_PRECONDITION.")), true,
   'The observed Apps Script storage precondition failure must be classified as transient');
 assert.equal(retryCtx.isTransientRpcTransportError_(
+  new Error("We're sorry, a server error occurred while reading from storage. Error code DEADLINE_EXCEEDED.")), true,
+  'The observed Apps Script storage deadline failure must be classified as transient');
+assert.equal(retryCtx.isTransientRpcTransportError_(
+  new Error('UrlFetchApp: DEADLINE_EXCEEDED')), false,
+  'Unrelated deadline failures must never be classified as transient');
+assert.equal(retryCtx.isTransientRpcTransportError_(
   new Error('FAILED_PRECONDITION: workbook setup is incomplete.')), false,
   'Unrelated precondition failures must never be classified as transient');
 assert.equal(retryCtx.isTransientRpcTransportError_(
@@ -3961,6 +3967,22 @@ assert.equal(persistentStorageInvocations, 2,
 assert.equal(persistentStorageFailures, 1,
   'A persistent storage failure must surface once after bounded recovery is exhausted');
 
+let persistentDeadlineInvocations = 0;
+let persistentDeadlineFailures = 0;
+retryCtx.runReadOnlyRpcWithRetry_({
+  invoke: function(_success, failure) {
+    persistentDeadlineInvocations += 1;
+    failure(new Error(
+      "We're sorry, a server error occurred while reading from storage. Error code DEADLINE_EXCEEDED."
+    ));
+  },
+  onFailure: function() { persistentDeadlineFailures += 1; }
+});
+assert.equal(persistentDeadlineInvocations, 2,
+  'A persistent storage deadline must stop after exactly one retry');
+assert.equal(persistentDeadlineFailures, 1,
+  'A persistent storage deadline must surface once after bounded recovery is exhausted');
+
 const customerErrorStart = render.indexOf('function customerSafeErrorMessage_(');
 const customerErrorEnd = render.indexOf('\nfunction toNumber(', customerErrorStart);
 assert.ok(customerErrorStart >= 0 && customerErrorEnd > customerErrorStart,
@@ -3974,6 +3996,11 @@ assert.doesNotMatch(safeTransportMessage, /NetworkError|HTTP\s*0|Connection fail
   'Raw Apps Script transport details must never reach the customer');
 assert.match(safeTransportMessage, /did not repeat the action/i,
   'An uncertain write outcome must tell the customer that CashCompass did not repeat it');
+const safeDeadlineMessage = retryCtx.customerSafeErrorMessage_(
+  new Error("We're sorry, a server error occurred while reading from storage. Error code DEADLINE_EXCEEDED.")
+);
+assert.doesNotMatch(safeDeadlineMessage, /DEADLINE_EXCEEDED|reading from storage/i,
+  'Raw Apps Script storage deadline details must never reach the customer');
 
 for (const [source, writerName] of [
   [render, 'runPlannerNow'],

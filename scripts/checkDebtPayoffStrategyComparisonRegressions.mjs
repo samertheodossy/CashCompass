@@ -165,7 +165,19 @@ assert.match(projection, /function buildDebtPayoffOneTimeAllocation_/);
 assert.match(projection, /function debtPayoffMaxOneTimePreservingReserve_/);
 assert.match(projection, /function evaluateDebtPayoffOneTimeHorizon_/);
 assert.match(projection, /function buildDebtPayoffBreakEvenExplanation_/);
+assert.match(projection, /function debtPayoffClassifySavedDebtType_/);
+assert.match(projection, /function collectDebtPayoffSupportedMinimums_/);
+assert.doesNotMatch(sliceFunction(projection, 'debtPayoffClassifySavedDebtType_'),
+  /debt\.name|originalName/);
+assert.doesNotMatch(sliceFunction(projection, 'simulateDebtPayoffSchedule_'),
+  /\.minimumPayment\s*=/);
 assert.match(client, /function renderDebtPayoffBreakEvenHtml_/);
+assert.match(client, /function renderDebtPayoffDebtMinimumDetailsHtml_/);
+assert.match(sliceFunction(client, 'renderDebtPayoffCalculationDetailsHtml_'),
+  /Debt minimums by account/);
+assert.match(help, /split by saved Type into Credit Cards, HELOC, Loans\/Mortgages, and Other\/Unknown/);
+assert.match(help, /not estimated as a percentage of a declining balance/);
+assert.match(help, /recast or refinance/);
 assert.match(sliceFunction(client, 'renderDebtPayoffMonthlyRecommendation_'),
   /renderDebtPayoffBreakEvenHtml_/);
 assert.doesNotMatch(sliceFunction(client, 'renderDebtPayoffBreakEvenHtml_'),
@@ -939,6 +951,26 @@ const unknownMin = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({
 assert.equal(unknownMin.available, false);
 assert.equal(unknownMin.amount, null);
 assert.equal(unknownMin.blockers.some(function(row) { return row.code === 'MINIMUM_UNKNOWN'; }), true);
+assert.equal(unknownMin.debtMinimumsByType.total, 0);
+assert.equal(unknownMin.debtMinimumsByType.unknownMinimums.length, 1);
+assert.equal(unknownMin.debtMinimumsByType.unknownMinimums[0].amount, null);
+assert.equal(unknownMin.debtMinimumsByType.unknownMinimums[0].minimumPaymentKnown, false);
+assert.doesNotMatch(JSON.stringify(unknownMin.debtMinimumsByType.unknownMinimums), /"amount":0/);
+
+const mixedKnownAndUnknownMin = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  debts: [
+    Object.assign(usableDebt('Visa', 2000, 22, 75), { type: 'Credit Card' }),
+    {
+      name: 'Blank Min Card', type: 'Credit Card', active: true, balance: 900,
+      minimumPayment: 0, minimumPaymentKnown: false
+    }
+  ]
+}));
+assert.equal(mixedKnownAndUnknownMin.available, false);
+assert.equal(mixedKnownAndUnknownMin.components.debtMinimumsMonthly, 75);
+assert.equal(mixedKnownAndUnknownMin.debtMinimumsByType.total, 75);
+assert.equal(mixedKnownAndUnknownMin.debtMinimumsByType.unknownMinimums.length, 1);
+assert.equal(mixedKnownAndUnknownMin.debtMinimumsByType.unknownMinimums[0].amount, null);
 
 const unknownFrequency = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
   bills: [{
@@ -1594,6 +1626,7 @@ assert.equal(
   deficit.recurringSurplusBeforeReserve
 );
 assert.equal(zeroRec.breakEven.canIdentifySafeReduction, false);
+assert.equal(zeroRec.breakEven.noSafeLump, false);
 assert.doesNotMatch(JSON.stringify(zeroRec.breakEven), /optional|adjustable|safe to reduce/i);
 assert.match(String(zeroRec.reason), /by \$300\.00/);
 
@@ -1610,6 +1643,63 @@ assert.equal(missingRec.breakEven.state, 'FACTS_MISSING');
 assert.equal(missingRec.breakEven.gapToBreakEven, null);
 assert.equal(missingRec.breakEven.categories.length, 0);
 assert.equal(missingRec.breakEven.canIdentifySafeReduction, false);
+
+const typedMinDebts = [
+  Object.assign(usableDebt('Visa', 2000, 22, 75), { type: 'Credit Card' }),
+  Object.assign(usableDebt('Figure HELOC', 15000, 8, 120), { type: 'HELOC' }),
+  Object.assign(usableDebt('Loan Depot - San Jose House', 400000, 2.25, 1800), { type: 'Loan' }),
+  Object.assign(usableDebt('Mystery Account', 500, 19, 40), { type: '' }),
+  Object.assign(usableDebt('Named HELOC as Loan', 8000, 7, 90), { type: 'Loan' })
+];
+const typedMinSupported = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
+  asOfDate: asOf,
+  recurringIncomeSources: [confirmedIncome('Salary', 1200)],
+  debts: typedMinDebts
+}));
+assert.equal(typedMinSupported.available, true);
+assert.equal(typedMinSupported.deficit, true);
+assert.equal(typedMinSupported.amount, 0);
+assert.equal(typedMinSupported.components.debtMinimumsMonthly, 2125);
+assert.equal(typedMinSupported.debtMinimumsByType.total, 2125);
+assert.equal(typedMinSupported.debtMinimumsByType.reconciles, true);
+assert.equal(typedMinSupported.debtMinimumsByType.unknownMinimums.length, 0);
+const typedBuckets = {};
+typedMinSupported.debtMinimumsByType.subtotals.forEach(function(row) {
+  typedBuckets[row.key] = row;
+});
+assert.equal(typedBuckets.creditCards.amount, 75);
+assert.equal(typedBuckets.heloc.amount, 120);
+assert.equal(typedBuckets.loansMortgages.amount, 1890);
+assert.equal(typedBuckets.otherUnknown.amount, 40);
+assert.equal(
+  context.round2_(
+    typedBuckets.creditCards.amount + typedBuckets.heloc.amount +
+    typedBuckets.loansMortgages.amount + typedBuckets.otherUnknown.amount
+  ),
+  typedMinSupported.components.debtMinimumsMonthly
+);
+assert.equal(context.debtPayoffClassifySavedDebtType_({ type: 'Loan', name: 'Chase HELOC' }),
+  'loansMortgages');
+assert.equal(context.debtPayoffClassifySavedDebtType_({ type: '', name: 'House Mortgage' }),
+  'otherUnknown');
+assert.equal(context.debtPayoffClassifySavedDebtType_({ type: 'HELOC', name: 'Card' }),
+  'heloc');
+assert.equal(context.debtPayoffClassifySavedDebtType_({ type: 'Credit Card' }), 'creditCards');
+const typedMinRec = context.buildDebtPayoffMonthlyRecommendation_(
+  typedMinDebts, typedMinSupported, { asOfDate: asOf });
+assert.equal(typedMinRec.monthlyExtra, 0);
+assert.equal(typedMinRec.breakEven.debtMinimumsByType.total, 2125);
+assert.equal(typedMinRec.breakEven.doesNotProjectDecliningCardMinimum, true);
+assert.equal(typedMinRec.breakEven.loanExtraDoesNotLowerScheduledPayment, true);
+assert.equal(typedMinRec.breakEven.payingOffRequiresCash, true);
+assert.equal(typedMinRec.oneTimeAllocation.amount, typedMinSupported.cashSafety.oneTimeAmount);
+
+const minHeldConstant = context.simulateDebtPayoffSchedule_([
+  Object.assign(usableDebt('Visa', 200, 24, 50), { type: 'Credit Card' }),
+  Object.assign(usableDebt('Mortgage', 10000, 4, 400), { type: 'Loan' })
+], 200, 'avalanche', { asOfDate: asOf, horizonMonths: 24 });
+assert.ok(minHeldConstant.totalInterest > 0);
+assert.doesNotMatch(JSON.stringify(minHeldConstant), /projectedMinimum|decliningMinimum/);
 
 const reserveRec = context.buildDebtPayoffMonthlyRecommendation_(recDebts, reserveProtected, { asOfDate: asOf });
 assert.equal(reserveRec.state, 'WITHHELD');
@@ -1750,6 +1840,9 @@ assert.equal(displayedHouseholdRec.oneTimeAllocation.baselineBreachMonthKey, '20
 assert.equal(displayedHouseholdRec.oneTimeAllocation.threeMonthAmount, 35133.46);
 assert.equal(displayedHouseholdRec.breakEven.state, 'DEFICIT');
 assert.equal(displayedHouseholdRec.breakEven.gapToBreakEven, 11233.45);
+assert.equal(displayedHouseholdRec.oneTimeAllocation.amount, 0);
+assert.equal(displayedHouseholdRec.oneTimeAllocation.code, 'BASELINE_RESERVE_BREACH');
+assert.equal(displayedHouseholdRec.breakEven.noSafeLump, true);
 assert.equal(
   displayedHouseholdRec.breakEven.gapToBreakEven,
   context.round2_(Math.abs(displayedHouseholdSupported.recurringSurplusBeforeReserve))
@@ -3752,6 +3845,9 @@ vm.runInContext(
   '\n' + sliceFunction(client, 'debtPayoffSupportedFromProtection_') +
   '\n' + sliceFunction(client, 'renderDebtPayoffNestedDetailsHtml_') +
   '\n' + sliceFunction(client, 'renderDebtPayoffDetailsSummaryHtml_') +
+  '\n' + sliceFunction(client, 'debtPayoffBreakEvenMinimumsByType_') +
+  '\n' + sliceFunction(client, 'renderDebtPayoffMinimumTypeSubtotalsHtml_') +
+  '\n' + sliceFunction(client, 'renderDebtPayoffDebtMinimumDetailsHtml_') +
   '\n' + sliceFunction(client, 'renderDebtPayoffCalculationDetailsHtml_') +
   '\n' + sliceFunction(client, 'renderDebtPayoffCashSafetySummaryHtml_') +
   '\n' + sliceFunction(client, 'renderDebtPayoffCashSafetyHtml_') +
@@ -3817,6 +3913,36 @@ uiContext.renderDebtPayoffMonthlyRecommendation_({
   reason: 'Recurring commitments leave no surplus after required bills.',
   monthlyExtra: 0,
   comparison: null,
+  breakEven: {
+    state: 'DEFICIT',
+    gapToBreakEven: 300,
+    noSafeLump: true,
+    payingOffRequiresCash: true,
+    doesNotProjectDecliningCardMinimum: true,
+    loanExtraDoesNotLowerScheduledPayment: true,
+    categories: [
+      { key: 'recurringIncomeMonthly', label: 'Recurring income', kind: 'income', amount: 1200 },
+      { key: 'recurringBillsMonthly', label: 'Required bills', kind: 'commitment', amount: 1000 },
+      { key: 'debtMinimumsMonthly', label: 'Debt minimums', kind: 'commitment', amount: 500 }
+    ],
+    debtMinimumsByType: {
+      total: 500,
+      reconciles: true,
+      subtotals: [
+        { key: 'creditCards', label: 'Credit Cards', amount: 200, accounts: [
+          { name: 'Visa', type: 'Credit Card', amount: 200, minimumPaymentKnown: true }
+        ] },
+        { key: 'heloc', label: 'HELOC', amount: 0, accounts: [] },
+        { key: 'loansMortgages', label: 'Loans/Mortgages', amount: 300, accounts: [
+          { name: 'House loan', type: 'Loan', amount: 300, minimumPaymentKnown: true }
+        ] },
+        { key: 'otherUnknown', label: 'Other/Unknown', amount: 0, accounts: [] }
+      ],
+      unknownMinimums: [
+        { name: 'Blank Card', type: 'Unknown', typeKey: 'otherUnknown', amount: null, minimumPaymentKnown: false }
+      ]
+    }
+  },
   protection: {
     recurringIncomeMonthly: 1200,
     recurringBillsMonthly: 1000,
@@ -3831,16 +3957,50 @@ uiContext.renderDebtPayoffMonthlyRecommendation_({
   recurringIncomeMonthly: 1200,
   recurringBillsMonthly: 1000,
   debtMinimumsMonthly: 500
-}, recurringSurplusBeforeReserve: -300, requiredReserveAmount: 1000, usableCashAfterBuffers: 5000 });
+}, recurringSurplusBeforeReserve: -300, requiredReserveAmount: 1000, usableCashAfterBuffers: 5000,
+  debtMinimumsByType: {
+    total: 500,
+    reconciles: true,
+    subtotals: [
+      { key: 'creditCards', label: 'Credit Cards', amount: 200, accounts: [
+        { name: 'Visa', type: 'Credit Card', amount: 200, minimumPaymentKnown: true }
+      ] },
+      { key: 'heloc', label: 'HELOC', amount: 0, accounts: [] },
+      { key: 'loansMortgages', label: 'Loans/Mortgages', amount: 300, accounts: [
+        { name: 'House loan', type: 'Loan', amount: 300, minimumPaymentKnown: true }
+      ] },
+      { key: 'otherUnknown', label: 'Other/Unknown', amount: 0, accounts: [] }
+    ],
+    unknownMinimums: [
+      { name: 'Blank Card', type: 'Unknown', typeKey: 'otherUnknown', amount: null, minimumPaymentKnown: false }
+    ]
+  }
+});
 assert.match(recommendationWrap.innerHTML, /<strong>\$0\.00<\/strong>/);
 assert.match(recommendationWrap.innerHTML, /No recurring extra this month/);
 assert.match(recommendationWrap.innerHTML, /Monthly gap to break even: \$300\.00/);
 assert.match(recommendationWrap.innerHTML, /<span class="debt-payoff-summary-label">Recurring income<\/span><span class="debt-payoff-summary-value">\$1,200\.00<\/span>/);
 assert.match(recommendationWrap.innerHTML, /<span class="debt-payoff-summary-label">Required bills<\/span><span class="debt-payoff-summary-value">\$1,000\.00<\/span>/);
 assert.match(recommendationWrap.innerHTML, /<span class="debt-payoff-summary-label">Debt minimums<\/span><span class="debt-payoff-summary-value">\$500\.00<\/span>/);
+assert.match(recommendationWrap.innerHTML, /Credit Cards[\s\S]*\$200\.00/);
+assert.match(recommendationWrap.innerHTML, /Loans\/Mortgages[\s\S]*\$300\.00/);
+assert.match(recommendationWrap.innerHTML, /<span class="debt-payoff-summary-label">Other\/Unknown<\/span><span class="debt-payoff-summary-value">unknown<\/span>/);
+assert.doesNotMatch(recommendationWrap.innerHTML,
+  /<span class="debt-payoff-summary-label">Other\/Unknown<\/span><span class="debt-payoff-summary-value">\$0\.00<\/span>/);
 assert.match(recommendationWrap.innerHTML, /cannot identify a safe reduction from the saved facts/);
+assert.match(recommendationWrap.innerHTML, /percentage of a declining balance/);
+assert.match(recommendationWrap.innerHTML, /recast or refinance/);
+assert.match(recommendationWrap.innerHTML, /Paying off a card requires cash/);
+assert.match(recommendationWrap.innerHTML, /reserve cash should not be used to pay cards now/);
 assert.match(recommendationWrap.innerHTML, /Extra debt payments remain \$0\.00 until recurring commitments are covered and the reserve forecast passes/);
 assert.doesNotMatch(recommendationWrap.innerHTML, /safe to reduce|adjustable|optional bill/i);
+const deficitHtmlBeforeDetails = recommendationWrap.innerHTML.split('How this was calculated')[0];
+assert.doesNotMatch(deficitHtmlBeforeDetails, /Visa|House loan|Blank Card/);
+assert.match(recommendationWrap.innerHTML, /<summary>Debt minimums by account<\/summary>/);
+assert.match(recommendationWrap.innerHTML, /Visa[\s\S]*Credit Card[\s\S]*\$200\.00/);
+assert.match(recommendationWrap.innerHTML, /House loan[\s\S]*Loan[\s\S]*\$300\.00/);
+assert.match(recommendationWrap.innerHTML, /Blank Card[\s\S]*Unknown[\s\S]*unknown/);
+assert.doesNotMatch(recommendationWrap.innerHTML, /Blank Card[\s\S]*\$0\.00/);
 assert.equal((recommendationWrap.innerHTML.match(/Income, commitments, and reserve protection/g) || []).length, 1);
 assert.doesNotMatch(recommendationWrap.innerHTML, /Do not pay extra this month/);
 assert.doesNotMatch(recommendationWrap.innerHTML, /Supported monthly extra/);
@@ -3937,6 +4097,9 @@ assert.match(zeroExtraHtml, /No one-time extra is labeled safe/);
 assert.match(zeroExtraHtml, /Monthly gap to break even: \$11,233\.45/);
 assert.match(zeroExtraHtml, /cannot identify a safe reduction from the saved facts/);
 assert.match(zeroExtraHtml, /Extra debt payments remain \$0\.00 until recurring commitments are covered and the reserve forecast passes/);
+assert.match(zeroExtraHtml, /percentage of a declining balance/);
+assert.match(zeroExtraHtml, /recast or refinance/);
+assert.match(zeroExtraHtml, /reserve cash should not be used to pay cards now/);
 assert.doesNotMatch(zeroExtraHtml, /safe to reduce|adjustable|optional bill/i);
 assert.match(zeroExtraHtml, /Shortfall month: 2027-04/);
 assert.match(zeroExtraHtml, /as the monthly deficit of \$11,233\.45 continues/);
@@ -4018,6 +4181,7 @@ assert.doesNotMatch(recommendationWrap.innerHTML, /debt-payoff-recommendation-am
 assert.match(recommendationWrap.innerHTML, /A monthly extra cannot be recommended/);
 assert.match(recommendationWrap.innerHTML, /The monthly gap to break even cannot be proven from the saved facts/);
 assert.doesNotMatch(recommendationWrap.innerHTML, /Monthly gap to break even: \$/);
+assert.doesNotMatch(recommendationWrap.innerHTML, /percentage of a declining balance/);
 assert.match(recommendationWrap.innerHTML, /cannot identify a safe reduction from the saved facts/);
 assert.doesNotMatch(recommendationWrap.innerHTML, /safe to reduce|adjustable|optional bill/i);
 assert.match(recommendationWrap.innerHTML, /PG&amp;E is missing a completed-month Cash Flow amount/);

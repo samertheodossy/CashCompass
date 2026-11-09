@@ -415,6 +415,12 @@ assert.equal(lastFocus.debtType, 'Credit Card');
 assert.equal(lastFocus.reviewRoute, 'editor');
 
 assert.match(render,
+  /function focusInvestmentTarget_\(obj\)[\s\S]*?setInvestmentPanelMode\('update'\)[\s\S]*?loadState === 'loading'\) return;[\s\S]*?loadInvestmentSectionThenSelect_\(name\)/,
+  'Monthly Review investment open must wait for an in-flight Investments load, then keep the selected account');
+assert.match(read('Dashboard_Script_AssetsBankInvestments.html'),
+  /function loadInvestmentSection\(\)[\s\S]*?if \(pendingFocus && pendingFocus.tab === 'investments'\)[\s\S]*?focusInvestmentTarget_\(pendingFocus\)/,
+  'The Investments tab load must apply the Monthly Review account after the picker is filled');
+assert.match(render,
   /function focusDebtTarget_\(obj\)[\s\S]*?setDebtPanelMode\('update'\)[\s\S]*?loadState === 'loading'\) return;[\s\S]*?loadDebtSectionThenSelect_\(name, debtType\)/,
   'Monthly Review debt open must wait for an in-flight Debts load, then keep the selected account');
 assert.doesNotMatch(render,
@@ -445,6 +451,66 @@ assert.deepEqual(appliedTargets, [],
   'Debt focus must wait for the in-flight load instead of selecting against a loading picker');
 assert.equal(focusCtx.pendingFocus.accountName, 'Credit Card - Corporate AMEX',
   'pending debt focus must remain so the completed tab load can select the card');
+
+const invFocusStart = render.indexOf('function focusInvestmentTarget_(');
+const invFocusEnd = render.indexOf('\nfunction focusDebtTarget_(', invFocusStart);
+assert.ok(invFocusStart >= 0 && invFocusEnd > invFocusStart, 'focusInvestmentTarget_ must be testable');
+let invThenSelectCalls = 0;
+let invDataCalls = 0;
+const invLoadingSelect = { dataset: { loadState: 'loading' }, options: [{ value: '' }] };
+const invFocusCtx = vm.createContext({
+  document: { getElementById: () => invLoadingSelect },
+  setInvestmentPanelMode() {},
+  applyFocusDate_() {},
+  loadInvestmentSectionThenSelect_() { invThenSelectCalls += 1; },
+  loadInvestmentData() { invDataCalls += 1; },
+  pendingFocus: { tab: 'investments', accountName: 'Roth IRA' },
+  Array
+});
+vm.runInContext(render.slice(invFocusStart, invFocusEnd), invFocusCtx);
+invFocusCtx.focusInvestmentTarget_({
+  accountName: 'Roth IRA',
+  cycleKey: '2026-11'
+});
+assert.equal(invThenSelectCalls, 0,
+  'an in-flight Investments tab load must not start a competing load-and-select');
+assert.equal(invDataCalls, 0,
+  'Investment focus must wait for the in-flight load instead of selecting against a loading picker');
+assert.equal(invFocusCtx.pendingFocus.accountName, 'Roth IRA',
+  'pending investment focus must remain so the completed tab load can select the account');
+
+const invReadySelect = {
+  dataset: { loadState: 'ready' },
+  options: [{ value: '' }, { value: 'Roth IRA' }],
+  value: ''
+};
+let invReadyThenSelect = 0;
+const invReadyDate = { value: '' };
+const invReadyCtx = vm.createContext({
+  document: {
+    getElementById(id) {
+      if (id === 'inv_date') return invReadyDate;
+      return invReadySelect;
+    }
+  },
+  setInvestmentPanelMode() {},
+  applyFocusDate_(_id, obj) { invReadyDate.value = '2026-11-30'; void obj; },
+  loadInvestmentSectionThenSelect_() { invReadyThenSelect += 1; },
+  loadInvestmentData() { invDataCalls += 1; },
+  pendingFocus: { tab: 'investments', accountName: 'Roth IRA' },
+  Array
+});
+vm.runInContext(render.slice(invFocusStart, invFocusEnd), invReadyCtx);
+invReadyCtx.focusInvestmentTarget_({
+  accountName: 'Roth IRA',
+  cycleKey: '2026-11'
+});
+assert.equal(invReadyThenSelect, 0, 'a ready Investments picker must not reload the account list');
+assert.equal(invReadySelect.value, 'Roth IRA',
+  'Monthly Review must keep the investment account selected after the picker is ready');
+assert.equal(invDataCalls, 1, 'a ready Investments picker must load the focused account details');
+assert.equal(invReadyCtx.pendingFocus, null,
+  'pending investment focus must clear only after the account is selected');
 assert.match(read('Dashboard_Script_PlanningDebts.html'),
   /function selectDebtUpdateTarget_\(accountName, optionalDebtType\)[\s\S]*?typeSel\.value = 'All'[\s\S]*?filterDebtAccounts\(\)/,
   'If a type filter would hide the focused debt, Update must fall back to All and keep the account selected');

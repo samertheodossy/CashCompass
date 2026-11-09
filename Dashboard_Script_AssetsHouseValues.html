@@ -6,6 +6,7 @@
 // from writing, but this flag also spares the user a confusing second "already
 // exists" round-trip. Reset in BOTH the success and failure handlers.
 var houseCreateInFlight_ = false;
+var houseSectionRequestId_ = 0;
 // null means the server-authoritative inactive inventory is still unknown.
 // An empty array is reserved for a successful response with exactly zero rows.
 var __houseInactiveRows = null;
@@ -361,12 +362,21 @@ function reactivateHouseFromManage_(row) {
 
 function loadHouseSection() {
   const initialLoadTiming = startDashboardInitialLoadStage_('houses');
-  document.getElementById('house_date').value = new Date().toISOString().slice(0, 10);
+  const sectionRequestId = ++houseSectionRequestId_;
+  if (pendingFocus && pendingFocus.tab === 'houses' &&
+      typeof applyFocusDate_ === 'function') {
+    applyFocusDate_('house_date', pendingFocus);
+  }
+  const dateEl = document.getElementById('house_date');
+  if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0, 10);
   setSelectLoading('house_house', 'Loading houses…');
   __houseInactiveRows = null;
   renderInactiveHouses_();
   updateHouseUpdateAvailability_();
   runReadOnlyRpcWithRetry_({
+    isCurrent: function() {
+      return sectionRequestId === houseSectionRequestId_;
+    },
     invoke: function(onSuccess, onFailure) {
       google.script.run
         .withSuccessHandler(onSuccess)
@@ -374,26 +384,34 @@ function loadHouseSection() {
         .getHouseUiData();
     },
     onSuccess: function(data) {
-      fillHouseDropdownFromData_(data);
       finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
+      if (sectionRequestId !== houseSectionRequestId_) return;
+      fillHouseDropdownFromData_(data);
+      if (pendingFocus && pendingFocus.tab === 'houses') {
+        focusHouseTarget_(pendingFocus);
+      }
     },
     onRetry: function(info) {
+      if (sectionRequestId !== houseSectionRequestId_) return;
       setStatusLoading('house_status', info.message);
     },
     onRecovered: function() {
+      if (sectionRequestId !== houseSectionRequestId_) return;
       setStatus('house_status', '', false);
     },
     onFailure: function(err) {
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
+      if (sectionRequestId !== houseSectionRequestId_) return;
       setSelectLoadFailure('house_house', 'Couldn’t load houses');
       updateHouseUpdateAvailability_();
       renderHouseManageList_();
       setStatus('house_status', (err.message || String(err)), true);
-      finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
     }
   });
 }
 
 function loadHouseSectionThenSelect_(houseName) {
+  const sectionRequestId = ++houseSectionRequestId_;
   document.getElementById('house_date').value =
     document.getElementById('house_date').value || new Date().toISOString().slice(0, 10);
   setSelectLoading('house_house', 'Loading houses…');
@@ -401,6 +419,9 @@ function loadHouseSectionThenSelect_(houseName) {
   renderInactiveHouses_();
   updateHouseUpdateAvailability_();
   runReadOnlyRpcWithRetry_({
+    isCurrent: function() {
+      return sectionRequestId === houseSectionRequestId_;
+    },
     invoke: function(onSuccess, onFailure) {
       google.script.run
         .withSuccessHandler(onSuccess)
@@ -408,20 +429,25 @@ function loadHouseSectionThenSelect_(houseName) {
         .getHouseUiData();
     },
     onSuccess: function(data) {
+      if (sectionRequestId !== houseSectionRequestId_) return;
       fillHouseDropdownFromData_(data);
       const sel = document.getElementById('house_house');
       if (sel && houseName) {
         sel.value = houseName;
         loadHouseData();
       }
+      if (pendingFocus && pendingFocus.tab === 'houses') pendingFocus = null;
     },
     onRetry: function(info) {
+      if (sectionRequestId !== houseSectionRequestId_) return;
       setStatusLoading('house_status', info.message);
     },
     onRecovered: function() {
+      if (sectionRequestId !== houseSectionRequestId_) return;
       setStatus('house_status', '', false);
     },
     onFailure: function(err) {
+      if (sectionRequestId !== houseSectionRequestId_) return;
       setSelectLoadFailure('house_house', 'Couldn’t load houses');
       updateHouseUpdateAvailability_();
       setStatus('house_status', (err.message || String(err)), true);

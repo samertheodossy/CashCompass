@@ -202,13 +202,15 @@ privacy-safe browser hydration trace. The flag is server-rendered before the
 dashboard bundles execute, so it works inside the Apps Script iframe without a
 Script Property change. Debug mode remains off for ordinary URLs.
 
-The progressive Overview core read has one narrowly bounded recovery attempt
-for the exact Apps Script `reading from storage` / `FAILED_PRECONDITION`
-signature observed during an immediate repeat load. This recovery does not
-apply to writers, ordinary business/precondition errors, full snapshot refreshes,
-or post-render maintenance. A persistent failure stops after two total attempts;
-the 45-second client trace continues to make that failure visible instead of
-looping or masking it.
+Read-only dashboard RPCs that already use the shared retry helper have one
+narrowly bounded recovery attempt for Apps Script `reading from storage`
+failures with `FAILED_PRECONDITION` or `DEADLINE_EXCEEDED`. Those signatures
+were observed during an immediate repeat Overview load and while switching
+Bank accounts after Overview background reads. This recovery does not apply
+to writers, ordinary business/precondition errors, unrelated deadlines such
+as UrlFetch, full snapshot refreshes, or post-render maintenance. A persistent
+failure stops after two total attempts; the 45-second client trace continues
+to make that failure visible instead of looping or masking it.
 
 One page load measures the wall-clock time from startup routing through the
 visible Overview core renderer. The core response contains the canonical Cash,

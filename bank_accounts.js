@@ -1031,22 +1031,26 @@ function getBankAccountValueForDate(accountName, balanceDate) {
   // workbooks that's ~6 round-trips for one account/date selection, making
   // the right-side panel feel laggy on every dropdown change.
   //
-  // We now load BANK_ACCOUNTS once up front and pass the snapshot into the
-  // year-block + row-find helpers so both months reuse it. The same year
-  // block usually serves both months; the prior-month case crosses a year
-  // boundary cleanly because the helpers accept the same display snapshot
-  // (the whole sheet, including all year blocks, is in memory). Behavior is
-  // identical for callers — the response shape, currency rounding, and
-  // error messages are unchanged.
+  // We now load BANK_ACCOUNTS once up front (display + values) and pass
+  // those snapshots into the year-block, row-find, month-column, and cell
+  // helpers so current and prior month reuse them. SYS - Accounts is also
+  // opened from the same spreadsheet handle instead of resolving the
+  // workbook a second time. Extra per-cell getValue() and header-row reads
+  // were a common way this RPC ran long enough to hit Apps Script's
+  // "reading from storage" DEADLINE_EXCEEDED after Overview background
+  // reads. Behavior is identical for callers — the response shape,
+  // currency rounding, and error messages are unchanged.
   const ss = getUserSpreadsheet_();
   const bankSheet = getSheet_(ss, 'BANK_ACCOUNTS');
-  const bankDisplay = bankSheet.getDataRange().getDisplayValues();
+  const bankRange = bankSheet.getDataRange();
+  const bankDisplay = bankRange.getDisplayValues();
+  const bankValues = bankRange.getValues();
 
   const year = d.getFullYear();
   const monthValue = getBankAccountHistoryValueForMonthFromDisplay_(
-    bankSheet, bankDisplay, name, year, d
+    bankSheet, bankDisplay, name, year, d, bankValues
   );
-  const accountInfo = getAccountsRowData_(name);
+  const accountInfo = getAccountsRowData_(name, ss);
 
   var previousMonthLabel = '';
   var deltaFromPreviousMonth = null;
@@ -1054,7 +1058,7 @@ function getBankAccountValueForDate(accountName, balanceDate) {
     const prior = new Date(d.getFullYear(), d.getMonth() - 1, 15);
     const priorYear = prior.getFullYear();
     const previousMonthValue = getBankAccountHistoryValueForMonthFromDisplay_(
-      bankSheet, bankDisplay, name, priorYear, prior
+      bankSheet, bankDisplay, name, priorYear, prior, bankValues
     );
     previousMonthLabel = Utilities.formatDate(prior, Session.getScriptTimeZone(), 'MMM-yy');
     const cur = Number(monthValue);
@@ -1085,19 +1089,32 @@ function getBankAccountValueForDate(accountName, balanceDate) {
  * pre-loaded BANK_ACCOUNTS display-values snapshot so callers reading
  * multiple months in a single RPC don't re-fetch the same sheet for
  * each lookup. Used by getBankAccountValueForDate for the
- * current-month + prior-month delta panel; the monthly cell value
- * itself is still read with sheet.getRange(...).getValue() so we
- * preserve the exact numeric path the existing code was tested
- * against (rounding behavior identical).
+ * current-month + prior-month delta panel. When the caller also passes
+ * the matching getValues() snapshot, month amounts come from that grid
+ * (same numeric values as getValue() on those cells) so this path does
+ * not add extra SpreadsheetApp round-trips.
  */
-function getBankAccountHistoryValueForMonthFromDisplay_(sheet, display, accountName, year, balanceDate) {
+function getBankAccountHistoryValueForMonthFromDisplay_(sheet, display, accountName, year, balanceDate, optionalValues) {
   const block = getBankAccountsYearBlock_(sheet, year, display);
   const accountRow = findBankAccountRowInBlock_(sheet, block, accountName, display);
   if (accountRow === -1) {
     throw new Error('Could not find account "' + accountName + '" inside Year ' + year + ' block.');
   }
-  const monthCol = getMonthColumnByDate_(sheet, balanceDate, block.headerRow);
+  const monthCol = getMonthColumnFromBankDisplay_(sheet, display, balanceDate, block.headerRow);
+  if (optionalValues && optionalValues.length >= accountRow &&
+      optionalValues[accountRow - 1] &&
+      optionalValues[accountRow - 1].length >= monthCol) {
+    return round2_(toNumber_(optionalValues[accountRow - 1][monthCol - 1]));
+  }
   return round2_(toNumber_(sheet.getRange(accountRow, monthCol).getValue()));
+}
+
+function getMonthColumnFromBankDisplay_(sheet, display, date, headerRow) {
+  const targetDate = date instanceof Date ? date : new Date(date);
+  const headers = (display && display[headerRow - 1]) || [];
+  const col = findMonthColumnIndex_(headers, targetDate);
+  if (col !== -1) return col;
+  return getMonthColumnByDate_(sheet, date, headerRow);
 }
 
 function getBankAccountHistoryValueForMonth_(accountName, year, balanceDate) {
@@ -1418,16 +1435,21 @@ function updateBankAccountsHistory_(accountName, year, balanceDate, currentValue
   setCurrencyCellPreserveRowFormat_(sheet, accountRow, monthCol, currentValue, block.firstMonthCol);
 }
 
-function getAccountsRowData_(accountName) {
-  const ss = getUserSpreadsheet_();
+function getAccountsRowData_(accountName, optionalSs) {
+  const ss = optionalSs || getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'ACCOUNTS');
 
-  const values = sheet.getDataRange().getValues();
-  const display = sheet.getDataRange().getDisplayValues();
+  // One data-range snapshot is enough: values for numeric fields, display
+  // for Type / Use Policy, and the same display row for the header map.
+  // Re-reading the sheet three times was a common way account switching
+  // hit Apps Script storage deadlines.
+  const range = sheet.getDataRange();
+  const values = range.getValues();
+  const display = range.getDisplayValues();
 
   if (display.length < 2) return null;
 
-  const headerMap = getAccountsHeaderMap_(sheet);
+  const headerMap = getAccountsHeaderMap_(sheet, display);
 
   for (let r = 1; r < display.length; r++) {
     if (String(display[r][headerMap.nameColZero] || '').trim() === accountName) {

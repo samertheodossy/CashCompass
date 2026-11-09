@@ -1172,6 +1172,7 @@ function debtPayoffRecommendationProtection_(supported) {
     debtMinimumsMonthly: c.debtMinimumsMonthly,
     policyFloorMonthly: c.policyFloorMonthly,
     unmatchedInvestmentBillsMonthly: c.unmatchedInvestmentBillsMonthly,
+    debtMinimumsByType: supported.debtMinimumsByType || null,
     surplusBeforeReserve: supported.recurringSurplusBeforeReserve,
     usableCashAfterBuffers: supported.usableCashAfterBuffers,
     requiredReserveAmount: supported.requiredReserveAmount,
@@ -2178,9 +2179,98 @@ function buildDebtPayoffOneTimeAllocation_(normalizedDebts, supported, rec, opti
   };
 }
 
+function debtPayoffClassifySavedDebtType_(debt) {
+  var type = String(debt && debt.type || '').trim().toLowerCase();
+  if (type === 'credit card' || type === 'credit cards') return 'creditCards';
+  if (type === 'heloc') return 'heloc';
+  if (type === 'loan' || type === 'loans' || type === 'mortgage' || type === 'mortgages') {
+    return 'loansMortgages';
+  }
+  return 'otherUnknown';
+}
+
+function debtPayoffEmptyMinimumTypeBuckets_() {
+  return {
+    creditCards: { key: 'creditCards', label: 'Credit Cards', amount: 0, accounts: [] },
+    heloc: { key: 'heloc', label: 'HELOC', amount: 0, accounts: [] },
+    loansMortgages: {
+      key: 'loansMortgages',
+      label: 'Loans/Mortgages',
+      amount: 0,
+      accounts: []
+    },
+    otherUnknown: { key: 'otherUnknown', label: 'Other/Unknown', amount: 0, accounts: [] }
+  };
+}
+
+function collectDebtPayoffSupportedMinimums_(debts) {
+  var buckets = debtPayoffEmptyMinimumTypeBuckets_();
+  var unknownMinimums = [];
+  var blockers = [];
+  var debtKeys = {};
+  var total = 0;
+  (debts || []).forEach(function(debt) {
+    if (!debt || debt.active === false) return;
+    if (!(Number(debt.balance) > 0.005)) return;
+    debtKeys[debtPayoffScenarioPayeeKey_(debt.name)] = true;
+    debtKeys[debtPayoffScenarioPayeeKey_(debt.originalName)] = true;
+    var typeKey = debtPayoffClassifySavedDebtType_(debt);
+    var typeLabel = String(debt.type || '').trim() || 'Unknown';
+    var name = debt.name || 'A debt';
+    if (debt.minimumPaymentKnown === false) {
+      blockers.push({
+        code: 'MINIMUM_UNKNOWN',
+        reason: name + ' has no usable contractual minimum.'
+      });
+      unknownMinimums.push({
+        name: name,
+        type: typeLabel,
+        typeKey: typeKey,
+        amount: null,
+        minimumPaymentKnown: false
+      });
+      return;
+    }
+    var min = round2_(Math.max(0, Number(debt.minimumPayment) || 0));
+    total = round2_(total + min);
+    buckets[typeKey].amount = round2_(buckets[typeKey].amount + min);
+    buckets[typeKey].accounts.push({
+      name: name,
+      type: typeLabel,
+      amount: min,
+      minimumPaymentKnown: true
+    });
+  });
+  var subtotals = [
+    buckets.creditCards,
+    buckets.heloc,
+    buckets.loansMortgages,
+    buckets.otherUnknown
+  ];
+  var recon = 0;
+  subtotals.forEach(function(row) {
+    recon = round2_(recon + (Number(row.amount) || 0));
+  });
+  return {
+    total: total,
+    debtKeys: debtKeys,
+    blockers: blockers,
+    breakdown: {
+      total: total,
+      subtotals: subtotals,
+      unknownMinimums: unknownMinimums,
+      reconciles: recon === total
+    }
+  };
+}
+
 function buildDebtPayoffBreakEvenExplanation_(supported) {
   var extraUntil =
     'recurring commitments are covered and the reserve forecast passes';
+  var minByType = supported && supported.debtMinimumsByType || null;
+  var safety = supported && supported.cashSafety || null;
+  var noSafeLump = !safety || safety.oneTimeAllocationEvaluated !== true ||
+    !(Number(safety.oneTimeAmount) > 0.005);
   var empty = {
     state: 'FACTS_MISSING',
     gapToBreakEven: null,
@@ -2188,7 +2278,12 @@ function buildDebtPayoffBreakEvenExplanation_(supported) {
     income: null,
     commitmentsTotal: null,
     categories: [],
+    debtMinimumsByType: minByType,
     canIdentifySafeReduction: false,
+    doesNotProjectDecliningCardMinimum: true,
+    loanExtraDoesNotLowerScheduledPayment: true,
+    payingOffRequiresCash: true,
+    noSafeLump: noSafeLump,
     extraRemainsZeroUntil: extraUntil
   };
   if (!supported || supported.available !== true) return empty;
@@ -2219,30 +2314,28 @@ function buildDebtPayoffBreakEvenExplanation_(supported) {
   var surplusN = surplusKnown ? round2_(Number(surplus)) : null;
   var deficit = supported.deficit === true ||
     (surplusKnown && surplusN <= 0.005);
-  if (!deficit) {
-    return {
-      state: 'BALANCED',
-      gapToBreakEven: 0,
-      surplusBeforeReserve: surplusN,
-      income: income,
-      commitmentsTotal: hasCommitments ? commitmentsTotal : null,
-      categories: categories,
-      canIdentifySafeReduction: false,
-      extraRemainsZeroUntil: extraUntil
-    };
-  }
-  return {
-    state: 'DEFICIT',
-    gapToBreakEven: surplusKnown && surplusN < -0.005
-      ? round2_(Math.abs(surplusN))
-      : 0,
+  var shared = {
     surplusBeforeReserve: surplusN,
     income: income,
     commitmentsTotal: hasCommitments ? commitmentsTotal : null,
     categories: categories,
+    debtMinimumsByType: minByType,
     canIdentifySafeReduction: false,
+    doesNotProjectDecliningCardMinimum: true,
+    loanExtraDoesNotLowerScheduledPayment: true,
+    payingOffRequiresCash: true,
+    noSafeLump: noSafeLump,
     extraRemainsZeroUntil: extraUntil
   };
+  if (!deficit) {
+    return Object.assign({ state: 'BALANCED', gapToBreakEven: 0 }, shared);
+  }
+  return Object.assign({
+    state: 'DEFICIT',
+    gapToBreakEven: surplusKnown && surplusN < -0.005
+      ? round2_(Math.abs(surplusN))
+      : 0
+  }, shared);
 }
 
 function attachDebtPayoffNextDollar_(rec, normalizedDebts, supported, options) {
@@ -3834,22 +3927,11 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
     income = round2_(income + classified.monthlyAmount);
   });
 
-  var debtMinimums = 0;
-  var debtKeys = {};
-  (input.debts || []).forEach(function(debt) {
-    if (!debt || debt.active === false) return;
-    if (!(Number(debt.balance) > 0.005)) return;
-    debtKeys[debtPayoffScenarioPayeeKey_(debt.name)] = true;
-    debtKeys[debtPayoffScenarioPayeeKey_(debt.originalName)] = true;
-    if (debt.minimumPaymentKnown === false) {
-      blockers.push({
-        code: 'MINIMUM_UNKNOWN',
-        reason: (debt.name || 'A debt') + ' has no usable contractual minimum.'
-      });
-      return;
-    }
-    debtMinimums = round2_(debtMinimums + Math.max(0, Number(debt.minimumPayment) || 0));
-  });
+  var collectedMins = collectDebtPayoffSupportedMinimums_(input.debts);
+  var debtMinimums = collectedMins.total;
+  var debtKeys = collectedMins.debtKeys;
+  var debtMinimumsByType = collectedMins.breakdown;
+  Array.prototype.push.apply(blockers, collectedMins.blockers);
 
   var billsMonthly = 0;
   var variableBillsMonthly = 0;
@@ -3976,6 +4058,7 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
       source: source,
       blockers: blockers,
       components: components,
+      debtMinimumsByType: debtMinimumsByType,
       variableBillEstimates: [],
       variableBillMethod: DEBT_PAYOFF_VARIABLE_BILL_METHOD_,
       requiredReserveAmount: requiredReserve,
@@ -4016,6 +4099,7 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
           source: source,
           blockers: safety.blockers || [],
           components: components,
+          debtMinimumsByType: debtMinimumsByType,
           variableBillEstimates: [],
           variableBillMethod: DEBT_PAYOFF_VARIABLE_BILL_METHOD_,
           requiredReserveAmount: requiredReserve,
@@ -4048,6 +4132,7 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
     source: source,
     blockers: [],
     components: components,
+    debtMinimumsByType: debtMinimumsByType,
     variableBillEstimates: variableBillEstimates,
     variableBillMethod: DEBT_PAYOFF_VARIABLE_BILL_METHOD_,
     requiredReserveAmount: requiredReserve,
