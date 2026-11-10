@@ -15,57 +15,86 @@
  *   missingCashFlowSheets: string[]
  * }}
  */
-function getDebtPayoffReadData() {
-  const ss = getUserSpreadsheet_();
+function debtPayoffPositionMethodNote_() {
+  return 'Property loans: estimated months use principal-and-interest only at the saved APR. The full minimum, which may include escrow, stays the monthly budget amount and is not applied to principal. If P&I versus escrow is not saved, the estimate is incomplete. Other Loan and HELOC rows: monthly amortization of the saved minimum. Other types: balance ÷ minimum payment (rough). If payment ≤ monthly interest on a loan, payoff is shown as unavailable.';
+}
+
+function readDebtPayoffWorkbookFacts_(ss) {
   const tz = Session.getScriptTimeZone();
   const today = new Date();
   const y = getCurrentYear_();
   const projectionYears = [y - 1, y];
-
-  // Blank-workbook safety: on a fresh sheet INPUT - Debts / SYS - Accounts
-  // don't exist yet and readSheetAsObjects_ -> getSheet_() would throw a
-  // red banner on Debt Overview. Return the same shape with empty rows
-  // and zeroed summary so the page renders clean. The populated path
-  // below is unchanged.
   const sheetNames = getSheetNames_();
   if (
     !ss.getSheetByName(sheetNames.DEBTS) ||
     !ss.getSheetByName(sheetNames.ACCOUNTS)
   ) {
-    const missingExtra = debtPayoffSupportedMonthlyExtraUnavailable_(
-      'INPUT - Debts or SYS - Accounts is missing.');
     return {
-      projectionYears: projectionYears,
-      debts: [],
-      summary: {
-        totalDebtBalance: 0,
-        totalMinimumPayments: 0,
-        usableCashAfterBuffers: 0,
-        totalAvailableNow: 0,
-        totalBuffers: 0,
-        projectedMonthNetCashFlow: 0,
-        longestRoughPayoff: null,
-        payoffMethodNote:
-          'Loan & HELOC: estimated months use a monthly amortization loop (interest on remaining balance, then principal). Other types: balance ÷ minimum payment (rough). If payment ≤ monthly interest on a loan, payoff is shown as unavailable.'
-      },
-      recommendations: [],
-      warnings: [],
-      missingCashFlowSheets: [],
-      supportedMonthlyExtra: missingExtra,
-      monthlyRecommendation: buildDebtPayoffMonthlyRecommendation_([], missingExtra, {
-        asOfDate: today,
-        savedAssumptions: readDebtPayoffSavedPlanningAssumptions_(ss)
-      })
+      empty: true,
+      ss: ss,
+      tz: tz,
+      today: today,
+      y: y,
+      projectionYears: projectionYears
     };
   }
 
-  const debtRows = readSheetAsObjects_(ss, 'DEBTS');
-  const accountRows = readSheetAsObjects_(ss, 'ACCOUNTS');
   const aliasMap = getAliasMap_();
-  const debts = normalizeDebts_(debtRows, aliasMap);
-  const accounts = normalizeAccounts_(accountRows);
-  const usableCash = calculateUsableCash_(accounts);
+  const debts = normalizeDebts_(readSheetAsObjects_(ss, 'DEBTS'), aliasMap);
+  const accounts = normalizeAccounts_(readSheetAsObjects_(ss, 'ACCOUNTS'));
+  return {
+    empty: false,
+    ss: ss,
+    tz: tz,
+    today: today,
+    y: y,
+    projectionYears: projectionYears,
+    aliasMap: aliasMap,
+    debts: debts,
+    accounts: accounts,
+    usableCash: calculateUsableCash_(accounts)
+  };
+}
 
+function buildDebtPayoffEmptyPosition_(facts) {
+  return {
+    projectionYears: facts.projectionYears,
+    debts: [],
+    summary: {
+      totalDebtBalance: 0,
+      totalMinimumPayments: 0,
+      usableCashAfterBuffers: 0,
+      totalAvailableNow: 0,
+      totalBuffers: 0,
+      projectedMonthNetCashFlow: 0,
+      longestRoughPayoff: null,
+      payoffMethodNote: debtPayoffPositionMethodNote_()
+    },
+    recommendations: [],
+    warnings: [],
+    missingCashFlowSheets: []
+  };
+}
+
+function buildDebtPayoffEmptyRecommendation_(facts) {
+  const missingExtra = debtPayoffSupportedMonthlyExtraUnavailable_(
+    'INPUT - Debts or SYS - Accounts is missing.');
+  return {
+    projectionYears: facts.projectionYears,
+    supportedMonthlyExtra: missingExtra,
+    monthlyRecommendation: buildDebtPayoffMonthlyRecommendation_([], missingExtra, {
+      asOfDate: facts.today,
+      savedAssumptions: readDebtPayoffSavedPlanningAssumptions_(facts.ss)
+    })
+  };
+}
+
+function buildDebtPayoffPositionFromFacts_(facts) {
+  if (facts.empty) return buildDebtPayoffEmptyPosition_(facts);
+
+  const debts = facts.debts;
+  const usableCash = facts.usableCash;
+  const projectionYears = facts.projectionYears;
   const minimumDueTotal = round2_(
     debts.filter(function(d) {
       return d.active;
@@ -74,42 +103,40 @@ function getDebtPayoffReadData() {
     }, 0)
   );
 
-  let thisMonthCashFlow = 0;
-  try {
-    const cashFlowRows = readCashFlowSheetAsObjects_(ss, y);
-    const monthHeader = getCurrentMonthHeader_(today, tz);
-    const cashFlow = normalizeCashFlow_(cashFlowRows, monthHeader, aliasMap);
-    thisMonthCashFlow = round2_(cashFlow.monthNet);
-  } catch (e) {
-    // ignore — recommendations will omit projected CF line
-  }
-
   const warnings = [];
   const missingCashFlowSheets = [];
+  const activeDebts = debts.filter(function(d) { return d.active; });
+  const paidByName = sumExpensePaymentsForDebtPayees_(
+    facts.ss,
+    activeDebts.map(function(d) { return d.name; }),
+    projectionYears,
+    facts.aliasMap,
+    missingCashFlowSheets
+  );
 
   // Debt Overview is an active-debts-only view. Stop-tracked debts (Active=No)
   // stay on INPUT - Debts for history + name reservation but should NOT appear
   // in the bar chart, table, or "longest payoff" callout here.
-  const debtsOut = debts
-    .filter(function(d) { return d.active; })
-    .map(function(d) {
-      const totalPaid = sumExpensePaymentsForDebtPayee_(ss, d.name, projectionYears, aliasMap, missingCashFlowSheets);
-      const est = estimateRoughPayoffMonths_(d.balance, d.minimumPayment, d.interestRate, d.type);
+  const debtsOut = activeDebts.map(function(d) {
+    const totalPaid = paidByName[String(d.name || '').trim()] || 0;
+    const est = estimateDebtPayoffPositionMonths_(d);
 
-      return {
-        name: d.name,
-        type: d.type,
-        balance: d.balance,
-        minimumPayment: d.minimumPayment,
-        interestRate: d.interestRate,
-        active: d.active,
-        cashFlowPaid: totalPaid,
-        estimatedPayoffMonths: est,
-        payoffEstimateMethod: isLoanTypeForAmortization_(d.type) ? 'amortization' : 'simple',
-        minimumPaymentKnown: d.minimumPaymentKnown !== false,
-        interestRateKnown: d.interestRateKnown !== false
-      };
-    });
+    return {
+      name: d.name,
+      type: d.type,
+      balance: d.balance,
+      minimumPayment: d.minimumPayment,
+      interestRate: d.interestRate,
+      active: d.active,
+      cashFlowPaid: totalPaid,
+      estimatedPayoffMonths: est.months,
+      payoffEstimateIncomplete: est.incomplete === true,
+      payoffEstimateIncompleteReason: est.reason || '',
+      payoffEstimateMethod: est.method,
+      minimumPaymentKnown: d.minimumPaymentKnown !== false,
+      interestRateKnown: d.interestRateKnown !== false
+    };
+  });
 
   if (missingCashFlowSheets.length > 0) {
     warnings.push(
@@ -129,42 +156,129 @@ function getDebtPayoffReadData() {
 
   const longest = findLongestRoughPayoff_(debtsOut);
 
-  const summary = {
-    totalDebtBalance: totalDebtBalance,
-    totalMinimumPayments: minimumDueTotal,
-    usableCashAfterBuffers: round2_(usableCash.usableAfterBuffers),
-    totalAvailableNow: round2_(usableCash.totalAvailableNow),
-    totalBuffers: round2_(usableCash.totalBuffers),
-    projectedMonthNetCashFlow: thisMonthCashFlow,
-    longestRoughPayoff: longest,
-    payoffMethodNote:
-      'Loan & HELOC: estimated months use a monthly amortization loop (interest on remaining balance, then principal). Other types: balance ÷ minimum payment (rough). If payment ≤ monthly interest on a loan, payoff is shown as unavailable.'
-  };
-
-  const recommendations = buildDebtPayoffRecommendations_({
-    debts: debts,
-    debtsOut: debtsOut,
-    usableCash: usableCash,
-    minimumDueTotal: minimumDueTotal,
-    thisMonthCashFlow: thisMonthCashFlow,
-    projectionYears: projectionYears,
-    longest: longest
-  });
-
-  const supported = readDebtPayoffSupportedMonthlyExtra_(ss, debts, accounts);
   return {
     projectionYears: projectionYears,
     debts: debtsOut,
-    summary: summary,
-    recommendations: recommendations,
+    summary: {
+      totalDebtBalance: totalDebtBalance,
+      totalMinimumPayments: minimumDueTotal,
+      usableCashAfterBuffers: round2_(usableCash.usableAfterBuffers),
+      totalAvailableNow: round2_(usableCash.totalAvailableNow),
+      totalBuffers: round2_(usableCash.totalBuffers),
+      projectedMonthNetCashFlow: 0,
+      longestRoughPayoff: longest,
+      payoffMethodNote: debtPayoffPositionMethodNote_()
+    },
+    recommendations: [],
     warnings: warnings,
-    missingCashFlowSheets: missingCashFlowSheets,
+    missingCashFlowSheets: missingCashFlowSheets
+  };
+}
+
+function buildDebtPayoffRecommendationFromFacts_(facts) {
+  if (facts.empty) return buildDebtPayoffEmptyRecommendation_(facts);
+
+  const supported = readDebtPayoffSupportedMonthlyExtra_(
+    facts.ss, facts.debts, facts.accounts);
+  return {
+    projectionYears: facts.projectionYears,
     supportedMonthlyExtra: supported,
-    monthlyRecommendation: buildDebtPayoffMonthlyRecommendation_(debts, supported, {
-      asOfDate: today,
-      savedAssumptions: readDebtPayoffSavedPlanningAssumptions_(ss)
+    monthlyRecommendation: buildDebtPayoffMonthlyRecommendation_(facts.debts, supported, {
+      asOfDate: facts.today,
+      savedAssumptions: readDebtPayoffSavedPlanningAssumptions_(facts.ss)
     })
   };
+}
+
+function attachDebtPayoffCombinedNotes_(facts, position) {
+  if (facts.empty) return position;
+
+  let thisMonthCashFlow = 0;
+  try {
+    const cashFlowRows = readCashFlowSheetAsObjects_(facts.ss, facts.y);
+    const monthHeader = getCurrentMonthHeader_(facts.today, facts.tz);
+    const cashFlow = normalizeCashFlow_(cashFlowRows, monthHeader, facts.aliasMap);
+    thisMonthCashFlow = round2_(cashFlow.monthNet);
+  } catch (e) {
+    // ignore — recommendations will omit projected CF line
+  }
+
+  const minimumDueTotal = position.summary.totalMinimumPayments;
+  position.summary.projectedMonthNetCashFlow = thisMonthCashFlow;
+  position.recommendations = buildDebtPayoffRecommendations_({
+    debts: facts.debts,
+    debtsOut: position.debts,
+    usableCash: facts.usableCash,
+    minimumDueTotal: minimumDueTotal,
+    thisMonthCashFlow: thisMonthCashFlow,
+    projectionYears: facts.projectionYears,
+    longest: position.summary.longestRoughPayoff
+  });
+  return position;
+}
+
+function getDebtPayoffReadData() {
+  const facts = readDebtPayoffWorkbookFacts_(getUserSpreadsheet_());
+  const position = attachDebtPayoffCombinedNotes_(
+    facts, buildDebtPayoffPositionFromFacts_(facts));
+  return Object.assign({}, position, buildDebtPayoffRecommendationFromFacts_(facts));
+}
+
+function getDebtPayoffRecommendationData() {
+  const performanceTrace = startPerformanceTrace_('debt_payoff.recommendation');
+  try {
+    const facts = readDebtPayoffWorkbookFacts_(getUserSpreadsheet_());
+    markPerformanceTrace_(performanceTrace, 'resolve_workbook');
+    const rec = buildDebtPayoffRecommendationFromFacts_(facts);
+    markPerformanceTrace_(performanceTrace, 'supported_extra');
+    finishPerformanceTrace_(performanceTrace, { outcome: 'ok' });
+    return rec;
+  } catch (err) {
+    finishPerformanceTrace_(performanceTrace, {
+      outcome: 'error',
+      failedStage: 'supported_extra'
+    });
+    throw err;
+  }
+}
+
+function getDebtPayoffPositionData() {
+  const performanceTrace = startPerformanceTrace_('debt_payoff.position');
+  try {
+    const facts = readDebtPayoffWorkbookFacts_(getUserSpreadsheet_());
+    markPerformanceTrace_(performanceTrace, 'resolve_workbook');
+    const position = buildDebtPayoffPositionFromFacts_(facts);
+    markPerformanceTrace_(performanceTrace, 'cash_flow_paid');
+    finishPerformanceTrace_(performanceTrace, { outcome: 'ok' });
+    return position;
+  } catch (err) {
+    finishPerformanceTrace_(performanceTrace, {
+      outcome: 'error',
+      failedStage: 'cash_flow_paid'
+    });
+    throw err;
+  }
+}
+
+/**
+ * Read-only household payoff plan for Debt Overview. Does not write, does not
+ * add a mortgage extra, and does not treat a rollover schedule as affordable.
+ */
+function getDebtPayoffHouseholdPlan(payload) {
+  payload = payload || {};
+  const facts = readDebtPayoffWorkbookFacts_(getUserSpreadsheet_());
+  const parsed = parseDebtPayoffScenarioMonthlyExtra_(payload.monthlyExtra);
+  const extra = parsed.ok ? parsed.amount : 0;
+  return buildDebtPayoffHouseholdPlan_(facts.empty ? [] : facts.debts, {
+    asOfDate: new Date(),
+    monthlyExtra: extra,
+    extraIsSafe: payload.extraIsSafe === true && extra > DEBT_PAYOFF_SCENARIO_ZERO_BAL_,
+    reserveBreached: payload.reserveBreached !== false,
+    targetOrder: payload.targetOrder,
+    monthlyDeficit: payload.monthlyDeficit,
+    usableCashAfterBuffers: payload.usableCashAfterBuffers,
+    requiredReserveAmount: payload.requiredReserveAmount
+  });
 }
 
 function isLoanTypeForAmortization_(type) {
@@ -336,16 +450,24 @@ function buildDebtPayoffRecommendations_(ctx) {
 /**
  * Sums absolute Expense amounts for rows whose Payee matches debt account name (after alias map).
  */
-function sumExpensePaymentsForDebtPayee_(ss, debtName, years, aliasMap, missingOut) {
-  let totalPaid = 0;
+function sumExpensePaymentsForDebtPayees_(ss, debtNames, years, aliasMap, missingOut) {
+  const totals = {};
+  const targets = [];
+  (debtNames || []).forEach(function(name) {
+    const target = String(name || '').trim();
+    if (!target || Object.prototype.hasOwnProperty.call(totals, target)) return;
+    totals[target] = 0;
+    targets.push(target);
+  });
+  if (!targets.length) return totals;
 
-  years.forEach(function(year) {
+  (years || []).forEach(function(year) {
     let sheet;
     try {
       sheet = getCashFlowSheet_(ss, year);
     } catch (e) {
       const tabName = getCashFlowSheetName_(year);
-      if (missingOut.indexOf(tabName) === -1) {
+      if (missingOut && missingOut.indexOf(tabName) === -1) {
         missingOut.push(tabName);
       }
       return;
@@ -357,7 +479,7 @@ function sumExpensePaymentsForDebtPayee_(ss, debtName, years, aliasMap, missingO
     const headers = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0];
     let headerMap;
     try {
-      headerMap = getCashFlowHeaderMap_(sheet);
+      headerMap = getCashFlowHeaderMapFromHeaders_(headers);
     } catch (e) {
       return;
     }
@@ -372,22 +494,36 @@ function sumExpensePaymentsForDebtPayee_(ss, debtName, years, aliasMap, missingO
     if (!monthColZero.length) return;
 
     const values = sheet.getDataRange().getValues();
-    const target = String(debtName || '').trim();
+    const targetIndex = {};
+    targets.forEach(function(target, i) {
+      targetIndex[target] = i;
+    });
 
     for (let r = 1; r < values.length; r++) {
       const type = String(values[r][headerMap.typeColZero] || '').trim();
       if (type !== 'Expense') continue;
 
       const payee = normalizeName_(String(values[r][headerMap.payeeColZero] || ''), aliasMap);
-      if (payee !== target) continue;
+      if (!Object.prototype.hasOwnProperty.call(targetIndex, payee)) continue;
 
+      let paid = 0;
       monthColZero.forEach(function(c) {
-        totalPaid += Math.abs(toNumber_(values[r][c]));
+        paid += Math.abs(toNumber_(values[r][c]));
       });
+      totals[payee] += paid;
     }
   });
 
-  return round2_(totalPaid);
+  Object.keys(totals).forEach(function(name) {
+    totals[name] = round2_(totals[name]);
+  });
+  return totals;
+}
+
+function sumExpensePaymentsForDebtPayee_(ss, debtName, years, aliasMap, missingOut) {
+  const totals = sumExpensePaymentsForDebtPayees_(
+    ss, [debtName], years, aliasMap, missingOut);
+  return totals[String(debtName || '').trim()] || 0;
 }
 
 /** Months of hypothetical extra-payoff forecast. Same cap as Overview amortization. */
@@ -801,8 +937,11 @@ function classifyDebtPayoffScenarioDebts_(debts) {
 }
 
 function debtPayoffScenarioCannotAmortizeAtMinimum_(debt) {
+  if (debt && debt.contractualPrincipalKnown === false) return false;
   const balance = Number(debt.balance) || 0;
-  const minPay = Number(debt.minimumPayment) || 0;
+  const minPay = debt && debt.contractualPrincipalKnown === true
+    ? Number(debt.contractualPrincipalPayment) || 0
+    : Number(debt.minimumPayment) || 0;
   const interest = debtPayoffScenarioMonthlyInterest_(balance, debt.interestRate);
   return minPay <= interest + DEBT_PAYOFF_SCENARIO_ZERO_BAL_;
 }
@@ -821,8 +960,23 @@ function debtPayoffScenarioMonthKey_(asOfDate, monthIndex) {
   return d.getFullYear() + '-' + (month.length < 2 ? '0' + month : month);
 }
 
-function debtPayoffScenarioSortTargets_(debts, strategy) {
+function debtPayoffScenarioSortTargets_(debts, strategy, targetOrder) {
   const rows = (debts || []).slice();
+  if (strategy === 'custom') {
+    const rank = {};
+    (targetOrder || []).forEach(function(name, i) {
+      rank[String(name || '')] = i;
+    });
+    rows.sort(function(a, b) {
+      const ia = Object.prototype.hasOwnProperty.call(rank, a.name) ? rank[a.name] : 999999;
+      const ib = Object.prototype.hasOwnProperty.call(rank, b.name) ? rank[b.name] : 999999;
+      if (ia !== ib) return ia - ib;
+      const apr = (Number(b.interestRate) || 0) - (Number(a.interestRate) || 0);
+      if (apr !== 0) return apr;
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
+    return rows;
+  }
   rows.sort(function(a, b) {
     if (strategy === 'snowball') {
       const bal = (Number(a.balance) || 0) - (Number(b.balance) || 0);
@@ -886,7 +1040,7 @@ function debtPayoffScenarioNameIsAllowed_(name, extraTargetNames) {
   return false;
 }
 
-function applyDebtPayoffScenarioLeftover_(remaining, amount, allocStrategy, extraTargetNames) {
+function applyDebtPayoffScenarioLeftover_(remaining, amount, allocStrategy, extraTargetNames, targetOrder) {
   var leftover = round2_(Math.max(0, Number(amount) || 0));
   var applied = [];
   if (!(leftover > DEBT_PAYOFF_SCENARIO_ZERO_BAL_)) return applied;
@@ -895,7 +1049,8 @@ function applyDebtPayoffScenarioLeftover_(remaining, amount, allocStrategy, extr
       return d.balance > DEBT_PAYOFF_SCENARIO_ZERO_BAL_ &&
         debtPayoffScenarioNameIsAllowed_(d.name, extraTargetNames);
     }),
-    allocStrategy
+    allocStrategy,
+    targetOrder
   );
   for (var t = 0; t < targets.length && leftover > DEBT_PAYOFF_SCENARIO_ZERO_BAL_; t++) {
     var pay = Math.min(leftover, targets[t].balance);
@@ -908,25 +1063,54 @@ function applyDebtPayoffScenarioLeftover_(remaining, amount, allocStrategy, extr
 }
 
 function debtPayoffScenarioAllocStrategy_(strategy) {
-  return strategy === 'snowball' ? 'snowball' : 'avalanche';
+  if (strategy === 'snowball') return 'snowball';
+  if (strategy === 'custom') return 'custom';
+  return 'avalanche';
+}
+
+function debtPayoffKnownMoney_(value, knownFlag) {
+  if (knownFlag === false) return false;
+  return value != null && isFinite(Number(value));
 }
 
 function copyDebtPayoffScenarioWorkingDebts_(debts) {
   return (debts || []).map(function(debt) {
+    var piKnown = debtPayoffKnownMoney_(
+      debt.principalAndInterest, debt.principalAndInterestKnown);
+    var escrowKnown = debtPayoffKnownMoney_(
+      debt.escrowPayment, debt.escrowKnown);
+    var termKnown = debt.remainingTermKnown === true ||
+      (Number(debt.remainingTermMonths) > 0);
+    var contractual = debtPayoffContractualPrincipalPayment_(debt);
     return {
       name: String(debt.name || ''),
+      originalName: String(debt.originalName || debt.name || ''),
       type: String(debt.type || ''),
+      linkedProperty: String(debt.linkedProperty || '').trim(),
       balance: round2_(debt.balance),
       minimumPayment: round2_(debt.minimumPayment),
-      interestRate: round2_(debt.interestRate)
+      interestRate: Number(debt.interestRate),
+      interestRateKnown: debt.interestRateKnown !== false,
+      principalAndInterest: piKnown ? round2_(debt.principalAndInterest) : null,
+      principalAndInterestKnown: piKnown,
+      escrowPayment: escrowKnown ? round2_(debt.escrowPayment) : null,
+      escrowKnown: escrowKnown,
+      remainingTermMonths: termKnown ? Number(debt.remainingTermMonths) : null,
+      remainingTermKnown: termKnown,
+      unverifiedTaxInsuranceAmount: debt.unverifiedTaxInsuranceAmount,
+      contractualPrincipalPayment: contractual.known ? contractual.amount : null,
+      contractualPrincipalKnown: contractual.known === true,
+      amortizationIncompleteReason: contractual.known ? '' : (contractual.reason || '')
     };
   });
 }
 
 /**
- * Month-loop payoff path. strategy: 'minimum_only' | 'avalanche' | 'snowball'.
+ * Month-loop payoff path. strategy: 'minimum_only' | 'avalanche' | 'snowball' | 'custom'.
  * Extra and selected bonus cash are applied only after interest and every
- * modeled debt receives its current minimum.
+ * modeled debt receives its current minimum. Optional rollReleasedPayments
+ * adds a paid-off debt’s freed contractual payment to later leftover; the
+ * default overlay does not roll, so existing extra-only results stay the same.
  */
 function simulateDebtPayoffSchedule_(normalizedDebts, monthlyTotalToExtra, strategy, options) {
   options = options || {};
@@ -941,6 +1125,8 @@ function simulateDebtPayoffSchedule_(normalizedDebts, monthlyTotalToExtra, strat
     : Math.max(0, round2_(Number(options.oneTimeExtra) || 0));
   const asOfDate = options.asOfDate;
   const bonusEvents = options.bonusEvents || [];
+  const rollReleased = options.rollReleasedPayments === true && strategy !== 'minimum_only';
+  const targetOrder = options.targetOrder;
   const bonusByMonth = {};
   bonusEvents.forEach(function(ev) {
     var idx = Number(ev && ev.monthIndex);
@@ -952,39 +1138,74 @@ function simulateDebtPayoffSchedule_(normalizedDebts, monthlyTotalToExtra, strat
   const working = copyDebtPayoffScenarioWorkingDebts_(normalizedDebts);
   const allocStrategy = debtPayoffScenarioAllocStrategy_(strategy);
   const extraTargetNames = options.extraTargetNames;
+  const incompleteAmortization = [];
+  const amortizable = [];
+  working.forEach(function(row) {
+    if (row.contractualPrincipalKnown === false) {
+      incompleteAmortization.push({
+        name: row.name,
+        reason: row.amortizationIncompleteReason ||
+          'P&I versus escrow split is not saved. The full saved minimum was not applied to principal.',
+        remainingBalance: round2_(row.balance)
+      });
+      return;
+    }
+    amortizable.push(row);
+  });
   const extraPriorityOrder = (strategy === 'minimum_only' && !bonusEvents.length &&
-      !(oneTimeExtra > DEBT_PAYOFF_SCENARIO_ZERO_BAL_))
+      !(oneTimeExtra > DEBT_PAYOFF_SCENARIO_ZERO_BAL_) && !rollReleased)
     ? []
     : debtPayoffScenarioSortTargets_(
-        working.filter(function(row) {
+        amortizable.filter(function(row) {
           return debtPayoffScenarioNameIsAllowed_(row.name, extraTargetNames);
         }),
-        allocStrategy
+        allocStrategy,
+        targetOrder
       ).map(function(row) {
         return row.name;
       });
-  const cannotAmortizeAtMinimum = working.filter(debtPayoffScenarioCannotAmortizeAtMinimum_)
+  const cannotAmortizeAtMinimum = amortizable.filter(debtPayoffScenarioCannotAmortizeAtMinimum_)
     .map(function(row) { return row.name; });
-  const emptyResult = {
-    strategy: strategy,
-    monthlyExtra: extra,
-    debtFreeWithinHorizon: false,
-    debtFreeMonthIndex: null,
-    debtFreeMonthKey: null,
-    totalInterest: 0,
-    payoffOrder: [],
-    extraPriorityOrder: extraPriorityOrder,
-    bonusAllocationRule: allocStrategy,
-    bonusApplications: [],
-    cannotAmortizeAtMinimum: cannotAmortizeAtMinimum,
-    remainingBalance: 0,
-    remainingDebtNames: []
-  };
-  if (!working.length) return emptyResult;
   const payoffOrder = [];
   const bonusApplications = [];
+  const paymentReleases = [];
   let totalInterest = 0;
-  let remaining = working.slice();
+  let remaining = amortizable.slice();
+  let rolledBudget = extra;
+
+  function finishSchedule_(debtFree, monthIndex) {
+    const incomplete = incompleteAmortization.length > 0;
+    const openBal = remaining.reduce(function(sum, d) {
+      return sum + Number(d.balance || 0);
+    }, 0);
+    const incompleteBal = incompleteAmortization.reduce(function(sum, row) {
+      return sum + Number(row.remainingBalance || 0);
+    }, 0);
+    return {
+      strategy: strategy,
+      monthlyExtra: extra,
+      debtFreeWithinHorizon: debtFree === true && !incomplete,
+      debtFreeMonthIndex: debtFree === true && !incomplete ? monthIndex : null,
+      debtFreeMonthKey: debtFree === true && !incomplete
+        ? debtPayoffScenarioMonthKey_(asOfDate, monthIndex)
+        : null,
+      totalInterest: incomplete ? null : round2_(totalInterest),
+      totalInterestReliable: !incomplete,
+      projectionIncomplete: incomplete,
+      incompleteAmortization: incompleteAmortization.slice(),
+      payoffOrder: payoffOrder,
+      extraPriorityOrder: extraPriorityOrder,
+      bonusAllocationRule: allocStrategy,
+      bonusApplications: bonusApplications,
+      paymentReleases: paymentReleases,
+      cannotAmortizeAtMinimum: cannotAmortizeAtMinimum,
+      remainingBalance: round2_(openBal + incompleteBal),
+      remainingDebtNames: remaining.map(function(d) { return d.name; })
+        .concat(incompleteAmortization.map(function(row) { return row.name; }))
+    };
+  }
+
+  if (!working.length || !remaining.length) return finishSchedule_(false, null);
 
   for (let m = 1; m <= horizon; m++) {
     remaining.forEach(function(d) {
@@ -994,13 +1215,16 @@ function simulateDebtPayoffSchedule_(normalizedDebts, monthlyTotalToExtra, strat
     });
 
     remaining.forEach(function(d) {
-      const pay = Math.min(Math.max(0, Number(d.minimumPayment) || 0), d.balance);
+      const pay = Math.min(
+        Math.max(0, Number(d.contractualPrincipalPayment) || 0),
+        d.balance
+      );
       d.balance = round2_(d.balance - pay);
     });
 
     var bonusAmount = bonusByMonth[m] || 0;
     var bonusApplied = applyDebtPayoffScenarioLeftover_(
-      remaining, bonusAmount, allocStrategy);
+      remaining, bonusAmount, allocStrategy, null, targetOrder);
     if (bonusApplied.length) {
       bonusApplications.push({
         monthIndex: m,
@@ -1012,11 +1236,11 @@ function simulateDebtPayoffSchedule_(normalizedDebts, monthlyTotalToExtra, strat
     }
     if (m === 1 && oneTimeExtra > DEBT_PAYOFF_SCENARIO_ZERO_BAL_) {
       applyDebtPayoffScenarioLeftover_(
-        remaining, oneTimeExtra, allocStrategy, extraTargetNames);
+        remaining, oneTimeExtra, allocStrategy, extraTargetNames, targetOrder);
     }
-    if (extra > DEBT_PAYOFF_SCENARIO_ZERO_BAL_) {
+    if (rolledBudget > DEBT_PAYOFF_SCENARIO_ZERO_BAL_ && strategy !== 'minimum_only') {
       applyDebtPayoffScenarioLeftover_(
-        remaining, extra, allocStrategy, extraTargetNames);
+        remaining, rolledBudget, allocStrategy, extraTargetNames, targetOrder);
     }
 
     const stillOpen = [];
@@ -1028,47 +1252,42 @@ function simulateDebtPayoffSchedule_(normalizedDebts, monthlyTotalToExtra, strat
           monthIndex: m,
           monthKey: debtPayoffScenarioMonthKey_(asOfDate, m)
         });
+        var freed = debtPayoffFreedContractualPayment_(d);
+        var disposition = rollReleased ? 'rolled_to_next' : 'household_cash';
+        paymentReleases.push({
+          name: d.name,
+          monthIndex: m,
+          monthKey: debtPayoffScenarioMonthKey_(asOfDate, m),
+          cashFlowStartsMonthIndex: m + 1,
+          cashFlowStartsMonthKey: debtPayoffScenarioMonthKey_(asOfDate, m + 1),
+          amount: freed.known ? freed.amount : null,
+          amountKnown: freed.known === true,
+          unknownReason: freed.reason || '',
+          continuingEscrow: freed.escrow,
+          disposition: disposition
+        });
+        if (rollReleased && freed.known) {
+          rolledBudget = round2_(rolledBudget + freed.amount);
+        }
         return;
       }
       stillOpen.push(d);
     });
     remaining = stillOpen;
     if (!remaining.length) {
-      return {
-        strategy: strategy,
-        monthlyExtra: extra,
-        debtFreeWithinHorizon: true,
-        debtFreeMonthIndex: m,
-        debtFreeMonthKey: debtPayoffScenarioMonthKey_(asOfDate, m),
-        totalInterest: round2_(totalInterest),
-        payoffOrder: payoffOrder,
-        extraPriorityOrder: extraPriorityOrder,
-        bonusAllocationRule: allocStrategy,
-        bonusApplications: bonusApplications,
-        cannotAmortizeAtMinimum: cannotAmortizeAtMinimum,
-        remainingBalance: 0,
-        remainingDebtNames: []
-      };
+      if (rollReleased) {
+        paymentReleases.forEach(function(row) {
+          if (row.disposition === 'rolled_to_next') {
+            row.rolloverStopsMonthIndex = m;
+            row.rolloverStopsMonthKey = debtPayoffScenarioMonthKey_(asOfDate, m);
+          }
+        });
+      }
+      return finishSchedule_(true, m);
     }
   }
 
-  return {
-    strategy: strategy,
-    monthlyExtra: extra,
-    debtFreeWithinHorizon: false,
-    debtFreeMonthIndex: null,
-    debtFreeMonthKey: null,
-    totalInterest: round2_(totalInterest),
-    payoffOrder: payoffOrder,
-    extraPriorityOrder: extraPriorityOrder,
-    bonusAllocationRule: allocStrategy,
-    bonusApplications: bonusApplications,
-    cannotAmortizeAtMinimum: cannotAmortizeAtMinimum,
-    remainingBalance: round2_(remaining.reduce(function(sum, d) {
-      return sum + Number(d.balance || 0);
-    }, 0)),
-    remainingDebtNames: remaining.map(function(d) { return d.name; })
-  };
+  return finishSchedule_(false, null);
 }
 
 function formatDebtPayoffInterestVsBaseline_(row) {
@@ -1084,9 +1303,14 @@ function formatDebtPayoffInterestVsBaseline_(row) {
 }
 
 function summarizeDebtPayoffScenario_(result, minOnlyInterest) {
-  const interestSaved = result.strategy === 'minimum_only'
-    ? 0
-    : round2_(Number(minOnlyInterest || 0) - Number(result.totalInterest || 0));
+  const incomplete = result && result.projectionIncomplete === true;
+  const interestSaved = incomplete || result.totalInterest == null
+    ? null
+    : (result.strategy === 'minimum_only'
+        ? 0
+        : (minOnlyInterest == null
+            ? null
+            : round2_(Number(minOnlyInterest) - Number(result.totalInterest || 0))));
   return {
     strategy: result.strategy,
     monthlyExtra: result.monthlyExtra,
@@ -1094,17 +1318,27 @@ function summarizeDebtPayoffScenario_(result, minOnlyInterest) {
     extraPriorityOrder: result.extraPriorityOrder,
     bonusAllocationRule: result.bonusAllocationRule || debtPayoffScenarioAllocStrategy_(result.strategy),
     bonusApplications: Array.isArray(result.bonusApplications) ? result.bonusApplications.slice() : [],
-    debtFreeWithinHorizon: result.debtFreeWithinHorizon,
-    debtFreeMonthIndex: result.debtFreeMonthIndex,
-    debtFreeMonthKey: result.debtFreeMonthKey,
-    totalInterest: result.totalInterest,
+    debtFreeWithinHorizon: incomplete ? false : result.debtFreeWithinHorizon,
+    debtFreeMonthIndex: incomplete ? null : result.debtFreeMonthIndex,
+    debtFreeMonthKey: incomplete ? null : result.debtFreeMonthKey,
+    totalInterest: incomplete ? null : result.totalInterest,
+    totalInterestReliable: !incomplete,
+    projectionIncomplete: incomplete,
+    incompleteAmortization: Array.isArray(result.incompleteAmortization)
+      ? result.incompleteAmortization.slice()
+      : [],
     interestSavedVsMinimumOnly: interestSaved,
-    interestVsBaselineLabel: formatDebtPayoffInterestVsBaseline_({
-      interestSavedVsMinimumOnly: interestSaved
-    }),
+    interestVsBaselineLabel: incomplete || interestSaved == null
+      ? 'Interest is incomplete until P&I versus escrow is saved.'
+      : formatDebtPayoffInterestVsBaseline_({
+          interestSavedVsMinimumOnly: interestSaved
+        }),
     cannotAmortizeAtMinimum: result.cannotAmortizeAtMinimum,
     remainingBalance: result.remainingBalance,
-    remainingDebtNames: result.remainingDebtNames
+    remainingDebtNames: result.remainingDebtNames,
+    paymentReleases: Array.isArray(result.paymentReleases)
+      ? result.paymentReleases.slice()
+      : []
   };
 }
 
@@ -1127,6 +1361,17 @@ function compareDebtPayoffStrategies_(normalizedDebts, monthlyExtra, options) {
   };
   assertDebtPayoffScenarioBonusEventsInHorizon_(bonusEvents, options.asOfDate);
   const bonusIncluded = debtPayoffScenarioBonusPlanIncluded_(bonusPlan);
+  const incompleteMortgages = classified.modeled
+    .filter(function(debt) {
+      return debtPayoffHasContinuingPropertyCosts_(debt) &&
+        !debtPayoffDerivedPrincipalAndInterest_(debt).known;
+    })
+    .map(function(debt) {
+      return {
+        name: String(debt && debt.name || ''),
+        reason: 'P&I versus escrow split is not saved. The full saved minimum was not applied to principal.'
+      };
+    });
   const simOptions = {
     asOfDate: options.asOfDate,
     horizonMonths: horizonMonths,
@@ -1144,7 +1389,9 @@ function compareDebtPayoffStrategies_(normalizedDebts, monthlyExtra, options) {
     persisted: false,
     extraIsAffordable: null,
     reserveModeled: false,
-    householdComparisonComplete: classified.blockers.length === 0 && classified.modeled.length > 0,
+    householdComparisonComplete: classified.blockers.length === 0 &&
+      classified.modeled.length > 0 && incompleteMortgages.length === 0,
+    incompleteMortgages: incompleteMortgages,
     monthlyExtra: extra,
     horizonMonths: horizonMonths,
     asOfMonthKey: debtPayoffScenarioForecastStartMonthKey_(options.asOfDate),
@@ -1161,6 +1408,514 @@ function compareDebtPayoffStrategies_(normalizedDebts, monthlyExtra, options) {
   };
 }
 
+function debtPayoffHasSavedPiOrEscrow_(debt) {
+  return !!(debt && (
+    debt.principalAndInterestKnown === true ||
+    debt.escrowKnown === true
+  ));
+}
+
+function debtPayoffHasContinuingPropertyCosts_(debt) {
+  if (debtPayoffHasSavedPiOrEscrow_(debt)) return true;
+  var type = String(debt && debt.type || '').trim().toLowerCase();
+  if (type === 'mortgage') return true;
+  if (type === 'loan' && String(debt && debt.linkedProperty || '').trim()) return true;
+  return false;
+}
+
+function debtPayoffDerivedPrincipalAndInterest_(debt) {
+  if (!debt) return { known: false, amount: null, derived: false };
+  if (debt.principalAndInterestKnown === true &&
+      isFinite(Number(debt.principalAndInterest))) {
+    return { known: true, amount: round2_(debt.principalAndInterest), derived: false };
+  }
+  if (debt.escrowKnown === true && isFinite(Number(debt.escrowPayment)) &&
+      isFinite(Number(debt.minimumPayment))) {
+    var derived = round2_(Number(debt.minimumPayment) - Number(debt.escrowPayment));
+    if (derived > DEBT_PAYOFF_SCENARIO_ZERO_BAL_) {
+      return { known: true, amount: derived, derived: true };
+    }
+  }
+  return { known: false, amount: null, derived: false };
+}
+
+function debtPayoffContractualPrincipalPayment_(debt) {
+  if (debtPayoffHasContinuingPropertyCosts_(debt)) {
+    var pi = debtPayoffDerivedPrincipalAndInterest_(debt);
+    if (!pi.known) {
+      return {
+        known: false,
+        amount: null,
+        reason: 'P&I versus escrow split is not saved. The full saved minimum was not applied to principal, and payoff dates and interest are not reliable.'
+      };
+    }
+    return { known: true, amount: pi.amount, reason: '' };
+  }
+  return {
+    known: true,
+    amount: round2_(Number(debt && debt.minimumPayment) || 0),
+    reason: ''
+  };
+}
+
+function debtPayoffFreedContractualPayment_(debt) {
+  if (debtPayoffHasContinuingPropertyCosts_(debt)) {
+    var pi = debtPayoffDerivedPrincipalAndInterest_(debt);
+    if (!pi.known) {
+      return {
+        known: false,
+        amount: null,
+        escrow: debt && debt.escrowKnown ? debt.escrowPayment : null,
+        reason: 'P&I versus escrow split is not saved, so payment relief is unknown. The full saved minimum was not treated as freed cash. Taxes, insurance, and escrow continue as property costs after payoff.'
+      };
+    }
+    return {
+      known: true,
+      amount: pi.amount,
+      escrow: debt.escrowKnown
+        ? debt.escrowPayment
+        : round2_(Number(debt.minimumPayment) - pi.amount),
+      reason: ''
+    };
+  }
+  return {
+    known: true,
+    amount: round2_(Number(debt && debt.minimumPayment) || 0),
+    escrow: 0,
+    reason: ''
+  };
+}
+
+function debtPayoffAmortizingPayment_(principal, aprPct, n) {
+  var p = Number(principal) || 0;
+  var months = Number(n) || 0;
+  if (!(p > 0) || !(months > 0)) return null;
+  var r = (Number(aprPct) || 0) / 100 / 12;
+  if (!(r > 0)) return round2_(p / months);
+  return round2_(p * r * Math.pow(1 + r, months) / (Math.pow(1 + r, months) - 1));
+}
+
+function debtPayoffRemainingTermKnown_(debt) {
+  return !!(debt && (debt.remainingTermKnown === true || Number(debt.remainingTermMonths) > 0));
+}
+
+function debtPayoffBalanceAfterScheduledPayments_(principal, aprPct, payment, n) {
+  var bal = round2_(principal);
+  var pay = Number(payment) || 0;
+  var months = Number(n) || 0;
+  if (!(months > 0)) return bal;
+  for (var m = 1; m <= months; m++) {
+    var interest = debtPayoffScenarioMonthlyInterest_(bal, aprPct);
+    bal = round2_(bal + interest);
+    bal = round2_(bal - Math.min(pay, bal));
+    if (bal <= DEBT_PAYOFF_SCENARIO_ZERO_BAL_) return 0;
+  }
+  return bal;
+}
+
+function debtPayoffModeledPayoffMonths_(principal, aprPct, payment) {
+  var bal = round2_(principal);
+  var pay = Number(payment) || 0;
+  if (!(bal > DEBT_PAYOFF_SCENARIO_ZERO_BAL_)) return 0;
+  if (!(pay > 0)) return null;
+  for (var m = 1; m <= DEBT_PAYOFF_SCENARIO_HORIZON_MONTHS_; m++) {
+    var interest = debtPayoffScenarioMonthlyInterest_(bal, aprPct);
+    bal = round2_(bal + interest);
+    if (pay <= interest + DEBT_PAYOFF_SCENARIO_ZERO_BAL_ &&
+        bal > pay + DEBT_PAYOFF_SCENARIO_ZERO_BAL_) {
+      return null;
+    }
+    bal = round2_(bal - Math.min(pay, bal));
+    if (bal <= DEBT_PAYOFF_SCENARIO_ZERO_BAL_) return m;
+  }
+  return null;
+}
+
+function estimateDebtPayoffPositionMonths_(debt) {
+  var result = {
+    months: null,
+    incomplete: false,
+    method: 'simple',
+    reason: ''
+  };
+  if (!debt) return result;
+  if (!(Number(debt.balance) > DEBT_PAYOFF_SCENARIO_ZERO_BAL_)) {
+    result.months = 0;
+    return result;
+  }
+  if (debtPayoffHasContinuingPropertyCosts_(debt)) {
+    result.method = 'amortization_pi';
+    var contractual = debtPayoffContractualPrincipalPayment_(debt);
+    if (!contractual.known) {
+      result.incomplete = true;
+      result.reason = contractual.reason ||
+        'P&I versus escrow is not saved. The full saved minimum was not applied to principal.';
+      return result;
+    }
+    result.months = debtPayoffModeledPayoffMonths_(
+      debt.balance, debt.interestRate, contractual.amount);
+    return result;
+  }
+  result.method = isLoanTypeForAmortization_(debt.type) ? 'amortization' : 'simple';
+  result.months = estimateRoughPayoffMonths_(
+    debt.balance, debt.minimumPayment, debt.interestRate, debt.type);
+  return result;
+}
+
+function debtPayoffIsMtbMo4Plex_(debtOrName) {
+  var name = typeof debtOrName === 'string'
+    ? debtOrName
+    : String(debtOrName && (debtOrName.name || debtOrName.originalName) || '');
+  return name.trim() === 'MTB Bank - MO 4 Plex';
+}
+
+function debtPayoffJoinEnglish_(items) {
+  items = (items || []).filter(Boolean);
+  if (!items.length) return '';
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return items[0] + ' and ' + items[1];
+  return items.slice(0, items.length - 1).join(', ') + ', and ' + items[items.length - 1];
+}
+
+function reconcileDebtPayoffMortgageTerm_(debt, asOfDate) {
+  var pi = debtPayoffDerivedPrincipalAndInterest_(debt);
+  var termKnown = debtPayoffRemainingTermKnown_(debt);
+  var aprKnown = !(debt && debt.interestRateKnown === false);
+  var result = {
+    name: String(debt && debt.name || ''),
+    savedBalance: round2_(Number(debt && debt.balance) || 0),
+    savedApr: Number(debt && debt.interestRate),
+    savedMinimum: round2_(Number(debt && debt.minimumPayment) || 0),
+    escrowPayment: debt && debt.escrowKnown ? debt.escrowPayment : null,
+    derivedPrincipalAndInterest: pi.known ? pi.amount : null,
+    remainingTermMonths: termKnown ? Number(debt.remainingTermMonths) : null,
+    remainingTermKnown: termKnown,
+    amortizedPayment: null,
+    modeledPayoffMonths: null,
+    leftoverAfterRemainingTerm: null,
+    savedLastPaymentMonthKey: '',
+    modeledPayoffMonthKey: '',
+    modeledReleaseMonthKey: '',
+    mismatch: false,
+    conditionalEstimate: false,
+    estimateKind: 'incomplete',
+    rateResetNotModeled: false,
+    rateResetCaveat: '',
+    payoffTimingReliable: false,
+    mismatches: [],
+    ignoredUnverifiedAmounts: [],
+    savedValuesUnchanged: true
+  };
+  if (debt && debt.unverifiedTaxInsuranceAmount != null &&
+      isFinite(Number(debt.unverifiedTaxInsuranceAmount))) {
+    result.ignoredUnverifiedAmounts.push({
+      amount: round2_(debt.unverifiedTaxInsuranceAmount),
+      reason: 'No clear period was saved, so this tax-and-insurance figure was not treated as a monthly escrow.'
+    });
+  }
+  if (pi.known && aprKnown) {
+    result.conditionalEstimate = true;
+    result.estimateKind = 'conditional';
+    result.modeledPayoffMonths = debtPayoffModeledPayoffMonths_(
+      debt.balance, debt.interestRate, pi.amount);
+    if (result.modeledPayoffMonths != null && asOfDate) {
+      result.modeledPayoffMonthKey = debtPayoffScenarioMonthKey_(
+        asOfDate, result.modeledPayoffMonths);
+      result.modeledReleaseMonthKey = debtPayoffScenarioMonthKey_(
+        asOfDate, result.modeledPayoffMonths + 1);
+    }
+    if (termKnown) {
+      result.amortizedPayment = debtPayoffAmortizingPayment_(
+        debt.balance, debt.interestRate, debt.remainingTermMonths);
+      result.leftoverAfterRemainingTerm = debtPayoffBalanceAfterScheduledPayments_(
+        debt.balance, debt.interestRate, pi.amount, debt.remainingTermMonths);
+      if (asOfDate) {
+        result.savedLastPaymentMonthKey = debtPayoffScenarioMonthKey_(
+          asOfDate, Number(debt.remainingTermMonths));
+      }
+      if (result.amortizedPayment != null &&
+          Math.abs(result.amortizedPayment - pi.amount) > 0.01) {
+        result.mismatch = true;
+        result.mismatches.push(
+          'Saved APR and remaining term imply a P&I of $' +
+          result.amortizedPayment.toFixed(2) +
+          ', which does not match derived P&I $' +
+          pi.amount.toFixed(2) +
+          '. This is a current-APR and P&I scenario, not a lender-confirmed date.'
+        );
+      }
+      if (result.modeledPayoffMonths != null &&
+          result.modeledPayoffMonths !== Number(debt.remainingTermMonths)) {
+        result.mismatch = true;
+        result.mismatches.push(
+          'Modeled P&I-only amortization takes ' + result.modeledPayoffMonths +
+          ' months and leaves $' +
+          Number(result.leftoverAfterRemainingTerm).toFixed(2) +
+          ' after the saved ' + debt.remainingTermMonths +
+          ' remaining payments' +
+          (result.savedLastPaymentMonthKey
+            ? ' (through ' + result.savedLastPaymentMonthKey + ')'
+            : '') +
+          '. This is a current-APR and P&I scenario, not a lender-confirmed date.'
+        );
+      } else if (Number(result.leftoverAfterRemainingTerm) > DEBT_PAYOFF_SCENARIO_ZERO_BAL_) {
+        result.mismatch = true;
+        result.mismatches.push(
+          'Modeled P&I-only amortization leaves $' +
+          Number(result.leftoverAfterRemainingTerm).toFixed(2) +
+          ' after the saved remaining term. This is a current-APR and P&I scenario, not a lender-confirmed date.'
+        );
+      }
+    }
+    if (debtPayoffIsMtbMo4Plex_(result.name)) {
+      result.rateResetNotModeled = true;
+      result.rateResetCaveat =
+        'MTB’s known March 2027 rate change and April 2027 P&I change are not modeled. This estimate does not invent a future rate or payment, so it is not a reliable long-term MTB date.';
+    }
+  }
+  return result;
+}
+
+function applyDebtPayoffMortgageTimingFlags_(strategies, reconciliations) {
+  var byName = {};
+  (reconciliations || []).forEach(function(row) {
+    if (row && row.name && (row.conditionalEstimate === true ||
+        row.estimateKind === 'conditional')) {
+      byName[row.name] = row;
+    }
+  });
+  function markRow_(row) {
+    if (!row) return;
+    var anyConditional = false;
+    (row.paymentReleases || []).forEach(function(rel) {
+      var recon = byName[rel.name];
+      if (!recon) {
+        if (rel.timingReliable == null) rel.timingReliable = true;
+        return;
+      }
+      anyConditional = true;
+      rel.modeledMonthIndex = rel.monthIndex;
+      rel.modeledMonthKey = rel.monthKey;
+      rel.modeledCashFlowStartsMonthIndex = rel.cashFlowStartsMonthIndex;
+      rel.modeledCashFlowStartsMonthKey = rel.cashFlowStartsMonthKey;
+      rel.timingReliable = false;
+      rel.conditionalEstimate = true;
+      rel.estimateKind = 'conditional';
+      rel.timingMismatchReason = '';
+    });
+    (row.payoffOrder || []).forEach(function(item) {
+      if (!byName[item.name]) return;
+      anyConditional = true;
+      item.modeledMonthIndex = item.monthIndex;
+      item.modeledMonthKey = item.monthKey;
+      item.timingReliable = false;
+      item.conditionalEstimate = true;
+      item.estimateKind = 'conditional';
+    });
+    if (anyConditional) {
+      row.mortgageDatesAreConditional = true;
+      row.payoffTimingReliable = false;
+    } else if (row.payoffTimingReliable == null) {
+      row.payoffTimingReliable = true;
+    }
+  }
+  Object.keys(strategies || {}).forEach(function(key) {
+    markRow_(strategies[key]);
+  });
+}
+
+function debtPayoffHouseholdPlanAssumptions_(options) {
+  options = options || {};
+  var extra = options.extra;
+  var extraIsSafe = options.extraIsSafe === true;
+  var reserveBreached = options.reserveBreached === true;
+  var notes = [];
+  if (options.hasConditionalMortgageEstimates) {
+    notes.push(
+      'Mortgage payoff months and interest are conditional estimates. They assume the current saved APR and P&I stay unchanged. They are not lender-confirmed dates.'
+    );
+  }
+  if (options.includeMtbRateResetCaveat) {
+    notes.push(
+      'MTB’s known March 2027 rate change and April 2027 P&I change are not modeled. This estimate does not invent a future rate or payment, so it is not a reliable long-term MTB date.'
+    );
+  }
+  var deficit = Number(options.monthlyDeficit);
+  var hasDeficit = isFinite(deficit) && deficit > 0.005;
+  var facts = [];
+  if (options.usableCashAfterBuffers != null &&
+      isFinite(Number(options.usableCashAfterBuffers))) {
+    facts.push(fmtCurrency_(options.usableCashAfterBuffers) + ' usable cash');
+  }
+  if (options.requiredReserveAmount != null &&
+      isFinite(Number(options.requiredReserveAmount))) {
+    facts.push('a ' + fmtCurrency_(options.requiredReserveAmount) + ' reserve');
+  }
+  var lead = facts.length
+    ? 'Current household facts show ' + debtPayoffJoinEnglish_(facts) + '. '
+    : '';
+  if (!extraIsSafe || reserveBreached || !(Number(extra) > DEBT_PAYOFF_SCENARIO_ZERO_BAL_)) {
+    notes.push(
+      lead +
+      'Rollover strategies are hypothetical and not currently affordable. They assume required payments continue and that released payments can be rolled.' +
+      (hasDeficit
+        ? ' They do not model how the current deficit is funded or future new borrowing.'
+        : ' They do not model future new borrowing.')
+    );
+    notes.push(
+      (Number(extra) > DEBT_PAYOFF_SCENARIO_ZERO_BAL_
+        ? 'Current extra remains ' + fmtCurrency_(extra) + '. '
+        : '') +
+      'A rollover schedule is not labeled safe. This plan does not add $400 to a mortgage.'
+    );
+  } else {
+    notes.push(
+      'This plan does not add $400 to a mortgage. Extra stays at the current recommendation of ' +
+      fmtCurrency_(extra) + '.'
+    );
+  }
+  notes.push(
+    'Mortgage amortization uses principal-and-interest only. Full minimums stay in monthly budgeting. Escrow is not applied to principal. Keeping a paid-off debt’s payment improves monthly cash flow; rolling that payment does not improve cash flow until the rollover stops.'
+  );
+  return notes;
+}
+
+function summarizeDebtPayoffHouseholdScenario_(result, minOnlyInterest, planKey, extraIsSafe, reserveBreached) {
+  var row = summarizeDebtPayoffScenario_(result, minOnlyInterest);
+  row.planKey = planKey;
+  row.rollReleasedPayments = planKey !== 'keep_cash';
+  row.improvesMonthlyCashFlowOnRelease = planKey === 'keep_cash';
+  row.rolloverIsSafe = extraIsSafe === true && reserveBreached !== true &&
+    planKey !== 'keep_cash';
+  row.hypothetical = planKey === 'custom_order' || extraIsSafe !== true ||
+    reserveBreached === true;
+  return row;
+}
+
+function buildDebtPayoffHouseholdPlan_(normalizedDebts, options) {
+  options = options || {};
+  var extraParsed = parseDebtPayoffScenarioMonthlyExtra_(options.monthlyExtra);
+  var extra = extraParsed.ok ? extraParsed.amount : 0;
+  var extraIsSafe = options.extraIsSafe === true && extra > DEBT_PAYOFF_SCENARIO_ZERO_BAL_;
+  var reserveBreached = options.reserveBreached === true;
+  var classified = classifyDebtPayoffScenarioDebts_(normalizedDebts);
+  var simOptions = {
+    asOfDate: options.asOfDate,
+    horizonMonths: options.horizonMonths,
+    bonusEvents: []
+  };
+  var keepCash = simulateDebtPayoffSchedule_(
+    classified.modeled, extra, 'minimum_only', simOptions);
+  var avalancheRoll = simulateDebtPayoffSchedule_(
+    classified.modeled, extra, 'avalanche', Object.assign({}, simOptions, {
+      rollReleasedPayments: true
+    }));
+  var snowballRoll = simulateDebtPayoffSchedule_(
+    classified.modeled, extra, 'snowball', Object.assign({}, simOptions, {
+      rollReleasedPayments: true
+    }));
+  var customOrder = null;
+  var targetOrder = Array.isArray(options.targetOrder)
+    ? options.targetOrder.map(function(name) { return String(name || ''); }).filter(Boolean)
+    : [];
+  if (targetOrder.length) {
+    customOrder = simulateDebtPayoffSchedule_(
+      classified.modeled, extra, 'custom', Object.assign({}, simOptions, {
+        rollReleasedPayments: true,
+        targetOrder: targetOrder
+      }));
+  }
+  var reconciliations = classified.modeled
+    .filter(debtPayoffHasContinuingPropertyCosts_)
+    .map(function(debt) {
+      return reconcileDebtPayoffMortgageTerm_(debt, options.asOfDate);
+    });
+  var incompleteMortgages = classified.modeled
+    .filter(function(debt) {
+      return debtPayoffHasContinuingPropertyCosts_(debt) &&
+        !debtPayoffDerivedPrincipalAndInterest_(debt).known;
+    })
+    .map(function(debt) {
+      return {
+        name: String(debt && debt.name || ''),
+        reason: 'P&I versus escrow split is not saved. The full saved minimum was not applied to principal, and payoff dates and interest are not reliable.'
+      };
+    });
+  var unverified = [];
+  reconciliations.forEach(function(row) {
+    (row.ignoredUnverifiedAmounts || []).forEach(function(item) {
+      unverified.push(item);
+    });
+  });
+  var strategies = {
+    keep_cash: summarizeDebtPayoffHouseholdScenario_(
+      keepCash, keepCash.totalInterest, 'keep_cash', extraIsSafe, reserveBreached),
+    avalanche_roll: summarizeDebtPayoffHouseholdScenario_(
+      avalancheRoll, keepCash.totalInterest, 'avalanche_roll', extraIsSafe, reserveBreached),
+    snowball_roll: summarizeDebtPayoffHouseholdScenario_(
+      snowballRoll, keepCash.totalInterest, 'snowball_roll', extraIsSafe, reserveBreached),
+    custom_order: customOrder
+      ? summarizeDebtPayoffHouseholdScenario_(
+          customOrder, keepCash.totalInterest, 'custom_order', extraIsSafe, reserveBreached)
+      : null
+  };
+  applyDebtPayoffMortgageTimingFlags_(strategies, reconciliations);
+  var monthlyDeficit = 0;
+  if (options.monthlyDeficit != null && isFinite(Number(options.monthlyDeficit))) {
+    monthlyDeficit = round2_(Math.max(0, Number(options.monthlyDeficit)));
+  } else {
+    var surplusN = Number(options.recurringSurplusBeforeReserve);
+    if (isFinite(surplusN) && surplusN < -0.005) {
+      monthlyDeficit = round2_(Math.abs(surplusN));
+    }
+  }
+  var includeMtb = classified.modeled.some(debtPayoffIsMtbMo4Plex_);
+  var hasConditionalMortgageEstimates = reconciliations.some(function(row) {
+    return row && row.conditionalEstimate === true;
+  });
+  var assumptions = debtPayoffHouseholdPlanAssumptions_({
+    extra: extra,
+    extraIsSafe: extraIsSafe,
+    reserveBreached: reserveBreached,
+    monthlyDeficit: monthlyDeficit,
+    usableCashAfterBuffers: options.usableCashAfterBuffers,
+    requiredReserveAmount: options.requiredReserveAmount,
+    includeMtbRateResetCaveat: includeMtb,
+    hasConditionalMortgageEstimates: hasConditionalMortgageEstimates
+  });
+  return {
+    persisted: false,
+    extraIsAffordable: null,
+    extraIsSafe: extraIsSafe,
+    monthlyExtra: extra,
+    mortgageExtraHypothetical: false,
+    proposedMortgageExtra: 0,
+    reserveBreached: reserveBreached,
+    rolloverIsSafe: extraIsSafe && !reserveBreached,
+    keepCashImprovesCashFlow: true,
+    rolloverDoesNotImproveCashFlowUntilLastDebt: true,
+    loanExtraDoesNotLowerScheduledPayment: true,
+    cardMinimumsHeldConstant: true,
+    householdComparisonComplete: classified.blockers.length === 0 &&
+      classified.modeled.length > 0 && incompleteMortgages.length === 0,
+    mortgageProjectionComplete: incompleteMortgages.length === 0,
+    modeledDebtNames: classified.modeled.map(function(d) { return d.name; }),
+    blockers: classified.blockers,
+    incompleteMortgages: incompleteMortgages,
+    mortgageReconciliations: reconciliations,
+    ignoredUnverifiedAmounts: unverified,
+    targetOrder: targetOrder,
+    strategies: strategies,
+    monthlyDeficit: monthlyDeficit,
+    usableCashAfterBuffers: options.usableCashAfterBuffers,
+    requiredReserveAmount: options.requiredReserveAmount,
+    includeMtbRateResetCaveat: includeMtb,
+    hasConditionalMortgageEstimates: hasConditionalMortgageEstimates,
+    assumptions: assumptions,
+    assumptionsNote: assumptions
+  };
+}
+
 function debtPayoffRecommendationProtection_(supported) {
   if (!supported) return null;
   var c = supported.components || {};
@@ -1173,6 +1928,7 @@ function debtPayoffRecommendationProtection_(supported) {
     policyFloorMonthly: c.policyFloorMonthly,
     unmatchedInvestmentBillsMonthly: c.unmatchedInvestmentBillsMonthly,
     debtMinimumsByType: supported.debtMinimumsByType || null,
+    cashPicture: supported.cashPicture || null,
     surplusBeforeReserve: supported.recurringSurplusBeforeReserve,
     usableCashAfterBuffers: supported.usableCashAfterBuffers,
     requiredReserveAmount: supported.requiredReserveAmount,
@@ -1368,8 +2124,9 @@ function readDebtPayoffSavedPlanningAssumptions_(ss) {
   try {
     var sheet = ss.getSheetByName('INPUT - Retirement');
     if (!sheet || sheet.getLastRow() < 1) return result;
-    var values = sheet.getDataRange().getValues();
-    var display = sheet.getDataRange().getDisplayValues();
+    var range = sheet.getDataRange();
+    var values = range.getValues();
+    var display = range.getDisplayValues();
     var selectedRow = -1;
     var returnRow = -1;
     var i;
@@ -2348,6 +3105,18 @@ function attachDebtPayoffNextDollar_(rec, normalizedDebts, supported, options) {
   if (rec.oneTimeAllocation && rec.oneTimeAllocation.evaluated === true) {
     rec.nextDollar.oneTimeAllocationEvaluated = true;
   }
+  rec.householdPlan = buildDebtPayoffHouseholdPlan_(normalizedDebts, {
+    asOfDate: options && options.asOfDate,
+    monthlyExtra: rec.monthlyExtra != null ? rec.monthlyExtra : 0,
+    extraIsSafe: rec.state === 'RECOMMENDED',
+    reserveBreached: !!(supported && (
+      supported.reserveProtects || supported.futureReserveProtects
+    )),
+    cashSafety: supported && supported.cashSafety,
+    recurringSurplusBeforeReserve: supported && supported.recurringSurplusBeforeReserve,
+    usableCashAfterBuffers: supported && supported.usableCashAfterBuffers,
+    requiredReserveAmount: supported && supported.requiredReserveAmount
+  });
   return rec;
 }
 
@@ -2420,17 +3189,21 @@ function buildDebtPayoffMonthlyRecommendation_(normalizedDebts, supported, optio
     var names = (comparison.blockers || []).map(function(row) {
       return (row.name || 'A debt') + ' (' + (row.reason || 'missing inputs') + ')';
     });
+    var mortgageNames = (comparison.incompleteMortgages || []).map(function(row) {
+      return (row.name || 'A property loan') + ' (' + (row.reason || 'P&I versus escrow is not saved') + ')';
+    });
+    var incompleteNames = names.concat(mortgageNames);
     return attachDebtPayoffNextDollar_(
       debtPayoffRecommendationWithhold_(
         'HOUSEHOLD_INCOMPLETE',
-        names.length
-          ? ('A household strategy cannot be recommended until these debts have a usable APR and minimum: ' +
-            names.join('; ') + '. Missing values were not replaced with $0 or 0%.')
+        incompleteNames.length
+          ? ('A household strategy cannot be recommended until these debts have usable payoff inputs: ' +
+            incompleteNames.join('; ') + '. Missing values were not replaced with $0 or 0%, and a full mortgage payment was not treated as principal-and-interest.')
           : 'No debts currently have a usable balance, APR, and minimum together.',
         {
           monthlyExtra: supported.amount,
           protection: protection,
-          reasons: names
+          reasons: incompleteNames
         }
       ),
       normalizedDebts, supported, options
@@ -2707,7 +3480,72 @@ function debtPayoffClassifySupportedIncomeSource_(sourceRow) {
       }
     };
   }
-  return { skip: false, monthlyAmount: monthly };
+  return { skip: false, monthlyAmount: monthly, name: label };
+}
+
+function buildDebtPayoffCashPicture_(parts) {
+  parts = parts || {};
+  var c = parts.components || {};
+  var income = round2_(Number(c.recurringIncomeMonthly) || 0);
+  var required = round2_(Number(c.recurringBillsMonthly) || 0);
+  var variable = round2_(Number(c.variableBillsMonthly) || 0);
+  var debts = round2_(Number(c.debtMinimumsMonthly) || 0);
+  var floors = round2_(Number(c.policyFloorMonthly) || 0);
+  var otherInv = round2_(Number(c.unmatchedInvestmentBillsMonthly) || 0);
+  var householdBills = round2_(required + variable);
+  var investments = round2_(floors + otherInv);
+  var surplus = parts.surplus != null && isFinite(Number(parts.surplus))
+    ? round2_(Number(parts.surplus))
+    : round2_(income - householdBills - debts - investments);
+  var minByType = parts.debtMinimumsByType || null;
+  var typeMap = {};
+  ((minByType && minByType.subtotals) || []).forEach(function(bucket) {
+    if (bucket && bucket.key) typeMap[bucket.key] = bucket;
+  });
+  var credit = typeMap.creditCards || { amount: 0, accounts: [], label: 'Credit Cards' };
+  var heloc = typeMap.heloc || { amount: 0, accounts: [], label: 'HELOC' };
+  var loans = typeMap.loansMortgages || { amount: 0, accounts: [], label: 'Loans/Mortgages' };
+  var otherDebt = typeMap.otherUnknown || { amount: 0, accounts: [], label: 'Other/Unknown' };
+  return {
+    income: {
+      label: 'Income',
+      total: income,
+      sources: parts.incomeSources || []
+    },
+    householdBills: {
+      label: 'Household bills',
+      total: householdBills,
+      required: required,
+      variable: variable,
+      requiredSources: parts.requiredBillSources || [],
+      variableSources: parts.variableBillEstimates || []
+    },
+    debtPayments: {
+      label: 'Debt payments',
+      total: debts,
+      creditCards: round2_(Number(credit.amount) || 0),
+      heloc: round2_(Number(heloc.amount) || 0),
+      loansMortgages: round2_(Number(loans.amount) || 0),
+      otherUnknown: round2_(Number(otherDebt.amount) || 0),
+      unknownMinimums: (minByType && minByType.unknownMinimums) || [],
+      accounts: [].concat(
+        credit.accounts || [],
+        heloc.accounts || [],
+        loans.accounts || [],
+        otherDebt.accounts || []
+      )
+    },
+    investments: {
+      label: 'Investment commitments',
+      total: investments,
+      policyFloors: floors,
+      otherBills: otherInv,
+      policyFloorSources: parts.policyFloorSources || [],
+      otherBillSources: parts.unmatchedInvestmentBillSources || []
+    },
+    shortfall: surplus < -0.005 ? round2_(Math.abs(surplus)) : 0,
+    surplus: surplus
+  };
 }
 
 function debtPayoffReserveFromCanonicalForecast_(forecast) {
@@ -3009,9 +3847,10 @@ function attachDebtPayoffVariableBillHistory_(ss, bills, asOfDate) {
       missingYears.push(year);
       return;
     }
+    var range = sheet.getDataRange();
     sheetsByYear[year] = {
-      display: sheet.getDataRange().getDisplayValues(),
-      values: sheet.getDataRange().getValues()
+      display: range.getDisplayValues(),
+      values: range.getValues()
     };
   });
   (bills || []).forEach(function(bill) {
@@ -3158,8 +3997,9 @@ function readDebtPayoffUpcomingObligations_(ss) {
   }
   var sheet = ss.getSheetByName('INPUT - Upcoming Expenses');
   if (!sheet) return { ok: true, missingSheet: true, rows: [] };
-  var values = sheet.getDataRange().getValues();
-  var display = sheet.getDataRange().getDisplayValues();
+  var range = sheet.getDataRange();
+  var values = range.getValues();
+  var display = range.getDisplayValues();
   if (!display || display.length < 2) return { ok: true, rows: [] };
   var headers = (display[0] || []).map(function(value) {
     return String(value || '').trim();
@@ -3855,6 +4695,128 @@ function evaluateDebtPayoffFutureCashSafety_(input) {
   };
 }
 
+function debtPayoffNormalizePayeeHay_(value) {
+  return ' ' + String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+}
+
+function debtPayoffPropertyCostBillKind_(bill) {
+  var payee = String(bill && (bill.payee || bill.name) || '').trim();
+  var cat = String(bill && bill.category || '').trim().toLowerCase();
+  var hay = debtPayoffNormalizePayeeHay_(payee);
+  if (hay.indexOf(' income tax ') !== -1 || hay.indexOf(' irs ') !== -1 ||
+      hay.indexOf(' auto insurance ') !== -1 || hay.indexOf(' car insurance ') !== -1 ||
+      hay.indexOf(' health insurance ') !== -1 || hay.indexOf(' life insurance ') !== -1) {
+    return '';
+  }
+  if (hay.indexOf(' property tax ') !== -1 || hay.indexOf(' real estate tax ') !== -1 ||
+      cat === 'property tax') {
+    return 'tax';
+  }
+  if (hay.indexOf(' homeowner insurance ') !== -1 || hay.indexOf(' homeowners insurance ') !== -1 ||
+      hay.indexOf(' hazard insurance ') !== -1 || hay.indexOf(' flood insurance ') !== -1 ||
+      hay.indexOf(' dwelling insurance ') !== -1) {
+    return 'insurance';
+  }
+  if ((cat === 'tax' || cat === 'insurance') && payee) return 'category';
+  return '';
+}
+
+function debtPayoffSameSavedPropertyLink_(billLink, debtLink) {
+  var left = String(billLink || '').trim().toLowerCase();
+  var right = String(debtLink || '').trim().toLowerCase();
+  if (!left || !right) return false;
+  return left === right;
+}
+
+function buildDebtPayoffEscrowBillCoverage_(debts, bills, debtKeys) {
+  var propertyDebts = [];
+  (debts || []).forEach(function(debt) {
+    if (!debt || debt.active === false) return;
+    if (!(Number(debt.balance) > 0.005)) return;
+    if (!debtPayoffHasContinuingPropertyCosts_(debt)) return;
+    var pi = debtPayoffDerivedPrincipalAndInterest_(debt);
+    var escrowKnown = false;
+    var escrowAmount = null;
+    if (debt.escrowKnown === true && isFinite(Number(debt.escrowPayment))) {
+      escrowKnown = true;
+      escrowAmount = round2_(debt.escrowPayment);
+    } else if (pi.known && isFinite(Number(debt.minimumPayment))) {
+      var derivedEscrow = round2_(Number(debt.minimumPayment) - Number(pi.amount));
+      if (derivedEscrow > DEBT_PAYOFF_SCENARIO_ZERO_BAL_) {
+        escrowKnown = true;
+        escrowAmount = derivedEscrow;
+      }
+    }
+    propertyDebts.push({
+      name: String(debt.name || debt.originalName || ''),
+      linkedProperty: String(debt.linkedProperty || '').trim(),
+      escrowKnown: escrowKnown,
+      escrowAmount: escrowAmount
+    });
+  });
+  var excludePayeeKeys = {};
+  var excludedBills = [];
+  var excludedAmount = 0;
+  var blockers = [];
+  var unknownBills = [];
+  (bills || []).forEach(function(bill) {
+    if (!bill || bill.active === false) return;
+    var payeeKey = debtPayoffScenarioPayeeKey_(bill.payee || bill.name);
+    if (bill.debtOwned || (debtKeys && debtKeys[payeeKey])) return;
+    var kind = debtPayoffPropertyCostBillKind_(bill);
+    if (!kind) return;
+    var billPropertyLink = String(bill.linkedProperty || '').trim();
+    if (!billPropertyLink) return;
+    var matches = propertyDebts.filter(function(debt) {
+      return debtPayoffSameSavedPropertyLink_(billPropertyLink, debt.linkedProperty);
+    });
+    if (!matches.length) return;
+    if (matches.length === 1 && matches[0].escrowKnown) {
+      var monthly = debtPayoffScenarioScheduledToMonthly_(bill.amount, bill.frequency);
+      if (bill.amountKnown === false || monthly == null) {
+        unknownBills.push(bill.payee || bill.name);
+        return;
+      }
+      excludePayeeKeys[payeeKey] = true;
+      excludedBills.push({
+        payee: bill.payee || bill.name,
+        monthlyAmount: monthly,
+        property: matches[0].linkedProperty || matches[0].name,
+        escrowAmount: matches[0].escrowAmount
+      });
+      excludedAmount = round2_(excludedAmount + monthly);
+      return;
+    }
+    if (matches.length === 1 && !matches[0].escrowKnown) {
+      unknownBills.push(bill.payee || bill.name);
+      return;
+    }
+    if (matches.length > 1) {
+      unknownBills.push(bill.payee || bill.name);
+    }
+  });
+  if (unknownBills.length) {
+    blockers.push({
+      code: 'ESCROW_COVERAGE_UNKNOWN',
+      reason: 'Escrow coverage for ' + unknownBills.join('; ') +
+        ' could not be matched safely to a property loan, so extra was withheld rather than counting those property costs twice or guessing. The full saved mortgage minimum was not reduced.'
+    });
+    excludePayeeKeys = {};
+    excludedBills = [];
+    excludedAmount = 0;
+  }
+  return {
+    excludePayeeKeys: excludePayeeKeys,
+    blockers: blockers,
+    summary: {
+      countedOnce: excludedBills.length > 0 && blockers.length === 0,
+      excludedBills: excludedBills,
+      excludedAmount: excludedAmount,
+      unknownBills: unknownBills
+    }
+  };
+}
+
 /**
  * Pure recurring-surplus estimate. Does not use This Week’s weekly extra,
  * current-month Cash Flow net, or Rolling Debt Payoff caps.
@@ -3871,6 +4833,7 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
     'Protected cash is This Week’s canonical reserve, including upcoming expenses and property contingency. A bills-only three-month proxy is not used.',
     'The recurring extra is then checked with a 3-month cash-safety forecast aligned with This Week’s 90-day reserve. It starts from usable cash after buffers. Each month, recurring surplus minus the extra and known Planned upcoming expenses in that window must leave cash at or above the protected reserve floor. Recurring bills and debt minimums stay in the surplus and are not subtracted again. Upcoming already included in This Week’s canonical reserve is removed from that month-end floor so those expenses are counted once. Planned upcoming due after the 3-month horizon is outside this check and is named. Blank or invalid upcoming dates or amounts withhold the extra instead of treating unknown as $0.',
     'Matching Bills for a tracked debt are counted only as the contractual minimum. A policy-floor bill is not added on top of the standing weekly floor converted at 52 ÷ 12.',
+    'A property loan’s full saved minimum, which may include escrow, is the cash-flow amount. Property-tax and insurance bills saved as linked to that mortgaged property are counted there and are not added again. Bills for properties with no linked mortgage, including paid-off homes, stay in the bill total and do not require an escrow match. Extra is withheld only when a bill is saved as linked to a mortgaged property and that mortgage’s escrow coverage is unknown. An amount with no confirmed period is not treated as monthly.',
     'Cisco Mid Year Bonus and Cisco End Year Bonus are separate annual income rows with Recurring = Yes and Frequency = Yearly. They are not included in recurring monthly income, are not treated as cash available each month, and are not used to satisfy the 90-day cash reserve. They are not applied to the strategy comparison unless you include them in the optional scenario overlay and enter the next payment month and year. If a yearly amount is shown as a monthly equivalent, that figure is an estimate only.'
   ];
 
@@ -3917,6 +4880,7 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
   Array.prototype.push.apply(blockers, debtPayoffCollectCashSafetyBlockers_(input));
 
   var income = 0;
+  var incomeSources = [];
   (input.recurringIncomeSources || []).forEach(function(sourceRow) {
     var classified = debtPayoffClassifySupportedIncomeSource_(sourceRow);
     if (classified.skip) return;
@@ -3925,6 +4889,10 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
       return;
     }
     income = round2_(income + classified.monthlyAmount);
+    incomeSources.push({
+      name: classified.name || sourceRow.name || 'An income source',
+      amount: classified.monthlyAmount
+    });
   });
 
   var collectedMins = collectDebtPayoffSupportedMinimums_(input.debts);
@@ -3932,11 +4900,17 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
   var debtKeys = collectedMins.debtKeys;
   var debtMinimumsByType = collectedMins.breakdown;
   Array.prototype.push.apply(blockers, collectedMins.blockers);
+  var escrowCoverage = buildDebtPayoffEscrowBillCoverage_(
+    input.debts, input.bills, debtKeys);
+  Array.prototype.push.apply(blockers, escrowCoverage.blockers);
 
   var billsMonthly = 0;
   var variableBillsMonthly = 0;
   var variableBillEstimates = [];
   var unmatchedInvestmentBillsMonthly = 0;
+  var requiredBillSources = [];
+  var unmatchedInvestmentBillSources = [];
+  var policyFloorSources = [];
   var policyFloorNames = {};
   (input.policyFloors || []).forEach(function(floor) {
     policyFloorNames[debtPayoffScenarioPayeeKey_(floor.accountName)] = true;
@@ -3946,6 +4920,7 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
     if (!bill || bill.active === false) return;
     var payeeKey = debtPayoffScenarioPayeeKey_(bill.payee || bill.name);
     if (bill.debtOwned || debtKeys[payeeKey]) return;
+    if (escrowCoverage.excludePayeeKeys[payeeKey]) return;
     var matchedFloor = bill.isInvestmentContribution && (
       (bill.matchedInvestmentAccount &&
         policyFloorNames[debtPayoffScenarioPayeeKey_(bill.matchedInvestmentAccount)]) ||
@@ -4001,9 +4976,17 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
     }
     if (bill.isInvestmentContribution) {
       unmatchedInvestmentBillsMonthly = round2_(unmatchedInvestmentBillsMonthly + monthly);
+      unmatchedInvestmentBillSources.push({
+        name: bill.payee || bill.name || 'An investment bill',
+        amount: monthly
+      });
       return;
     }
     billsMonthly = round2_(billsMonthly + monthly);
+    requiredBillSources.push({
+      name: bill.payee || bill.name || 'A bill',
+      amount: monthly
+    });
   });
 
   var policyFloorMonthly = 0;
@@ -4012,8 +4995,12 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
       Number(floor.weeklyAmount) || 0,
       Number(floor.requestedWeeklyPace) || 0
     );
-    policyFloorMonthly = round2_(
-      policyFloorMonthly + debtPayoffScenarioWeeklyToMonthly_(weekly));
+    var monthlyFloor = debtPayoffScenarioWeeklyToMonthly_(weekly);
+    policyFloorMonthly = round2_(policyFloorMonthly + monthlyFloor);
+    policyFloorSources.push({
+      name: floor.accountName || 'Investment policy floor',
+      amount: monthlyFloor
+    });
   });
 
   var components = {
@@ -4028,6 +5015,16 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
     debtMinimums + billsMonthly + variableBillsMonthly +
     policyFloorMonthly + unmatchedInvestmentBillsMonthly);
   var surplus = round2_(income - commitments);
+  var cashPicture = buildDebtPayoffCashPicture_({
+    components: components,
+    surplus: surplus,
+    debtMinimumsByType: debtMinimumsByType,
+    incomeSources: incomeSources,
+    requiredBillSources: requiredBillSources,
+    variableBillEstimates: variableBillEstimates,
+    policyFloorSources: policyFloorSources,
+    unmatchedInvestmentBillSources: unmatchedInvestmentBillSources
+  });
   var requiredReserve = input.reserveKnown === false
     ? null
     : round2_(Number(input.requiredReserveAmount));
@@ -4059,6 +5056,8 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
       blockers: blockers,
       components: components,
       debtMinimumsByType: debtMinimumsByType,
+      cashPicture: cashPicture,
+      escrowCoverage: escrowCoverage.summary,
       variableBillEstimates: [],
       variableBillMethod: DEBT_PAYOFF_VARIABLE_BILL_METHOD_,
       requiredReserveAmount: requiredReserve,
@@ -4100,6 +5099,8 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
           blockers: safety.blockers || [],
           components: components,
           debtMinimumsByType: debtMinimumsByType,
+          cashPicture: cashPicture,
+          escrowCoverage: escrowCoverage.summary,
           variableBillEstimates: [],
           variableBillMethod: DEBT_PAYOFF_VARIABLE_BILL_METHOD_,
           requiredReserveAmount: requiredReserve,
@@ -4133,6 +5134,8 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
     blockers: [],
     components: components,
     debtMinimumsByType: debtMinimumsByType,
+    cashPicture: cashPicture,
+    escrowCoverage: escrowCoverage.summary,
     variableBillEstimates: variableBillEstimates,
     variableBillMethod: DEBT_PAYOFF_VARIABLE_BILL_METHOD_,
     requiredReserveAmount: requiredReserve,
@@ -4277,8 +5280,9 @@ function readDebtPayoffSupportedMonthlyExtraIncome_(ss) {
       };
     }
     var sheet = getCashFlowSheet_(ss, year);
-    var display = sheet.getDataRange().getDisplayValues();
-    var values = sheet.getDataRange().getValues();
+    var range = sheet.getDataRange();
+    var display = range.getDisplayValues();
+    var values = range.getValues();
     if (!display || display.length < 2) {
       return {
         unavailable: true,
@@ -4665,8 +5669,9 @@ function readDebtPayoffSupportedMonthlyExtraBills_(ss, policyFloors) {
   var sheetNames = getSheetNames_();
   var sheet = ss.getSheetByName(sheetNames.BILLS);
   if (!sheet) return { unavailable: true, rows: [] };
-  var values = sheet.getDataRange().getValues();
-  var display = sheet.getDataRange().getDisplayValues();
+  var range = sheet.getDataRange();
+  var values = range.getValues();
+  var display = range.getDisplayValues();
   if (display.length < 2) return { unavailable: false, rows: [] };
   var headers = (display[0] || []).map(function(value) {
     return String(value || '').trim().toLowerCase();
@@ -4678,6 +5683,7 @@ function readDebtPayoffSupportedMonthlyExtraBills_(ss, policyFloors) {
   var frequencyCol = col('Frequency');
   var categoryCol = col('Category');
   var variesCol = col('Varies');
+  var linkedPropertyCol = col('Linked Property');
   if (payeeCol === -1 || amountCol === -1 || activeCol === -1) {
     return {
       unavailable: true,
@@ -4730,6 +5736,9 @@ function readDebtPayoffSupportedMonthlyExtraBills_(ss, policyFloors) {
       frequency: frequency,
       varies: variesCol === -1 ? '' : String(display[r][variesCol] || '').trim(),
       category: billMeta.category,
+      linkedProperty: linkedPropertyCol === -1
+        ? ''
+        : String(display[r][linkedPropertyCol] || '').trim(),
       active: true,
       isInvestmentContribution: investment.isInvestmentContribution === true,
       matchedInvestmentAccount: investment.accountName || ''

@@ -317,11 +317,50 @@ function normalizeDebts_(rows, aliasMap) {
         minPayment: minPayment,
         legacyFallback: DEBT_LEGACY_FALLBACK_.BALANCE_OR_MIN
       });
+      var remainingTermRaw = Object.prototype.hasOwnProperty.call(r, 'Remaining Term Months')
+        ? r['Remaining Term Months']
+        : (Object.prototype.hasOwnProperty.call(r, 'Remaining Term')
+          ? r['Remaining Term'] : '');
+      var remainingTermDisplay = Object.prototype.hasOwnProperty.call(r, '__display__Remaining Term Months')
+        ? r['__display__Remaining Term Months']
+        : (Object.prototype.hasOwnProperty.call(r, '__display__Remaining Term')
+          ? r['__display__Remaining Term']
+          : remainingTermRaw);
+      var remainingTermKnown = debtMinimumPaymentCellIsKnown_(
+        remainingTermRaw, remainingTermDisplay) &&
+        Number(toNumber_(remainingTermRaw)) > 0;
 
       return {
         name: normalizeName_(r['Account Name'], aliasMap),
         originalName: originalName,
         type: type,
+        linkedProperty: String(
+          r['__display__Linked Property'] || r['Linked Property'] || ''
+        ).trim(),
+        principalAndInterest: round2_(toNumber_(
+          Object.prototype.hasOwnProperty.call(r, 'Principal and Interest')
+            ? r['Principal and Interest'] : '')),
+        principalAndInterestKnown: debtMinimumPaymentCellIsKnown_(
+          Object.prototype.hasOwnProperty.call(r, 'Principal and Interest')
+            ? r['Principal and Interest'] : '',
+          Object.prototype.hasOwnProperty.call(r, '__display__Principal and Interest')
+            ? r['__display__Principal and Interest']
+            : (Object.prototype.hasOwnProperty.call(r, 'Principal and Interest')
+              ? r['Principal and Interest'] : '')),
+        escrowPayment: round2_(toNumber_(
+          Object.prototype.hasOwnProperty.call(r, 'Escrow Payment')
+            ? r['Escrow Payment'] : '')),
+        escrowKnown: debtMinimumPaymentCellIsKnown_(
+          Object.prototype.hasOwnProperty.call(r, 'Escrow Payment')
+            ? r['Escrow Payment'] : '',
+          Object.prototype.hasOwnProperty.call(r, '__display__Escrow Payment')
+            ? r['__display__Escrow Payment']
+            : (Object.prototype.hasOwnProperty.call(r, 'Escrow Payment')
+              ? r['Escrow Payment'] : '')),
+        remainingTermMonths: remainingTermKnown
+          ? Number(toNumber_(remainingTermRaw))
+          : null,
+        remainingTermKnown: remainingTermKnown,
         balance: round2_(balance),
         dueDay: dueDay,
         dueDayKnown: dueDayKnown,

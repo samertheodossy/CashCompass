@@ -2390,6 +2390,11 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
               <label>Linked Property</label>
               <select id="debt_add_linked_property"></select>
               <div class="muted" style="margin-top:4px;font-size:12px;">Optional for Loans and HELOCs. Used later to show property financing separately from operating expenses.</div>
+              <label>Principal and Interest</label>
+              <input type="text" id="debt_add_principal_interest" inputmode="decimal" onfocus="currencyFocus('debt_add_principal_interest')" onblur="currencyBlur('debt_add_principal_interest')">
+              <label>Escrow Payment</label>
+              <input type="text" id="debt_add_escrow_payment" inputmode="decimal" onfocus="currencyFocus('debt_add_escrow_payment')" onblur="currencyBlur('debt_add_escrow_payment')">
+              <div class="muted" style="margin-top:4px;font-size:12px;">Optional verified monthly amounts. Blank is unknown, not $0. The full Minimum Payment stays the cash-flow amount. Do not enter an escrow figure whose period is unconfirmed.</div>
             </div>
             <button onclick="createDebtAccount()">Create debt</button>
           </div>
@@ -2443,6 +2448,11 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                 <label>Linked Property</label>
                 <select id="debt_edit_linked_property"></select>
                 <div class="muted" style="margin-top:4px;font-size:12px;">Optional for Loans and HELOCs. Existing inactive links are retained until you clear or replace them.</div>
+                <label>Principal and Interest</label>
+                <input type="text" id="debt_edit_principal_interest" inputmode="decimal" onfocus="currencyFocus('debt_edit_principal_interest')" onblur="currencyBlur('debt_edit_principal_interest')">
+                <label>Escrow Payment</label>
+                <input type="text" id="debt_edit_escrow_payment" inputmode="decimal" onfocus="currencyFocus('debt_edit_escrow_payment')" onblur="currencyBlur('debt_edit_escrow_payment')">
+                <div class="muted" style="margin-top:4px;font-size:12px;">Optional verified monthly amounts. Blank is unknown, not $0. The full Minimum Payment stays the cash-flow amount. Do not enter an escrow figure whose period is unconfirmed.</div>
               </div>
               <label>Available credit</label>
               <div id="debt_edit_pct_avail" class="muted" style="padding:8px 10px;background:#f1f5f9;border-radius:6px;">—</div>
@@ -2791,12 +2801,15 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
     </div>
 
     <div id="debtPayoff" class="panel" role="tabpanel" aria-labelledby="planning_tool_debt_overview">
-      <div class="panel-head">
-        <div>
-          <h2>
-            Debt Overview
-            <span class="muted" style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-left:8px;padding:2px 8px;border:1px solid #cbd5e1;border-radius:999px;vertical-align:middle;">Reference</span>
-          </h2>
+      <div class="panel-head debt-payoff-panel-head">
+        <div class="debt-payoff-panel-copy">
+          <div class="debt-payoff-panel-title-row">
+            <h2>
+              Debt Overview
+              <span class="muted" style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-left:8px;padding:2px 8px;border:1px solid #cbd5e1;border-radius:999px;vertical-align:middle;">Reference</span>
+            </h2>
+            <button type="button" class="small-btn" onclick="loadDebtPayoffReadSection()" aria-label="Refresh Debt Overview">Refresh</button>
+          </div>
           <p class="planning-panel-purpose">
             Review the current debt position and payoff outlook; no account changes are made here.
           </p>
@@ -2806,11 +2819,11 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <button type="button" class="small-btn" onclick="showTab('rollingDebtPayoff')">Open Rolling Payoff</button>
           </nav>
         </div>
-        <button type="button" onclick="loadDebtPayoffReadSection()">Refresh</button>
       </div>
       <div id="debt_payoff_read_status" class="status"></div>
-      <div id="debt_payoff_strategy_wrap" class="debt-payoff-strategy info">
-        <div class="debt-payoff-overall-head">This month’s extra-payoff recommendation</div>
+      <section class="debt-payoff-section debt-payoff-section--action" aria-labelledby="debt_payoff_action_heading">
+      <div id="debt_payoff_strategy_wrap" class="debt-payoff-strategy">
+        <h3 id="debt_payoff_action_heading" class="debt-payoff-section-title">This month’s action</h3>
         <p class="debt-payoff-strategy-lede">
           Debt Overview recommends this month’s extra payment and payoff
           strategy from current saved facts. It is not a payment, is not saved,
@@ -2849,8 +2862,11 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           </div>
         </details>
       </div>
+      </section>
+      <div id="debt_payoff_household_wrap"></div>
+      <section class="debt-payoff-section debt-payoff-section--position" aria-labelledby="debt_payoff_position_heading">
       <details class="debt-payoff-details debt-payoff-position">
-        <summary>Debt position and payoff estimates</summary>
+        <summary id="debt_payoff_position_heading">Debt balances and payoff estimates</summary>
         <div class="debt-payoff-details-body">
           <div id="debt_payoff_read_summary" class="info" style="margin-bottom:14px;"></div>
           <div id="debt_payoff_read_meta" class="muted" style="margin-bottom:10px;"></div>
@@ -2876,6 +2892,8 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <div id="debt_payoff_read_table_wrap" class="activity-table-wrap"></div>
         </div>
       </details>
+      </section>
+      <div id="debt_payoff_calc_wrap"></div>
       <!--
         Decision-layer "Notes / recommendations" block intentionally removed.
         Cash snapshot, safe-to-use vs minimums, projected cash flow, highest-APR

@@ -28,6 +28,8 @@ const houseValuesSource = await readFile(new URL('../house_values.js', import.me
 const upcomingExpensesSource = await readFile(new URL('../upcoming_expenses.js', import.meta.url), 'utf8');
 const retirementSource = await readFile(new URL('../retirement.js', import.meta.url), 'utf8');
 const retirementClientSource = await readFile(new URL('../Dashboard_Script_PlanningRetirement.html', import.meta.url), 'utf8');
+const debtPayoffSource = await readFile(new URL('../debt_payoff_projection.js', import.meta.url), 'utf8');
+const debtPayoffClientSource = await readFile(new URL('../Dashboard_Script_PlanningDebtPayoff.html', import.meta.url), 'utf8');
 const populatedBrowserSource = await readFile(new URL('../Dashboard_Script_PopulatedDashboardE2E.html', import.meta.url), 'utf8');
 const onboardingSource = await readFile(new URL('../onboarding.js', import.meta.url), 'utf8');
 const incomeSourcesSource = await readFile(new URL('../income_sources.js', import.meta.url), 'utf8');
@@ -286,6 +288,40 @@ assert.match(retirementClientSource,
 assert.match(populatedBrowserSource,
   /performance_retirement_scenario_load[\s\S]*?selectedMeaningfulMs[\s\S]*?allComparisonsMs/,
   'Populated runtime evidence must capture selected meaningful content separately from all comparisons');
+assert.match(functionSource_(debtPayoffSource, 'getDebtPayoffRecommendationData'),
+  /startPerformanceTrace_\('debt_payoff\.recommendation'\)[\s\S]*?markPerformanceTrace_\(performanceTrace, 'resolve_workbook'\)[\s\S]*?markPerformanceTrace_\(performanceTrace, 'supported_extra'\)[\s\S]*?finishPerformanceTrace_\(performanceTrace/,
+  'Debt Overview recommendation RPC must retain flag-gated stage timing');
+assert.doesNotMatch(functionSource_(debtPayoffSource, 'getDebtPayoffRecommendationData'),
+  /sumExpensePaymentsForDebtPayees_|cash_flow_paid/,
+  'Debt Overview recommendation timing must not include CF paid-total work');
+assert.match(functionSource_(debtPayoffSource, 'getDebtPayoffPositionData'),
+  /startPerformanceTrace_\('debt_payoff\.position'\)[\s\S]*?markPerformanceTrace_\(performanceTrace, 'resolve_workbook'\)[\s\S]*?markPerformanceTrace_\(performanceTrace, 'cash_flow_paid'\)[\s\S]*?finishPerformanceTrace_\(performanceTrace/,
+  'Debt Overview position RPC must retain flag-gated CF paid-total timing');
+assert.match(functionSource_(debtPayoffSource, 'buildDebtPayoffPositionFromFacts_'),
+  /sumExpensePaymentsForDebtPayees_/,
+  'Debt Overview position must batch CF paid totals in one year-sheet pass');
+assert.match(functionSource_(debtPayoffClientSource, 'loadDebtPayoffReadSection'),
+  /renderDebtPayoffMonthlyRecommendation_[\s\S]*?loadDebtPayoffPositionSection_\(requestId\)[\s\S]*?getDebtPayoffRecommendationData\(\)/,
+  'Debt Overview client must paint the monthly recommendation before requesting position data');
+assert.doesNotMatch(functionSource_(debtPayoffClientSource, 'loadDebtPayoffReadSection'),
+  /getDebtPayoffReadData\(\)|getDebtPayoffPositionData\(\)/,
+  'Debt Overview initial load must not wait on the combined recommendation+position RPC');
+assert.doesNotMatch(debtPayoffSource,
+  /CacheService/,
+  'Debt Overview load must not use a long-lived CacheService snapshot');
+[
+  'readDebtPayoffSavedPlanningAssumptions_',
+  'attachDebtPayoffVariableBillHistory_',
+  'readDebtPayoffUpcomingObligations_',
+  'readDebtPayoffSupportedMonthlyExtraIncome_',
+  'readDebtPayoffSupportedMonthlyExtraBills_'
+].forEach(function(name) {
+  const text = functionSource_(debtPayoffSource, name);
+  assert.match(text, /(?:var|const|let) range = sheet.getDataRange\(\);/,
+    name + ' must reuse one getDataRange() for values and display');
+  assert.doesNotMatch(text, /getDataRange\(\)\.get(?:Values|DisplayValues)\(\)/,
+    name + ' must not fetch the same sheet range twice');
+});
 
 function functionSource_(text, name) {
   const start = text.indexOf(`function ${name}`);

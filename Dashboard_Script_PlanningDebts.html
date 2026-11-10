@@ -685,6 +685,8 @@ function openDebtEditForm(key) {
   setMoney('debt_edit_balance', row.accountBalance);
   setMoney('debt_edit_credit_limit', row.creditLimit);
   setMoney('debt_edit_min_payment', row.minimumPayment);
+  setMoney('debt_edit_principal_interest', row.principalAndInterest);
+  setMoney('debt_edit_escrow_payment', row.escrowPayment);
   setVal('debt_edit_due_date', (row.dueDate === '' ? '' : row.dueDate));
   setVal('debt_edit_int_rate', (row.intRate === '' ? '' : row.intRate));
   populateDebtPropertySelect_(
@@ -761,12 +763,16 @@ function submitDebtEdit_() {
   const balance = numFromInput('debt_edit_balance');
   const creditLimit = numFromInput('debt_edit_credit_limit');
   const minPayment = numFromInput('debt_edit_min_payment');
+  const principalAndInterest = numFromInput('debt_edit_principal_interest');
+  const escrowPayment = numFromInput('debt_edit_escrow_payment');
   const intRate = numFromInput('debt_edit_int_rate');
 
   const numericChecks = [
     { v: balance, label: 'Account Balance' },
     { v: creditLimit, label: 'Credit Limit' },
     { v: minPayment, label: 'Minimum Payment' },
+    { v: principalAndInterest, label: 'Principal and Interest' },
+    { v: escrowPayment, label: 'Escrow Payment' },
     { v: intRate, label: 'Interest Rate' }
   ];
   for (let i = 0; i < numericChecks.length; i++) {
@@ -798,6 +804,8 @@ function submitDebtEdit_() {
     creditLimit: creditLimit,
     minimumPayment: minPayment,
     intRate: intRate,
+    principalAndInterest: principalAndInterest,
+    escrowPayment: escrowPayment,
     linkedProperty: (function() {
       const el = document.getElementById('debt_edit_linked_property');
       return el && !el.disabled ? String(el.value || '').trim() : '';
@@ -1044,6 +1052,8 @@ function resetDebtAddForm_() {
     'debt_add_int_rate',
     'debt_add_due_day',
     'debt_add_linked_property',
+    'debt_add_principal_interest',
+    'debt_add_escrow_payment',
     'debt_add_type_other'
   ];
   ids.forEach(function(id) {
@@ -1231,12 +1241,19 @@ function saveDebt() {
   let value = document.getElementById('debt_value').value;
 
   if (debtFieldTypes[fieldName] === 'currency') {
-    const num = toNumber(value);
-    if (String(value || '').trim() && isNaN(num)) {
-      setStatus('debt_status', 'Value must be a valid number.', true);
-      return;
+    const raw = String(value || '').trim();
+    const optionalKnown = fieldName === 'Principal and Interest' ||
+      fieldName === 'Escrow Payment';
+    if (optionalKnown && !raw) {
+      value = '';
+    } else {
+      const num = toNumber(value);
+      if (raw && isNaN(num)) {
+        setStatus('debt_status', 'Value must be a valid number.', true);
+        return;
+      }
+      value = num;
     }
-    value = num;
   }
 
   setStatusLoading('debt_status', 'Saving…');
@@ -1371,6 +1388,14 @@ function createDebtAccount() {
     linkedProperty: (function() {
       const el = document.getElementById('debt_add_linked_property');
       return el && !el.disabled ? String(el.value || '').trim() : '';
+    })(),
+    principalAndInterest: (function() {
+      const el = document.getElementById('debt_add_principal_interest');
+      return el ? String(el.value || '').trim() : '';
+    })(),
+    escrowPayment: (function() {
+      const el = document.getElementById('debt_add_escrow_payment');
+      return el ? String(el.value || '').trim() : '';
     })()
   };
 

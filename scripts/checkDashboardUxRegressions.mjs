@@ -1675,6 +1675,12 @@ assert.match(planning,
   /id="debtPayoff"[\s\S]*?class="related-view-nav"[\s\S]*?Manage Debt Accounts[\s\S]*?Open Rolling Payoff/,
   'Debt Overview must present both related destinations as secondary buttons');
 assert.match(planning,
+  /id="debtPayoff"[\s\S]*?debt-payoff-panel-title-row[\s\S]*?class="small-btn"[\s\S]*?loadDebtPayoffReadSection\(\)[\s\S]*?Refresh/,
+  'Debt Overview Refresh must sit compactly beside the heading instead of stretching across the panel');
+assert.match(files['Dashboard_Styles.html'],
+  /\.debt-payoff-panel-title-row \.small-btn[\s\S]*?width:\s*auto/,
+  'Debt Overview Refresh must keep an intrinsic compact width on desktop and mobile');
+assert.match(planning,
   /id="rollingDebtPayoff"[\s\S]*?showTab\('debts'\)[\s\S]*?showTab\('debtPayoff'\)/,
   'Rolling Debt Payoff must link to source Debt accounts and the read-only overview');
 assert.match(planning,

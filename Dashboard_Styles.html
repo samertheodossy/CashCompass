@@ -2027,7 +2027,27 @@
   }
 
   .debt-payoff-strategy {
-    margin-top: 16px;
+    margin-top: 0;
+  }
+  .debt-payoff-section {
+    margin: 20px 0 0;
+    padding: 16px 16px 18px;
+    border: 1px solid #d7dee8;
+    border-radius: 12px;
+    background: #ffffff;
+  }
+  .debt-payoff-section-title {
+    margin: 0 0 10px;
+    padding: 0 0 8px;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    line-height: 1.3;
+    color: #0f172a;
+  }
+  #debt_payoff_household_wrap:empty,
+  #debt_payoff_calc_wrap:empty {
+    display: none;
   }
   .debt-payoff-strategy .debt-payoff-overall-head {
     font-size: 1.15rem;
@@ -2088,11 +2108,10 @@
     vertical-align: middle;
   }
   .debt-payoff-recommendation {
-    margin: 10px 0;
-    padding: 10px 12px;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    background: #ffffff;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
   }
   .debt-payoff-recommendation-lead {
     margin: 0 0 8px;
@@ -2101,6 +2120,10 @@
   .debt-payoff-recommendation-amount {
     margin: 4px 0 8px;
     font-size: 1.35rem;
+  }
+  .debt-payoff-one-time-amount {
+    margin: 4px 0 8px;
+    font-size: 1.15rem;
   }
   .debt-payoff-recommendation-blockers {
     margin: 0 0 8px 0;
@@ -2117,33 +2140,144 @@
   .debt-payoff-break-even {
     margin: 0 0 12px;
   }
-  .debt-payoff-break-even-categories {
-    list-style: none;
-    margin: 8px 0;
-    padding: 0;
+  .debt-payoff-cash-picture {
+    margin: 8px 0 12px;
+    min-width: 0;
+    max-width: 100%;
   }
-  .debt-payoff-break-even-categories > li {
+  .debt-payoff-cash-picture-title {
+    margin: 0 0 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #1f2937;
+  }
+  .debt-payoff-cash-picture-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .debt-payoff-cash-picture-card {
+    min-width: 0;
+    max-width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #dbe4ee;
+    border-radius: 8px;
+  }
+  .debt-payoff-cash-picture-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: 8px 16px;
+  }
+  .debt-payoff-cash-picture-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #334155;
+  }
+  .debt-payoff-cash-picture-value {
+    font-size: 1.05rem;
+    font-weight: 700;
+    white-space: nowrap;
+    text-align: right;
+  }
+  .debt-payoff-cash-picture-splits {
     display: flex;
     flex-wrap: wrap;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 4px 0;
-    border-bottom: 1px solid var(--cc-border);
-    font-size: 14px;
-  }
-  .debt-payoff-break-even-subtotals {
-    list-style: none;
-    flex: 1 0 100%;
-    margin: 4px 0 0 12px;
-    padding: 0;
-  }
-  .debt-payoff-break-even-subtotals li {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 2px 0;
+    gap: 2px 0;
+    margin: 6px 0 0;
     font-size: 13px;
-    color: var(--cc-muted);
+    color: #475569;
+  }
+  .debt-payoff-cash-picture-split {
+    white-space: nowrap;
+  }
+  .debt-payoff-cash-picture-details {
+    margin-top: 8px;
+    border: 0;
+    background: transparent;
+  }
+  .debt-payoff-cash-picture-details > summary {
+    padding: 4px 0;
+    font-size: 13px;
+  }
+  .debt-payoff-cash-picture-panel {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    margin-top: 8px;
+  }
+  .debt-payoff-cash-picture-shortfall {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: 8px 16px;
+    margin: 10px 0 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+  }
+  .debt-payoff-source-table {
+    width: 100%;
+    max-width: 100%;
+    border-collapse: collapse;
+  }
+  .debt-payoff-source-caption,
+  .debt-payoff-source-table caption {
+    caption-side: top;
+    text-align: left;
+    margin: 0 0 6px;
+    font-weight: 600;
+    color: #334155;
+  }
+  .debt-payoff-source-table th,
+  .debt-payoff-source-table td {
+    text-align: left;
+    padding: 4px 12px 4px 0;
+    vertical-align: top;
+  }
+  .debt-payoff-source-table .debt-payoff-num,
+  .debt-payoff-source-table th:last-child,
+  .debt-payoff-source-table td:last-child {
+    text-align: right;
+    padding-left: 16px;
+    padding-right: 0;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    width: 1%;
+  }
+  .debt-payoff-math-leader-label {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: #fffbeb;
+    color: #92400e;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .debt-payoff-math-leader-note {
+    margin: 6px 0 0;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .debt-payoff-household-alternatives {
+    margin-top: 12px;
+  }
+  .debt-payoff-tone-info {
+    background: #f8fbfe;
+    border-color: #bfdbfe;
+  }
+  .debt-payoff-tone-info .debt-payoff-cash-picture-label,
+  .debt-payoff-tone-info .debt-payoff-tone-label {
+    color: #1f4e78;
+  }
+  .debt-payoff-tone-conditional {
+    color: #92400e;
+  }
+  .debt-payoff-tone-conditional.debt-payoff-comparison-value,
+  .debt-payoff-comparison-value.debt-payoff-tone-conditional {
+    background: #fffbeb;
+    border-radius: 4px;
+    padding: 1px 6px;
   }
   .debt-payoff-cash-summary {
     display: grid;
@@ -2257,10 +2391,170 @@
     }
   }
   .debt-payoff-position {
-    margin-top: 12px;
+    margin-top: 0;
+  }
+  .debt-payoff-section--position > .debt-payoff-position {
+    margin: 0;
+    border: 0;
+    background: transparent;
+  }
+  .debt-payoff-section--position > .debt-payoff-position > summary {
+    padding: 0 0 10px;
+    margin: 0 0 4px;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 1.1rem;
+  }
+  .debt-payoff-section--position > .debt-payoff-position > .debt-payoff-details-body {
+    padding: 8px 0 0;
+  }
+  .debt-payoff-section--calc > .debt-payoff-details {
+    margin-top: 0;
   }
   .debt-payoff-what-if {
     margin-top: 12px;
+  }
+  .debt-payoff-panel-head {
+    justify-content: flex-start;
+    align-items: flex-start;
+  }
+  .debt-payoff-panel-copy {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .debt-payoff-panel-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .debt-payoff-panel-title-row h2 {
+    margin: 0;
+  }
+  .debt-payoff-panel-title-row .small-btn {
+    flex: 0 0 auto;
+    width: auto;
+    margin-top: 0;
+  }
+  .debt-payoff-household-plan {
+    margin: 20px 0 0;
+  }
+  .debt-payoff-comparison-wrap {
+    overflow-x: auto;
+    margin-top: 12px;
+    max-width: 100%;
+  }
+  .debt-payoff-comparison {
+    width: 100%;
+    min-width: 0;
+    border-collapse: collapse;
+  }
+  .debt-payoff-comparison caption {
+    caption-side: top;
+    text-align: left;
+    margin: 0 0 8px;
+    font-weight: 600;
+    color: #1f2937;
+  }
+  .debt-payoff-comparison th,
+  .debt-payoff-comparison td {
+    text-align: left;
+    vertical-align: top;
+    padding: 10px 12px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .debt-payoff-comparison thead th {
+    font-size: 12px;
+    font-weight: 700;
+    color: #475569;
+    white-space: nowrap;
+  }
+  .debt-payoff-comparison thead th:nth-child(n+3),
+  .debt-payoff-comparison .debt-payoff-num,
+  .debt-payoff-comparison td[data-label="Total interest"],
+  .debt-payoff-comparison td[data-label="Vs keep-cash"],
+  .debt-payoff-comparison td[data-label="vs baseline"] {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .debt-payoff-comparison th[scope="row"] {
+    min-width: 12rem;
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
+  }
+  .debt-payoff-comparison-sublabel {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+  }
+  .debt-payoff-comparison-value {
+    display: inline-block;
+    white-space: nowrap;
+    font-weight: 600;
+    color: #0f172a;
+  }
+  .debt-payoff-comparison-row--recommended th,
+  .debt-payoff-comparison-row--recommended td {
+    background: #f8fbfe;
+  }
+  .debt-payoff-comparison-expand-row > td {
+    padding: 0 12px 12px;
+  }
+  .debt-payoff-comparison-details {
+    margin-top: 0;
+    border: 0;
+    background: transparent;
+    width: 100%;
+  }
+  .debt-payoff-comparison-details > summary {
+    padding: 4px 0;
+    font-size: 13px;
+  }
+  .debt-payoff-comparison-details .debt-payoff-details-body {
+    padding: 8px 0 0;
+    width: 100%;
+  }
+  .debt-payoff-break-even-details {
+    margin-top: 8px;
+  }
+  .debt-payoff-household-assumptions {
+    margin: 8px 0 12px;
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+  .debt-payoff-household-assumptions p {
+    margin: 0 0 8px;
+  }
+  .debt-payoff-household-assumptions p:last-child {
+    margin-bottom: 0;
+  }
+  .debt-payoff-household-custom {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: center;
+    margin: 12px 0;
+  }
+  .debt-payoff-household-custom label {
+    font-weight: 600;
+  }
+  .debt-payoff-household-custom select {
+    min-width: 220px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+  }
+  .debt-payoff-release-list {
+    margin: 0 0 12px;
+    padding-left: 1.2em;
+  }
+  .debt-payoff-release-list li {
+    margin: 0 0 6px;
   }
   .debt-payoff-next-dollar-alt {
     margin: 0 0 12px;
@@ -2340,6 +2634,14 @@
     font-weight: 600;
     color: #1f2937;
   }
+  .debt-payoff-cash-picture-card > .debt-payoff-cash-picture-details {
+    margin-top: 8px;
+    border: 0;
+    background: transparent;
+  }
+  .debt-payoff-cash-picture-card > .debt-payoff-cash-picture-details > summary {
+    padding: 4px 0;
+  }
   .debt-payoff-details-body {
     padding: 0 12px 12px;
     overflow-x: auto;
@@ -2384,6 +2686,23 @@
     padding: 6px 8px;
     border-bottom: 1px solid #e2e8f0;
     vertical-align: top;
+  }
+  .debt-payoff-estimate-breakdown .debt-payoff-num,
+  .debt-payoff-estimate-breakdown th:last-child,
+  .debt-payoff-estimate-breakdown td:last-child,
+  .debt-payoff-variable-bill-table .debt-payoff-num,
+  .debt-payoff-variable-bill-table th:nth-child(n+2),
+  .debt-payoff-variable-bill-table td:nth-child(n+2) {
+    text-align: right;
+    padding-left: 12px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  #debtPayoff .activity-table th.activity-num,
+  #debtPayoff .activity-table td.activity-num {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
   }
   .debt-payoff-variable-bills {
     margin: 8px 0;
@@ -2438,11 +2757,77 @@
     font-weight: 500;
   }
   @media (max-width: 900px) {
+    .debt-payoff-panel-title-row .small-btn {
+      width: auto;
+    }
     .debt-payoff-strategy-grid {
       grid-template-columns: minmax(0, 1fr);
     }
     .debt-payoff-strategy-metrics {
       grid-template-columns: minmax(0, 1fr);
+    }
+    .debt-payoff-cash-picture-stack {
+      flex-direction: column;
+    }
+    .debt-payoff-comparison {
+      min-width: 0;
+    }
+    .debt-payoff-comparison thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+    }
+    .debt-payoff-comparison,
+    .debt-payoff-comparison tbody,
+    .debt-payoff-comparison tr,
+    .debt-payoff-comparison th,
+    .debt-payoff-comparison td {
+      display: block;
+      width: 100%;
+    }
+    .debt-payoff-comparison tbody.debt-payoff-comparison-strategy {
+      display: block;
+      margin: 0 0 10px;
+      padding: 10px 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: #ffffff;
+    }
+    .debt-payoff-comparison tr {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+    .debt-payoff-comparison th,
+    .debt-payoff-comparison td {
+      border-bottom: 0;
+      padding: 6px 0;
+    }
+    .debt-payoff-comparison th[scope="row"] {
+      min-width: 0;
+      padding-bottom: 8px;
+      margin-bottom: 4px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .debt-payoff-comparison td::before {
+      content: attr(data-label);
+      display: block;
+      margin-bottom: 2px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: #64748b;
+    }
+    .debt-payoff-comparison-expand-row td {
+      padding-top: 4px;
+    }
+    .debt-payoff-comparison-expand-row td::before {
+      content: none;
+      display: none;
     }
     .debt-payoff-bonus-row {
       grid-template-columns: minmax(0, 1fr);
@@ -5295,6 +5680,9 @@
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.04em;
+    }
+    #debtPayoff .activity-table td.activity-num {
+      text-align: left;
     }
     .activity-th-actions,
     .activity-td-actions { width: auto; text-align: left; }

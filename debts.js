@@ -30,6 +30,8 @@ var DEBTS_RESERVED_ROW_NAMES_ = {
 };
 
 var DEBTS_LINKED_PROPERTY_HEADER_ = 'Linked Property';
+var DEBTS_PRINCIPAL_AND_INTEREST_HEADER_ = 'Principal and Interest';
+var DEBTS_ESCROW_PAYMENT_HEADER_ = 'Escrow Payment';
 var DEBTS_LAST_UPDATED_HEADER_ = 'Last Updated';
 var DEBTS_REQUIRED_HEADERS_ = [
   'Account Name',
@@ -56,6 +58,8 @@ var DEBTS_CANONICAL_WIDTHS_ = {
   'Acct PCT Avail': 190,
   'Active': 90,
   'Linked Property': 220,
+  'Principal and Interest': 200,
+  'Escrow Payment': 180,
   'Last Updated': 130
 };
 
@@ -76,7 +80,9 @@ var DEBT_EDITABLE_FIELDS_ = [
   'Due Date',
   'Credit Limit',
   'Minimum Payment',
-  'Int Rate'
+  'Int Rate',
+  DEBTS_PRINCIPAL_AND_INTEREST_HEADER_,
+  DEBTS_ESCROW_PAYMENT_HEADER_
 ];
 var DEBT_DERIVED_FIELDS_ = [
   'Credit Left',
@@ -273,6 +279,8 @@ function getActiveDebtsForManagementFromDashboard() {
       intRate: disp(headerMap.intRateColZero),
       acctPctAvail: disp(headerMap.pctAvailColZero),
       linkedProperty: disp(headerMap.linkedPropertyColZero),
+      principalAndInterest: numOrBlank(headerMap.principalAndInterestColZero),
+      escrowPayment: numOrBlank(headerMap.escrowPaymentColZero),
       active: disp(headerMap.activeColZero) || 'Yes',
       lastUpdated: debtNormalizeLastUpdatedIso_(
         headerMap.lastUpdatedColZero === -1 ? '' : valueRow[headerMap.lastUpdatedColZero])
@@ -356,6 +364,8 @@ function getInactiveDebtsForManagementFromDashboard() {
       intRate: disp(headerMap.intRateColZero),
       acctPctAvail: disp(headerMap.pctAvailColZero),
       linkedProperty: disp(headerMap.linkedPropertyColZero),
+      principalAndInterest: numOrBlank(headerMap.principalAndInterestColZero),
+      escrowPayment: numOrBlank(headerMap.escrowPaymentColZero),
       active: disp(headerMap.activeColZero) || 'No'
     });
   }
@@ -379,6 +389,8 @@ function debtFieldKindForLabel_(label) {
     case 'Credit Limit':
     case 'Credit Left':
     case 'Minimum Payment':
+    case 'Principal and Interest':
+    case 'Escrow Payment':
       return 'currency';
     case 'Int Rate':
       return 'percent';
@@ -400,7 +412,8 @@ function debtFieldKindForLabel_(label) {
  *   - never touches Account Name (the Edit surface saves rename separately) and never
  *     touches Cash Flow.
  * Payload: { sheetRow, expectedAccountName, type?, accountBalance?, dueDate?,
- *            creditLimit?, creditLeft?, minimumPayment?, intRate?, linkedProperty? }
+ *            creditLimit?, creditLeft?, minimumPayment?, intRate?, linkedProperty?,
+ *            principalAndInterest?, escrowPayment? }
  */
 function updateTrackedDebtFromDashboard(payload) {
   validateRequired_(payload, ['sheetRow', 'expectedAccountName']);
@@ -541,6 +554,46 @@ function updateTrackedDebtFromDashboard(payload) {
   currencyChange('creditLimit', 'Credit Limit', headerMap.creditLimitColZero);
   currencyChange('minimumPayment', 'Minimum Payment', headerMap.minimumPaymentColZero);
   percentChange('intRate', 'Int Rate', headerMap.intRateColZero);
+
+  const optionalKnownCurrencyChange = function(field, label, colZero) {
+    if (typeof payload[field] === 'undefined') return;
+    if (colZero === -1) {
+      throw new Error(
+        label + ' could not be saved because INPUT - Debts is missing that column.'
+      );
+    }
+    const rawText = payload[field] === null || payload[field] === undefined
+      ? ''
+      : String(payload[field]).trim();
+    const curDisp = String(rowDisplay[colZero] || '').trim();
+    if (rawText === '') {
+      if (curDisp === '') return;
+      copyNeighborFormatInRow_(sheet, sheetRow, colZero + 1, 1);
+      sheet.getRange(sheetRow, colZero + 1).setValue('');
+      changedFields.push(label);
+      debtColumnFitTargets.push({ sheet: sheet, col: colZero + 1 });
+      previous[label] = curDisp;
+      next[label] = '';
+      return;
+    }
+    const newNum = round2_(toNumber_(rawText));
+    if (!isFinite(newNum) || newNum < 0) {
+      throw new Error(label + ' must be a valid amount of $0.00 or more, or blank if unknown.');
+    }
+    const curNum = curDisp === '' ? null : round2_(toNumber_(rowValues[colZero]));
+    if (curNum != null && newNum === curNum) return;
+    setCurrencyCellPreserveRowFormat_(sheet, sheetRow, colZero + 1, newNum, 1);
+    changedFields.push(label);
+    debtColumnFitTargets.push({ sheet: sheet, col: colZero + 1 });
+    previous[label] = curDisp;
+    next[label] = newNum;
+  };
+  optionalKnownCurrencyChange(
+    'principalAndInterest', DEBTS_PRINCIPAL_AND_INTEREST_HEADER_,
+    headerMap.principalAndInterestColZero);
+  optionalKnownCurrencyChange(
+    'escrowPayment', DEBTS_ESCROW_PAYMENT_HEADER_,
+    headerMap.escrowPaymentColZero);
 
   if (shouldManageLinkedProperty) {
     if (validatedLinkedProperty !== currentLinkedProperty) {
@@ -1274,6 +1327,10 @@ function updateDebtField(payload) {
     'Minimum Payment': true,
     'Credit Limit': true
   };
+  const optionalKnownCurrencyFields = {
+    'Principal and Interest': true,
+    'Escrow Payment': true
+  };
 
   const percentFields = {
     'Int Rate': true
@@ -1318,7 +1375,27 @@ function updateDebtField(payload) {
   // alignment, and background untouched, so we only re-apply the canonical
   // number format for the field type. This keeps Credit Limit (and every other
   // edited column) looking identical to its neighbors after an update.
-  if (currencyFields[fieldName]) {
+  if (optionalKnownCurrencyFields[fieldName]) {
+    const rawText = rawValue === null || rawValue === undefined ? '' : String(rawValue).trim();
+    fieldKind = 'currency';
+    if (rawText === '') {
+      valueChanged = String(previousDisplay || previousRaw || '').trim() !== '';
+      cell.setValue('');
+      applyCurrencyFormat_(cell);
+      newRawForLog = '';
+    } else {
+      const num = toNumber_(rawText);
+      if (!isFinite(num) || num < 0) {
+        throw new Error(fieldName + ' must be a valid amount of $0.00 or more, or blank if unknown.');
+      }
+      const rounded = round2_(num);
+      const previousKnown = String(previousDisplay || '').trim() !== '';
+      valueChanged = !previousKnown || round2_(toNumber_(previousRaw)) !== rounded;
+      cell.setValue(rounded);
+      applyCurrencyFormat_(cell);
+      newRawForLog = num;
+    }
+  } else if (currencyFields[fieldName]) {
     const num = toNumber_(rawValue);
     const rounded = round2_(num);
     valueChanged = round2_(toNumber_(previousRaw)) !== rounded;
@@ -1796,6 +1873,21 @@ function addDebtFromDashboard(payload) {
   const linkedProperty = validateDebtLinkedProperty_(
     ss, typeStr, payload.linkedProperty, '');
 
+  function parseOptionalKnownCurrency_(raw, label) {
+    if (raw === undefined || raw === null) return { known: false, amount: null };
+    const s = String(raw).trim();
+    if (s === '') return { known: false, amount: null };
+    const n = toNumber_(s);
+    if (!isFinite(n) || n < 0) {
+      throw new Error(label + ' must be a valid amount of $0.00 or more, or blank if unknown.');
+    }
+    return { known: true, amount: round2_(n) };
+  }
+  const principalAndInterest = parseOptionalKnownCurrency_(
+    payload.principalAndInterest, DEBTS_PRINCIPAL_AND_INTEREST_HEADER_);
+  const escrowPayment = parseOptionalKnownCurrency_(
+    payload.escrowPayment, DEBTS_ESCROW_PAYMENT_HEADER_);
+
   // Credit Left is derived for credit cards from Credit Limit − Balance.
   // Loans and HELOCs do not receive revolving utilization formulas.
   const creditLeft = debtIsCreditCardType_(typeStr)
@@ -1827,6 +1919,18 @@ function addDebtFromDashboard(payload) {
   setAt_(headerMap.dueDateColZero, dueDay);
   if (headerMap.activeColZero !== -1) row[headerMap.activeColZero] = 'Yes';
   setAt_(headerMap.linkedPropertyColZero, linkedProperty);
+  if (principalAndInterest.known && headerMap.principalAndInterestColZero === -1) {
+    throw new Error('Principal and Interest could not be saved because INPUT - Debts is missing that column.');
+  }
+  if (escrowPayment.known && headerMap.escrowPaymentColZero === -1) {
+    throw new Error('Escrow Payment could not be saved because INPUT - Debts is missing that column.');
+  }
+  if (principalAndInterest.known) {
+    setAt_(headerMap.principalAndInterestColZero, principalAndInterest.amount);
+  }
+  if (escrowPayment.known) {
+    setAt_(headerMap.escrowPaymentColZero, escrowPayment.amount);
+  }
 
   const templateRow = findDebtTemplateRow_(sheet, headerMap);
 
@@ -2346,9 +2450,12 @@ function getDebtsHeaderMap_(sheet, optionalDisplay) {
   // array in via optionalDisplay so we can read the header row from it
   // instead of doing another full-sheet round-trip just to look up
   // column indices. Behavior is identical when omitted.
-  const headers = (optionalDisplay && optionalDisplay.length)
+  const headers = ((optionalDisplay && optionalDisplay.length)
     ? (optionalDisplay[0] || [])
-    : (sheet.getDataRange().getDisplayValues()[0] || []);
+    : (sheet.getDataRange().getDisplayValues()[0] || [])
+  ).map(function(h) {
+    return String(h || '').trim();
+  });
 
   const nameColZero = headers.indexOf('Account Name');
   const typeColZero = headers.indexOf('Type');
@@ -2361,6 +2468,8 @@ function getDebtsHeaderMap_(sheet, optionalDisplay) {
   const pctAvailColZero = headers.indexOf('Acct PCT Avail');
   const activeColZero = headers.indexOf('Active');
   const linkedPropertyColZero = headers.indexOf(DEBTS_LINKED_PROPERTY_HEADER_);
+  const principalAndInterestColZero = headers.indexOf(DEBTS_PRINCIPAL_AND_INTEREST_HEADER_);
+  const escrowPaymentColZero = headers.indexOf(DEBTS_ESCROW_PAYMENT_HEADER_);
   const lastUpdatedColZero = headers.indexOf(DEBTS_LAST_UPDATED_HEADER_);
 
   if (nameColZero === -1) throw new Error('Debts sheet must contain Account Name.');
@@ -2378,6 +2487,8 @@ function getDebtsHeaderMap_(sheet, optionalDisplay) {
     pctAvailColZero: pctAvailColZero,
     activeColZero: activeColZero,
     linkedPropertyColZero: linkedPropertyColZero,
+    principalAndInterestColZero: principalAndInterestColZero,
+    escrowPaymentColZero: escrowPaymentColZero,
     lastUpdatedColZero: lastUpdatedColZero,
     nameCol: nameColZero + 1,
     typeCol: typeColZero + 1,
@@ -2390,6 +2501,8 @@ function getDebtsHeaderMap_(sheet, optionalDisplay) {
     pctAvailCol: pctAvailColZero === -1 ? -1 : pctAvailColZero + 1,
     activeCol: activeColZero === -1 ? -1 : activeColZero + 1,
     linkedPropertyCol: linkedPropertyColZero === -1 ? -1 : linkedPropertyColZero + 1,
+    principalAndInterestCol: principalAndInterestColZero === -1 ? -1 : principalAndInterestColZero + 1,
+    escrowPaymentCol: escrowPaymentColZero === -1 ? -1 : escrowPaymentColZero + 1,
     lastUpdatedCol: lastUpdatedColZero === -1 ? -1 : lastUpdatedColZero + 1
   };
 }
@@ -2523,7 +2636,9 @@ function debtsLinkedPropertyColumnPositionIsValid_(headers) {
  */
 function ensureDebtsLastUpdatedColumn_(sheet, optionalSs) {
   const preliminary = getDebtsHeaderMap_(sheet);
-  if (preliminary.lastUpdatedColZero !== -1) return preliminary;
+  if (preliminary.lastUpdatedColZero !== -1) {
+    return appendDebtPrincipalEscrowColumns_(sheet);
+  }
 
   const headerMap = ensureDebtsLinkedPropertyColumn_(sheet, optionalSs);
   if (headerMap.lastUpdatedColZero !== -1) return headerMap;
@@ -2554,7 +2669,47 @@ function ensureDebtsLastUpdatedColumn_(sheet, optionalSs) {
   } catch (styleErr) {
     Logger.log('ensureDebtsLastUpdatedColumn_ style: ' + styleErr);
   }
-  return getDebtsHeaderMap_(sheet);
+  return appendDebtPrincipalEscrowColumns_(sheet);
+}
+
+/**
+ * Additive blank-safe Principal and Interest and Escrow Payment columns.
+ * Appends after existing headers, including Last Updated. Never moves
+ * columns or writes $0 into blank cells.
+ */
+function appendDebtPrincipalEscrowColumns_(sheet) {
+  function appendIfMissing_(header, note) {
+    const map = getDebtsHeaderMap_(sheet);
+    const existing = header === DEBTS_PRINCIPAL_AND_INTEREST_HEADER_
+      ? map.principalAndInterestColZero
+      : map.escrowPaymentColZero;
+    if (existing !== -1) return map;
+    const lastCol = Math.max(sheet.getLastColumn(), 1);
+    const targetCol = lastCol + 1;
+    sheet.getRange(1, targetCol).setValue(header);
+    try {
+      const formatCol = map.minimumPaymentCol !== -1 ? map.minimumPaymentCol : targetCol;
+      sheet.getRange(1, formatCol, sheet.getMaxRows(), 1).copyTo(
+        sheet.getRange(1, targetCol, sheet.getMaxRows(), 1),
+        SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+        false
+      );
+      sheet.getRange(1, targetCol).setValue(header);
+      if (note) sheet.getRange(1, targetCol).setNote(note);
+      sheet.setColumnWidth(targetCol, DEBTS_CANONICAL_WIDTHS_[header] || 180);
+    } catch (styleErr) {
+      Logger.log('appendDebtPrincipalEscrowColumns_ style: ' + styleErr);
+    }
+    return getDebtsHeaderMap_(sheet);
+  }
+  appendIfMissing_(
+    DEBTS_PRINCIPAL_AND_INTEREST_HEADER_,
+    'Optional verified principal-and-interest. Blank is unknown, not $0. The full Minimum Payment stays the cash-flow amount.'
+  );
+  return appendIfMissing_(
+    DEBTS_ESCROW_PAYMENT_HEADER_,
+    'Optional verified monthly escrow for taxes and insurance. Blank is unknown, not $0. Do not enter an amount whose period is unconfirmed.'
+  );
 }
 
 function debtParseLastUpdatedDate_(rawValue) {
@@ -2605,6 +2760,14 @@ function debtFieldValueChangedForLastUpdated_(fieldName, previousRaw, newRaw) {
   if (DEBT_EDITABLE_FIELDS_.indexOf(label) === -1) return false;
   if (label === 'Account Balance' || label === 'Minimum Payment' ||
       label === 'Credit Limit') {
+    return round2_(toNumber_(previousRaw)) !== round2_(toNumber_(newRaw));
+  }
+  if (label === DEBTS_PRINCIPAL_AND_INTEREST_HEADER_ ||
+      label === DEBTS_ESCROW_PAYMENT_HEADER_) {
+    const prevText = String(previousRaw == null ? '' : previousRaw).trim();
+    const nextText = String(newRaw == null ? '' : newRaw).trim();
+    if (!prevText && !nextText) return false;
+    if (!prevText || !nextText) return true;
     return round2_(toNumber_(previousRaw)) !== round2_(toNumber_(newRaw));
   }
   if (label === 'Int Rate') {
@@ -2974,10 +3137,13 @@ function getRequiredDebtFieldColZero_(sheet, fieldName, optionalHeaders) {
   // Performance: callers that already have the header row loaded can
   // pass it in via optionalHeaders to avoid a redundant full-sheet read
   // just for the header lookup. Behavior is unchanged when omitted.
-  const headers = (optionalHeaders && optionalHeaders.length)
+  const headers = ((optionalHeaders && optionalHeaders.length)
     ? optionalHeaders
-    : (sheet.getDataRange().getDisplayValues()[0] || []);
-  const colZero = headers.indexOf(fieldName);
+    : (sheet.getDataRange().getDisplayValues()[0] || [])
+  ).map(function(h) {
+    return String(h || '').trim();
+  });
+  const colZero = headers.indexOf(String(fieldName || '').trim());
   if (colZero === -1) {
     throw new Error('Field not found: ' + fieldName);
   }

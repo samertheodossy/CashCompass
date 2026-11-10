@@ -65,6 +65,31 @@ The current planner stages are:
 12. `build_snapshot` *(dashboard wrapper only)*
 13. `save_baseline` *(dashboard wrapper only)*
 
+## Debt Overview load coverage
+
+`debt_payoff.recommendation` and `debt_payoff.position` measure the two read-only
+RPCs behind Planning → Debt Overview. The monthly recommendation paints from
+`debt_payoff.recommendation` without waiting for the payoff chart or table.
+Those position reads run only after that recommendation request settles, so the
+two RPCs do not overlap. Refresh still issues both reads against current
+workbook facts; there is no long-lived cache of balances, minimums, or extras.
+
+`debt_payoff.recommendation` stages:
+
+1. `resolve_workbook`
+2. `supported_extra`
+
+`debt_payoff.position` stages:
+
+1. `resolve_workbook`
+2. `cash_flow_paid`
+
+Cash Flow paid totals for the debt table reuse one year-sheet read per
+projection year instead of rereading the same sheet once per debt. The
+recommendation path does not perform those paid-total reads. Within the
+recommendation request, Retirement, Upcoming, Bills, income Cash Flow, and
+variable-bill history each reuse one `getDataRange()` for values and display.
+
 ## Ordinary Bank Save coverage
 
 `bank.ordinary_save` measures the server RPC that keeps the Bank editor on
