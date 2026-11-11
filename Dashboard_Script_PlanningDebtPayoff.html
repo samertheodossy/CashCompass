@@ -1220,6 +1220,10 @@ function renderDebtPayoffCashPictureHtml_(rec, supported) {
     )
   }));
   parts.push('</div>');
+  parts.push('<p class="debt-payoff-cash-picture-policy muted">');
+  parts.push('This monthly baseline includes standing investment policy floors (weekly amount × 52 ÷ 12). ');
+  parts.push('This Week may pause Robinhood for the current week under a cash constraint; that weekly pause does not change this monthly baseline.');
+  parts.push('</p>');
   if (Number(picture.shortfall) > 0.005) {
     parts.push('<p class="debt-payoff-cash-picture-shortfall debt-payoff-tone-deficit">');
     parts.push('<span class="debt-payoff-cash-picture-label">Monthly shortfall</span>');
@@ -2301,6 +2305,47 @@ function parseDebtPayoffScenarioExtraText_(raw) {
   return { ok: true, amount: n, error: '' };
 }
 
+function parseDebtPayoffHypotheticalMoneyFromInput_(id, label) {
+  var el = document.getElementById(id);
+  var parsed = parseDebtPayoffScenarioExtraText_(el ? el.value : '');
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      amount: null,
+      error: 'Enter a valid hypothetical ' + label +
+        ' of $0.00 or more. Negative and non-numeric amounts are not used.'
+    };
+  }
+  return parsed;
+}
+
+function collectDebtPayoffHypotheticalCashFlowScenarioFromInput_() {
+  var income = parseDebtPayoffHypotheticalMoneyFromInput_(
+    'debt_payoff_scenario_income_increase', 'recurring income increase');
+  if (!income.ok) return income;
+  var reduction = parseDebtPayoffHypotheticalMoneyFromInput_(
+    'debt_payoff_scenario_commitment_reduction', 'commitment reduction');
+  if (!reduction.ok) return reduction;
+  var increase = parseDebtPayoffHypotheticalMoneyFromInput_(
+    'debt_payoff_scenario_commitment_increase', 'commitment increase');
+  if (!increase.ok) return increase;
+  var bonus = parseDebtPayoffHypotheticalMoneyFromInput_(
+    'debt_payoff_scenario_one_time_bonus', 'one-time bonus');
+  if (!bonus.ok) return bonus;
+  var pauseEl = document.getElementById('debt_payoff_scenario_pause_policy_floors');
+  return {
+    ok: true,
+    error: '',
+    scenario: {
+      recurringIncomeIncrease: income.amount,
+      commitmentReduction: reduction.amount,
+      commitmentIncrease: increase.amount,
+      oneTimeBonusIncome: bonus.amount,
+      pausePolicyFloors: !!(pauseEl && pauseEl.checked)
+    }
+  };
+}
+
 function debtPayoffStrategyTitle_(key, data) {
   if (key === 'avalanche_roll') return 'Highest APR first, roll released payments';
   if (key === 'snowball_roll') return 'Smallest balance first, roll released payments';
@@ -2372,6 +2417,56 @@ function renderDebtPayoffStrategyCard_(row, data) {
   });
 }
 
+function renderDebtPayoffCashFlowScenarioHtml_(scenario) {
+  if (!scenario || scenario.applied !== true) return '';
+  var parts = [];
+  var baseline = scenario.baseline || {};
+  var picture = scenario.cashPicture || {};
+  parts.push('<div class="debt-payoff-cash-flow-result">');
+  parts.push('<p><strong>Hypothetical cash-flow result</strong> — unsaved, not written, and not This Week.</p>');
+  parts.push('<p>Saved baseline: ' +
+    (Number(baseline.shortfall) > 0.005
+      ? 'monthly shortfall ' + (typeof fmtCurrency === 'function' ? fmtCurrency(baseline.shortfall) : String(baseline.shortfall))
+      : 'monthly surplus ' + (typeof fmtCurrency === 'function' ? fmtCurrency(baseline.surplus || 0) : String(baseline.surplus || 0))) +
+    '; safe extra ' +
+    (typeof fmtCurrency === 'function' ? fmtCurrency(Number(baseline.amount) || 0) : String(Number(baseline.amount) || 0)) +
+    '; standing policy floors included.</p>');
+  var scenarioGap = Number(picture.shortfall) > 0.005
+    ? 'monthly shortfall ' + (typeof fmtCurrency === 'function' ? fmtCurrency(picture.shortfall) : String(picture.shortfall))
+    : 'monthly surplus ' + (typeof fmtCurrency === 'function' ? fmtCurrency(picture.surplus || 0) : String(picture.surplus || 0));
+  parts.push('<p>This hypothetical: ' + scenarioGap +
+    '; safe extra ' +
+    (typeof fmtCurrency === 'function' ? fmtCurrency(Number(scenario.amount) || 0) : String(Number(scenario.amount) || 0)) +
+    '.</p>');
+  var usable = scenario.usableCashAfterBuffers;
+  var reserve = scenario.requiredReserveAmount;
+  var remaining = scenario.remainingAboveReserve;
+  parts.push('<p>Reserve effect: usable cash after buffers ' +
+    (usable == null ? 'unknown' : (typeof fmtCurrency === 'function' ? fmtCurrency(usable) : String(usable))) +
+    '; required reserve ' +
+    (reserve == null ? 'unknown' : (typeof fmtCurrency === 'function' ? fmtCurrency(reserve) : String(reserve))) +
+    (remaining == null
+      ? ''
+      : '; remaining above reserve ' +
+        (typeof fmtCurrency === 'function' ? fmtCurrency(remaining) : String(remaining))) +
+    '.</p>');
+  if (scenario.policyFloorsPausedInScenario === true) {
+    parts.push('<p>This hypothetical pauses standing investment policy floors. The saved baseline still includes them.</p>');
+  }
+  if (Number(scenario.oneTimeBonusIncome) > 0.005) {
+    parts.push('<p>One-time bonus ' +
+      (typeof fmtCurrency === 'function'
+        ? fmtCurrency(scenario.oneTimeBonusIncome)
+        : String(scenario.oneTimeBonusIncome)) +
+      ' is not recurring monthly income and is not in the 90-day reserve.</p>');
+  }
+  if (scenario.blocker) {
+    parts.push('<p>' + escapeHtml(scenario.blocker) + '</p>');
+  }
+  parts.push('</div>');
+  return parts.join('');
+}
+
 function renderDebtPayoffStrategyComparison_(data) {
   var wrap = document.getElementById('debt_payoff_strategy_results');
   if (!wrap) return;
@@ -2381,6 +2476,8 @@ function renderDebtPayoffStrategyComparison_(data) {
   }
 
   var parts = [];
+  var cashFlowHtml = renderDebtPayoffCashFlowScenarioHtml_(data.cashFlowScenario);
+  if (cashFlowHtml) parts.push(cashFlowHtml);
   if (!data.householdComparisonComplete) {
     parts.push('<div class="debt-payoff-strategy-blockers"><strong>Not a complete household comparison.</strong> ');
     if (data.blockers && data.blockers.length) {
@@ -2457,6 +2554,12 @@ function runDebtPayoffStrategyComparison() {
     setStatus(statusId, parsed.error, true);
     return;
   }
+  var cashFlow = collectDebtPayoffHypotheticalCashFlowScenarioFromInput_();
+  if (!cashFlow.ok) {
+    if (wrap) wrap.innerHTML = '';
+    setStatus(statusId, cashFlow.error, true);
+    return;
+  }
   var bonusSelections = collectDebtPayoffScenarioBonusSelections_();
   var bonusCheck = validateDebtPayoffScenarioBonusSelections_(bonusSelections);
   if (!bonusCheck.ok) {
@@ -2504,6 +2607,7 @@ function runDebtPayoffStrategyComparison() {
     })
     .getDebtPayoffStrategyComparison({
       monthlyExtra: parsed.amount,
-      bonusSelections: bonusSelections
+      bonusSelections: bonusSelections,
+      cashFlowScenario: cashFlow.scenario
     });
 }

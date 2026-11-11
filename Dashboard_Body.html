@@ -2838,6 +2838,41 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
               include a Cisco bonus to compare strategies without changing this
               month’s recommendation. This is not a payment and is not saved.
             </p>
+            <div class="debt-payoff-scenario-cash-flow">
+              <div class="debt-payoff-overall-head">Hypothetical cash-flow changes</div>
+              <p class="muted">
+                Hypothetical and unsaved. These edits do not write to sheets, do not
+                change saved facts, and do not change This Week. The saved monthly
+                baseline still includes standing investment policy floors even if
+                This Week paused Robinhood this week. Extra stays $0.00 unless both
+                the adjusted recurring cash flow and the reserve forecast support it.
+                CashCompass does not pick a bill to cut; enter a commitment change
+                only if you choose it.
+              </p>
+              <div class="debt-payoff-strategy-controls">
+                <label for="debt_payoff_scenario_income_increase">Recurring income increase (hypothetical)</label>
+                <input id="debt_payoff_scenario_income_increase" type="text" inputmode="decimal"
+                       placeholder="0.00">
+                <label for="debt_payoff_scenario_commitment_reduction">Recurring commitment reduction (hypothetical)</label>
+                <input id="debt_payoff_scenario_commitment_reduction" type="text" inputmode="decimal"
+                       placeholder="0.00">
+                <label for="debt_payoff_scenario_commitment_increase">Recurring commitment increase (hypothetical)</label>
+                <input id="debt_payoff_scenario_commitment_increase" type="text" inputmode="decimal"
+                       placeholder="0.00">
+                <label for="debt_payoff_scenario_one_time_bonus">One-time bonus (hypothetical)</label>
+                <input id="debt_payoff_scenario_one_time_bonus" type="text" inputmode="decimal"
+                       placeholder="0.00">
+              </div>
+              <p class="muted">
+                A one-time bonus is not recurring monthly income and does not enter
+                the 90-day reserve. Use the Cisco bonus overlay below to include a
+                dated bonus in the payoff comparison only.
+              </p>
+              <label class="debt-payoff-scenario-pause">
+                <input id="debt_payoff_scenario_pause_policy_floors" type="checkbox">
+                In this hypothetical, pause standing investment policy floors
+              </label>
+            </div>
             <div id="debt_payoff_scenario_bonus_wrap" class="debt-payoff-scenario-bonus">
               <div class="debt-payoff-overall-head">Optional Cisco bonus</div>
               <p class="debt-payoff-bonus-caveat">

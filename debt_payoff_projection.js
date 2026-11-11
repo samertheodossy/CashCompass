@@ -555,6 +555,12 @@ var DEBT_PAYOFF_BREAK_EVEN_CATEGORIES_ = [
  */
 var DEBT_PAYOFF_SCENARIO_EXTRA_INVALID_ =
   'Enter a valid monthly extra of $0.00 or more. Negative and non-numeric amounts are not used.';
+var DEBT_PAYOFF_HYPOTHETICAL_CASH_FLOW_INVALID_ =
+  'Enter a valid hypothetical cash-flow amount of $0.00 or more. Negative and non-numeric amounts are not used.';
+var DEBT_PAYOFF_HYPOTHETICAL_INCOME_LABEL_ =
+  'Hypothetical recurring income increase';
+var DEBT_PAYOFF_HYPOTHETICAL_COMMITMENT_LABEL_ =
+  'Hypothetical additional commitment';
 var DEBT_PAYOFF_SCENARIO_BONUS_INVALID_ =
   'Enter the next expected payment month and year for each included Cisco bonus. Timing is not inferred from the bonus name or a historical payment month.';
 var DEBT_PAYOFF_SCENARIO_BONUS_EXCLUDED_ =
@@ -569,11 +575,16 @@ function getDebtPayoffStrategyComparison(payload) {
   if (!parsed.ok) {
     throw new Error(parsed.error);
   }
-  const monthlyExtra = parsed.amount;
+  const scenarioPlan = parseDebtPayoffHypotheticalCashFlowScenario_(
+    payload.cashFlowScenario);
+  if (!scenarioPlan.ok) {
+    throw new Error(scenarioPlan.error);
+  }
   const today = new Date();
   const ss = getUserSpreadsheet_();
   const sheetNames = getSheetNames_();
   var debts = [];
+  var extraInput = null;
   var supported;
   if (!ss.getSheetByName(sheetNames.DEBTS)) {
     supported = debtPayoffSupportedMonthlyExtraUnavailable_(
@@ -590,9 +601,14 @@ function getDebtPayoffStrategyComparison(payload) {
     } catch (e) {
       accountRows = [];
     }
-    supported = readDebtPayoffSupportedMonthlyExtra_(
+    extraInput = collectDebtPayoffSupportedMonthlyExtraInput_(
       ss, debts, normalizeAccounts_(accountRows));
+    supported = buildDebtPayoffSupportedMonthlyExtra_(extraInput);
   }
+  var cashFlowScenario = buildDebtPayoffHypotheticalCashFlowScenario_(
+    extraInput, supported, scenarioPlan);
+  var monthlyExtra = debtPayoffStrategyComparisonMonthlyExtra_(
+    parsed.amount, cashFlowScenario);
   var bonusPlan = resolveDebtPayoffScenarioBonusEvents_(
     payload.bonusSelections,
     supported && supported.datedBonusScenario,
@@ -608,6 +624,7 @@ function getDebtPayoffStrategyComparison(payload) {
     bonusPlan: bonusPlan
   });
   comparison.supportedMonthlyExtra = supported;
+  comparison.cashFlowScenario = cashFlowScenario;
   return comparison;
 }
 
@@ -636,6 +653,80 @@ function parseDebtPayoffScenarioMonthlyExtra_(value) {
   const n = Number(normalized);
   if (!isFinite(n) || n < 0) return invalid;
   return valid(n);
+}
+
+function parseDebtPayoffHypotheticalCashFlowMoney_(value, label) {
+  var parsed = parseDebtPayoffScenarioMonthlyExtra_(value);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      amount: null,
+      error: 'Enter a valid hypothetical ' + label +
+        ' of $0.00 or more. Negative and non-numeric amounts are not used.'
+    };
+  }
+  return parsed;
+}
+
+function parseDebtPayoffHypotheticalCashFlowScenario_(payload) {
+  var empty = {
+    ok: true,
+    applied: false,
+    useForComparison: false,
+    recurringIncomeIncrease: 0,
+    commitmentReduction: 0,
+    commitmentIncrease: 0,
+    oneTimeBonusIncome: 0,
+    pausePolicyFloors: false,
+    error: ''
+  };
+  if (payload == null || payload === '') return empty;
+  if (typeof payload !== 'object') {
+    return {
+      ok: false,
+      applied: false,
+      useForComparison: false,
+      recurringIncomeIncrease: null,
+      commitmentReduction: null,
+      commitmentIncrease: null,
+      oneTimeBonusIncome: null,
+      pausePolicyFloors: false,
+      error: DEBT_PAYOFF_HYPOTHETICAL_CASH_FLOW_INVALID_
+    };
+  }
+  var income = parseDebtPayoffHypotheticalCashFlowMoney_(
+    payload.recurringIncomeIncrease, 'recurring income increase');
+  if (!income.ok) return income;
+  var reduction = parseDebtPayoffHypotheticalCashFlowMoney_(
+    payload.commitmentReduction, 'commitment reduction');
+  if (!reduction.ok) return reduction;
+  var increase = parseDebtPayoffHypotheticalCashFlowMoney_(
+    payload.commitmentIncrease, 'commitment increase');
+  if (!increase.ok) return increase;
+  var bonus = parseDebtPayoffHypotheticalCashFlowMoney_(
+    payload.oneTimeBonusIncome, 'one-time bonus');
+  if (!bonus.ok) return bonus;
+  var pause = payload.pausePolicyFloors === true;
+  var structural = income.amount > 0.005 || reduction.amount > 0.005 ||
+    increase.amount > 0.005 || pause;
+  return {
+    ok: true,
+    applied: structural || bonus.amount > 0.005,
+    useForComparison: structural,
+    recurringIncomeIncrease: income.amount,
+    commitmentReduction: reduction.amount,
+    commitmentIncrease: increase.amount,
+    oneTimeBonusIncome: bonus.amount,
+    pausePolicyFloors: pause,
+    error: ''
+  };
+}
+
+function debtPayoffStrategyComparisonMonthlyExtra_(parsedAmount, cashFlowScenario) {
+  if (cashFlowScenario && cashFlowScenario.useForComparison === true) {
+    return round2_(Number(cashFlowScenario.amount) || 0);
+  }
+  return round2_(Number(parsedAmount) || 0);
 }
 
 function debtPayoffScenarioBonusCanonicalName_(name) {
@@ -3544,7 +3635,8 @@ function buildDebtPayoffCashPicture_(parts) {
       otherBillSources: parts.unmatchedInvestmentBillSources || []
     },
     shortfall: surplus < -0.005 ? round2_(Math.abs(surplus)) : 0,
-    surplus: surplus
+    surplus: surplus,
+    hypotheticalAdjustments: parts.hypotheticalAdjustments || null
   };
 }
 
@@ -4990,12 +5082,22 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
   });
 
   var policyFloorMonthly = 0;
+  var pausePolicyFloors = input.pausePolicyFloors === true;
   (input.policyFloors || []).forEach(function(floor) {
     var weekly = Math.max(
       Number(floor.weeklyAmount) || 0,
       Number(floor.requestedWeeklyPace) || 0
     );
     var monthlyFloor = debtPayoffScenarioWeeklyToMonthly_(weekly);
+    if (pausePolicyFloors) {
+      policyFloorSources.push({
+        name: floor.accountName || 'Investment policy floor',
+        amount: 0,
+        standingAmount: monthlyFloor,
+        pausedInHypothetical: true
+      });
+      return;
+    }
     policyFloorMonthly = round2_(policyFloorMonthly + monthlyFloor);
     policyFloorSources.push({
       name: floor.accountName || 'Investment policy floor',
@@ -5003,17 +5105,26 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
     });
   });
 
+  var requestedReduction = round2_(
+    Math.max(0, Number(input.hypotheticalCommitmentReductionMonthly) || 0));
+  var reducibleCommitments = round2_(
+    billsMonthly + variableBillsMonthly + policyFloorMonthly +
+    unmatchedInvestmentBillsMonthly);
+  var appliedReduction = requestedReduction > 0.005
+    ? round2_(Math.min(requestedReduction, reducibleCommitments))
+    : 0;
   var components = {
     recurringIncomeMonthly: income,
     debtMinimumsMonthly: debtMinimums,
     recurringBillsMonthly: billsMonthly,
     variableBillsMonthly: variableBillsMonthly,
     policyFloorMonthly: policyFloorMonthly,
-    unmatchedInvestmentBillsMonthly: unmatchedInvestmentBillsMonthly
+    unmatchedInvestmentBillsMonthly: unmatchedInvestmentBillsMonthly,
+    hypotheticalCommitmentReductionMonthly: appliedReduction
   };
   var commitments = round2_(
     debtMinimums + billsMonthly + variableBillsMonthly +
-    policyFloorMonthly + unmatchedInvestmentBillsMonthly);
+    policyFloorMonthly + unmatchedInvestmentBillsMonthly - appliedReduction);
   var surplus = round2_(income - commitments);
   var cashPicture = buildDebtPayoffCashPicture_({
     components: components,
@@ -5023,7 +5134,8 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
     requiredBillSources: requiredBillSources,
     variableBillEstimates: variableBillEstimates,
     policyFloorSources: policyFloorSources,
-    unmatchedInvestmentBillSources: unmatchedInvestmentBillSources
+    unmatchedInvestmentBillSources: unmatchedInvestmentBillSources,
+    hypotheticalAdjustments: input.hypotheticalAdjustments || null
   });
   var requiredReserve = input.reserveKnown === false
     ? null
@@ -5064,8 +5176,18 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
       usableCashAfterBuffers: isFinite(usable) ? round2_(usable) : null,
       cashSafety: null,
       assumptions: assumptions,
-      datedBonusScenario: input.datedBonusScenario || null
+      datedBonusScenario: input.datedBonusScenario || null,
+      policyFloorTreatment: pausePolicyFloors
+        ? 'HYPOTHETICAL_PAUSE'
+        : 'STANDING_WEEKLY_FLOOR_TIMES_52_DIV_12',
+      policyFloorsIncluded: !pausePolicyFloors
     };
+  }
+
+  if (pausePolicyFloors) {
+    assumptions = assumptions.concat([
+      'This hypothetical pauses standing investment policy floors. The saved monthly baseline still includes them. This Week’s weekly Robinhood pause does not change that saved baseline.'
+    ]);
   }
 
   var deficit = surplus <= 0.005;
@@ -5108,7 +5230,11 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
           recurringSurplusBeforeReserve: surplus,
           cashSafety: safety.cashSafety || null,
           assumptions: assumptions,
-          datedBonusScenario: input.datedBonusScenario || null
+          datedBonusScenario: input.datedBonusScenario || null,
+          policyFloorTreatment: pausePolicyFloors
+            ? 'HYPOTHETICAL_PAUSE'
+            : 'STANDING_WEEKLY_FLOOR_TIMES_52_DIV_12',
+          policyFloorsIncluded: !pausePolicyFloors
         };
       }
     } else {
@@ -5149,13 +5275,20 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
         ' − debt minimums $' + debtMinimums.toFixed(2) +
         ' − policy floors $' + policyFloorMonthly.toFixed(2) +
         ' − other investment bills $' + unmatchedInvestmentBillsMonthly.toFixed(2) +
+        (appliedReduction > 0.005
+          ? ' + hypothetical commitment reduction $' + appliedReduction.toFixed(2)
+          : '') +
         ' = $' + surplus.toFixed(2) + ' before reserve protection.'
     ]),
-    datedBonusScenario: input.datedBonusScenario || null
+    datedBonusScenario: input.datedBonusScenario || null,
+    policyFloorTreatment: pausePolicyFloors
+      ? 'HYPOTHETICAL_PAUSE'
+      : 'STANDING_WEEKLY_FLOOR_TIMES_52_DIV_12',
+    policyFloorsIncluded: !pausePolicyFloors
   };
 }
 
-function readDebtPayoffSupportedMonthlyExtra_(ss, debts, accounts) {
+function collectDebtPayoffSupportedMonthlyExtraInput_(ss, debts, accounts) {
   var incomeRead = readDebtPayoffSupportedMonthlyExtraIncome_(ss);
 
   var usableCashKnown = true;
@@ -5224,7 +5357,7 @@ function readDebtPayoffSupportedMonthlyExtra_(ss, debts, accounts) {
   if (!billsResult.unavailable) {
     attachDebtPayoffVariableBillHistory_(ss, billsResult.rows, asOfDate);
   }
-  return buildDebtPayoffSupportedMonthlyExtra_({
+  return {
     asOfDate: asOfDate,
     recurringIncomeSources: incomeRead.sources,
     incomeUnavailable: incomeRead.unavailable,
@@ -5248,7 +5381,195 @@ function readDebtPayoffSupportedMonthlyExtra_(ss, debts, accounts) {
     upcomingUnavailable: upcomingRead.ok === false,
     upcomingUnavailableReason: upcomingRead.reason || '',
     upcomingLocation: upcomingRead.location || DEBT_PAYOFF_CASH_SAFETY_LOCATION_
-  });
+  };
+}
+
+function readDebtPayoffSupportedMonthlyExtra_(ss, debts, accounts) {
+  return buildDebtPayoffSupportedMonthlyExtra_(
+    collectDebtPayoffSupportedMonthlyExtraInput_(ss, debts, accounts));
+}
+
+function cloneDebtPayoffSupportedExtraInput_(input) {
+  input = input || {};
+  return {
+    asOfDate: input.asOfDate,
+    recurringIncomeSources: (input.recurringIncomeSources || []).slice(),
+    incomeUnavailable: input.incomeUnavailable,
+    incomeCadenceUnconfirmed: input.incomeCadenceUnconfirmed,
+    incomeCadenceReason: input.incomeCadenceReason,
+    incomeIncompleteRows: (input.incomeIncompleteRows || []).slice(),
+    datedBonusScenario: input.datedBonusScenario || null,
+    debts: (input.debts || []).slice(),
+    bills: (input.bills || []).slice(),
+    billsUnavailable: input.billsUnavailable,
+    billsUnavailableReason: input.billsUnavailableReason,
+    policyFloors: (input.policyFloors || []).slice(),
+    investmentsUnavailable: input.investmentsUnavailable,
+    usableCashAfterBuffers: input.usableCashAfterBuffers,
+    usableCashKnown: input.usableCashKnown,
+    reserveKnown: input.reserveKnown,
+    requiredReserveAmount: input.requiredReserveAmount,
+    reserveUpcomingAmount: input.reserveUpcomingAmount,
+    reserveUnavailableReason: input.reserveUnavailableReason,
+    upcomingExpenses: (input.upcomingExpenses || []).slice(),
+    upcomingUnavailable: input.upcomingUnavailable,
+    upcomingUnavailableReason: input.upcomingUnavailableReason,
+    upcomingLocation: input.upcomingLocation,
+    pausePolicyFloors: false,
+    hypotheticalCommitmentReductionMonthly: 0,
+    hypotheticalAdjustments: null
+  };
+}
+
+function debtPayoffCashFlowScenarioSnapshot_(supported) {
+  var picture = (supported && supported.cashPicture) || {};
+  var components = (supported && supported.components) || {};
+  return {
+    available: !!(supported && supported.available === true),
+    amount: supported && supported.amount != null ? supported.amount : null,
+    shortfall: picture.shortfall != null ? picture.shortfall : 0,
+    surplus: picture.surplus != null ? picture.surplus : null,
+    recurringIncomeMonthly: components.recurringIncomeMonthly,
+    policyFloorMonthly: components.policyFloorMonthly,
+    usableCashAfterBuffers: supported ? supported.usableCashAfterBuffers : null,
+    requiredReserveAmount: supported ? supported.requiredReserveAmount : null,
+    reserveProtects: !!(supported && supported.reserveProtects === true),
+    futureReserveProtects: !!(supported && supported.futureReserveProtects === true),
+    deficit: !!(supported && supported.deficit === true),
+    policyFloorTreatment: supported && supported.policyFloorTreatment
+      ? supported.policyFloorTreatment
+      : 'STANDING_WEEKLY_FLOOR_TIMES_52_DIV_12',
+    policyFloorsIncluded: !(supported && supported.policyFloorsIncluded === false)
+  };
+}
+
+function debtPayoffHypotheticalCashFlowBlocker_(supported) {
+  if (!supported || supported.available !== true) {
+    var blockers = (supported && supported.blockers) || [];
+    var first = blockers[0];
+    return (first && (first.reason || first.code)) ||
+      'A supported extra cannot be proven from the hypothetical facts.';
+  }
+  if (supported.deficit === true) {
+    return 'Hypothetical recurring commitments still exceed recurring income, so extra stays $0.00.';
+  }
+  if (supported.reserveProtects === true) {
+    return 'Hypothetical recurring surplus is not enough: usable cash after buffers still does not cover This Week’s canonical reserve, so extra stays $0.00.';
+  }
+  if (supported.futureReserveProtects === true) {
+    return (supported.cashSafety && supported.cashSafety.reason) ||
+      'The reserve forecast still fails after the hypothetical change, so extra stays $0.00.';
+  }
+  if (!(Number(supported.amount) > 0.005)) {
+    return 'The hypothetical change does not leave a safe recurring extra.';
+  }
+  return '';
+}
+
+function buildDebtPayoffHypotheticalCashFlowScenario_(input, baselineSupported, scenarioPlan) {
+  scenarioPlan = scenarioPlan || parseDebtPayoffHypotheticalCashFlowScenario_(null);
+  var baseline = debtPayoffCashFlowScenarioSnapshot_(baselineSupported);
+  var empty = {
+    applied: false,
+    useForComparison: false,
+    hypothetical: true,
+    persisted: false,
+    amount: 0,
+    blocker: '',
+    adjustments: scenarioPlan,
+    baseline: baseline,
+    result: null,
+    oneTimeBonusIncome: scenarioPlan && scenarioPlan.oneTimeBonusIncome
+      ? scenarioPlan.oneTimeBonusIncome
+      : 0,
+    oneTimeBonusCountedInRecurringIncome: false,
+    oneTimeBonusCountedInReserve: false,
+    policyFloorsIncludedInBaseline: true,
+    policyFloorsPausedInScenario: false
+  };
+  if (!scenarioPlan || scenarioPlan.ok === false || scenarioPlan.applied !== true) {
+    return empty;
+  }
+  if (!input) {
+    empty.applied = true;
+    empty.useForComparison = scenarioPlan.useForComparison === true;
+    empty.blocker = 'Saved cash-flow facts were not available for this hypothetical.';
+    empty.oneTimeBonusIncome = scenarioPlan.oneTimeBonusIncome || 0;
+    return empty;
+  }
+  var adjusted = cloneDebtPayoffSupportedExtraInput_(input);
+  if (scenarioPlan.recurringIncomeIncrease > 0.005) {
+    adjusted.recurringIncomeSources = adjusted.recurringIncomeSources.concat([{
+      rawPayee: DEBT_PAYOFF_HYPOTHETICAL_INCOME_LABEL_,
+      name: DEBT_PAYOFF_HYPOTHETICAL_INCOME_LABEL_,
+      recurringConfirmed: true,
+      cadenceKnown: true,
+      frequency: 'monthly',
+      expectedAmount: scenarioPlan.recurringIncomeIncrease,
+      amountKnown: true,
+      hypothetical: true
+    }]);
+  }
+  if (scenarioPlan.commitmentIncrease > 0.005) {
+    adjusted.bills = adjusted.bills.concat([{
+      payee: DEBT_PAYOFF_HYPOTHETICAL_COMMITMENT_LABEL_,
+      amount: scenarioPlan.commitmentIncrease,
+      amountKnown: true,
+      frequency: 'monthly',
+      active: true,
+      varies: 'No',
+      hypothetical: true
+    }]);
+  }
+  if (scenarioPlan.pausePolicyFloors === true) {
+    adjusted.pausePolicyFloors = true;
+  }
+  if (scenarioPlan.commitmentReduction > 0.005) {
+    adjusted.hypotheticalCommitmentReductionMonthly =
+      scenarioPlan.commitmentReduction;
+  }
+  adjusted.hypotheticalAdjustments = {
+    recurringIncomeIncrease: scenarioPlan.recurringIncomeIncrease,
+    commitmentReduction: scenarioPlan.commitmentReduction,
+    commitmentIncrease: scenarioPlan.commitmentIncrease,
+    oneTimeBonusIncome: scenarioPlan.oneTimeBonusIncome,
+    pausePolicyFloors: scenarioPlan.pausePolicyFloors === true,
+    oneTimeBonusCountedInRecurringIncome: false,
+    oneTimeBonusCountedInReserve: false
+  };
+  var result = buildDebtPayoffSupportedMonthlyExtra_(adjusted);
+  var amount = result && result.available === true ? round2_(Number(result.amount) || 0) : 0;
+  var blocker = debtPayoffHypotheticalCashFlowBlocker_(result);
+  return {
+    applied: true,
+    useForComparison: scenarioPlan.useForComparison === true,
+    hypothetical: true,
+    persisted: false,
+    amount: amount,
+    blocker: blocker,
+    adjustments: scenarioPlan,
+    baseline: baseline,
+    result: result,
+    cashPicture: result && result.cashPicture || null,
+    reserveProtects: !!(result && result.reserveProtects),
+    futureReserveProtects: !!(result && result.futureReserveProtects),
+    deficit: !!(result && result.deficit),
+    usableCashAfterBuffers: result ? result.usableCashAfterBuffers : null,
+    requiredReserveAmount: result ? result.requiredReserveAmount : null,
+    remainingAboveReserve: result && result.cashSafety
+      ? result.cashSafety.remainingAboveReserve
+      : null,
+    oneTimeBonusIncome: scenarioPlan.oneTimeBonusIncome || 0,
+    oneTimeBonusCountedInRecurringIncome: false,
+    oneTimeBonusCountedInReserve: false,
+    policyFloorsIncludedInBaseline: true,
+    policyFloorsPausedInScenario: scenarioPlan.pausePolicyFloors === true,
+    policyFloorTreatment: result && result.policyFloorTreatment
+      ? result.policyFloorTreatment
+      : (scenarioPlan.pausePolicyFloors === true
+        ? 'HYPOTHETICAL_PAUSE'
+        : 'STANDING_WEEKLY_FLOOR_TIMES_52_DIV_12')
+  };
 }
 
 function readDebtPayoffSupportedMonthlyExtraIncome_(ss) {
