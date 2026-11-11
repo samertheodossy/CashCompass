@@ -62,6 +62,19 @@ assert.doesNotMatch(source, /balancedMonthlyDeploymentCap[^\n]{0,160}(?:0\.25|0\
   'the Balanced monthly cap must not use a percentage or household-specific dollar constant');
 assert.match(source, /LIQUIDITY_FIRST[\s\S]*?BALANCED[\s\S]*?AGGRESSIVE_DEBT_REDUCTION/);
 assert.match(source, /readCapitalAllocationForecast90_/);
+assert.match(source, /function capitalAllocationReserveForecastIncludesDays_/);
+assert.match(source, /function capitalAllocationScheduledBillOccurrenceSettled_/);
+assert.match(source, /function capitalAllocationScheduledBillOccurrenceSkipped_/);
+assert.match(source, /function capitalAllocationUniqueScheduledCashFlowForOccurrence_/);
+assert.doesNotMatch(source, /function capitalAllocationUniquePostedCashFlowForOccurrence_/);
+assert.match(source, /function capitalAllocationYearlyScheduledDueDates_/);
+assert.match(source, /function capitalAllocationDedupeFutureBillsAgainstUpcoming_/);
+assert.match(source, /A date-specific bill_skip is SKIPPED/);
+assert.match(source, /Defer, Upcoming, AutoPay,[\s\S]*remain plans, not payment/);
+assert.match(source,
+  /activityLogDedupeKeyExists_\(ss, capitalAllocationScheduledBillSkipKey_/);
+assert.doesNotMatch(source,
+  /capitalAllocationUniqueScheduledCashFlowForOccurrence_[\s\S]{0,200}settled: true/);
 assert.match(source,
   /monthlyDebtEvidenceResult = readCapitalAllocationMonthlyDebtEvidenceResult_[\s\S]*?monthlyDebtEvidence = monthlyDebtEvidenceResult\.rows[\s\S]*?readCapitalAllocationObligations_[\s\S]*?monthlyDebtEvidence[\s\S]*?readCapitalAllocationForecast90_[\s\S]*?monthlyDebtEvidence/,
   'one canonical monthly payment reconciliation must feed current requirements and the forecast');
@@ -104,6 +117,10 @@ assert.match(body, /id="capitalAllocationPreview" class="panel active"/);
 assert.doesNotMatch(body, /Your household plan · read only/,
   'the shared This Week shell must not repeat a page-level read-only disclaimer');
 const help = fs.readFileSync(new URL('../Dashboard_Help.html', import.meta.url), 'utf8');
+assert.match(help, /A date-specific Skip excludes only that occurrence/);
+assert.match(help, /Defer, Upcoming, AutoPay, and a nonzero Cash Flow month cell are plans, not payment/);
+assert.doesNotMatch(help, /skip, or AutoPay marker/);
+assert.doesNotMatch(help, /Cash Flow posting in the due month or the following month can settle/);
 assert.match(help,
   /Do Not Touch[\s\S]*?intentional Use Policy[\s\S]*?excluded from available household cash/,
   'Help must treat Do Not Touch as an intentional exclusion, not a missing-data error');
@@ -181,6 +198,11 @@ assert.match(client, /Protected reserve/);
 assert.match(client, /Preferred extra cushion/);
 assert.doesNotMatch(client, /Unassigned cash/);
 assert.match(client, /How the 90-day reserve is calculated/);
+assert.match(client, /Unpaid scheduled bills still due, plus days 8–90/);
+assert.match(client, /Due this month/);
+assert.match(client, /Scheduled Cash Flow amount still unpaid; counted once, not in Future bills/);
+assert.match(client, /Still due · unpaid scheduled bill/);
+assert.match(client, /currentMonthBills/);
 assert.match(client, /Expected gross rental income/);
 assert.match(client, /Normal Robinhood policy commitments/);
 assert.match(client, /View allocation logic/);
@@ -570,7 +592,12 @@ const normalizedScheduleForecast = context.readCapitalAllocationFutureBills_({
 }, new Date(2026, 7, 18), new Date(2026, 10, 15), [], []);
 assert.equal(observedForecastFrequency, 'yearly',
   'title-case Yearly source data must reach the recurrence engine as the canonical yearly schedule');
-assert.equal(normalizedScheduleForecast.rows.length, 1);
+const normalizedScheduleDates = normalizedScheduleForecast.rows.map(row => String(row.dueDate));
+assert.equal(normalizedScheduleDates.length, 2,
+  'yearly Future bills keeps the unpaid April occurrence and the in-horizon candidate: ' +
+  JSON.stringify(normalizedScheduleDates));
+assert.equal(normalizedScheduleDates.includes('2026-04-15'), true);
+assert.equal(normalizedScheduleDates.includes('2026-11-15'), true);
 const debtOwnedBillForecast = context.readCapitalAllocationFutureBills_({
   getSpreadsheetTimeZone() { return 'America/Los_Angeles'; },
   getSheetByName() {
@@ -649,6 +676,11 @@ assert.equal(context.capitalAllocationForecastRowsWithinDays_([
   { dueDate: '2026-10-20', amount: 400 }
 ], new Date(2026, 7, 18), 30), 200,
   'the exact 30-day ledger must include days 8-29 and exclude current-week and later obligations');
+assert.equal(context.capitalAllocationForecastRowsWithinDays_([
+  { dueDate: '2026-08-10', amount: 50 },
+  { dueDate: '2026-09-10', amount: 200 }
+], new Date(2026, 7, 18), 30), 250,
+  'an unpaid past-due obligation stays in the near-term protected ledger');
 
 const unknownScheduleFindings = [];
 const unknownScheduleValues = [
@@ -658,6 +690,15 @@ const unknownScheduleValues = [
 const unknownScheduleDisplay = unknownScheduleValues.map(row => row.map(String));
 context.normalizeFrequency_ = recurrenceContext.normalizeFrequency_;
 context.buildInputBillDueCandidates_ = recurrenceContext.buildInputBillDueCandidates_;
+vm.runInContext(`
+parseDateOnlySheetCell_ = function(raw, shown) {
+  var text = String(shown || raw || '').trim();
+  var m = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(text);
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+};
+`, recurrenceContext);
+context.parseDateOnlySheetCell_ = recurrenceContext.parseDateOnlySheetCell_;
 const unknownScheduleForecast = context.readCapitalAllocationFutureBills_({
   getSpreadsheetTimeZone() { return 'America/Los_Angeles'; },
   getSheetByName() { return { getDataRange() { return {
@@ -669,6 +710,472 @@ assert.equal(unknownScheduleForecast.total, 0);
 assert.equal(unknownScheduleFindings.length, 1);
 assert.equal(unknownScheduleFindings[0].blocksAllocation, true,
   'an unknown bill schedule must remain an explicit reserve blocker, not a fabricated zero or monthly amount');
+
+context.buildDashboardBillPaidKey_ = (payee, dueIso) =>
+  'dashboard_bill_paid::' + String(payee || '').trim() + '::' + String(dueIso || '').trim();
+context.buildDashboardBillSkipKey_ = (payee, dueIso) =>
+  'dashboard_bill_skip::' + String(payee || '').trim() + '::' + String(dueIso || '').trim();
+context.activityLogDedupeKeyExists_ = (ss, key) => !!(ss && ss.__dedupeKeys && ss.__dedupeKeys[key]);
+context.parseSheetDateToIso_ = value => {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return context.capitalAllocationIso_(value);
+  }
+  const text = String(value || '').trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : '';
+};
+
+const oakleyAsOf = new Date(2026, 10, 10);
+const oakleyHorizon = new Date(2026, 10, 10 + 89);
+assert.equal(context.capitalAllocationIso_(oakleyHorizon), '2027-02-07');
+const oakleyHeaders = ['Payee', 'Category', 'Due Day', 'Default Amount', 'Varies', 'Active',
+  'Frequency', 'Start Month'];
+const oakleyRow = ['Oakley House Property Tax 1', 'Housing', 1, 2855.71, 'Yes', 'Yes', 'Yearly', 11];
+const oakleyBillsValues = [oakleyHeaders, oakleyRow];
+const oakleyBillsDisplay = oakleyBillsValues.map(row => row.map(value => String(value)));
+function oakleySs_(extras) {
+  extras = extras || {};
+  return {
+    __dedupeKeys: extras.dedupeKeys || {},
+    getSpreadsheetTimeZone() { return 'America/Los_Angeles'; },
+    getSheetByName(name) {
+      if (name === 'INPUT - Bills') {
+        return { getDataRange() { return {
+          getValues() { return oakleyBillsValues; },
+          getDisplayValues() { return oakleyBillsDisplay; }
+        }; } };
+      }
+      if (name === 'INPUT - Upcoming Expenses') {
+        const upcoming = extras.upcoming ||
+          [['Expense Name', 'Payee', 'Due Date', 'Amount', 'Status']];
+        return { getDataRange() { return {
+          getValues() { return upcoming; },
+          getDisplayValues() { return upcoming.map(row => row.map(value => String(value))); }
+        }; } };
+      }
+      if (name === 'INPUT - Cash Flow 2026' && extras.cashFlow) return extras.cashFlow;
+      return null;
+    }
+  };
+}
+
+function oakleyCashFlowSheet_(rows) {
+  return {
+    getDataRange() {
+      return {
+        getValues() { return rows; },
+        getDisplayValues() {
+          return rows.map(row => row.map(value => value == null ? '' : String(value)));
+        }
+      };
+    }
+  };
+}
+function oakleyRead_(asOf, extras) {
+  extras = extras || {};
+  const horizon = extras.horizon || new Date(asOf.getFullYear(), asOf.getMonth(), asOf.getDate() + 89);
+  const ss = oakleySs_(extras);
+  const previousGetCashFlowSheet = context.getCashFlowSheet_;
+  if (extras.cashFlowByYear) {
+    context.getCashFlowSheet_ = (workbook, year) => extras.cashFlowByYear[year] || null;
+  }
+  const result = context.readCapitalAllocationFutureBills_(ss, asOf, horizon, [], []);
+  if (extras.cashFlowByYear) {
+    if (previousGetCashFlowSheet) context.getCashFlowSheet_ = previousGetCashFlowSheet;
+    else delete context.getCashFlowSheet_;
+  }
+  return result;
+}
+function oakleyDates_(result) {
+  return Array.from(result.rows || [], row => String(row.dueDate));
+}
+
+const oakleyUnpaid = oakleyRead_(oakleyAsOf);
+assert.equal(oakleyUnpaid.rows.length, 1,
+  'the unpaid Nov 1 Oakley tax stays in Future bills after the due date');
+assert.equal(oakleyUnpaid.rows[0].dueDate, '2026-11-01');
+assert.equal(oakleyUnpaid.rows[0].amount, 2855.71,
+  'Future bills uses the saved Default Amount, not Cash Flow history or YTD');
+assert.equal(oakleyUnpaid.rows[0].amountBasis, 'SAVED_ESTIMATED_AMOUNT');
+assert.equal(oakleyUnpaid.rows[0].paymentStatus, 'UNPAID');
+assert.equal(oakleyUnpaid.total, 2855.71);
+
+const oakleyDecemberUnpaid = oakleyRead_(new Date(2026, 11, 10));
+assert.deepEqual(oakleyDates_(oakleyDecemberUnpaid), ['2026-11-01'],
+  'the Nov 1 occurrence remains reserved in December while unpaid');
+assert.equal(oakleyDecemberUnpaid.total, 2855.71);
+const oakleyJanuaryUnpaid = oakleyRead_(new Date(2027, 0, 15));
+assert.deepEqual(oakleyDates_(oakleyJanuaryUnpaid), ['2026-11-01'],
+  'the Nov 1 occurrence remains reserved after December while unpaid');
+assert.equal(oakleyJanuaryUnpaid.total, 2855.71);
+
+const oakleySkip = oakleyRead_(oakleyAsOf, {
+  dedupeKeys: { 'bill_skip::dashboard_bill_skip::Oakley House Property Tax 1::2026-11-01': true }
+});
+assert.equal(oakleySkip.total, 0,
+  'a date-specific Skip excludes only that occurrence outflow');
+assert.equal(oakleySkip.rows.length, 0);
+assert.equal(oakleySkip.currentMonthTotal, 0);
+assert.equal(oakleySkip.skippedRows.length, 1);
+assert.equal(oakleySkip.skippedRows[0].dueDate, '2026-11-01');
+assert.equal(oakleySkip.skippedRows[0].paymentStatus, 'SKIPPED');
+assert.equal(oakleySkip.skippedRows[0].status, 'SKIPPED');
+assert.equal(oakleySkip.skippedRows[0].amount, 0,
+  'SKIPPED is not PAID and contributes $0 outflow');
+const oakleyAutopay = oakleyRead_(oakleyAsOf, {
+  dedupeKeys: { 'bill_autopay::oakley house property tax 1::Nov-26::2026-11-01::2855.71': true }
+});
+assert.equal(oakleyAutopay.total, 2855.71, 'AutoPay is a plan and does not settle the reserved obligation');
+const oakleyDefer = oakleyRead_(oakleyAsOf, {
+  dedupeKeys: { 'bill_defer::dashboard_bill_defer::Oakley House Property Tax 1::2026-11-01': true }
+});
+assert.equal(oakleyDefer.total, 2855.71, 'Defer does not settle the reserved obligation');
+
+const oakleyPaid = oakleyRead_(oakleyAsOf, {
+  dedupeKeys: { 'bill_paid::dashboard_bill_paid::Oakley House Property Tax 1::2026-11-01': true }
+});
+assert.equal(oakleyPaid.total, 0,
+  'a confirmed bill_paid marker removes the occurrence from the reserve');
+assert.equal(oakleyPaid.rows.length, 0);
+
+const scheduledDecemberRows = [
+  ['Type', 'Payee', 'Nov-26', 'Dec-26'],
+  ['Expense', 'Oakley House Property Tax 1', 0, -2922.60]
+];
+const oakleyScheduledDecember = oakleyRead_(oakleyAsOf, {
+  cashFlow: oakleyCashFlowSheet_(scheduledDecemberRows),
+  cashFlowByYear: { 2026: oakleyCashFlowSheet_(scheduledDecemberRows) }
+});
+assert.equal(oakleyScheduledDecember.total, 2922.60,
+  'a scheduled December Cash Flow amount is a planned future outflow before December starts');
+assert.equal(oakleyScheduledDecember.rows[0].amount, 2922.60);
+assert.equal(oakleyScheduledDecember.rows[0].amountBasis, 'SCHEDULED_CASH_FLOW_AMOUNT');
+assert.equal(oakleyScheduledDecember.rows[0].paymentStatus, 'SCHEDULED');
+assert.equal(oakleyScheduledDecember.currentMonthTotal, 0);
+
+const decemberFirstUnpaid = oakleyRead_(new Date(2026, 11, 1), {
+  cashFlow: oakleyCashFlowSheet_(scheduledDecemberRows),
+  cashFlowByYear: { 2026: oakleyCashFlowSheet_(scheduledDecemberRows) }
+});
+assert.equal(decemberFirstUnpaid.total, 0,
+  'when December begins the scheduled amount leaves Future bills');
+assert.equal(decemberFirstUnpaid.rows.length, 0);
+assert.equal(decemberFirstUnpaid.currentMonthTotal, 2922.60,
+  'the Nov 1 occurrence remains reserved as current-month due while the December cell is still only a plan');
+assert.equal(decemberFirstUnpaid.currentMonthRows[0].dueDate, '2026-11-01');
+assert.equal(decemberFirstUnpaid.currentMonthRows[0].paymentStatus, 'UNPAID');
+assert.equal(decemberFirstUnpaid.currentMonthRows[0].amountBasis, 'SCHEDULED_CASH_FLOW_AMOUNT');
+
+const decemberFirstPaid = oakleyRead_(new Date(2026, 11, 1), {
+  cashFlow: oakleyCashFlowSheet_(scheduledDecemberRows),
+  cashFlowByYear: { 2026: oakleyCashFlowSheet_(scheduledDecemberRows) },
+  dedupeKeys: { 'bill_paid::dashboard_bill_paid::Oakley House Property Tax 1::2026-11-01': true }
+});
+assert.equal(decemberFirstPaid.total, 0);
+assert.equal(decemberFirstPaid.currentMonthTotal, 0,
+  'explicit payment confirmation releases the Nov 1 occurrence after December begins');
+
+const after2026Scheduled = oakleyRead_(new Date(2027, 9, 20), {
+  cashFlow: oakleyCashFlowSheet_(scheduledDecemberRows),
+  cashFlowByYear: { 2026: oakleyCashFlowSheet_(scheduledDecemberRows) },
+  horizon: new Date(2027, 9, 20 + 89)
+});
+assert.deepEqual(oakleyDates_(after2026Scheduled), ['2027-11-01'],
+  'a 2026 December Cash Flow plan does not settle the Nov 1, 2027 recurrence');
+assert.equal(after2026Scheduled.rows[0].paymentStatus, 'SCHEDULED');
+assert.equal(after2026Scheduled.total, 2855.71);
+assert.equal(after2026Scheduled.currentMonthTotal, 2922.60,
+  'the unpaid 2026 planned amount stays current-month due until bill_paid');
+
+const ambiguousRows = [
+  ['Type', 'Payee', 'Nov-26', 'Dec-26'],
+  ['Expense', 'Oakley House Property Tax 1', 0, -2922.60],
+  ['Expense', 'Oakley House Property Tax 1', -100, 0]
+];
+const oakleyAmbiguous = oakleyRead_(new Date(2026, 11, 5), {
+  cashFlow: oakleyCashFlowSheet_(ambiguousRows),
+  cashFlowByYear: { 2026: oakleyCashFlowSheet_(ambiguousRows) }
+});
+assert.equal(oakleyAmbiguous.total, 2855.71,
+  'ambiguous Cash Flow rows do not settle the reserved obligation');
+const genericNovemberRows = [
+  ['Type', 'Payee', 'Nov-26', 'Dec-26'],
+  ['Expense', 'Property Tax', -2800, 0]
+];
+const oakleyGenericNovember = oakleyRead_(oakleyAsOf, {
+  cashFlow: oakleyCashFlowSheet_(genericNovemberRows),
+  cashFlowByYear: { 2026: oakleyCashFlowSheet_(genericNovemberRows) }
+});
+assert.equal(oakleyGenericNovember.total, 2855.71,
+  'a generic nonzero November amount does not settle this bill');
+
+const oakleyUpcomingValues = [
+  ['Expense Name', 'Payee', 'Due Date', 'Amount', 'Status'],
+  ['Oakley House Property Tax 1', 'Oakley House Property Tax 1', '2026-11-01', 3000, 'Planned']
+];
+const oakleyBillsForDedupe = oakleyRead_(oakleyAsOf, { upcoming: oakleyUpcomingValues });
+const oakleyUpcoming = context.readCapitalAllocationFutureUpcoming_(
+  oakleySs_({ upcoming: oakleyUpcomingValues }), oakleyAsOf, oakleyHorizon);
+const oakleyDeduped = context.capitalAllocationDedupeFutureBillsAgainstUpcoming_(
+  oakleyBillsForDedupe, oakleyUpcoming);
+assert.equal(oakleyDeduped.bills.total, 2855.71,
+  'Upcoming is a plan; the reserved amount stays the saved Default Amount');
+assert.equal(oakleyDeduped.upcoming.total, 0,
+  'a matching Planned Upcoming row is not counted again');
+
+const nextYearAsOf = new Date(2027, 9, 20);
+const nextYearHorizon = new Date(2027, 9, 20 + 89);
+const nextYearOccurrences = Array.from(recurrenceContext.buildInputBillDueCandidates_(
+  nextYearAsOf, 1, 'yearly', 11, '', null, null, nextYearHorizon),
+row => context.capitalAllocationIso_(row.dueDate));
+assert.deepEqual(nextYearOccurrences, ['2027-11-01'],
+  'the yearly recurrence remains Nov 1 next year and does not create a December occurrence');
+const bothOutstanding = oakleyRead_(nextYearAsOf, { horizon: nextYearHorizon });
+assert.deepEqual(oakleyDates_(bothOutstanding), ['2026-11-01', '2027-11-01'],
+  'an unpaid prior annual occurrence is retained when the next Nov 1 becomes due');
+assert.equal(bothOutstanding.total, 5711.42);
+assert.equal(bothOutstanding.rows.length, 2);
+assert.equal(bothOutstanding.rows.filter(row => row.dueDate === '2026-11-01')[0].paymentStatus, 'UNPAID');
+assert.equal(bothOutstanding.rows.filter(row => row.dueDate === '2027-11-01')[0].paymentStatus, 'SCHEDULED');
+const paid2026Keeps2027 = oakleyRead_(nextYearAsOf, {
+  horizon: nextYearHorizon,
+  dedupeKeys: { 'bill_paid::dashboard_bill_paid::Oakley House Property Tax 1::2026-11-01': true }
+});
+assert.deepEqual(oakleyDates_(paid2026Keeps2027), ['2027-11-01'],
+  'confirming the 2026 occurrence paid leaves the 2027 recurrence reserved once');
+assert.equal(paid2026Keeps2027.total, 2855.71);
+const skip2026Keeps2027 = oakleyRead_(nextYearAsOf, {
+  horizon: nextYearHorizon,
+  dedupeKeys: { 'bill_skip::dashboard_bill_skip::Oakley House Property Tax 1::2026-11-01': true }
+});
+assert.deepEqual(oakleyDates_(skip2026Keeps2027), ['2027-11-01'],
+  'skipping 2026-11-01 does not settle or hide the 2027 recurrence');
+assert.equal(skip2026Keeps2027.rows[0].paymentStatus, 'SCHEDULED');
+assert.equal(skip2026Keeps2027.skippedRows.length, 1);
+assert.equal(skip2026Keeps2027.skippedRows[0].dueDate, '2026-11-01');
+assert.equal(skip2026Keeps2027.skippedRows[0].paymentStatus, 'SKIPPED');
+assert.equal(skip2026Keeps2027.total, 2855.71);
+
+const oakleyReserveBefore = context.capitalAllocationReserve90_(10000, 0);
+const oakleyReserveAfter = context.capitalAllocationReserve90_(10000 + 2855.71, 0);
+assert.equal(oakleyReserveBefore.requiredReserveAmount, 10000);
+assert.equal(oakleyReserveAfter.requiredReserveAmount, 12855.71,
+  'adding the unpaid scheduled bill raises protected outflows by the saved estimate');
+
+const nov10Snapshot = {
+  futureBillsBeforeOakley: 21465.89,
+  futureDebtMinimums: 65349.31,
+  futureUpcoming: 4500,
+  propertyContingency: 614.83,
+  expectedNonRentalIncome: 61848.45,
+  expectedGrossRentalIncome: 27999.69,
+  protectedReserveBefore: 30643.34
+};
+const money = context.capitalAllocationMoney_;
+const nov10ScheduledBefore = money(
+  nov10Snapshot.futureBillsBeforeOakley + nov10Snapshot.futureDebtMinimums +
+  nov10Snapshot.futureUpcoming + nov10Snapshot.propertyContingency);
+const nov10ExpectedIncome = money(
+  nov10Snapshot.expectedNonRentalIncome + nov10Snapshot.expectedGrossRentalIncome);
+const nov10ReserveBefore = context.capitalAllocationReserve90_(
+  nov10ScheduledBefore, nov10ExpectedIncome);
+assert.equal(nov10ScheduledBefore, 91930.03);
+assert.equal(nov10ReserveBefore.minimumOperatingFloorAmount, nov10Snapshot.protectedReserveBefore);
+assert.equal(nov10ReserveBefore.requiredReserveAmount, nov10Snapshot.protectedReserveBefore,
+  'the Nov 10 snapshot floor is one-third of scheduled outflows after income offset');
+
+function oakleyForecast_(asOf, extras) {
+  extras = extras || {};
+  const previousGetCashFlowSheet = context.getCashFlowSheet_;
+  const previousHouseRows = context.getAllHouseExpenseRowsForSpreadsheet_;
+  if (extras.cashFlowByYear) {
+    context.getCashFlowSheet_ = (workbook, year) => extras.cashFlowByYear[year] || null;
+  }
+  context.getAllHouseExpenseRowsForSpreadsheet_ = () => [];
+  const result = context.readCapitalAllocationForecast90_(oakleySs_(extras), asOf, [], {
+    currentRequired: extras.currentRequired || [],
+    debts: [],
+    income: extras.income || {
+      expected90Days: nov10ExpectedIncome,
+      nonRentalMonthly: nov10Snapshot.expectedNonRentalIncome / 3,
+      grossRentalMonthly: nov10Snapshot.expectedGrossRentalIncome / 3
+    },
+    property: {},
+    monthlyDebtEvidence: [],
+    incomeProducingAccounts: []
+  });
+  if (extras.cashFlowByYear) {
+    if (previousGetCashFlowSheet) context.getCashFlowSheet_ = previousGetCashFlowSheet;
+    else delete context.getCashFlowSheet_;
+  }
+  if (previousHouseRows) context.getAllHouseExpenseRowsForSpreadsheet_ = previousHouseRows;
+  else delete context.getAllHouseExpenseRowsForSpreadsheet_;
+  return result;
+}
+
+const nov10OakleyCf = {
+  cashFlow: oakleyCashFlowSheet_(scheduledDecemberRows),
+  cashFlowByYear: { 2026: oakleyCashFlowSheet_(scheduledDecemberRows) }
+};
+const nov10OakleyForecast = oakleyForecast_(oakleyAsOf, nov10OakleyCf);
+assert.equal(nov10OakleyForecast.futureBillsAmount, 2922.60,
+  'Oakley adds the planned December Cash Flow amount once on Nov 10');
+assert.equal(nov10OakleyForecast.currentMonthBillsAmount, 0);
+assert.equal(nov10OakleyForecast.futureBills.length, 1);
+assert.equal(nov10OakleyForecast.futureBills[0].dueDate, '2026-11-01');
+const nov10FutureBillsAfter = money(
+  nov10Snapshot.futureBillsBeforeOakley + nov10OakleyForecast.futureBillsAmount);
+const nov10ScheduledAfter = money(
+  nov10FutureBillsAfter + nov10Snapshot.futureDebtMinimums +
+  nov10Snapshot.futureUpcoming + nov10Snapshot.propertyContingency);
+const nov10ReserveAfter = context.capitalAllocationReserve90_(
+  nov10ScheduledAfter, nov10ExpectedIncome);
+assert.equal(nov10FutureBillsAfter, 24388.49);
+assert.equal(nov10ScheduledAfter, 94852.63);
+assert.equal(nov10ReserveAfter.minimumOperatingFloorAmount, 31617.54);
+assert.equal(nov10ReserveAfter.requiredReserveAmount, 31617.54,
+  'with snapshot income the protected reserve is the one-third operating floor');
+assert.equal(money(nov10ReserveAfter.requiredReserveAmount -
+  nov10ReserveBefore.requiredReserveAmount), 974.20);
+
+const dec1OakleyForecast = oakleyForecast_(new Date(2026, 11, 1), nov10OakleyCf);
+assert.equal(dec1OakleyForecast.futureBillsAmount, 0,
+  'December moves Oakley out of Future bills');
+assert.equal(dec1OakleyForecast.currentMonthBillsAmount, 2922.60,
+  'December counts Oakley once as current-month due');
+assert.equal(dec1OakleyForecast.futureOperatingOutflowsAmount, 0);
+assert.equal(dec1OakleyForecast.currentHouseholdRequiredAmount, 2922.60);
+assert.equal(dec1OakleyForecast.currentMonthBills[0].paymentStatus, 'UNPAID');
+const dec1HouseholdFutureBills = money(
+  nov10Snapshot.futureBillsBeforeOakley + dec1OakleyForecast.futureBillsAmount);
+assert.equal(dec1HouseholdFutureBills, nov10Snapshot.futureBillsBeforeOakley,
+  'Oakley is not also left in household Future bills after it moves to December');
+
+const dec1PaidForecast = oakleyForecast_(new Date(2026, 11, 1), {
+  ...nov10OakleyCf,
+  dedupeKeys: { 'bill_paid::dashboard_bill_paid::Oakley House Property Tax 1::2026-11-01': true }
+});
+assert.equal(dec1PaidForecast.futureBillsAmount, 0);
+assert.equal(dec1PaidForecast.currentMonthBillsAmount, 0,
+  'explicit confirmation is the only release after December begins');
+
+const sjhcHeaders = ['Payee', 'Category', 'Due Day', 'Default Amount', 'Varies', 'Active',
+  'Frequency', 'Start Month', 'Weekday', 'Anchor Date', 'Schedule Effective Date'];
+const sjhcRow = ['San Jose House Cleaning', 'Home Services', 1, 160, 'No', 'Yes',
+  'Biweekly', 1, 'Monday', '2026-07-06', '2026-07-08'];
+const sjhcBillsValues = [sjhcHeaders, sjhcRow];
+const sjhcBillsDisplay = sjhcBillsValues.map(row => row.map(value => String(value)));
+const sjhcCashFlowRows = [
+  ['Type', 'Payee', 'Oct-26', 'Nov-26', 'Dec-26'],
+  ['Expense', 'San Jose House Cleaning', -160, 0, 0]
+];
+function sjhcRead_(extras) {
+  extras = extras || {};
+  const asOf = extras.asOf || recurrenceDate(2026, 10, 10);
+  const horizon = extras.horizon || recurrenceDate(2026, 10, 10 + 89);
+  const previousGetCashFlowSheet = context.getCashFlowSheet_;
+  context.getCashFlowSheet_ = (workbook, year) => year === 2026
+    ? oakleyCashFlowSheet_(sjhcCashFlowRows) : null;
+  const result = context.readCapitalAllocationFutureBills_({
+    __dedupeKeys: extras.dedupeKeys || {},
+    getSpreadsheetTimeZone() { return 'America/Los_Angeles'; },
+    getSheetByName(name) {
+      if (name === 'INPUT - Bills') {
+        return { getDataRange() { return {
+          getValues() { return sjhcBillsValues; },
+          getDisplayValues() { return sjhcBillsDisplay; }
+        }; } };
+      }
+      if (name === 'INPUT - Cash Flow 2026') return oakleyCashFlowSheet_(sjhcCashFlowRows);
+      return null;
+    }
+  }, asOf, horizon, [], []);
+  if (previousGetCashFlowSheet) context.getCashFlowSheet_ = previousGetCashFlowSheet;
+  else delete context.getCashFlowSheet_;
+  return result;
+}
+function sjhcDates_(result, field) {
+  return Array.from(result[field] || [], row => String(row.dueDate));
+}
+
+const sjhcPaidOnly = sjhcRead_({
+  dedupeKeys: { 'bill_paid::dashboard_bill_paid::San Jose House Cleaning::2026-10-12': true }
+});
+assert.equal(sjhcDates_(sjhcPaidOnly, 'currentMonthRows').includes('2026-10-12'), false,
+  'the Oct 12 payment is counted once as PAID and is not Due this month');
+assert.equal(sjhcDates_(sjhcPaidOnly, 'currentMonthRows').includes('2026-10-26'), true,
+  'without Skip, the Oct 26 visit stays Due this month from the shared October Cash Flow cell');
+assert.equal(sjhcPaidOnly.currentMonthRows.filter(row => row.dueDate === '2026-10-26')[0].amount, 160);
+assert.equal(sjhcDates_(sjhcPaidOnly, 'rows').includes('2026-11-09'), true,
+  'without Skip, Nov 9 remains a Future bills outflow at the default amount');
+assert.equal(sjhcPaidOnly.rows.filter(row => row.dueDate === '2026-11-09')[0].amount, 160);
+assert.equal(sjhcDates_(sjhcPaidOnly, 'rows').includes('2026-11-23'), true);
+assert.equal(sjhcPaidOnly.rows.filter(row => row.dueDate === '2026-11-23')[0].paymentStatus, 'SCHEDULED');
+assert.equal(sjhcPaidOnly.currentMonthTotal, 160);
+assert.equal(sjhcPaidOnly.skippedRows.length, 0);
+
+const sjhcHousehold = sjhcRead_({
+  dedupeKeys: {
+    'bill_paid::dashboard_bill_paid::San Jose House Cleaning::2026-10-12': true,
+    'bill_skip::dashboard_bill_skip::San Jose House Cleaning::2026-10-26': true,
+    'bill_skip::dashboard_bill_skip::San Jose House Cleaning::2026-11-09': true
+  }
+});
+assert.equal(sjhcDates_(sjhcHousehold, 'currentMonthRows').includes('2026-10-12'), false,
+  'Oct 12 stays PAID once and is not re-added or subtracted from October Cash Flow');
+assert.equal(sjhcDates_(sjhcHousehold, 'currentMonthRows').includes('2026-10-26'), false,
+  'the Oct 26 Skip excludes only that occurrence from Due this month');
+assert.equal(sjhcDates_(sjhcHousehold, 'rows').includes('2026-11-09'), false,
+  'the Nov 9 Skip excludes only that occurrence from Future bills');
+assert.equal(sjhcDates_(sjhcHousehold, 'rows').includes('2026-11-23'), true,
+  'the next unskipped occurrence Nov 23 remains scheduled');
+assert.equal(sjhcHousehold.rows.filter(row => row.dueDate === '2026-11-23')[0].amount, 160);
+assert.equal(sjhcHousehold.rows.filter(row => row.dueDate === '2026-11-23')[0].paymentStatus, 'SCHEDULED');
+assert.equal(sjhcHousehold.currentMonthTotal, 0);
+assert.deepEqual(sjhcDates_(sjhcHousehold, 'skippedRows'), ['2026-10-26', '2026-11-09']);
+assert.equal(sjhcHousehold.skippedRows.every(row => row.paymentStatus === 'SKIPPED'), true);
+assert.equal(sjhcHousehold.skippedRows.every(row => row.amount === 0), true);
+assert.equal(sjhcHousehold.skippedRows.every(row => row.status === 'SKIPPED'), true);
+assert.equal(money(sjhcPaidOnly.currentMonthTotal - sjhcHousehold.currentMonthTotal), 160);
+assert.equal(money(
+  (sjhcPaidOnly.rows.filter(row => row.dueDate === '2026-11-09')[0] || { amount: 0 }).amount
+), 160);
+assert.equal(sjhcHousehold.rows.filter(row => row.dueDate === '2026-11-09').length, 0);
+
+const nov10Screen = {
+  futureBills: 26732.44,
+  dueThisMonth: 23664.14,
+  futureDebtMinimums: 65349.31,
+  upcoming: 39500,
+  property: 614.83
+};
+const nov10ScreenIncome = money(
+  nov10Snapshot.expectedNonRentalIncome + nov10Snapshot.expectedGrossRentalIncome);
+const nov10ScreenOutflows = money(
+  nov10Screen.futureBills + nov10Screen.futureDebtMinimums +
+  nov10Screen.upcoming + nov10Screen.property);
+const nov10ScreenReserve = context.capitalAllocationReserve90_(
+  nov10ScreenOutflows, nov10ScreenIncome);
+assert.equal(nov10ScreenOutflows, 132196.58);
+assert.equal(nov10ScreenReserve.requiredReserveAmount, 44065.53);
+assert.equal(nov10ScreenReserve.incomeOffsetAmount, 88131.05);
+
+const nov10AfterSjhcSkip = {
+  futureBills: money(nov10Screen.futureBills - 160),
+  dueThisMonth: money(nov10Screen.dueThisMonth - 160)
+};
+const nov10AfterSkipOutflows = money(
+  nov10AfterSjhcSkip.futureBills + nov10Screen.futureDebtMinimums +
+  nov10Screen.upcoming + nov10Screen.property);
+const nov10AfterSkipReserve = context.capitalAllocationReserve90_(
+  nov10AfterSkipOutflows, nov10ScreenIncome);
+assert.equal(nov10AfterSjhcSkip.futureBills, 26572.44,
+  'Future bills decreases by the skipped Nov 9 $160');
+assert.equal(nov10AfterSjhcSkip.dueThisMonth, 23504.14,
+  'Due this month decreases by the skipped Oct 26 $160');
+assert.equal(nov10AfterSkipOutflows, 132036.58);
+assert.equal(nov10AfterSkipReserve.minimumOperatingFloorAmount, 44012.19);
+assert.equal(nov10AfterSkipReserve.requiredReserveAmount, 44012.19);
+assert.equal(nov10AfterSkipReserve.incomeOffsetAmount, 88024.39);
 
 const propertyContingency = context.capitalAllocationBuildPropertyContingency_([
   { house: 'SD House', type: 'Repair', cost: 1000, serviceFees: 0,

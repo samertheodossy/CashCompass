@@ -848,14 +848,32 @@ function capitalAllocationForecastRequirementsHtml_(plan, estimatedBillCount) {
     return row.actionClass === 'REQUIRED_ACTION' &&
       row.actionType !== 'FUND_INCOME_PRODUCING_MINIMUM';
   });
-  var total = actions.reduce(function(sum, row) { return sum + Number(row.amount || 0); }, 0);
+  var unpaidBills = ((plan.forecast90 || {}).futureBills || []).concat(
+    (plan.forecast90 || {}).currentMonthBills || []
+  ).filter(function(row) {
+    return String(row.paymentStatus || row.status || '') === 'UNPAID' &&
+      Number(row.amount || 0) > 0;
+  }).map(function(row) {
+    return {
+      targetName: row.name,
+      amount: row.amount,
+      actionType: 'PAY_TRACKED_BILL',
+      paymentStatus: 'UNPAID',
+      dueDate: row.dueDate,
+      amountBasis: row.amountBasis
+    };
+  });
+  var total = actions.concat(unpaidBills).reduce(function(sum, row) { return sum + Number(row.amount || 0); }, 0);
   return '<details class="capital-allocation-forecast capital-allocation-upcoming-requirements"><summary><span>' +
     '<strong>Upcoming requirements</strong><span class="capital-allocation-waits-summary">' +
     actions.length + ' scheduled item' + (actions.length === 1 ? '' : 's') + ' this week' +
+    (unpaidBills.length ? ' · ' + unpaidBills.length + ' unpaid scheduled bill' +
+      (unpaidBills.length === 1 ? '' : 's') + ' still due' : '') +
     (estimatedBillCount ? ' · ' + estimatedBillCount + ' using estimates' : '') + '</span></span>' +
     '<span class="capital-allocation-expand-label">' + formatCapitalAllocationMoney_(total) +
     ' · View items</span></summary><div class="capital-allocation-group-items">' +
-    actions.map(capitalAllocationCompactActionHtml_).join('') + '</div></details>';
+    actions.map(capitalAllocationCompactActionHtml_).concat(
+      unpaidBills.map(capitalAllocationCompactActionHtml_)).join('') + '</div></details>';
 }
 
 function capitalAllocationForecastContributionHtml_(plan) {
@@ -1750,10 +1768,11 @@ function capitalAllocationForecast90Html_(forecast) {
     escapeCapitalAllocationHtml_(forecast.endDate) + ' · estimated from your recorded averages and schedules</span></span>' +
     '<span class="capital-allocation-expand-label">Review forecast</span></summary>' +
     '<div class="capital-allocation-forecast-grid">' +
-    capitalAllocationForecastLineHtml_('Future bills', forecast.futureBillsAmount, 'Days 8–90') +
+    capitalAllocationForecastLineHtml_('Future bills', forecast.futureBillsAmount, 'Unpaid scheduled bills still due, plus days 8–90') +
+    capitalAllocationForecastLineHtml_('Due this month', forecast.currentMonthBillsAmount, 'Scheduled Cash Flow amount still unpaid; counted once, not in Future bills') +
     capitalAllocationForecastLineHtml_('Future debt minimums', forecast.futureDebtMinimumsAmount, 'Days 8–90; tracked debt bills counted once') +
     capitalAllocationForecastLineHtml_('Normal Robinhood policy commitments', forecast.futureInvestmentCommitmentsAmount, 'Shown for planning; not included in the operating reserve and subject to the emergency-liquidity override') +
-    capitalAllocationForecastLineHtml_('Upcoming expenses', forecast.futureUpcomingAmount, 'Planned items due in days 8–90') +
+    capitalAllocationForecastLineHtml_('Upcoming expenses', forecast.futureUpcomingAmount, 'Unpaid planned items still due, plus days 8–90') +
     capitalAllocationForecastLineHtml_('Unscheduled property contingency', propertyContingency,
       'Trailing Repair, Maintenance, Appliance, and Other history; planned Upcoming costs offset the allowance') +
     capitalAllocationForecastLineHtml_('Expected non-rental income', expectedNonRental, 'Forecast only · recorded monthly average × 3') +
@@ -1925,6 +1944,7 @@ function capitalAllocationCompactActionHtml_(row) {
 }
 
 function capitalAllocationCustomerActionLabel_(row) {
+  if (row.paymentStatus === 'UNPAID') return 'Still due · unpaid scheduled bill';
   if (row.actionType === 'FUND_INCOME_PRODUCING_MINIMUM') return 'Fund required weekly commitment';
   if (row.actionClass === 'REQUIRED_ACTION') return 'Pay this week';
   if (row.actionType === 'PROTECT_90_DAY_OPERATING_RESERVE') return 'Keep available for the next 90 days';

@@ -2194,11 +2194,33 @@ function readCapitalAllocationForecast90_(ss, asOfDate, findings, context) {
     currentHouseholdRequiredAmount + currentInvestmentCommitmentAmount);
   var futureBills = readCapitalAllocationFutureBills_(ss, asOfDate, horizonEnd,
     findings, context.incomeProducingAccounts || [], context.monthlyDebtEvidence || []);
+  var currentMonthBills = {
+    rows: futureBills.currentMonthRows || [],
+    total: capitalAllocationMoney_(futureBills.currentMonthTotal || 0)
+  };
   var activeBillPayees = capitalAllocationActiveBillPayeeMap_(ss);
     var futureDebtMinimums = readCapitalAllocationFutureDebtMinimums_(
     context.debts || [], asOfDate, horizonEnd, activeBillPayees,
     context.monthlyDebtEvidence || []);
   var futureUpcoming = readCapitalAllocationFutureUpcoming_(ss, asOfDate, horizonEnd);
+  var dedupedForecast = capitalAllocationDedupeFutureBillsAgainstUpcoming_(
+    futureBills, futureUpcoming);
+  futureBills = dedupedForecast.bills;
+  futureUpcoming = capitalAllocationDedupeFutureBillsAgainstUpcoming_(
+    currentMonthBills, dedupedForecast.upcoming).upcoming;
+  var currentRequiredKeys = {};
+  (currentRequired || []).forEach(function(row) {
+    currentRequiredKeys[capitalAllocationBillOccurrenceKey_(row.name, row.dueDate)] = true;
+  });
+  var extraCurrentMonthAmount = 0;
+  currentMonthBills.rows.forEach(function(row) {
+    if (currentRequiredKeys[capitalAllocationBillOccurrenceKey_(row.name, row.dueDate)]) return;
+    extraCurrentMonthAmount += Number(row.amount || 0);
+  });
+  currentHouseholdRequiredAmount = capitalAllocationMoney_(
+    currentHouseholdRequiredAmount + extraCurrentMonthAmount);
+  currentRequiredAmount = capitalAllocationMoney_(
+    currentHouseholdRequiredAmount + currentInvestmentCommitmentAmount);
   var futureInvestmentCommitments = readCapitalAllocationFutureInvestmentCommitments_(
     context.incomeProducingAccounts || [], asOfDate, horizonEnd);
   var propertyContingency = readCapitalAllocationPropertyContingency_(
@@ -2224,6 +2246,7 @@ function readCapitalAllocationForecast90_(ss, asOfDate, findings, context) {
     currentHouseholdRequiredAmount: currentHouseholdRequiredAmount,
     currentInvestmentCommitmentAmount: currentInvestmentCommitmentAmount,
     futureBillsAmount: futureBills.total,
+    currentMonthBillsAmount: currentMonthBills.total,
     futureDebtMinimumsAmount: futureDebtMinimums.total,
     futureUpcomingAmount: futureUpcoming.total,
     futureInvestmentCommitmentsAmount: futureInvestmentCommitments.total,
@@ -2247,6 +2270,7 @@ function readCapitalAllocationForecast90_(ss, asOfDate, findings, context) {
     normalPolicyInvestmentCommitmentsAmount: futureInvestmentCommitments.total,
     confidence: 'ESTIMATED_FROM_RECORDED_AVERAGES',
     futureBills: futureBills.rows,
+    currentMonthBills: currentMonthBills.rows,
     futureDebtMinimums: futureDebtMinimums.rows,
     futureUpcoming: futureUpcoming.rows,
     futureInvestmentCommitments: futureInvestmentCommitments.rows,
@@ -2255,7 +2279,7 @@ function readCapitalAllocationForecast90_(ss, asOfDate, findings, context) {
       debtMinimums: 'INPUT - Debts owns every active debt minimum; matching tracked Bills are suppressed',
       upcoming: 'INPUT - Upcoming Expenses owns dated one-time and irregular-known obligations',
       property: 'Bills, Debts, and Upcoming own scheduled property costs; HOUSES history supplies only net irregular contingency',
-      cashFlow: 'Current-month Cash Flow supplies recorded payment evidence, not a second future obligation',
+      cashFlow: 'A uniquely matched Cash Flow month cell is a scheduled plan amount, not posted payment; bill_paid is PAID; a date-specific bill_skip is SKIPPED and excludes only that occurrence',
       investmentPolicy: 'Robinhood policy commitments remain separate from gross operating obligations'
     },
     reserveComplete: futureDebtMinimums.reserveComplete !== false &&
@@ -2269,8 +2293,269 @@ function capitalAllocationForecastRowsWithinDays_(rows, asOfDate, horizonDays) {
     var due = capitalAllocationDate_(row && row.dueDate);
     if (!due) return sum;
     var days = daysBetween_(stripTime_(asOfDate), stripTime_(due));
-    return days > 7 && days < horizonDays ? sum + Number(row.amount || 0) : sum;
+    return capitalAllocationReserveForecastIncludesDays_(days) && days < horizonDays
+      ? sum + Number(row.amount || 0) : sum;
   }, 0));
+}
+
+/**
+ * 90-day reserve window: unpaid past-due items stay protected, current-week
+ * (days 0–7) stays on This Week's required list, and days 8–89 remain future.
+ * A due date alone never drops an unpaid scheduled bill.
+ */
+function capitalAllocationReserveForecastIncludesDays_(days) {
+  var n = Number(days);
+  if (!isFinite(n)) return false;
+  if (n >= 90) return false;
+  if (n >= 0 && n <= 7) return false;
+  return true;
+}
+
+function capitalAllocationBillOccurrenceKey_(payee, dueDate) {
+  var name = typeof normalizeBillName_ === 'function'
+    ? normalizeBillName_(payee)
+    : String(payee || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  return name + '::' + String(dueDate || '').trim();
+}
+
+function capitalAllocationUpcomingOccurrenceKeys_(row) {
+  var due = String(row && row.dueDate || '').trim();
+  var keys = [];
+  if (!due) return keys;
+  if (row && row.name) keys.push(capitalAllocationBillOccurrenceKey_(row.name, due));
+  if (row && row.payee) keys.push(capitalAllocationBillOccurrenceKey_(row.payee, due));
+  return keys;
+}
+
+function capitalAllocationScheduledBillPaidKey_(payee, dueIso) {
+  if (typeof buildDashboardBillPaidKey_ === 'function') {
+    return 'bill_paid::' + buildDashboardBillPaidKey_(payee, dueIso);
+  }
+  return 'bill_paid::dashboard_bill_paid::' + String(payee || '').trim() + '::' + String(dueIso || '').trim();
+}
+
+function capitalAllocationScheduledBillSkipKey_(payee, dueIso) {
+  if (typeof buildDashboardBillSkipKey_ === 'function') {
+    return 'bill_skip::' + buildDashboardBillSkipKey_(payee, dueIso);
+  }
+  return 'bill_skip::dashboard_bill_skip::' + String(payee || '').trim() + '::' + String(dueIso || '').trim();
+}
+
+/**
+ * Occurrence-level payment confirmation for the 90-day reserve.
+ * Only an explicit bill_paid marker for this due date is PAID.
+ * A date-specific bill_skip is SKIPPED: it excludes only that occurrence's
+ * expected outflow and is not payment. It never settles another occurrence
+ * and never rewrites a shared Cash Flow month cell. Defer, Upcoming, AutoPay,
+ * and a nonzero Cash Flow month cell remain plans, not payment. Cash Flow has
+ * no transaction-level posted/cleared source, so a scheduled monthly amount
+ * cannot mark an occurrence PAID.
+ */
+function capitalAllocationScheduledBillOccurrenceSettled_(ss, payee, dueIso) {
+  if (typeof activityLogDedupeKeyExists_ === 'function' &&
+      activityLogDedupeKeyExists_(ss, capitalAllocationScheduledBillPaidKey_(payee, dueIso))) {
+    return { settled: true, evidence: 'bill_paid', paymentStatus: 'PAID' };
+  }
+  return { settled: false, evidence: '', paymentStatus: '' };
+}
+
+function capitalAllocationScheduledBillOccurrenceSkipped_(ss, payee, dueIso) {
+  if (typeof activityLogDedupeKeyExists_ === 'function' &&
+      activityLogDedupeKeyExists_(ss, capitalAllocationScheduledBillSkipKey_(payee, dueIso))) {
+    return true;
+  }
+  return false;
+}
+
+function capitalAllocationIsValidDate_(value) {
+  return !!(value && typeof value.getFullYear === 'function' &&
+    typeof value.getTime === 'function' && !isNaN(value.getTime()));
+}
+
+function capitalAllocationOccurrenceMonthHeader_(dueIso) {
+  var due = capitalAllocationIsValidDate_(dueIso) ? dueIso : capitalAllocationDate_(dueIso);
+  if (!due) return '';
+  if (typeof monthHeaderFromYearMonth_ === 'function') {
+    return monthHeaderFromYearMonth_(due.getFullYear(), due.getMonth());
+  }
+  var names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return names[due.getMonth()] + '-' + String(due.getFullYear()).slice(-2);
+}
+
+function capitalAllocationCashFlowMonthHasStarted_(asOfDate, year, monthIndex) {
+  var asOf = capitalAllocationIsValidDate_(asOfDate) ? asOfDate : null;
+  if (!asOf) return false;
+  var monthStart = new Date(year, monthIndex, 1);
+  return stripTime_(asOf).getTime() >= stripTime_(monthStart).getTime();
+}
+
+function capitalAllocationOccurrencePaymentMonthHeaders_(dueIso) {
+  var due = capitalAllocationDate_(dueIso);
+  if (!due) return [];
+  var first = { year: due.getFullYear(), monthIndex: due.getMonth(),
+    header: capitalAllocationOccurrenceMonthHeader_(dueIso) };
+  var nextDate = new Date(due.getFullYear(), due.getMonth() + 1, 1);
+  var second = { year: nextDate.getFullYear(), monthIndex: nextDate.getMonth(),
+    header: capitalAllocationOccurrenceMonthHeader_(capitalAllocationIso_(nextDate)) };
+  return [first, second];
+}
+
+function capitalAllocationTryCashFlowSheet_(ss, year) {
+  var sheet = null;
+  try {
+    if (typeof getCashFlowSheet_ === 'function') sheet = getCashFlowSheet_(ss, year);
+  } catch (e) {
+    sheet = null;
+  }
+  if (sheet) return sheet;
+  var prefix = (typeof getSheetNames_ === 'function' && getSheetNames_().CASH_FLOW_PREFIX) ||
+    'INPUT - Cash Flow ';
+  return ss && typeof ss.getSheetByName === 'function'
+    ? ss.getSheetByName(prefix + String(year))
+    : null;
+}
+
+function capitalAllocationCashFlowCellAmount_(raw, shown) {
+  if (String(shown == null ? '' : shown).trim() === '' && (raw === '' || raw == null)) return 0;
+  var n = typeof toNumber_ === 'function' ? toNumber_(raw != null ? raw : shown) : Number(raw);
+  if (!isFinite(n)) n = typeof toNumber_ === 'function' ? toNumber_(shown) : Number(shown);
+  return isFinite(n) ? n : 0;
+}
+
+/**
+ * A uniquely matched Cash Flow month cell is a scheduled/planned amount for
+ * this bill, not payment confirmation. Exactly one Expense row must match the
+ * bill payee, with a nonzero amount in the due month or the following month.
+ * Multiple matching rows, a different payee, $0/blank, or YTD are not a
+ * reliable item-specific plan amount.
+ */
+function capitalAllocationUniqueScheduledCashFlowForOccurrence_(ss, payee, dueIso) {
+  var due = capitalAllocationDate_(dueIso);
+  if (!due || !ss) return { amount: 0, matchCount: 0 };
+  var months = capitalAllocationOccurrencePaymentMonthHeaders_(dueIso);
+  var want = capitalAllocationBillOccurrenceKey_(payee, '').replace(/::$/, '');
+  var matchCount = 0;
+  var plannedAmount = 0;
+  var plannedMonth = null;
+  var seenYears = {};
+  months.forEach(function(month) {
+    if (seenYears[month.year]) return;
+    seenYears[month.year] = true;
+    var sheet = capitalAllocationTryCashFlowSheet_(ss, month.year);
+    if (!sheet) return;
+    var display = sheet.getDataRange().getDisplayValues();
+    var values = sheet.getDataRange().getValues();
+    if (!display || display.length < 2) return;
+    var headers = (display[0] || []).map(function(value) {
+      return String(value || '').trim();
+    });
+    var typeCol = headers.indexOf('Type');
+    var payeeCol = headers.indexOf('Payee');
+    if (typeCol === -1 || payeeCol === -1) return;
+    var yearMatches = 0;
+    var r;
+    for (r = 1; r < display.length; r++) {
+      if (String(display[r][typeCol] || '').trim().toLowerCase() !== 'expense') continue;
+      var rowPayee = String(display[r][payeeCol] || '').trim();
+      if (capitalAllocationBillOccurrenceKey_(rowPayee, '').replace(/::$/, '') !== want) continue;
+      yearMatches += 1;
+      months.forEach(function(slot) {
+        if (slot.year !== month.year) return;
+        var col = -1;
+        var c;
+        for (c = 0; c < headers.length; c++) {
+          if (String(headers[c] || '').trim() === slot.header) {
+            col = c;
+            break;
+          }
+        }
+        if (col === -1) return;
+        var amount = Math.abs(capitalAllocationCashFlowCellAmount_(
+          values[r] && values[r][col], display[r][col]));
+        if (amount > 0.005) {
+          plannedAmount = amount;
+          plannedMonth = slot;
+        }
+      });
+    }
+    matchCount += yearMatches;
+  });
+  if (matchCount !== 1 || !(plannedAmount > 0) || !plannedMonth) {
+    return { amount: 0, matchCount: matchCount };
+  }
+  return {
+    amount: capitalAllocationMoney_(plannedAmount),
+    matchCount: 1,
+    year: plannedMonth.year,
+    monthIndex: plannedMonth.monthIndex,
+    header: plannedMonth.header
+  };
+}
+
+function capitalAllocationYearlyDueDate_(year, dueDay, startMonth) {
+  var start = Math.min(12, Math.max(1, Number(startMonth) || 1));
+  var day = Math.max(1, Number(dueDay) || 1);
+  var lastDay = new Date(year, start, 0).getDate();
+  return new Date(year, start - 1, Math.min(day, lastDay));
+}
+
+function capitalAllocationYearlyScheduledDueDates_(asOfDate, horizonEnd, dueDay, startMonth, effectiveDate) {
+  var asOf = stripTime_(asOfDate);
+  var thisYearDue = capitalAllocationYearlyDueDate_(asOf.getFullYear(), dueDay, startMonth);
+  var years = asOf.getTime() < thisYearDue.getTime()
+    ? [asOf.getFullYear() - 1, asOf.getFullYear(), asOf.getFullYear() + 1]
+    : [asOf.getFullYear(), asOf.getFullYear() + 1];
+  var seen = {};
+  var dates = [];
+  years.forEach(function(year) {
+    if (seen[year]) return;
+    seen[year] = true;
+    var due = capitalAllocationYearlyDueDate_(year, dueDay, startMonth);
+    if (capitalAllocationIsValidDate_(effectiveDate) &&
+        due.getTime() < effectiveDate.getTime()) return;
+    dates.push({
+      dueDate: due,
+      year: year,
+      monthIndex: due.getMonth(),
+      monthHeader: capitalAllocationOccurrenceMonthHeader_(capitalAllocationIso_(due))
+    });
+  });
+  return dates;
+}
+
+function capitalAllocationDedupeFutureBillsAgainstUpcoming_(billResult, upcomingResult) {
+  billResult = billResult || { total: 0, rows: [] };
+  upcomingResult = upcomingResult || { total: 0, rows: [] };
+  var billKeys = {};
+  (billResult.rows || []).forEach(function(row) {
+    billKeys[capitalAllocationBillOccurrenceKey_(row.name, row.dueDate)] = true;
+  });
+  var keptUpcoming = [];
+  (upcomingResult.rows || []).forEach(function(row) {
+    var duplicate = capitalAllocationUpcomingOccurrenceKeys_(row).some(function(key) {
+      return !!billKeys[key];
+    });
+    if (duplicate) {
+      row.duplicateOfScheduledBill = true;
+      return;
+    }
+    keptUpcoming.push(row);
+  });
+  return {
+    bills: {
+      rows: billResult.rows || [],
+      total: capitalAllocationMoney_((billResult.rows || []).reduce(function(sum, row) {
+        return sum + Number(row.amount || 0);
+      }, 0))
+    },
+    upcoming: {
+      rows: keptUpcoming,
+      total: capitalAllocationMoney_(keptUpcoming.reduce(function(sum, row) {
+        return sum + Number(row.amount || 0);
+      }, 0))
+    }
+  };
 }
 
 function readCapitalAllocationFutureInvestmentCommitments_(accounts, asOfDate, horizonEnd) {
@@ -2393,10 +2678,10 @@ function capitalAllocationReserve90_(futureOutflows, expectedIncome) {
 function readCapitalAllocationFutureBills_(ss, asOfDate, horizonEnd, findings,
     incomeProducingAccounts, monthlyDebtEvidence) {
   var sheet = ss.getSheetByName(getSheetNames_().BILLS);
-  if (!sheet) return { total: 0, rows: [] };
+  if (!sheet) return { total: 0, rows: [], currentMonthTotal: 0, currentMonthRows: [], skippedRows: [] };
   var values = sheet.getDataRange().getValues();
   var display = sheet.getDataRange().getDisplayValues();
-  if (display.length < 2) return { total: 0, rows: [] };
+  if (display.length < 2) return { total: 0, rows: [], currentMonthTotal: 0, currentMonthRows: [], skippedRows: [] };
   var headers = (display[0] || []).map(function(value) { return String(value || '').trim().toLowerCase(); });
   function col(name) { return headers.indexOf(String(name).toLowerCase()); }
   var payeeCol = col('Payee'), amountCol = col('Default Amount'), dueCol = col('Due Day');
@@ -2406,10 +2691,12 @@ function readCapitalAllocationFutureBills_(ss, asOfDate, horizonEnd, findings,
   if (payeeCol === -1 || amountCol === -1 || dueCol === -1 || activeCol === -1) {
     findings.push(capitalAllocationFinding_('FORECAST_BILLS_SCHEMA_INVALID', 'ERROR', true,
       'Bills cannot be included in the 90-day reserve because required headers are missing.', 'INPUT - Bills'));
-    return { total: 0, rows: [] };
+    return { total: 0, rows: [], currentMonthTotal: 0, currentMonthRows: [], skippedRows: [] };
   }
   var workbookTz = ss.getSpreadsheetTimeZone ? ss.getSpreadsheetTimeZone() : Session.getScriptTimeZone();
   var rows = [];
+  var currentMonthRows = [];
+  var skippedRows = [];
   var missingEstimateFindings = {};
   var debtOwnedPayees = {};
   (monthlyDebtEvidence || []).forEach(function(row) {
@@ -2447,13 +2734,45 @@ function readCapitalAllocationFutureBills_(ss, asOfDate, horizonEnd, findings,
       }
       continue;
     }
+    var startMonth = startCol === -1 ? 1 : values[r][startCol];
     var occurrences = buildInputBillDueCandidates_(asOfDate, dueDay, frequency,
-      startCol === -1 ? 1 : values[r][startCol],
-      weekdayCol === -1 ? '' : display[r][weekdayCol], effectiveDate, anchorDate, horizonEnd);
+      startMonth, weekdayCol === -1 ? '' : display[r][weekdayCol], effectiveDate, anchorDate, horizonEnd);
+    if (frequency === 'yearly') {
+      var seenDue = {};
+      occurrences.forEach(function(occurrence) {
+        seenDue[capitalAllocationIso_(occurrence.dueDate)] = true;
+      });
+      capitalAllocationYearlyScheduledDueDates_(
+        asOfDate, horizonEnd, dueDay, startMonth, effectiveDate
+      ).forEach(function(scheduled) {
+        var iso = capitalAllocationIso_(scheduled.dueDate);
+        if (seenDue[iso]) return;
+        seenDue[iso] = true;
+        occurrences.push(scheduled);
+      });
+    }
     occurrences.forEach(function(occurrence) {
       var days = daysBetween_(stripTime_(asOfDate), stripTime_(occurrence.dueDate));
-      if (days <= 7 || days >= 90) return;
-      if (!(amount > 0)) {
+      var dueIso = capitalAllocationIso_(occurrence.dueDate);
+      var settled = capitalAllocationScheduledBillOccurrenceSettled_(ss, payee, dueIso);
+      if (settled.settled) return;
+      if (capitalAllocationScheduledBillOccurrenceSkipped_(ss, payee, dueIso)) {
+        skippedRows.push({
+          name: payee,
+          dueDate: dueIso,
+          amount: 0,
+          estimated: false,
+          amountBasis: 'SKIPPED_OCCURRENCE',
+          paymentStatus: 'SKIPPED',
+          status: 'SKIPPED'
+        });
+        return;
+      }
+      var planned = capitalAllocationUniqueScheduledCashFlowForOccurrence_(ss, payee, dueIso);
+      var rowAmount = planned.amount > 0 ? planned.amount : amount;
+      var plannedMonthStarted = planned.amount > 0 &&
+        capitalAllocationCashFlowMonthHasStarted_(asOfDate, planned.year, planned.monthIndex);
+      if (!(rowAmount > 0)) {
         if (varies === 'yes') {
           var findingId = 'VARIABLE_BILL_FORECAST_ESTIMATE_MISSING:' + capitalAllocationKey_(payee);
           if (hasSavedAmount || capitalAllocationIsEpisodicVariableBill_(billMeta)) {
@@ -2472,14 +2791,42 @@ function readCapitalAllocationFutureBills_(ss, asOfDate, horizonEnd, findings,
         }
         return;
       }
-      rows.push({ name: payee, dueDate: capitalAllocationIso_(occurrence.dueDate),
-        amount: amount, estimated: varies === 'yes' });
+      var row = {
+        name: payee,
+        dueDate: dueIso,
+        amount: rowAmount,
+        estimated: varies === 'yes' && !(planned.amount > 0),
+        amountBasis: planned.amount > 0 ? 'SCHEDULED_CASH_FLOW_AMOUNT'
+          : (varies === 'yes' ? 'SAVED_ESTIMATED_AMOUNT' : 'DEFAULT_AMOUNT'),
+        paymentStatus: plannedMonthStarted || (days < 0 && !(planned.amount > 0)) ? 'UNPAID' : 'SCHEDULED',
+        status: plannedMonthStarted || (days < 0 && !(planned.amount > 0)) ? 'UNPAID' : 'SCHEDULED'
+      };
+      if (plannedMonthStarted) {
+        currentMonthRows.push(row);
+        return;
+      }
+      if (!capitalAllocationReserveForecastIncludesDays_(days)) return;
+      rows.push(row);
     });
   }
   rows.sort(function(a, b) { return String(a.dueDate + ':' + a.name).localeCompare(String(b.dueDate + ':' + b.name)); });
-  return { total: capitalAllocationMoney_(rows.reduce(function(sum, row) {
-    return sum + row.amount;
-  }, 0)), rows: rows };
+  currentMonthRows.sort(function(a, b) {
+    return String(a.dueDate + ':' + a.name).localeCompare(String(b.dueDate + ':' + b.name));
+  });
+  skippedRows.sort(function(a, b) {
+    return String(a.dueDate + ':' + a.name).localeCompare(String(b.dueDate + ':' + b.name));
+  });
+  return {
+    total: capitalAllocationMoney_(rows.reduce(function(sum, row) {
+      return sum + row.amount;
+    }, 0)),
+    rows: rows,
+    currentMonthTotal: capitalAllocationMoney_(currentMonthRows.reduce(function(sum, row) {
+      return sum + row.amount;
+    }, 0)),
+    currentMonthRows: currentMonthRows,
+    skippedRows: skippedRows
+  };
 }
 
 function readCapitalAllocationFutureDebtMinimums_(debts, asOfDate, horizonEnd, activeBillPayees,
@@ -2541,13 +2888,15 @@ function readCapitalAllocationFutureUpcoming_(ss, asOfDate, horizonEnd) {
     var due = capitalAllocationDate_(dueIso);
     if (!due) continue;
     var days = daysBetween_(stripTime_(asOfDate), due);
-    if (days <= 7 || due.getTime() > horizonEnd.getTime()) continue;
+    if (!capitalAllocationReserveForecastIncludesDays_(days) || due.getTime() > horizonEnd.getTime()) continue;
     var amount = Math.max(0, capitalAllocationMoney_(toNumber_(values[r][amountCol])));
     if (!(amount > 0)) continue;
     rows.push({ name: nameCol === -1 ? 'Upcoming expense' : String(display[r][nameCol] || '').trim(),
       category: categoryCol === -1 ? '' : String(display[r][categoryCol] || '').trim(),
       payee: payeeCol === -1 ? '' : String(display[r][payeeCol] || '').trim(),
-      dueDate: dueIso, amount: amount });
+      dueDate: dueIso, amount: amount,
+      amountBasis: 'REMAINING_PLANNED_AMOUNT',
+      paymentStatus: days < 0 ? 'UNPAID' : 'SCHEDULED' });
   }
   return { total: capitalAllocationMoney_(rows.reduce(function(sum, row) {
     return sum + row.amount;
