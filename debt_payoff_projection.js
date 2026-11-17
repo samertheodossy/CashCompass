@@ -538,6 +538,9 @@ var DEBT_PAYOFF_CASH_SAFETY_HORIZON_LABEL_ =
 var DEBT_PAYOFF_ONE_TIME_HORIZON_MONTHS_ = 12;
 var DEBT_PAYOFF_ONE_TIME_HORIZON_LABEL_ =
   '12-month cash-safety forecast from current recurring surplus and known Planned upcoming expenses';
+var DEBT_PAYOFF_CASH_FLOW_TIMELINE_HORIZON_MONTHS_ = 36;
+var DEBT_PAYOFF_CASH_FLOW_TIMELINE_HORIZON_LABEL_ =
+  '36-month hypothetical cash-flow and reserve timeline using This Week’s canonical reserve floor';
 var DEBT_PAYOFF_BREAK_EVEN_CATEGORIES_ = [
   { key: 'recurringIncomeMonthly', label: 'Recurring income', kind: 'income' },
   { key: 'recurringBillsMonthly', label: 'Required bills', kind: 'commitment' },
@@ -625,6 +628,15 @@ function getDebtPayoffStrategyComparison(payload) {
   });
   comparison.supportedMonthlyExtra = supported;
   comparison.cashFlowScenario = cashFlowScenario;
+  comparison.cashFlowTimeline = buildDebtPayoffCashFlowTimeline_({
+    supported: (cashFlowScenario && cashFlowScenario.result) || supported,
+    input: extraInput,
+    asOfDate: today,
+    proceedsAmount: scenarioPlan.shareSaleProceeds,
+    proceedsMonth: scenarioPlan.shareSaleMonth,
+    proceedsYear: scenarioPlan.shareSaleYear,
+    proceedsTimingUnknown: scenarioPlan.proceedsTimingUnknown === true
+  });
   return comparison;
 }
 
@@ -677,6 +689,10 @@ function parseDebtPayoffHypotheticalCashFlowScenario_(payload) {
     commitmentReduction: 0,
     commitmentIncrease: 0,
     oneTimeBonusIncome: 0,
+    shareSaleProceeds: 0,
+    shareSaleMonth: '',
+    shareSaleYear: '',
+    proceedsTimingUnknown: false,
     pausePolicyFloors: false,
     error: ''
   };
@@ -690,6 +706,10 @@ function parseDebtPayoffHypotheticalCashFlowScenario_(payload) {
       commitmentReduction: null,
       commitmentIncrease: null,
       oneTimeBonusIncome: null,
+      shareSaleProceeds: null,
+      shareSaleMonth: '',
+      shareSaleYear: '',
+      proceedsTimingUnknown: false,
       pausePolicyFloors: false,
       error: DEBT_PAYOFF_HYPOTHETICAL_CASH_FLOW_INVALID_
     };
@@ -706,17 +726,53 @@ function parseDebtPayoffHypotheticalCashFlowScenario_(payload) {
   var bonus = parseDebtPayoffHypotheticalCashFlowMoney_(
     payload.oneTimeBonusIncome, 'one-time bonus');
   if (!bonus.ok) return bonus;
+  var proceeds = parseDebtPayoffHypotheticalCashFlowMoney_(
+    payload.shareSaleProceeds, 'share-sale proceeds');
+  if (!proceeds.ok) return proceeds;
+  var monthText = String(payload.shareSaleMonth == null ? '' : payload.shareSaleMonth).trim();
+  var yearText = String(payload.shareSaleYear == null ? '' : payload.shareSaleYear).trim();
+  var shareSaleMonth = '';
+  var shareSaleYear = '';
+  var proceedsTimingUnknown = false;
+  if (proceeds.amount > 0.005) {
+    if (!monthText && !yearText) {
+      proceedsTimingUnknown = true;
+    } else if (!monthText || !yearText) {
+      return {
+        ok: false,
+        amount: null,
+        error: 'Enter the availability month and year for hypothetical share-sale proceeds. Timing is not inferred from reported sales, and missing timing is not treated as this month.'
+      };
+    } else {
+      var monthParsed = parseDebtPayoffScenarioBonusMonth_(payload.shareSaleMonth);
+      var yearParsed = parseDebtPayoffScenarioBonusYear_(payload.shareSaleYear);
+      if (!monthParsed.ok || !yearParsed.ok) {
+        return {
+          ok: false,
+          amount: null,
+          error: 'Enter the availability month and year for hypothetical share-sale proceeds. Timing is not inferred from reported sales, and missing timing is not treated as this month.'
+        };
+      }
+      shareSaleMonth = String(monthParsed.month);
+      shareSaleYear = String(yearParsed.year);
+    }
+  }
   var pause = payload.pausePolicyFloors === true;
   var structural = income.amount > 0.005 || reduction.amount > 0.005 ||
     increase.amount > 0.005 || pause;
+  var proceedsApplied = proceeds.amount > 0.005;
   return {
     ok: true,
-    applied: structural || bonus.amount > 0.005,
+    applied: structural || bonus.amount > 0.005 || proceedsApplied,
     useForComparison: structural,
     recurringIncomeIncrease: income.amount,
     commitmentReduction: reduction.amount,
     commitmentIncrease: increase.amount,
     oneTimeBonusIncome: bonus.amount,
+    shareSaleProceeds: proceeds.amount,
+    shareSaleMonth: shareSaleMonth,
+    shareSaleYear: shareSaleYear,
+    proceedsTimingUnknown: proceedsTimingUnknown,
     pausePolicyFloors: pause,
     error: ''
   };
@@ -4324,16 +4380,21 @@ function debtPayoffOutsideHorizonLabel_(rows) {
 function debtPayoffWalkCashSafety_(start, surplus, extra, reserve, months, options) {
   options = options || {};
   var oneTime = options.oneTime === true;
+  var inflows = options.inflowsByMonth || {};
   var cash = round2_(start);
   var firstBreach = null;
   var walks = [];
   var i;
   for (i = 0; i < months.length; i++) {
     var monthExtra = oneTime ? (i === 0 ? extra : 0) : extra;
-    cash = round2_(cash + surplus - monthExtra - months[i].upcomingAmount);
+    var inflow = round2_(Number(inflows[months[i].key]) || 0);
+    var startingCash = cash;
+    cash = round2_(cash + surplus + inflow - monthExtra - months[i].upcomingAmount);
     var headroom = round2_(cash - reserve);
     walks.push({
       monthKey: months[i].key,
+      startingCash: startingCash,
+      inflow: inflow,
       endingCash: cash,
       upcomingAmount: round2_(Number(months[i].upcomingAmount) || 0),
       headroom: headroom,
@@ -4397,13 +4458,13 @@ function debtPayoffMaxOneTimePreservingReserve_(start, surplus, reserve, months)
   };
 }
 
-function debtPayoffMaxExtraPreservingReserve_(start, surplus, reserve, months) {
+function debtPayoffMaxExtraPreservingReserve_(start, surplus, reserve, months, options) {
   surplus = round2_(surplus);
   if (!(surplus > 0.005)) return 0;
-  if (debtPayoffWalkCashSafety_(start, surplus, surplus, reserve, months).ok) {
+  if (debtPayoffWalkCashSafety_(start, surplus, surplus, reserve, months, options).ok) {
     return surplus;
   }
-  if (!debtPayoffWalkCashSafety_(start, surplus, 0, reserve, months).ok) {
+  if (!debtPayoffWalkCashSafety_(start, surplus, 0, reserve, months, options).ok) {
     return 0;
   }
   var lo = 0;
@@ -4412,7 +4473,7 @@ function debtPayoffMaxExtraPreservingReserve_(start, surplus, reserve, months) {
   while (lo <= hi) {
     var midCents = Math.floor((lo + hi) / 2);
     var mid = round2_(midCents / 100);
-    if (debtPayoffWalkCashSafety_(start, surplus, mid, reserve, months).ok) {
+    if (debtPayoffWalkCashSafety_(start, surplus, mid, reserve, months, options).ok) {
       best = mid;
       lo = midCents + 1;
     } else {
@@ -5569,6 +5630,261 @@ function buildDebtPayoffHypotheticalCashFlowScenario_(input, baselineSupported, 
       : (scenarioPlan.pausePolicyFloors === true
         ? 'HYPOTHETICAL_PAUSE'
         : 'STANDING_WEEKLY_FLOOR_TIMES_52_DIV_12')
+  };
+}
+
+function debtPayoffMonthKeyFromYearMonth_(year, month) {
+  var parsedMonth = parseDebtPayoffScenarioBonusMonth_(month);
+  var parsedYear = parseDebtPayoffScenarioBonusYear_(year);
+  if (!parsedMonth.ok || !parsedYear.ok) return '';
+  var mm = String(parsedMonth.month);
+  if (mm.length < 2) mm = '0' + mm;
+  return parsedYear.year + '-' + mm;
+}
+
+function debtPayoffCashFlowTimelineUnavailable_(reason, extras) {
+  extras = extras || {};
+  return {
+    available: false,
+    hypothetical: true,
+    persisted: false,
+    currentRecommendationUnchanged: true,
+    horizonMonths: DEBT_PAYOFF_CASH_FLOW_TIMELINE_HORIZON_MONTHS_,
+    horizonLabel: DEBT_PAYOFF_CASH_FLOW_TIMELINE_HORIZON_LABEL_,
+    months: [],
+    earliestExtraMonthKey: '',
+    earliestExtraAmount: null,
+    earliestExtraKnown: false,
+    proceedsAmount: extras.proceedsAmount || 0,
+    proceedsMonthKey: extras.proceedsMonthKey || '',
+    proceedsApplied: false,
+    proceedsExcludedByDefault: extras.proceedsAmount > 0.005 ? false : true,
+    reason: reason ||
+      'A forward cash-flow timeline could not be proven. Missing values were not treated as $0.',
+    assumptions: extras.assumptions || [],
+    blockers: extras.blockers || []
+  };
+}
+
+function buildDebtPayoffCashFlowTimeline_(options) {
+  options = options || {};
+  var supported = options.supported || {};
+  var input = options.input || {};
+  var proceedsAmount = round2_(Math.max(0, Number(options.proceedsAmount) || 0));
+  var proceedsTimingUnknown = options.proceedsTimingUnknown === true;
+  var proceedsMonthKey = proceedsAmount > 0.005 && !proceedsTimingUnknown
+    ? debtPayoffMonthKeyFromYearMonth_(options.proceedsYear, options.proceedsMonth)
+    : '';
+  var assumptions = [
+    'This timeline reuses This Week’s canonical reserve floor and the existing cash-safety walk. It is not a second reserve formula.',
+    'Eligible cash starts from usable cash after buffers. Recurring surplus or deficit is held constant; known rate or payment changes, including MTB’s 2027 change, are not modeled.',
+    'Share-sale proceeds are $0.00 unless a hypothetical net amount and availability month are entered. Reported sales are not treated as settled, net of taxes, or available.',
+    'One-time Cisco bonus income stays out of recurring cash flow and this reserve walk.',
+    'A modeled extra-payment start is not this month’s recommendation, is not saved, and does not change This Week.'
+  ];
+  if (proceedsTimingUnknown) {
+    return debtPayoffCashFlowTimelineUnavailable_(
+      'Hypothetical share-sale proceeds were entered without an availability month. Timing was not inferred from reported sales or treated as this month, so no precise extra-payment start month is shown.',
+      {
+        proceedsAmount: proceedsAmount,
+        proceedsTimingUnknown: true,
+        assumptions: assumptions
+      }
+    );
+  }
+  var asOfDate = options.asOfDate || input.asOfDate;
+  var hasAsOf = asOfDate instanceof Date && !isNaN(asOfDate.getTime());
+  if (!hasAsOf) {
+    return debtPayoffCashFlowTimelineUnavailable_(
+      'A forward cash-flow timeline needs an as-of date to place months. Unknown timing was not treated as $0.',
+      { proceedsAmount: proceedsAmount, assumptions: assumptions }
+    );
+  }
+  if (supported && supported.available === false && supported.blockers &&
+      supported.blockers.length) {
+    return debtPayoffCashFlowTimelineUnavailable_(
+      supported.blockers[0].reason ||
+        'Saved cash-flow facts are incomplete, so a precise extra-payment start month is not shown.',
+      { proceedsAmount: proceedsAmount, assumptions: assumptions, blockers: supported.blockers }
+    );
+  }
+  var start = round2_(Number(supported.usableCashAfterBuffers));
+  var surplus = supported.recurringSurplusBeforeReserve != null
+    ? round2_(Number(supported.recurringSurplusBeforeReserve))
+    : round2_(Number(supported.cashPicture && supported.cashPicture.surplus));
+  var requiredReserve = round2_(Number(supported.requiredReserveAmount));
+  var reserveUpcoming = input.reserveUpcomingAmount != null
+    ? input.reserveUpcomingAmount
+    : (supported.cashSafety && supported.cashSafety.reserveUpcomingAmount);
+  var reserveFloor = debtPayoffCashSafetyReserveFloor_(requiredReserve, reserveUpcoming);
+  if (!isFinite(start) || !isFinite(surplus) || reserveFloor == null) {
+    return debtPayoffCashFlowTimelineUnavailable_(
+      'Usable cash, recurring surplus, or the canonical reserve could not be proven for the forward timeline. Missing values were not replaced with $0.',
+      { proceedsAmount: proceedsAmount, assumptions: assumptions }
+    );
+  }
+  var horizonMonths = DEBT_PAYOFF_CASH_FLOW_TIMELINE_HORIZON_MONTHS_;
+  var lastKey = debtPayoffScenarioMonthKey_(asOfDate, horizonMonths);
+  var firstKey = debtPayoffScenarioMonthKey_(asOfDate, 1);
+  var timelineBlockers = [];
+  if (input.upcomingUnavailable) {
+    timelineBlockers.push({
+      code: 'UPCOMING_UNAVAILABLE',
+      reason: String(input.upcomingUnavailableReason ||
+        ('Dated upcoming expenses could not be read, so they were not treated as $0. Update ' +
+          DEBT_PAYOFF_CASH_SAFETY_LOCATION_ + '.'))
+    });
+  } else {
+    (input.upcomingExpenses || []).forEach(function(row) {
+      if (!row) return;
+      var name = row.name || 'An upcoming expense';
+      if (row.dueDateKnown !== true || !debtPayoffIsoDateIsValid_(row.dueDate)) {
+        timelineBlockers.push({
+          code: 'UPCOMING_DATE_UNKNOWN',
+          reason: name +
+            ' is Planned but has no usable due date, so it was not placed in the forward cash-flow timeline or treated as $0.'
+        });
+        return;
+      }
+      var monthKey = debtPayoffMonthKeyFromIsoDate_(row.dueDate);
+      if (monthKey && lastKey && monthKey > lastKey) return;
+      if (row.amountKnown !== true) {
+        timelineBlockers.push({
+          code: 'UPCOMING_AMOUNT_UNKNOWN',
+          reason: name +
+            ' is Planned with a due date in the forward cash-flow timeline but has no usable Amount, so it was not treated as $0.'
+        });
+      }
+    });
+  }
+  var proceedsInWindow = false;
+  var proceedsOutsideHorizon = false;
+  var proceedsBeforeStart = false;
+  if (proceedsAmount > 0.005) {
+    if (!proceedsMonthKey) {
+      return debtPayoffCashFlowTimelineUnavailable_(
+        'Hypothetical share-sale proceeds were entered without a usable availability month. Timing was not inferred from reported sales.',
+        { proceedsAmount: proceedsAmount, assumptions: assumptions }
+      );
+    }
+    if (proceedsMonthKey < firstKey) {
+      proceedsBeforeStart = true;
+    } else if (proceedsMonthKey > lastKey) {
+      proceedsOutsideHorizon = true;
+    } else {
+      proceedsInWindow = true;
+    }
+  }
+  if (proceedsBeforeStart) {
+    return debtPayoffCashFlowTimelineUnavailable_(
+      'Hypothetical share-sale proceeds are dated before the forecast start month and were not moved into a later month, so no precise extra-payment start month is shown.',
+      {
+        proceedsAmount: proceedsAmount,
+        proceedsMonthKey: proceedsMonthKey,
+        assumptions: assumptions
+      }
+    );
+  }
+  var months = debtPayoffBuildCashSafetyMonths_(
+    asOfDate, horizonMonths, input.upcomingExpenses || []);
+  var inflowsByMonth = {};
+  if (proceedsInWindow) inflowsByMonth[proceedsMonthKey] = proceedsAmount;
+  var walk = debtPayoffWalkCashSafety_(
+    start, surplus, 0, reserveFloor, months, { inflowsByMonth: inflowsByMonth });
+  var outsideHorizon = debtPayoffListOutsideHorizonUpcoming_(
+    asOfDate, horizonMonths, input.upcomingExpenses || []);
+  var rows = (walk.walks || []).map(function(row, index) {
+    return {
+      monthKey: row.monthKey,
+      monthIndex: index + 1,
+      startingEligibleCash: row.startingCash,
+      recurringSurplus: surplus,
+      proceedsInflow: row.inflow,
+      upcomingAmount: row.upcomingAmount,
+      reserveTarget: reserveFloor,
+      endingEligibleCash: row.endingCash,
+      reservePass: row.ok === true,
+      extraEligible: surplus > 0.005 && row.startingCash + 0.005 >= reserveFloor
+    };
+  });
+  var suppressEarliest = timelineBlockers.length > 0;
+  var earliestExtraMonthKey = '';
+  var earliestExtraAmount = null;
+  var earliestReason = '';
+  if (suppressEarliest) {
+    earliestReason = timelineBlockers[0].reason;
+  } else if (!(surplus > 0.005)) {
+    earliestReason =
+      'Recurring commitments still exceed recurring income, so cash does not accumulate into a recurring extra payment.';
+  } else {
+    var i;
+    for (i = 0; i < rows.length; i++) {
+      if (rows[i].startingEligibleCash + 0.005 < reserveFloor) continue;
+      var remaining = months.slice(i);
+      var remainingInflows = {};
+      Object.keys(inflowsByMonth).forEach(function(key) {
+        if (key >= rows[i].monthKey) remainingInflows[key] = inflowsByMonth[key];
+      });
+      var extraCap = debtPayoffMaxExtraPreservingReserve_(
+        rows[i].startingEligibleCash, surplus, reserveFloor, remaining,
+        { inflowsByMonth: remainingInflows });
+      if (extraCap > 0.005) {
+        earliestExtraMonthKey = rows[i].monthKey;
+        earliestExtraAmount = extraCap;
+        break;
+      }
+    }
+    if (!earliestExtraMonthKey) {
+      var last = rows.length ? rows[rows.length - 1] : null;
+      if (last && last.endingEligibleCash + 0.005 < reserveFloor) {
+        earliestReason =
+          'Eligible cash is still below This Week’s canonical reserve floor at the end of the ' +
+          horizonMonths + '-month window, so no extra-payment start month is shown.';
+      } else {
+        earliestReason =
+          'The reserve test does not support a recurring extra inside this window. Months after ' +
+          lastKey + ' are outside this check.';
+      }
+    }
+  }
+  if (outsideHorizon.length) {
+    assumptions = assumptions.concat([
+      'Planned upcoming after ' + lastKey + ' is outside this timeline: ' +
+        debtPayoffOutsideHorizonLabel_(outsideHorizon) + '.'
+    ]);
+  }
+  if (proceedsOutsideHorizon) {
+    assumptions = assumptions.concat([
+      'Hypothetical share-sale proceeds of $' + proceedsAmount.toFixed(2) +
+        ' in ' + proceedsMonthKey + ' fall after this window and were not applied.'
+    ]);
+  }
+  return {
+    available: true,
+    hypothetical: true,
+    persisted: false,
+    currentRecommendationUnchanged: true,
+    horizonMonths: horizonMonths,
+    horizonLabel: DEBT_PAYOFF_CASH_FLOW_TIMELINE_HORIZON_LABEL_,
+    asOfMonthKey: firstKey,
+    throughMonthKey: lastKey,
+    startingEligibleCash: start,
+    recurringSurplus: surplus,
+    reserveTarget: reserveFloor,
+    canonicalReserveAmount: requiredReserve,
+    months: rows,
+    earliestExtraMonthKey: earliestExtraMonthKey,
+    earliestExtraAmount: earliestExtraAmount,
+    earliestExtraKnown: !!earliestExtraMonthKey,
+    earliestReason: earliestReason,
+    proceedsAmount: proceedsAmount,
+    proceedsMonthKey: proceedsMonthKey,
+    proceedsApplied: proceedsInWindow,
+    proceedsExcludedByDefault: !(proceedsAmount > 0.005),
+    proceedsOutsideHorizon: proceedsOutsideHorizon,
+    reason: earliestReason,
+    assumptions: assumptions,
+    blockers: timelineBlockers
   };
 }
 

@@ -2868,6 +2868,37 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                 the 90-day reserve. Use the Cisco bonus overlay below to include a
                 dated bonus in the payoff comparison only.
               </p>
+              <div class="debt-payoff-overall-head">Hypothetical share-sale proceeds</div>
+              <p class="muted">
+                Hypothetical and unsaved. Default is $0.00. Reported share sales are
+                not treated as settled, net of taxes, or available. Enter a net
+                amount and the month it becomes available only if you want this
+                timeline to include it.
+              </p>
+              <div class="debt-payoff-strategy-controls">
+                <label for="debt_payoff_scenario_share_sale_proceeds">Net proceeds (hypothetical)</label>
+                <input id="debt_payoff_scenario_share_sale_proceeds" type="text" inputmode="decimal"
+                       placeholder="0.00">
+                <label for="debt_payoff_scenario_share_sale_month">Available month</label>
+                <select id="debt_payoff_scenario_share_sale_month">
+                  <option value="">Month</option>
+                  <option value="1">January</option>
+                  <option value="2">February</option>
+                  <option value="3">March</option>
+                  <option value="4">April</option>
+                  <option value="5">May</option>
+                  <option value="6">June</option>
+                  <option value="7">July</option>
+                  <option value="8">August</option>
+                  <option value="9">September</option>
+                  <option value="10">October</option>
+                  <option value="11">November</option>
+                  <option value="12">December</option>
+                </select>
+                <label for="debt_payoff_scenario_share_sale_year">Year</label>
+                <input id="debt_payoff_scenario_share_sale_year" type="text" inputmode="numeric"
+                       maxlength="4" placeholder="YYYY">
+              </div>
               <label class="debt-payoff-scenario-pause">
                 <input id="debt_payoff_scenario_pause_policy_floors" type="checkbox">
                 In this hypothetical, pause standing investment policy floors

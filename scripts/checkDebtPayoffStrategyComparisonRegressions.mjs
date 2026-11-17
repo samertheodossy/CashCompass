@@ -71,6 +71,10 @@ assert.match(debtOverview, /id="debt_payoff_scenario_commitment_reduction"/);
 assert.match(debtOverview, /id="debt_payoff_scenario_commitment_increase"/);
 assert.match(debtOverview, /id="debt_payoff_scenario_one_time_bonus"/);
 assert.match(debtOverview, /id="debt_payoff_scenario_pause_policy_floors"/);
+assert.match(debtOverview, /id="debt_payoff_scenario_share_sale_proceeds"/);
+assert.match(debtOverview, /id="debt_payoff_scenario_share_sale_month"/);
+assert.match(debtOverview, /id="debt_payoff_scenario_share_sale_year"/);
+assert.match(debtOverview, /Reported share sales are\s+not treated as settled/);
 assert.match(debtOverview, /Hypothetical and unsaved/);
 assert.match(debtOverview, /does not pick a bill to cut/);
 assert.doesNotMatch(debtOverview, /safe to reduce/);
@@ -158,8 +162,17 @@ assert.match(projection, /function parseDebtPayoffHypotheticalCashFlowScenario_/
 assert.match(projection, /STANDING_WEEKLY_FLOOR_TIMES_52_DIV_12/);
 assert.match(client, /function collectDebtPayoffHypotheticalCashFlowScenarioFromInput_/);
 assert.match(client, /function renderDebtPayoffCashFlowScenarioHtml_/);
+assert.match(client, /function renderDebtPayoffCashFlowTimelineHtml_/);
+assert.match(projection, /function buildDebtPayoffCashFlowTimeline_/);
+assert.match(projection, /DEBT_PAYOFF_CASH_FLOW_TIMELINE_HORIZON_MONTHS_ = 36/);
+assert.doesNotMatch(sliceFunction(projection, 'buildDebtPayoffCashFlowTimeline_'),
+  /setValue\(|appendRow\(|PropertiesService|buildCapitalAllocationPlan_|should_draw_from_heloc|40000/);
+assert.doesNotMatch(sliceFunction(projection, 'buildDebtPayoffMonthlyRecommendation_'),
+  /cashFlowTimeline|shareSaleProceeds/);
 assert.match(help, /standing investment policy floors \(weekly amount × 52 ÷ 12\)/);
 assert.match(help, /one-time bonus stays out of recurring monthly income and the 90-day reserve/);
+assert.match(help, /forward cash-flow and reserve timeline/);
+assert.match(help, /reported sales are not treated as settled/);
 assert.doesNotMatch(capital, /evaluateDebtPayoffFutureCashSafety_|readDebtPayoffUpcomingObligations_/);
 assert.doesNotMatch(rolling, /evaluateDebtPayoffFutureCashSafety_|readDebtPayoffUpcomingObligations_/);
 assert.match(help, /3-month cash-safety forecast/);
@@ -395,7 +408,7 @@ assert.match(projection, /reserveModeled: false/);
 assert.doesNotMatch(sliceFunction(projection, 'buildDebtPayoffMonthlyRecommendation_'),
   /setValue\(|appendRow\(|PAY_EXTRA|PropertiesService|google\.script\.run/);
 assert.doesNotMatch(sliceFunction(projection, 'buildDebtPayoffMonthlyRecommendation_'),
-  /bonusSelections|datedBonusScenario|cashFlowScenario|pausePolicyFloors|hypotheticalCommitmentReduction/);
+  /bonusSelections|datedBonusScenario|cashFlowScenario|pausePolicyFloors|hypotheticalCommitmentReduction|cashFlowTimeline|shareSaleProceeds/);
 assert.match(projection, /function buildDebtPayoffNextDollarComparison_/);
 assert.match(projection, /rec.nextDollar = buildDebtPayoffNextDollarComparison_/);
 assert.match(projection, /extraTargetNames/);
@@ -420,8 +433,8 @@ assert.doesNotMatch(capital, /compareDebtPayoffStrategies_|getDebtPayoffStrategy
 assert.match(rolling, /var ROLLING_DP_RESERVE_DEFAULT_ = 100000;/);
 assert.match(rolling, /ROLLING_DP_EXEC_PLAN_SMALL_BALANCE_SNOWBALL_MAX_/);
 assert.doesNotMatch(rolling, /getDebtPayoffStrategyComparison|compareDebtPayoffStrategies_/);
-assert.doesNotMatch(thisWeekClient, /getDebtPayoffStrategyComparison|debt_payoff_scenario_extra|debt_payoff_scenario_income_increase|cashFlowScenario/);
-assert.doesNotMatch(rollingClient, /getDebtPayoffStrategyComparison|debt_payoff_scenario_extra|debt_payoff_scenario_income_increase|cashFlowScenario/);
+assert.doesNotMatch(thisWeekClient, /getDebtPayoffStrategyComparison|debt_payoff_scenario_extra|debt_payoff_scenario_income_increase|cashFlowScenario|share_sale_proceeds/);
+assert.doesNotMatch(rollingClient, /getDebtPayoffStrategyComparison|debt_payoff_scenario_extra|debt_payoff_scenario_income_increase|cashFlowScenario|share_sale_proceeds/);
 assert.match(help, /hypothetical overlay[\s\S]*?avalanche[\s\S]*?snowball/);
 
 const context = vm.createContext({
@@ -551,6 +564,24 @@ assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_({
 }).useForComparison, false,
   'a one-time bonus alone must not replace the typed extra comparison');
 assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_({
+  shareSaleProceeds: 25000,
+  shareSaleMonth: 11,
+  shareSaleYear: 2026
+}).applied, true);
+assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_({
+  shareSaleProceeds: 25000,
+  shareSaleMonth: 11,
+  shareSaleYear: 2026
+}).useForComparison, false,
+  'share-sale proceeds must not replace the current extra comparison');
+assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_({
+  shareSaleProceeds: 25000
+}).proceedsTimingUnknown, true);
+assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_({
+  shareSaleProceeds: 25000,
+  shareSaleMonth: 11
+}).ok, false);
+assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_({
   pausePolicyFloors: true
 }).pausePolicyFloors, true);
 assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_({
@@ -675,6 +706,9 @@ assert.equal(rpcPayloads[0].cashFlowScenario.recurringIncomeIncrease, 0,
 assert.equal(rpcPayloads[0].cashFlowScenario.commitmentReduction, 0);
 assert.equal(rpcPayloads[0].cashFlowScenario.commitmentIncrease, 0);
 assert.equal(rpcPayloads[0].cashFlowScenario.oneTimeBonusIncome, 0);
+assert.equal(rpcPayloads[0].cashFlowScenario.shareSaleProceeds, 0);
+assert.equal(rpcPayloads[0].cashFlowScenario.shareSaleMonth, '');
+assert.equal(rpcPayloads[0].cashFlowScenario.shareSaleYear, '');
 assert.equal(rpcPayloads[0].cashFlowScenario.pausePolicyFloors, false);
 assert.equal(statusCalls.some(function(row) { return row.isError; }), false);
 
@@ -1429,6 +1463,9 @@ assert.doesNotMatch(renderRecommendation, /debt_payoff_scenario_extra/,
 assert.doesNotMatch(sliceFunction(client, 'renderDebtPayoffCashFlowScenarioHtml_'),
   /debt_payoff_scenario_extra|el\.value\s*=/,
   'a hypothetical extra must be passed into Compare, not typed into the extra field');
+assert.doesNotMatch(sliceFunction(client, 'renderDebtPayoffCashFlowTimelineHtml_'),
+  /debt_payoff_scenario_extra|el\.value\s*=/,
+  'the timeline must not write a modeled extra into the typed extra field');
 assert.doesNotMatch(renderRecommendation, /<button/,
   'the monthly recommendation must not offer a copy-to-scenario button');
 
@@ -1731,6 +1768,112 @@ assert.equal(reductionInput.bills[0].amount, 3500,
 assert.doesNotMatch(JSON.stringify(commitmentCut.result.cashPicture.householdBills),
   /safe to reduce|optional bill/i);
 
+const baselineTimeline = context.buildDebtPayoffCashFlowTimeline_({
+  supported: verifiedBaseline,
+  input: verifiedBaselineInput,
+  asOfDate: asOf
+});
+assert.equal(baselineTimeline.available, true);
+assert.equal(baselineTimeline.persisted, false);
+assert.equal(baselineTimeline.currentRecommendationUnchanged, true);
+assert.equal(baselineTimeline.recurringSurplus, -11128.24);
+assert.equal(baselineTimeline.startingEligibleCash, 0);
+assert.equal(baselineTimeline.proceedsExcludedByDefault, true);
+assert.equal(baselineTimeline.proceedsApplied, false);
+assert.equal(baselineTimeline.earliestExtraKnown, false);
+assert.equal(verifiedBaseline.amount, 0,
+  'the timeline must not change the current $0 recommendation');
+assert.equal(baselineTimeline.months[0].startingEligibleCash, 0);
+assert.equal(baselineTimeline.months[0].endingEligibleCash, -11128.24);
+assert.equal(baselineTimeline.months[0].reservePass, false);
+assert.equal(baselineTimeline.months[1].startingEligibleCash, -11128.24,
+  'a monthly deficit must not produce phantom accumulating cash');
+assert.ok(baselineTimeline.months[1].endingEligibleCash < baselineTimeline.months[0].endingEligibleCash);
+assert.match(baselineTimeline.earliestReason, /do not accumulate|exceed recurring income/i);
+
+const scenarioTimeline = context.buildDebtPayoffCashFlowTimeline_({
+  supported: baselineUnchanged.result,
+  input: verifiedBaselineInput,
+  asOfDate: asOf
+});
+assert.equal(verifiedBaseline.cashPicture.shortfall, 11128.24,
+  'scenario-only income must not change the saved baseline shortfall');
+assert.equal(scenarioTimeline.recurringSurplus, 871.76);
+assert.equal(scenarioTimeline.earliestExtraKnown, false,
+  'a surplus below the reserve still cannot start extra inside the window');
+assert.equal(scenarioTimeline.months[0].reservePass, false);
+assert.equal(scenarioTimeline.months[0].extraEligible, false);
+
+const extraStartInput = Object.assign({}, baseSupported, {
+  asOfDate: asOf,
+  usableCashAfterBuffers: 0,
+  requiredReserveAmount: 3000
+});
+const extraStartSupported = context.buildDebtPayoffSupportedMonthlyExtra_(extraStartInput);
+assert.equal(extraStartSupported.amount, 0);
+const extraStartTimeline = context.buildDebtPayoffCashFlowTimeline_({
+  supported: extraStartSupported,
+  input: extraStartInput,
+  asOfDate: asOf
+});
+assert.equal(extraStartTimeline.months[0].extraEligible, false,
+  'cash must not become available for extra before the reserve test passes');
+assert.equal(extraStartTimeline.earliestExtraKnown, true);
+assert.equal(extraStartTimeline.earliestExtraMonthKey, '2026-12');
+assert.equal(extraStartTimeline.earliestExtraAmount, 2500);
+assert.equal(extraStartSupported.amount, 0,
+  'a future extra-start month must stay separate from the current recommendation');
+
+const proceedsDefault = context.buildDebtPayoffCashFlowTimeline_({
+  supported: extraStartSupported,
+  input: extraStartInput,
+  asOfDate: asOf,
+  proceedsAmount: 0
+});
+assert.equal(proceedsDefault.proceedsExcludedByDefault, true);
+assert.equal(proceedsDefault.months[0].proceedsInflow, 0);
+
+const proceedsTimed = context.buildDebtPayoffCashFlowTimeline_({
+  supported: extraStartSupported,
+  input: extraStartInput,
+  asOfDate: asOf,
+  proceedsAmount: 3000,
+  proceedsMonth: 10,
+  proceedsYear: 2026
+});
+assert.equal(proceedsTimed.proceedsApplied, true);
+assert.equal(proceedsTimed.months[0].proceedsInflow, 3000);
+assert.equal(proceedsTimed.months[1].proceedsInflow, 0,
+  'proceeds must enter only in the specified availability month');
+assert.equal(proceedsTimed.earliestExtraMonthKey, '2026-11');
+
+const proceedsMissingMonth = context.buildDebtPayoffCashFlowTimeline_({
+  supported: extraStartSupported,
+  input: extraStartInput,
+  asOfDate: asOf,
+  proceedsAmount: 3000,
+  proceedsTimingUnknown: true
+});
+assert.equal(proceedsMissingMonth.available, false);
+assert.equal(proceedsMissingMonth.earliestExtraKnown, false);
+assert.match(proceedsMissingMonth.reason, /without an availability month|not inferred from reported sales/i);
+
+const unknownUpcomingTimeline = context.buildDebtPayoffCashFlowTimeline_({
+  supported: extraStartSupported,
+  input: Object.assign({}, extraStartInput, {
+    upcomingExpenses: [{
+      name: 'Unknown tax bill',
+      dueDate: '',
+      dueDateKnown: false,
+      amountKnown: false
+    }]
+  }),
+  asOfDate: asOf
+});
+assert.equal(unknownUpcomingTimeline.earliestExtraKnown, false,
+  'missing upcoming timing must suppress a precise extra-payment month');
+assert.match(unknownUpcomingTimeline.earliestReason, /no usable due date/i);
+
 const deficit = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
   asOfDate: asOf,
   recurringIncomeSources: [confirmedIncome('Salary', 1200)]
@@ -1745,6 +1888,23 @@ assert.equal(deficit.cashSafety.oneTimeLimitedToThreeMonths, false);
 assert.ok(deficit.cashSafety.oneTimeAmount > 0);
 assert.ok(deficit.cashSafety.oneTimeAmount <= deficit.cashSafety.remainingAboveReserve);
 assert.ok(deficit.cashSafety.remainingAboveReserve > 0);
+
+const deficitProceeds = context.buildDebtPayoffCashFlowTimeline_({
+  supported: deficit,
+  input: Object.assign({}, baseSupported, {
+    asOfDate: asOf,
+    recurringIncomeSources: [confirmedIncome('Salary', 1200)]
+  }),
+  asOfDate: asOf,
+  proceedsAmount: 8000,
+  proceedsMonth: 11,
+  proceedsYear: 2026
+});
+assert.equal(deficitProceeds.months[0].proceedsInflow, 0);
+assert.equal(deficitProceeds.months[1].proceedsInflow, 8000);
+assert.ok(deficitProceeds.months[0].endingEligibleCash < deficitProceeds.months[0].startingEligibleCash);
+assert.equal(deficitProceeds.earliestExtraKnown, false,
+  'a monthly deficit still cannot create a recurring extra from one-time proceeds');
 
 const missingIncome = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
   recurringIncomeSources: [],
@@ -5004,6 +5164,7 @@ vm.runInContext(
   '\n' + sliceFunction(client, 'renderDebtPayoffScenarioBonusForm_') +
   '\n' + sliceFunction(client, 'renderDebtPayoffStrategyCard_') +
   '\n' + sliceFunction(client, 'renderDebtPayoffCashFlowScenarioHtml_') +
+  '\n' + sliceFunction(client, 'renderDebtPayoffCashFlowTimelineHtml_') +
   '\n' + sliceFunction(client, 'renderDebtPayoffStrategyComparison_'),
   uiContext
 );
@@ -5873,6 +6034,8 @@ assert.doesNotMatch(resultsHtml, /Annualized monthly equivalent/);
 assert.doesNotMatch(resultsHtml, /aria-hidden="true"/);
 assert.doesNotMatch(resultsHtml, /Hypothetical cash-flow result/,
   'typed extra and Cisco bonus comparison must stay unchanged when no cash-flow scenario is applied');
+assert.doesNotMatch(resultsHtml, /Forward cash-flow and reserve timeline/,
+  'the timeline must not appear on a typed-extra comparison unless Compare built one');
 
 resultsWrap.innerHTML = '';
 uiContext.renderDebtPayoffStrategyComparison_({
@@ -5891,6 +6054,23 @@ uiContext.renderDebtPayoffStrategyComparison_({
     remainingAboveReserve: 0,
     policyFloorsPausedInScenario: false,
     oneTimeBonusIncome: 50000
+  },
+  cashFlowTimeline: {
+    available: true,
+    persisted: false,
+    currentRecommendationUnchanged: true,
+    earliestExtraKnown: false,
+    earliestReason: 'Eligible cash is still below This Week’s canonical reserve floor at the end of the 36-month window, so no extra-payment start month is shown.',
+    proceedsExcludedByDefault: true,
+    months: [{
+      monthKey: '2026-10',
+      startingEligibleCash: 0,
+      recurringSurplus: 871.76,
+      reserveTarget: 44012.19,
+      endingEligibleCash: 871.76,
+      reservePass: false
+    }],
+    assumptions: ['This timeline reuses This Week’s canonical reserve floor and the existing cash-safety walk. It is not a second reserve formula.']
   },
   strategies: {
     minimum_only: {
@@ -5933,6 +6113,11 @@ assert.match(cashFlowHtml, /One-time bonus \$50,000\.00 is not recurring monthly
 assert.match(cashFlowHtml, /canonical reserve/);
 assert.match(cashFlowHtml, /<th scope="col">Debt-free<\/th>/,
   'the existing payoff comparison table must still render after a cash-flow scenario');
+assert.match(cashFlowHtml, /Forward cash-flow and reserve timeline/);
+assert.match(cashFlowHtml, /not this month’s recommendation/);
+assert.match(cashFlowHtml, /Starting eligible cash/);
+assert.match(cashFlowHtml, /Does not pass/);
+assert.match(cashFlowHtml, /Share-sale proceeds are \$0\.00 in this timeline/);
 
 assert.match(projection, /function buildDebtPayoffHouseholdPlan_/);
 assert.match(projection, /function getDebtPayoffHouseholdPlan/);

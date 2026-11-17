@@ -2332,6 +2332,11 @@ function collectDebtPayoffHypotheticalCashFlowScenarioFromInput_() {
   var bonus = parseDebtPayoffHypotheticalMoneyFromInput_(
     'debt_payoff_scenario_one_time_bonus', 'one-time bonus');
   if (!bonus.ok) return bonus;
+  var proceeds = parseDebtPayoffHypotheticalMoneyFromInput_(
+    'debt_payoff_scenario_share_sale_proceeds', 'share-sale proceeds');
+  if (!proceeds.ok) return proceeds;
+  var monthEl = document.getElementById('debt_payoff_scenario_share_sale_month');
+  var yearEl = document.getElementById('debt_payoff_scenario_share_sale_year');
   var pauseEl = document.getElementById('debt_payoff_scenario_pause_policy_floors');
   return {
     ok: true,
@@ -2341,6 +2346,9 @@ function collectDebtPayoffHypotheticalCashFlowScenarioFromInput_() {
       commitmentReduction: reduction.amount,
       commitmentIncrease: increase.amount,
       oneTimeBonusIncome: bonus.amount,
+      shareSaleProceeds: proceeds.amount,
+      shareSaleMonth: monthEl ? monthEl.value : '',
+      shareSaleYear: yearEl ? yearEl.value : '',
       pausePolicyFloors: !!(pauseEl && pauseEl.checked)
     }
   };
@@ -2467,6 +2475,73 @@ function renderDebtPayoffCashFlowScenarioHtml_(scenario) {
   return parts.join('');
 }
 
+function renderDebtPayoffCashFlowTimelineHtml_(timeline) {
+  if (!timeline) return '';
+  var money = function(value) {
+    if (value == null || !isFinite(Number(value))) return 'unknown';
+    return typeof fmtCurrency === 'function' ? fmtCurrency(value) : String(value);
+  };
+  var parts = [];
+  parts.push('<div class="debt-payoff-cash-flow-timeline">');
+  parts.push('<p><strong>Forward cash-flow and reserve timeline</strong> — hypothetical, unsaved, and not this month’s recommendation.</p>');
+  if (timeline.available !== true) {
+    parts.push('<p>' + escapeHtml(timeline.reason ||
+      'A forward cash-flow timeline could not be proven. Missing values were not treated as $0.') + '</p>');
+    parts.push('</div>');
+    return parts.join('');
+  }
+  if (timeline.earliestExtraKnown === true) {
+    parts.push('<p>Earliest modeled extra payment: ' +
+      escapeHtml(timeline.earliestExtraMonthKey) +
+      ' for ' + money(timeline.earliestExtraAmount) +
+      ' per month, after the reserve test passes. This is not the current monthly recommendation.</p>');
+  } else {
+    parts.push('<p>' + escapeHtml(timeline.earliestReason || timeline.reason ||
+      'No precise extra-payment start month can be shown from these inputs.') + '</p>');
+  }
+  if (timeline.proceedsExcludedByDefault === true) {
+    parts.push('<p>Share-sale proceeds are $0.00 in this timeline unless you enter a hypothetical net amount and availability month.</p>');
+  } else if (timeline.proceedsApplied === true) {
+    parts.push('<p>Hypothetical share-sale proceeds ' + money(timeline.proceedsAmount) +
+      ' are included in ' + escapeHtml(timeline.proceedsMonthKey) +
+      ' only. They are not recurring income.</p>');
+  }
+  var months = timeline.months || [];
+  if (months.length) {
+    parts.push('<div class="debt-payoff-source-table-wrap"><table class="debt-payoff-source-table">');
+    parts.push('<caption>Projected eligible cash versus This Week’s canonical reserve floor</caption>');
+    parts.push('<thead><tr>');
+    parts.push('<th scope="col">Month</th>');
+    parts.push('<th scope="col" class="debt-payoff-num">Starting eligible cash</th>');
+    parts.push('<th scope="col" class="debt-payoff-num">Recurring surplus</th>');
+    parts.push('<th scope="col" class="debt-payoff-num">Reserve target</th>');
+    parts.push('<th scope="col" class="debt-payoff-num">Ending eligible cash</th>');
+    parts.push('<th scope="col">Reserve test</th>');
+    parts.push('</tr></thead><tbody>');
+    months.forEach(function(row) {
+      parts.push('<tr>');
+      parts.push('<td>' + escapeHtml(row.monthKey || '') + '</td>');
+      parts.push('<td class="debt-payoff-num">' + money(row.startingEligibleCash) + '</td>');
+      parts.push('<td class="debt-payoff-num">' + money(row.recurringSurplus) + '</td>');
+      parts.push('<td class="debt-payoff-num">' + money(row.reserveTarget) + '</td>');
+      parts.push('<td class="debt-payoff-num">' + money(row.endingEligibleCash) + '</td>');
+      parts.push('<td>' + (row.reservePass ? 'Passes' : 'Does not pass') + '</td>');
+      parts.push('</tr>');
+    });
+    parts.push('</tbody></table></div>');
+  }
+  if (timeline.assumptions && timeline.assumptions.length) {
+    parts.push('<details class="debt-payoff-details"><summary>Timeline assumptions</summary>');
+    parts.push('<div class="debt-payoff-details-body"><ul>');
+    timeline.assumptions.forEach(function(line) {
+      parts.push('<li>' + escapeHtml(line) + '</li>');
+    });
+    parts.push('</ul></div></details>');
+  }
+  parts.push('</div>');
+  return parts.join('');
+}
+
 function renderDebtPayoffStrategyComparison_(data) {
   var wrap = document.getElementById('debt_payoff_strategy_results');
   if (!wrap) return;
@@ -2478,6 +2553,8 @@ function renderDebtPayoffStrategyComparison_(data) {
   var parts = [];
   var cashFlowHtml = renderDebtPayoffCashFlowScenarioHtml_(data.cashFlowScenario);
   if (cashFlowHtml) parts.push(cashFlowHtml);
+  var timelineHtml = renderDebtPayoffCashFlowTimelineHtml_(data.cashFlowTimeline);
+  if (timelineHtml) parts.push(timelineHtml);
   if (!data.householdComparisonComplete) {
     parts.push('<div class="debt-payoff-strategy-blockers"><strong>Not a complete household comparison.</strong> ');
     if (data.blockers && data.blockers.length) {
