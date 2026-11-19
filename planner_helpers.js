@@ -1,3 +1,26 @@
+function formatBalanceAsOfIso_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    var mm = String(value.getMonth() + 1);
+    if (mm.length < 2) mm = '0' + mm;
+    var dd = String(value.getDate());
+    if (dd.length < 2) dd = '0' + dd;
+    return value.getFullYear() + '-' + mm + '-' + dd;
+  }
+  var text = String(value == null ? '' : value).replace(/\u00A0/g, ' ').trim();
+  if (!text) return '';
+  var iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
+  if (iso) return iso[1] + '-' + iso[2] + '-' + iso[3];
+  var us = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text);
+  if (us) {
+    var month = String(us[1]);
+    var day = String(us[2]);
+    if (month.length < 2) month = '0' + month;
+    if (day.length < 2) day = '0' + day;
+    return us[3] + '-' + month + '-' + day;
+  }
+  return '';
+}
+
 function findLabelValueCell_(sheet, label) {
   const values = sheet.getDataRange().getValues();
   for (let r = 0; r < values.length; r++) {

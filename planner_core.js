@@ -420,7 +420,14 @@ function normalizeAccounts_(rows) {
         availableNow: Math.max(0, round2_(toNumber_(r['Available Now']))),
         minBuffer: Math.max(0, round2_(toNumber_(r['Min Buffer']))),
         usePolicy: String(r['Use Policy'] || '').trim().toUpperCase(),
-        priority: parseInt(String(r['Priority'] || '9'), 10) || 9
+        priority: parseInt(String(r['Priority'] || '9'), 10) || 9,
+        balanceAsOf: typeof formatBalanceAsOfIso_ === 'function'
+          ? formatBalanceAsOfIso_(
+            r['Balance As Of'] != null && r['Balance As Of'] !== ''
+              ? r['Balance As Of']
+              : r['__display__Balance As Of']
+          )
+          : ''
       };
     });
 }

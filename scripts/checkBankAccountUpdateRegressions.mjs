@@ -4,6 +4,7 @@ import vm from 'node:vm';
 
 const read = (name) => fs.readFileSync(new URL('../' + name, import.meta.url), 'utf8');
 const bankSource = read('bank_accounts.js');
+const dashboardSource = read('dashboard_data.js');
 const body = read('Dashboard_Body.html');
 const help = read('Dashboard_Help.html');
 const client = read('Dashboard_Script_AssetsBankInvestments.html');
@@ -40,6 +41,57 @@ assert.match(
   /function updateBankAccountValueByDate_\(payload, trustedProvenance\)[\s\S]*?const updateAvailableNow = !!payload\.updateAvailableNow/
 );
 assert.match(bankSource, /function getAccountsRowData_\(accountName, optionalSs\)/);
+assert.match(bankSource, /SYS_ACCOUNTS_BALANCE_AS_OF_HEADER_ = 'Balance As Of'/);
+assert.match(bankSource, /SYS_ACCOUNTS_BALANCE_AS_OF_INITIAL_ISO_ = '2026-11-05'/);
+assert.match(bankSource, /function ensureAccountsBalanceAsOfColumn_/);
+assert.match(bankSource, /function stampSysAccountBalanceAsOf_/);
+assert.match(
+  bankSource.slice(
+    bankSource.indexOf('function syncAllAccountsFromLatestCurrentYear_'),
+    bankSource.indexOf('function getLatestBankAccountValuesForYear_')
+  ),
+  /stampSysAccountBalanceAsOf_/,
+  'a SYS Current Balance write from sync must stamp that same account’s Balance As Of'
+);
+assert.match(bankSource, /function applySuppliedNovember5BalanceAsOfSnapshot_/);
+assert.match(bankSource, /function runSuppliedNovember5BalanceAsOfSnapshot\(/);
+assert.match(bankSource, /function inspectSysAccountsBalanceAsOf\(/);
+assert.match(
+  bankSource.slice(
+    bankSource.indexOf('function runSuppliedNovember5BalanceAsOfSnapshot('),
+    bankSource.indexOf('function inspectSysAccountsBalanceAsOf(')
+  ),
+  /assertAdmin_/
+);
+assert.match(
+  bankSource.slice(
+    bankSource.indexOf('function getBankAccountUiData()'),
+    bankSource.indexOf('function getInactiveBankAccountsSet_()')
+  ),
+  /ensureAccountsBalanceAsOfColumn_/
+);
+assert.doesNotMatch(
+  bankSource.slice(
+    bankSource.indexOf('function getBankAccountUiData()'),
+    bankSource.indexOf('function getInactiveBankAccountsSet_()')
+  ),
+  /applySuppliedNovember5BalanceAsOfSnapshot_|runSuppliedNovember5BalanceAsOfSnapshot|inspectSysAccountsBalanceAsOf/
+);
+assert.match(
+  bankSource.slice(
+    bankSource.indexOf('function ensureAccountsBalanceAsOfColumn_'),
+    bankSource.indexOf('function stampSysAccountBalanceAsOf_')
+  ),
+  /SYS_ACCOUNTS_BALANCE_AS_OF_INITIAL_ISO_/
+);
+assert.match(
+  dashboardSource.slice(
+    dashboardSource.indexOf('function runDashboardPostRenderMaintenance()'),
+    dashboardSource.indexOf('var DASHBOARD_OVERVIEW_CONTINUATION_CACHE_PREFIX_')
+  ),
+  /ensureAccountsBalanceAsOfColumn_/
+);
+assert.match(body, /id="bank_edit_balance_as_of"/);
 assert.match(bankSource, /getAccountsRowData_\(name, ss\)/);
 assert.match(bankSource, /function getMonthColumnFromBankDisplay_/);
 assert.doesNotMatch(
@@ -69,6 +121,7 @@ assert.doesNotMatch(sidebarAdd, /id="bank_add_set_available"\s+checked/);
 assert.doesNotMatch(sidebarAdd, /id="bank_add_set_min_buffer"\s+checked/);
 assert.match(help, /Opening balance is unknown \/ not available yet/);
 assert.match(help, /A blank opening balance is not saved as \$0/);
+assert.match(help, /records 2026-11-05 for existing named accounts/);
 assert.match(client, /function createBankAccount\(\)[\s\S]*?openingBalanceUnknown\s*=\s*true/);
 assert.doesNotMatch(client, /Enter 0 if unknown/);
 assert.match(sidebar, /function createBankAccount\(\)[\s\S]*?openingBalanceUnknown\s*=\s*true/);
@@ -140,6 +193,15 @@ class FakeSheet {
   valueAt(row, col) { return this.rows[row - 1]?.[col - 1] ?? ''; }
   formulaAt(row, col) { return this.formulas[row - 1]?.[col - 1] ?? ''; }
   setValueAt(row, col, value) {
+    if (col > this.width) {
+      this.width = col;
+      this.rows.forEach((rowValues) => {
+        while (rowValues.length < this.width) rowValues.push('');
+      });
+      this.formulas.forEach((rowValues) => {
+        while (rowValues.length < this.width) rowValues.push('');
+      });
+    }
     while (this.rows.length < row) {
       this.rows.push(Array.from({ length: this.width }, () => ''));
       this.formulas.push(Array.from({ length: this.width }, () => ''));
@@ -214,9 +276,9 @@ const bankAccounts = new FakeSheet('INPUT - Bank Accounts', [
   ['Total Accounts']
 ]);
 const accounts = new FakeSheet('SYS - Accounts', [
-  ['Account Name', 'Current Balance', 'Available Now', 'Min Buffer', 'Type', 'Use Policy', 'Priority', 'Active'],
-  ['Checking', 2000, 1500, 400, 'Checking', 'USE_FOR_BILLS', 1, 'Yes'],
-  ['Savings', 8000, 8000, 1000, 'Savings', 'DO_NOT_TOUCH', 9, 'Yes']
+  ['Account Name', 'Current Balance', 'Available Now', 'Min Buffer', 'Type', 'Use Policy', 'Priority', 'Active', 'Balance As Of'],
+  ['Checking', 2000, 1500, 400, 'Checking', 'USE_FOR_BILLS', 1, 'Yes', '2026-11-05'],
+  ['Savings', 8000, 8000, 1000, 'Savings', 'DO_NOT_TOUCH', 9, 'Yes', '2026-11-05']
 ]);
 const sheets = {
   'INPUT - Bank Accounts': bankAccounts,
@@ -329,6 +391,10 @@ assert.equal(accountRow('Checking')[3], 400,
 assert.equal(accountRow('Checking')[4], 'Checking');
 assert.equal(accountRow('Checking')[5], 'USE_FOR_BILLS');
 assert.equal(accountRow('Checking')[6], 1);
+assert.equal(accountRow('Checking')[8], isoDate,
+  'a Checking save must stamp only Checking’s Balance As Of');
+assert.equal(accountRow('Savings')[8], '2026-11-05',
+  'a Checking save must not change another account’s Balance As Of');
 assert.deepEqual(snapshotRows(['Old Checking']), [preservedBefore[0]],
   'a current-month save must preserve prior-year history');
 assert.equal(JSON.stringify(accountRow('Savings')), savingsAssetBefore,
@@ -558,5 +624,72 @@ assert.equal(accountsDataRangeCalls, 1,
   'SYS - Accounts must be read once per account/date RPC');
 assert.equal(bankCellGetValueCalls, 0,
   'month amounts must come from the batched values snapshot');
+
+const legacyAccounts = new FakeSheet('SYS - Accounts', [
+  ['Account Name', 'Current Balance', 'Available Now', 'Min Buffer', 'Type', 'Use Policy', 'Priority', 'Active'],
+  ['Checking', 2000, 1500, 400, 'Checking', 'USE_FOR_BILLS', 1, 'Yes'],
+  ['Savings', 8000, 8000, 1000, 'Savings', 'DO_NOT_TOUCH', 9, 'Yes'],
+  ['', '', '', '', '', '', '', '']
+]);
+context.ensureAccountsBalanceAsOfColumn_(legacyAccounts);
+assert.equal(legacyAccounts.rows[0][8], 'Balance As Of');
+assert.equal(legacyAccounts.rows[1][1], 2000, 'adding Balance As Of must not change balances');
+assert.equal(legacyAccounts.rows[2][1], 8000, 'adding Balance As Of must not change balances');
+assert.equal(legacyAccounts.rows[1][8], '2026-11-05',
+  'first add must record 2026-11-05 on named account rows');
+assert.equal(legacyAccounts.rows[2][8], '2026-11-05',
+  'first add must record 2026-11-05 on named account rows');
+assert.equal(legacyAccounts.rows[3][8], '',
+  'first add must leave nameless rows without a Balance As Of date');
+legacyAccounts.rows[1][8] = '2026-11-20';
+context.ensureAccountsBalanceAsOfColumn_(legacyAccounts);
+assert.equal(legacyAccounts.rows[1][8], '2026-11-20',
+  'a later load must not replace an existing Balance As Of date');
+assert.equal(legacyAccounts.rows[2][8], '2026-11-05',
+  'a later load must retain the initial date until that account is updated');
+
+const suppliedAccounts = new FakeSheet('SYS - Accounts', [
+  ['Account Name', 'Current Balance', 'Available Now', 'Min Buffer', 'Type', 'Use Policy', 'Priority', 'Active'],
+  ['Checking - 1198', 2100, 2100, 400, 'Checking', 'USE_FOR_BILLS', 1, 'Yes'],
+  ['Savings - 2167', 8000, 8000, 1000, 'Savings', 'DO_NOT_TOUCH', 9, 'Yes'],
+  ['Random Extra Account', 50, 50, 0, 'Checking', 'USE_FOR_BILLS', 9, 'Yes'],
+  ['Checking', 99, 99, 0, 'Checking', 'USE_FOR_BILLS', 9, 'Yes']
+]);
+const suppliedSs = {
+  getSheetByName(name) { return name === 'SYS - Accounts' ? suppliedAccounts : null; }
+};
+const migration = context.applySuppliedNovember5BalanceAsOfSnapshot_(suppliedSs);
+assert.equal(migration.ok, true);
+assert.equal(migration.headerAfter, 'Active');
+assert.equal(migration.unchangedBalances, true);
+assert.equal(suppliedAccounts.rows[1][1], 2100, 'migration must not change balances');
+assert.equal(suppliedAccounts.rows[2][1], 8000, 'migration must not change balances');
+assert.equal(suppliedAccounts.rows[3][1], 50, 'migration must not change balances');
+assert.equal(suppliedAccounts.rows[1][8], '2026-11-05');
+assert.equal(suppliedAccounts.rows[2][8], '2026-11-05');
+assert.equal(suppliedAccounts.rows[3][8], '2026-11-05',
+  'first column add records 2026-11-05 on every named account');
+assert.equal(suppliedAccounts.rows[4][8], '2026-11-05',
+  'first column add records 2026-11-05 on every named account');
+suppliedAccounts.rows[1][8] = '2026-10-01';
+const secondPass = context.applySuppliedNovember5BalanceAsOfSnapshot_(suppliedSs);
+assert.equal(suppliedAccounts.rows[1][8], '2026-10-01',
+  'migration must not overwrite an existing Balance As Of date');
+assert.ok(secondPass.skipped.includes('Checking - 1198'));
+
+const existingColumnAccounts = new FakeSheet('SYS - Accounts', [
+  ['Account Name', 'Current Balance', 'Available Now', 'Min Buffer', 'Type', 'Use Policy', 'Priority', 'Active', 'Balance As Of'],
+  ['Checking - 1198', 2100, 2100, 400, 'Checking', 'USE_FOR_BILLS', 1, 'Yes', ''],
+  ['Random Extra Account', 50, 50, 0, 'Checking', 'USE_FOR_BILLS', 9, 'Yes', '']
+]);
+const existingColumnSs = {
+  getSheetByName(name) { return name === 'SYS - Accounts' ? existingColumnAccounts : null; }
+};
+const allowListOnly = context.applySuppliedNovember5BalanceAsOfSnapshot_(existingColumnSs);
+assert.equal(existingColumnAccounts.rows[1][8], '2026-11-05');
+assert.equal(existingColumnAccounts.rows[2][8], '',
+  'once the column exists, the owner migration must not backfill non-snapshot rows');
+assert.ok(allowListOnly.updated.includes('Checking - 1198'));
+assert.ok(!allowListOnly.updated.includes('Random Extra Account'));
 
 console.log('bank account update regressions passed');

@@ -853,6 +853,15 @@ function bankImportApplyAutoMatchWrite_(accountName, balanceAsOfDate, balance) {
   updateBankAccountsHistory_(accountName, year, balanceAsOfDate, balance);
   syncAllAccountsFromLatestCurrentYear_();
   try {
+    if (typeof stampSysAccountBalanceAsOf_ === 'function') {
+      stampSysAccountBalanceAsOf_(
+        ensureSysAccountsSheet_(),
+        accountName,
+        balanceAsOfDate
+      );
+    }
+  } catch (_asOfStampErr) {}
+  try {
     touchDashboardSourceUpdated_('bank_accounts');
   } catch (_touchErr) {
     // Best-effort cache touch; the underlying writes already succeeded.

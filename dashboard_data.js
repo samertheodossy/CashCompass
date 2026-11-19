@@ -47,6 +47,14 @@ function runDashboardPostRenderMaintenance() {
   try {
     if (typeof ensureDebouncePlannerTrigger_ === 'function') ensureDebouncePlannerTrigger_();
   } catch (_triggerMaintenanceErr) { /* non-blocking maintenance */ }
+  try {
+    if (typeof ensureAccountsBalanceAsOfColumn_ === 'function') {
+      var names = typeof getSheetNames_ === 'function' ? getSheetNames_() : null;
+      var sheetName = names && names.ACCOUNTS ? names.ACCOUNTS : 'SYS - Accounts';
+      var accountsSheet = ss.getSheetByName(sheetName);
+      if (accountsSheet) ensureAccountsBalanceAsOfColumn_(accountsSheet);
+    }
+  } catch (_asOfMaintenanceErr) { /* non-blocking maintenance */ }
   return { ok: true };
 }
 

@@ -561,7 +561,9 @@
               <div>
                 <label>Current balance</label>
                 <div id="bank_edit_current_balance" class="muted" style="padding:8px 10px;background:#f1f5f9;border-radius:6px;">—</div>
-                <div class="muted" style="margin-top:4px;font-size:12px;">Update dated balances from the Update tab.</div>
+                <label>Balance as of</label>
+                <div id="bank_edit_balance_as_of" class="muted" style="padding:8px 10px;background:#f1f5f9;border-radius:6px;">—</div>
+                <div class="muted" style="margin-top:4px;font-size:12px;">Update dated balances from the Update tab. That save records a new as-of date for this account only.</div>
                 <label>Available now</label>
                 <input type="text" id="bank_edit_available" inputmode="decimal" onfocus="currencyFocus('bank_edit_available', true)" onblur="currencyBlur('bank_edit_available')">
                 <label>Minimum buffer</label>
@@ -2870,10 +2872,27 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
               </p>
               <div class="debt-payoff-overall-head">Hypothetical share-sale proceeds</div>
               <p class="muted">
-                Hypothetical and unsaved. Default is $0.00. Reported share sales are
-                not treated as settled, net of taxes, or available. Enter a net
-                amount and the month it becomes available only if you want this
-                timeline to include it.
+                Hypothetical and unsaved. Default is $0.00 additional. Each
+                account’s balance stays paired with that account’s Balance As Of
+                date. When those dates differ, starting eligible cash is a
+                mixed-date sum, not a single household snapshot from the earliest
+                date. Classified stock-sale Cash Flow rows are counted once only
+                when you confirm they are not already in those balances.
+                Advancing the forecast month does not include or drop them.
+                Inclusion is not inferred from the earliest date or from another
+                account’s refresh. Reported sales are not treated as settled, net
+                of taxes, or available until those classified rows and this
+                overlay say so. Enter a net amount and the month it becomes
+                available only for additional hypothetical proceeds that are not
+                already in Cash Flow. Holdback is explicit; leave it blank if
+                unknown — tax withholding is not estimated.                 For the 2026-11-05 snapshot, November stock-sale Cash Flow rows
+                are treated as landing after those saved balances. Later
+                snapshots still need a per-sale confirmation. Each confirmation
+                applies only to the account balances it was checked against. If a
+                relevant account balance later changes, that answer returns to
+                unknown until you mark it again. If a refreshed balance may
+                already include the proceeds and inclusion is not confirmed, the
+                lump-sum result is withheld.
               </p>
               <div class="debt-payoff-strategy-controls">
                 <label for="debt_payoff_scenario_share_sale_proceeds">Net proceeds (hypothetical)</label>
@@ -2898,6 +2917,12 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                 <label for="debt_payoff_scenario_share_sale_year">Year</label>
                 <input id="debt_payoff_scenario_share_sale_year" type="text" inputmode="numeric"
                        maxlength="4" placeholder="YYYY">
+                <label for="debt_payoff_scenario_holdback">Holdback (explicit)</label>
+                <input id="debt_payoff_scenario_holdback" type="text" inputmode="decimal"
+                       placeholder="Leave blank if unknown">
+              </div>
+              <div id="debt_payoff_scenario_inflow_reflections" class="debt-payoff-inflow-reflections">
+                <p class="muted">Already reflected in opening eligible cash? Mark each classified stock sale against the current account balances. A later balance refresh sets this back to unknown. Unknown withholds the lump-sum result that depends on it. Inclusion is not inferred from the earliest date or from another account’s refresh. A newer Balance As Of on some other account does not absorb the sale.</p>
               </div>
               <label class="debt-payoff-scenario-pause">
                 <input id="debt_payoff_scenario_pause_policy_floors" type="checkbox">

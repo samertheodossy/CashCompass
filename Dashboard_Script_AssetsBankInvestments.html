@@ -1183,6 +1183,10 @@ function openBankEditForm_(accountName) {
     row.currentBalance === '' || row.currentBalance === null ||
       typeof row.currentBalance === 'undefined'
       ? '—' : fmtCurrency(Number(row.currentBalance));
+  var asOfEl = document.getElementById('bank_edit_balance_as_of');
+  if (asOfEl) {
+    asOfEl.textContent = String(row.balanceAsOf || '').trim() || '—';
+  }
   document.getElementById('bank_edit_import_note').style.display =
     row.externalLinked ? '' : 'none';
   document.getElementById('bank_edit_title').textContent =

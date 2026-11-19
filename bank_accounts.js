@@ -24,6 +24,31 @@ const SYS_ACCOUNTS_CANONICAL_WIDTHS_ = {
   'Priority': 245
 };
 
+const SYS_ACCOUNTS_BALANCE_AS_OF_HEADER_ = 'Balance As Of';
+const SYS_ACCOUNTS_BALANCE_AS_OF_INITIAL_ISO_ = '2026-11-05';
+const SYS_ACCOUNTS_SUPPLIED_NOVEMBER5_BALANCE_AS_OF_NAMES_ = [
+  'Ally - Samer Savings Account - 0393',
+  'Ally - Lutfi Savings Account - 1219',
+  'Ally - Laith Savings Account - 1367',
+  'Cash Maximizer - 8747',
+  'Checking - 1198',
+  'Laith Checking Account - 8174',
+  'Munira Account - 1528',
+  'Rental Account - 0521',
+  'Savings - 2167',
+  'Laith Account - 3337',
+  'Laith Saving Account - 8187',
+  'Lutfi Account - 0448',
+  'Pay Your Self Savings - 3117',
+  'Payoff Account - 8588',
+  'BofA - Luma Adv Tiered Interest Chkg - 6198',
+  'Lutfi Checking - 3425',
+  'Lutfi Savings - 3991',
+  'Lutfi Savings To Pay Back - 8371',
+  'Lutfi Bofa Visa Signature - 8830',
+  'Laith Pay YourSelf Savings - 2466'
+];
+
 /**
  * Canonical SYS - Accounts header row (exact text + order). Single source of
  * truth shared by ensureSysAccountsSheet_ (first-create), the header-map readers
@@ -38,7 +63,8 @@ const SYS_ACCOUNTS_REQUIRED_HEADERS_ = [
   'Type',
   'Use Policy',
   'Priority',
-  'Active'
+  'Active',
+  SYS_ACCOUNTS_BALANCE_AS_OF_HEADER_
 ];
 
 /**
@@ -64,9 +90,9 @@ const BANK_ACCOUNTS_REQUIRED_HEADERS_ = ['Account Name'];
  *   - Canonical headers (same labels getAccountsHeaderMap_ /
  *     planner_core.js normalizeAccounts_ look up by string): Account
  *     Name, Current Balance, Available Now, Min Buffer, Type, Use
- *     Policy, Priority, Active. Writing all eight on create means the
- *     bank-account add path doesn't have to self-heal anything on the
- *     first save.
+ *     Policy, Priority, Active, Balance As Of. Writing all nine on create
+ *     means the bank-account add path doesn't have to self-heal anything
+ *     on the first save.
  *   - Benign race-safe: if another caller wins the insertSheet race,
  *     we treat the now-existing sheet as a no-op.
  *
@@ -112,6 +138,10 @@ function ensureSysAccountsSheet_(optionalSs) {
       // Current Balance (B), Available Now (C), Min Buffer (D) are currency.
       // Priority (G) stays a plain integer.
       sheet.getRange(2, 2, maxRowsFmt - 1, 3).setNumberFormat(currencyFormat);
+      var asOfCol = headers.indexOf(SYS_ACCOUNTS_BALANCE_AS_OF_HEADER_) + 1;
+      if (asOfCol > 0) {
+        sheet.getRange(2, asOfCol, maxRowsFmt - 1, 1).setNumberFormat('yyyy-mm-dd');
+      }
     }
   } catch (_fmt) { /* cosmetic only */ }
 
@@ -130,7 +160,8 @@ function ensureSysAccountsSheet_(optionalSs) {
     'Type': 150,
     'Use Policy': 170,
     'Priority': 120,
-    'Active': 110
+    'Active': 110,
+    'Balance As Of': 140
   });
 
   // Validator-approved AdoptGolden widths for the seven SYS - Accounts columns
@@ -173,10 +204,12 @@ function syncAllAccountsFromLatestCurrentYear_(optionalSs, optionalBankDisplay) 
   }
 
   const targetHeaderMap = getAccountsHeaderMap_(targetSheet, targetDisplay);
+  const latestAsOf = {};
   const latestMap = getLatestBankAccountValuesForYear_(
     sourceSheet,
     getCurrentYear_(),
-    optionalBankDisplay
+    optionalBankDisplay,
+    latestAsOf
   );
 
   for (let r = 1; r < targetDisplay.length; r++) {
@@ -197,6 +230,7 @@ function syncAllAccountsFromLatestCurrentYear_(optionalSs, optionalBankDisplay) 
       newValue,
       1
     );
+    stampSysAccountBalanceAsOf_(targetSheet, name, latestAsOf[name]);
   }
 
   // Same-call read context for callers that immediately update another field
@@ -210,7 +244,7 @@ function syncAllAccountsFromLatestCurrentYear_(optionalSs, optionalBankDisplay) 
   };
 }
 
-function getLatestBankAccountValuesForYear_(sheet, year, optionalDisplay) {
+function getLatestBankAccountValuesForYear_(sheet, year, optionalDisplay, optionalAsOfOut) {
   // Performance: same fix as getLatestInvestmentValuesForYear_. Read
   // the year block in 2 batched calls (display once, values once) and
   // resolve the latest non-empty month entirely in memory instead of
@@ -240,6 +274,7 @@ function getLatestBankAccountValuesForYear_(sheet, year, optionalDisplay) {
 
     let bestColIdx = -1;
     let bestTime = -1;
+    let bestDate = null;
 
     for (let c = block.firstMonthCol - 1; c < lastCol && c < headerLen; c++) {
       const parsed = parseMonthHeader_(headerRow[c]);
@@ -253,11 +288,17 @@ function getLatestBankAccountValuesForYear_(sheet, year, optionalDisplay) {
       if (time > bestTime) {
         bestTime = time;
         bestColIdx = c;
+        bestDate = parsed;
       }
     }
 
     if (bestColIdx !== -1) {
       result[name] = round2_(toNumber_(values[i][bestColIdx]));
+      if (optionalAsOfOut && bestDate) {
+        optionalAsOfOut[name] = typeof formatBalanceAsOfIso_ === 'function'
+          ? formatBalanceAsOfIso_(bestDate)
+          : '';
+      }
     }
   }
 
@@ -333,11 +374,22 @@ function getBankAccountUiData() {
     const ss = getUserSpreadsheet_();
     const accountsSheet = ss.getSheetByName(getSheetNames_().ACCOUNTS);
     if (accountsSheet) {
-      const accountsRange = accountsSheet.getDataRange();
-      const accountsDisplay = accountsRange.getDisplayValues();
-      const accountsValues = accountsRange.getValues();
+      var accountsRange = accountsSheet.getDataRange();
+      var accountsDisplay = accountsRange.getDisplayValues();
+      var accountsValues = accountsRange.getValues();
       if (accountsDisplay.length >= 1) {
-        const headers = accountsDisplay[0] || [];
+        var headers = accountsDisplay[0] || [];
+        if (headers.indexOf(SYS_ACCOUNTS_BALANCE_AS_OF_HEADER_) === -1) {
+          try {
+            ensureAccountsBalanceAsOfColumn_(accountsSheet);
+            accountsRange = accountsSheet.getDataRange();
+            accountsDisplay = accountsRange.getDisplayValues();
+            accountsValues = accountsRange.getValues();
+            headers = accountsDisplay[0] || [];
+          } catch (_asOfEnsureErr) {
+            Logger.log('getBankAccountUiData Balance As Of ensure: ' + _asOfEnsureErr);
+          }
+        }
         const typeIdx = headers.indexOf('Type');
         const policyIdx = headers.indexOf('Use Policy');
         const nameIdx = headers.indexOf('Account Name');
@@ -347,6 +399,7 @@ function getBankAccountUiData() {
         const bufferIdx = headers.indexOf('Min Buffer');
         const priorityIdx = headers.indexOf('Priority');
         const externalIdIdx = headers.indexOf('External Account Id');
+        const balanceAsOfIdx = headers.indexOf(SYS_ACCOUNTS_BALANCE_AS_OF_HEADER_);
 
         const typeSet = Object.create(null);
         const policySet = Object.create(null);
@@ -386,6 +439,14 @@ function getBankAccountUiData() {
                 usePolicy: policyIdx === -1 ? '' : String(row[policyIdx] || '').trim(),
                 priority: priorityIdx === -1 ? '' : String(row[priorityIdx] || '').trim(),
                 externalLinked: externalIdIdx !== -1 && !!String(row[externalIdIdx] || '').trim(),
+                balanceAsOf: balanceAsOfIdx === -1
+                  ? ''
+                  : (typeof formatBalanceAsOfIso_ === 'function'
+                    ? formatBalanceAsOfIso_(accountsValues[r][balanceAsOfIdx] != null &&
+                      accountsValues[r][balanceAsOfIdx] !== ''
+                      ? accountsValues[r][balanceAsOfIdx]
+                      : row[balanceAsOfIdx])
+                    : String(row[balanceAsOfIdx] || '').trim()),
                 inactive: rowInactive
               };
             }
@@ -428,6 +489,7 @@ function getBankAccountUiData() {
       usePolicy: '',
       priority: '',
       externalLinked: false,
+      balanceAsOf: '',
       inactive: false
     };
   });
@@ -672,6 +734,7 @@ function findAccountsTemplateRow_(sheet, headerMap) {
 }
 
 function appendAccountsRowForNewBank_(sheet, accountName, typeStr, policyStr, priorityNum, currentBalance) {
+  ensureAccountsBalanceAsOfColumn_(sheet);
   const headerMap = ensureAccountsActiveColumn_(sheet);
   const lastCol = Math.max(sheet.getLastColumn(), headerMap.nameCol, headerMap.activeCol);
 
@@ -791,7 +854,8 @@ function addBankAccountFromDashboard(payload) {
   //     expects a few lines below.
   //   ensureSysAccountsSheet_()
   //     Canonical SYS - Accounts (Account Name, Current Balance,
-  //     Available Now, Min Buffer, Type, Use Policy, Priority, Active).
+  //     Available Now, Min Buffer, Type, Use Policy, Priority, Active,
+  //     Balance As Of).
   //     Returns the Sheet object directly so we do not re-read via
   //     getSheet_() on a potentially-stale Spreadsheet handle — some
   //     Apps Script executions leave `ss.getSheetByName(...)` returning
@@ -897,6 +961,11 @@ function addBankAccountFromDashboard(payload) {
       priorityNum,
       opening.unknown ? null : opening.amount
     );
+    if (!opening.unknown) {
+      try {
+        stampSysAccountBalanceAsOf_(accountsSheet, accountName, openingDate);
+      } catch (_newAsOfErr) {}
+    }
   } catch (e2) {
     bankSheet.deleteRow(bankRowNum);
     throw new Error('Could not add the account (rolled back the bank sheet row): ' + (e2.message || e2));
@@ -1298,6 +1367,20 @@ function updateBankAccountValueByDate_(payload, trustedProvenance) {
 
     failedStage = 'sync_accounts';
     const accountsContext = syncAllAccountsFromLatestCurrentYear_(ss, bankDisplay);
+    try {
+      var asOfIso = Utilities.formatDate(
+        stripTime_(balanceDate),
+        Session.getScriptTimeZone(),
+        'yyyy-MM-dd'
+      );
+      stampSysAccountBalanceAsOf_(
+        accountsContext && accountsContext.sheet,
+        accountName,
+        asOfIso
+      );
+    } catch (_asOfStampErr) {
+      Logger.log('updateBankAccountValueByDate Balance As Of stamp: ' + _asOfStampErr);
+    }
     markPerformanceTrace_(performanceTrace, 'sync_accounts');
 
     failedStage = 'touch_source';
@@ -2058,6 +2141,7 @@ function getAccountsHeaderMap_(sheet, optionalDisplay) {
   const policyColZero = headers.indexOf('Use Policy');
   const priorityColZero = headers.indexOf('Priority');
   const activeColZero = headers.indexOf('Active');
+  const balanceAsOfColZero = headers.indexOf(SYS_ACCOUNTS_BALANCE_AS_OF_HEADER_);
 
   if (nameColZero === -1) {
     throw new Error('Accounts sheet must contain Account Name.');
@@ -2072,6 +2156,7 @@ function getAccountsHeaderMap_(sheet, optionalDisplay) {
     policyColZero: policyColZero,
     priorityColZero: priorityColZero,
     activeColZero: activeColZero,
+    balanceAsOfColZero: balanceAsOfColZero,
     nameCol: nameColZero + 1,
     balanceCol: balanceColZero === -1 ? -1 : balanceColZero + 1,
     availableCol: availableColZero === -1 ? -1 : availableColZero + 1,
@@ -2079,7 +2164,8 @@ function getAccountsHeaderMap_(sheet, optionalDisplay) {
     typeCol: typeColZero === -1 ? -1 : typeColZero + 1,
     policyCol: policyColZero === -1 ? -1 : policyColZero + 1,
     priorityCol: priorityColZero === -1 ? -1 : priorityColZero + 1,
-    activeCol: activeColZero === -1 ? -1 : activeColZero + 1
+    activeCol: activeColZero === -1 ? -1 : activeColZero + 1,
+    balanceAsOfCol: balanceAsOfColZero === -1 ? -1 : balanceAsOfColZero + 1
   };
 }
 
@@ -2107,6 +2193,231 @@ function ensureAccountsActiveColumn_(sheet) {
 
   sheet.getRange(1, targetCol).setValue('Active');
   return getAccountsHeaderMap_(sheet);
+}
+
+/**
+ * Append Balance As Of at the end of SYS - Accounts if missing. On that
+ * first add only, named account rows with a blank as-of receive
+ * 2026-11-05. Existing dates, nameless rows, and balances are left
+ * unchanged. Later balance updates stamp that same account only.
+ */
+function ensureAccountsBalanceAsOfColumn_(sheet) {
+  var headerMap = getAccountsHeaderMap_(sheet);
+  if (headerMap.balanceAsOfColZero !== -1) return headerMap;
+
+  var lastCol = Math.max(sheet.getLastColumn(), 1);
+  var headerRowValues = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0] || [];
+  var targetCol = lastCol + 1;
+  var c;
+  for (c = headerRowValues.length; c >= 1; c--) {
+    if (String(headerRowValues[c - 1] || '').trim() === '') {
+      targetCol = c;
+    } else {
+      break;
+    }
+  }
+  sheet.getRange(1, targetCol).setValue(SYS_ACCOUNTS_BALANCE_AS_OF_HEADER_);
+  try {
+    var lastRow = Math.max(sheet.getLastRow(), 1);
+    if (lastRow > 1) {
+      sheet.getRange(2, targetCol, lastRow - 1, 1).setNumberFormat('yyyy-mm-dd');
+    }
+  } catch (_fmt) { /* cosmetic only */ }
+  headerMap = getAccountsHeaderMap_(sheet);
+  fillBlankNamedBalanceAsOf_(
+    sheet, headerMap, SYS_ACCOUNTS_BALANCE_AS_OF_INITIAL_ISO_);
+  return headerMap;
+}
+
+function fillBlankNamedBalanceAsOf_(sheet, headerMap, iso) {
+  if (!sheet || !headerMap || headerMap.balanceAsOfCol === -1) return;
+  var dateIso = String(iso || '').trim();
+  if (!dateIso) return;
+  var lastRow = Math.max(sheet.getLastRow(), 1);
+  if (lastRow < 2) return;
+  var lastCol = Math.max(sheet.getLastColumn(), headerMap.balanceAsOfCol);
+  var display = sheet.getRange(1, 1, lastRow, lastCol).getDisplayValues();
+  var values = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  var colValues = [];
+  var changed = false;
+  var r;
+  for (r = 1; r < display.length; r++) {
+    var name = String(display[r][headerMap.nameColZero] || '').trim();
+    var existing = values[r] ? values[r][headerMap.balanceAsOfColZero] : '';
+    var existingIso = typeof formatBalanceAsOfIso_ === 'function'
+      ? formatBalanceAsOfIso_(existing)
+      : String(existing || '').trim();
+    if (name && !existingIso) {
+      colValues.push([dateIso]);
+      changed = true;
+    } else {
+      colValues.push([existing]);
+    }
+  }
+  if (changed) {
+    sheet.getRange(2, headerMap.balanceAsOfCol, colValues.length, 1)
+      .setValues(colValues);
+  }
+}
+
+function stampSysAccountBalanceAsOf_(sheet, accountName, asOfValue) {
+  var target = String(accountName || '').trim();
+  if (!target || !sheet) return;
+  var headerMap = ensureAccountsBalanceAsOfColumn_(sheet);
+  if (headerMap.balanceAsOfCol === -1) return;
+  var iso = typeof formatBalanceAsOfIso_ === 'function'
+    ? formatBalanceAsOfIso_(asOfValue)
+    : String(asOfValue || '').trim();
+  if (!iso) return;
+  var display = sheet.getDataRange().getDisplayValues();
+  var r;
+  for (r = 1; r < display.length; r++) {
+    if (String(display[r][headerMap.nameColZero] || '').trim() === target) {
+      sheet.getRange(r + 1, headerMap.balanceAsOfCol).setValue(iso);
+      return;
+    }
+  }
+}
+
+/**
+ * Owner-invoked setup migration. Writes 2026-11-05 only onto the named
+ * account rows from the supplied November 5 snapshot when those cells are
+ * blank. Does not run on page load, does not fill other workbooks’ extra
+ * rows, and does not change balances.
+ */
+function applySuppliedNovember5BalanceAsOfSnapshot_(optionalSs) {
+  var ss = optionalSs || getUserSpreadsheet_();
+  var names = typeof getSheetNames_ === 'function' ? getSheetNames_() : null;
+  var sheetName = names && names.ACCOUNTS ? names.ACCOUNTS : 'SYS - Accounts';
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    return {
+      ok: false,
+      updated: [],
+      skipped: [],
+      missing: [],
+      reason: 'SYS - Accounts is missing.'
+    };
+  }
+  var headerMap = ensureAccountsBalanceAsOfColumn_(sheet);
+  var allow = Object.create(null);
+  SYS_ACCOUNTS_SUPPLIED_NOVEMBER5_BALANCE_AS_OF_NAMES_.forEach(function(name) {
+    allow[String(name)] = true;
+  });
+  var range = sheet.getDataRange();
+  var display = range.getDisplayValues();
+  var values = range.getValues();
+  var headers = display[0] || [];
+  var asOfIdx = headerMap.balanceAsOfColZero;
+  var updated = [];
+  var skipped = [];
+  var seen = Object.create(null);
+  var r;
+  for (r = 1; r < display.length; r++) {
+    var name = String(display[r][headerMap.nameColZero] || '').trim();
+    if (!name || !allow[name]) continue;
+    seen[name] = true;
+    var existing = values[r] ? values[r][asOfIdx] : '';
+    var iso = typeof formatBalanceAsOfIso_ === 'function'
+      ? formatBalanceAsOfIso_(existing)
+      : String(existing || '').trim();
+    if (iso) {
+      skipped.push(name);
+      continue;
+    }
+    sheet.getRange(r + 1, headerMap.balanceAsOfCol).setValue(
+      SYS_ACCOUNTS_BALANCE_AS_OF_INITIAL_ISO_);
+    updated.push(name);
+  }
+  var missing = SYS_ACCOUNTS_SUPPLIED_NOVEMBER5_BALANCE_AS_OF_NAMES_.filter(function(name) {
+    return !seen[name];
+  });
+  return {
+    ok: true,
+    spreadsheetId: typeof ss.getId === 'function' ? ss.getId() : '',
+    sheetName: sheet.getName(),
+    headers: headers.slice(),
+    balanceAsOfHeader: SYS_ACCOUNTS_BALANCE_AS_OF_HEADER_,
+    balanceAsOfColumn: headerMap.balanceAsOfCol,
+    headerAfter: asOfIdx > 0 ? String(headers[asOfIdx - 1] || '') : '',
+    updated: updated,
+    skipped: skipped,
+    missing: missing,
+    unchangedBalances: true,
+    date: SYS_ACCOUNTS_BALANCE_AS_OF_INITIAL_ISO_
+  };
+}
+
+/**
+ * Editor / clasp-run entry for the one-time November 5 Balance As Of
+ * snapshot. Owner/admin only. Not called from Bank Accounts, Debt
+ * Overview, or any page load.
+ */
+function runSuppliedNovember5BalanceAsOfSnapshot() {
+  if (typeof assertAdmin_ === 'function') {
+    assertAdmin_();
+  } else {
+    throw new Error('Admin access required.');
+  }
+  var result = applySuppliedNovember5BalanceAsOfSnapshot_();
+  try { Logger.log(JSON.stringify(result)); } catch (_log) {}
+  return result;
+}
+
+/**
+ * Read-only owner inspection of SYS - Accounts Balance As Of placement
+ * and per-row dates. Does not write.
+ */
+function inspectSysAccountsBalanceAsOf() {
+  if (typeof assertAdmin_ === 'function') {
+    assertAdmin_();
+  } else {
+    throw new Error('Admin access required.');
+  }
+  var ss = getUserSpreadsheet_();
+  var names = typeof getSheetNames_ === 'function' ? getSheetNames_() : null;
+  var sheetName = names && names.ACCOUNTS ? names.ACCOUNTS : 'SYS - Accounts';
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    return {
+      ok: false,
+      reason: 'SYS - Accounts is missing.'
+    };
+  }
+  var display = sheet.getDataRange().getDisplayValues();
+  var values = sheet.getDataRange().getValues();
+  var headers = display[0] || [];
+  var nameIdx = headers.indexOf('Account Name');
+  var balanceIdx = headers.indexOf('Current Balance');
+  var asOfIdx = headers.indexOf(SYS_ACCOUNTS_BALANCE_AS_OF_HEADER_);
+  var externalIdx = headers.indexOf('External Account Id');
+  var rows = [];
+  var r;
+  for (r = 1; r < display.length; r++) {
+    var name = String(display[r][nameIdx] || '').trim();
+    if (!name) continue;
+    var rawBalance = balanceIdx === -1 ? '' : (values[r] ? values[r][balanceIdx] : '');
+    var rawAsOf = asOfIdx === -1 ? '' : (values[r] ? values[r][asOfIdx] : '');
+    rows.push({
+      name: name,
+      currentBalance: rawBalance === '' || rawBalance == null
+        ? ''
+        : round2_(toNumber_(rawBalance)),
+      balanceAsOf: typeof formatBalanceAsOfIso_ === 'function'
+        ? formatBalanceAsOfIso_(rawAsOf)
+        : String(rawAsOf || '').trim()
+    });
+  }
+  return {
+    ok: true,
+    spreadsheetId: typeof ss.getId === 'function' ? ss.getId() : '',
+    sheetName: sheet.getName(),
+    headers: headers.slice(),
+    externalAccountIdColumn: externalIdx + 1,
+    balanceAsOfColumn: asOfIdx + 1,
+    headerAfter: asOfIdx > 0 ? String(headers[asOfIdx - 1] || '') : '',
+    rows: rows
+  };
 }
 
 /**

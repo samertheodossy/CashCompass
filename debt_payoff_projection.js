@@ -541,6 +541,7 @@ var DEBT_PAYOFF_ONE_TIME_HORIZON_LABEL_ =
 var DEBT_PAYOFF_CASH_FLOW_TIMELINE_HORIZON_MONTHS_ = 36;
 var DEBT_PAYOFF_CASH_FLOW_TIMELINE_HORIZON_LABEL_ =
   '36-month hypothetical cash-flow and reserve timeline using This Week’s canonical reserve floor';
+var DEBT_PAYOFF_CONFIRMED_OPENING_SNAPSHOT_ISO_ = '2026-11-05';
 var DEBT_PAYOFF_BREAK_EVEN_CATEGORIES_ = [
   { key: 'recurringIncomeMonthly', label: 'Recurring income', kind: 'income' },
   { key: 'recurringBillsMonthly', label: 'Required bills', kind: 'commitment' },
@@ -598,7 +599,12 @@ function getDebtPayoffStrategyComparison(payload) {
     debts = normalizeDebts_(debtRows, aliasMap);
     var accountRows = [];
     try {
-      if (ss.getSheetByName(sheetNames.ACCOUNTS)) {
+      var accountsSheet = ss.getSheetByName(sheetNames.ACCOUNTS);
+      if (accountsSheet) {
+        if (typeof ensureAccountsBalanceAsOfColumn_ === 'function') {
+          try { ensureAccountsBalanceAsOfColumn_(accountsSheet); }
+          catch (_asOfEnsureErr) { /* comparison can still render without dates */ }
+        }
         accountRows = readSheetAsObjects_(ss, 'ACCOUNTS');
       }
     } catch (e) {
@@ -635,7 +641,14 @@ function getDebtPayoffStrategyComparison(payload) {
     proceedsAmount: scenarioPlan.shareSaleProceeds,
     proceedsMonth: scenarioPlan.shareSaleMonth,
     proceedsYear: scenarioPlan.shareSaleYear,
-    proceedsTimingUnknown: scenarioPlan.proceedsTimingUnknown === true
+    proceedsTimingUnknown: scenarioPlan.proceedsTimingUnknown === true,
+    classifiedInflows: extraInput && extraInput.classifiedInflows,
+    holdbackAmount: scenarioPlan.holdbackAmount,
+    holdbackKnown: scenarioPlan.holdbackKnown === true,
+    accountBalanceAsOf: extraInput && extraInput.accountBalanceAsOf,
+    openingSnapshotDate: extraInput && extraInput.openingSnapshotDate,
+    openingInflowsAlreadyIncluded: scenarioPlan.openingInflowsAlreadyIncluded,
+    classifiedInflowReflections: scenarioPlan.classifiedInflowReflections
   });
   return comparison;
 }
@@ -693,6 +706,13 @@ function parseDebtPayoffHypotheticalCashFlowScenario_(payload) {
     shareSaleMonth: '',
     shareSaleYear: '',
     proceedsTimingUnknown: false,
+    holdbackAmount: null,
+    holdbackKnown: false,
+    openingSnapshotMonth: '',
+    openingSnapshotYear: '',
+    openingSnapshotMonthKey: '',
+    openingInflowsAlreadyIncluded: null,
+    classifiedInflowReflections: [],
     pausePolicyFloors: false,
     error: ''
   };
@@ -710,6 +730,13 @@ function parseDebtPayoffHypotheticalCashFlowScenario_(payload) {
       shareSaleMonth: '',
       shareSaleYear: '',
       proceedsTimingUnknown: false,
+      holdbackAmount: null,
+      holdbackKnown: false,
+      openingSnapshotMonth: '',
+      openingSnapshotYear: '',
+      openingSnapshotMonthKey: '',
+      openingInflowsAlreadyIncluded: null,
+      classifiedInflowReflections: [],
       pausePolicyFloors: false,
       error: DEBT_PAYOFF_HYPOTHETICAL_CASH_FLOW_INVALID_
     };
@@ -757,13 +784,26 @@ function parseDebtPayoffHypotheticalCashFlowScenario_(payload) {
       shareSaleYear = String(yearParsed.year);
     }
   }
+  var holdbackKnown = false;
+  var holdbackAmount = null;
+  var holdbackRaw = payload.holdbackAmount;
+  var holdbackText = holdbackRaw == null ? '' : String(holdbackRaw).replace(/\u00A0/g, ' ').trim();
+  if (payload.holdbackKnown === true || holdbackText !== '') {
+    var holdback = parseDebtPayoffHypotheticalCashFlowMoney_(
+      holdbackRaw, 'holdback');
+    if (!holdback.ok) return holdback;
+    holdbackKnown = true;
+    holdbackAmount = holdback.amount;
+  }
+  var openingSnapshot = parseDebtPayoffOpeningSnapshotCutoff_(payload);
+  if (!openingSnapshot.ok) return openingSnapshot;
   var pause = payload.pausePolicyFloors === true;
   var structural = income.amount > 0.005 || reduction.amount > 0.005 ||
     increase.amount > 0.005 || pause;
   var proceedsApplied = proceeds.amount > 0.005;
   return {
     ok: true,
-    applied: structural || bonus.amount > 0.005 || proceedsApplied,
+    applied: structural || bonus.amount > 0.005 || proceedsApplied || holdbackKnown,
     useForComparison: structural,
     recurringIncomeIncrease: income.amount,
     commitmentReduction: reduction.amount,
@@ -773,9 +813,289 @@ function parseDebtPayoffHypotheticalCashFlowScenario_(payload) {
     shareSaleMonth: shareSaleMonth,
     shareSaleYear: shareSaleYear,
     proceedsTimingUnknown: proceedsTimingUnknown,
+    holdbackAmount: holdbackAmount,
+    holdbackKnown: holdbackKnown,
+    openingSnapshotMonth: openingSnapshot.openingSnapshotMonth,
+    openingSnapshotYear: openingSnapshot.openingSnapshotYear,
+    openingSnapshotMonthKey: openingSnapshot.openingSnapshotMonthKey,
+    openingInflowsAlreadyIncluded: openingSnapshot.openingInflowsAlreadyIncluded,
+    classifiedInflowReflections: openingSnapshot.classifiedInflowReflections || [],
     pausePolicyFloors: pause,
     error: ''
   };
+}
+
+/**
+ * Opening snapshot dates come from account Balance As Of values, not from
+ * the forecast month. This overlay only records whether each classified
+ * inflow is already reflected in that opening eligible cash.
+ */
+function parseDebtPayoffOpeningSnapshotCutoff_(payload) {
+  payload = payload || {};
+  var included = parseDebtPayoffOpeningInflowsAlreadyIncluded_(
+    payload.openingInflowsAlreadyIncluded);
+  if (!included.ok) return included;
+  var reflections = parseDebtPayoffClassifiedInflowReflections_(
+    payload.classifiedInflowReflections);
+  if (!reflections.ok) return reflections;
+  return {
+    ok: true,
+    openingSnapshotMonth: '',
+    openingSnapshotYear: '',
+    openingSnapshotMonthKey: '',
+    openingInflowsAlreadyIncluded: included.included,
+    classifiedInflowReflections: reflections.rows
+  };
+}
+
+function parseDebtPayoffClassifiedInflowReflections_(raw) {
+  if (raw == null || raw === '') return { ok: true, rows: [] };
+  if (!Array.isArray(raw)) {
+    return {
+      ok: false,
+      amount: null,
+      error: 'Mark each classified stock-sale inflow as already reflected in opening eligible cash, or leave it unknown. Inclusion is not inferred from a later account update.'
+    };
+  }
+  var rows = [];
+  var i;
+  for (i = 0; i < raw.length; i++) {
+    var item = raw[i] || {};
+    var parsed = parseDebtPayoffOpeningInflowsAlreadyIncluded_(item.alreadyReflected);
+    if (!parsed.ok) return parsed;
+    var source = String(item.source || '').trim();
+    var monthKey = String(item.monthKey || '').trim();
+    if (!source && parsed.included == null) continue;
+    rows.push({
+      source: source,
+      monthKey: monthKey,
+      alreadyReflected: parsed.included,
+      accountSnapshotKey: String(item.accountSnapshotKey || '').trim()
+    });
+  }
+  return { ok: true, rows: rows };
+}
+
+function debtPayoffAccountSnapshotKey_(accounts) {
+  var rows = [];
+  (accounts || []).forEach(function(account) {
+    if (!account || !String(account.name || '').trim()) return;
+    var iso = typeof formatBalanceAsOfIso_ === 'function'
+      ? formatBalanceAsOfIso_(account.balanceAsOf)
+      : String(account.balanceAsOf || '').trim();
+    var balance = account.currentBalance;
+    var balanceText = (balance == null || balance === '')
+      ? ''
+      : String(round2_(toNumber_(balance)));
+    rows.push(String(account.name).trim() + '|' + balanceText + '|' + (iso || ''));
+  });
+  rows.sort();
+  return rows.join(';');
+}
+
+function parseDebtPayoffOpeningInflowsAlreadyIncluded_(value) {
+  if (value === true) return { ok: true, included: true };
+  if (value === false) return { ok: true, included: false };
+  var text = String(value == null ? '' : value).replace(/\u00A0/g, ' ').trim().toLowerCase();
+  if (!text || text === 'unknown') return { ok: true, included: null };
+  if (text === 'yes' || text === 'true' || text === 'included') {
+    return { ok: true, included: true };
+  }
+  if (text === 'no' || text === 'false' || text === 'not included') {
+    return { ok: true, included: false };
+  }
+  return {
+    ok: false,
+    amount: null,
+    error: 'Mark whether classified stock-sale proceeds are already reflected in opening eligible cash, or leave that control unknown. Inclusion is not inferred from a later account update or the forecast month.'
+  };
+}
+
+function debtPayoffOpeningSnapshotFromAccounts_(accounts) {
+  accounts = accounts || [];
+  var rows = [];
+  var knownDates = [];
+  var missing = false;
+  var i;
+  for (i = 0; i < accounts.length; i++) {
+    var account = accounts[i];
+    if (!account || !String(account.name || '').trim()) continue;
+    var iso = typeof formatBalanceAsOfIso_ === 'function'
+      ? formatBalanceAsOfIso_(account.balanceAsOf)
+      : String(account.balanceAsOf || '').trim();
+    if (!iso) missing = true;
+    else knownDates.push(iso);
+    var currentBalance = account.currentBalance;
+    var cashRow = debtPayoffAccountEligibleCashRow_(account);
+    rows.push({
+      name: cashRow.name,
+      currentBalance: currentBalance == null || currentBalance === ''
+        ? null
+        : cashRow.currentBalance,
+      minBuffer: cashRow.minBuffer,
+      usePolicy: cashRow.usePolicy,
+      usableAfterBuffer: cashRow.usableAfterBuffer,
+      includedInEligibleCash: cashRow.includedInEligibleCash,
+      excludedReason: cashRow.excludedReason,
+      balanceAsOf: iso || ''
+    });
+  }
+  if (!knownDates.length) {
+    return {
+      known: false,
+      mixed: false,
+      date: '',
+      monthKey: '',
+      earliestDate: '',
+      latestDate: '',
+      incomplete: missing || !rows.length,
+      source: 'unknown — account Balance As Of dates are missing',
+      accounts: rows
+    };
+  }
+  var unique = {};
+  knownDates.forEach(function(iso) { unique[iso] = true; });
+  var uniqueDates = Object.keys(unique).sort();
+  var mixed = uniqueDates.length > 1;
+  var earliest = uniqueDates[0];
+  var latest = uniqueDates[uniqueDates.length - 1];
+  var source = mixed
+    ? 'mixed-date household snapshot — each account’s Current Balance is as of its own Balance As Of date'
+    : (missing
+      ? ('account Balance As Of incomplete (known ' + earliest + ')')
+      : ('account Balance As Of (' + earliest + ')'));
+  return {
+    known: !missing && !mixed,
+    mixed: mixed,
+    date: mixed ? '' : earliest,
+    monthKey: mixed ? '' : earliest.slice(0, 7),
+    earliestDate: earliest,
+    latestDate: latest,
+    incomplete: missing,
+    source: source,
+    accounts: rows
+  };
+}
+
+function debtPayoffNormalizeOpeningSnapshot_(snapshot) {
+  if (snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)) {
+    return snapshot;
+  }
+  var key = String(snapshot || '');
+  return {
+    known: !!key,
+    mixed: false,
+    incomplete: !key,
+    date: '',
+    monthKey: key,
+    earliestDate: '',
+    latestDate: '',
+    source: key ? ('account Balance As Of (' + key + ')') : '',
+    accounts: []
+  };
+}
+
+function debtPayoffAccountEligibleCashRow_(account) {
+  var name = String(account && account.name || '').trim();
+  var policy = String(account && account.usePolicy || '').trim().toUpperCase();
+  var balanceRaw = account && account.currentBalance;
+  var bufferRaw = account && account.minBuffer;
+  var currentBalance = (balanceRaw == null || balanceRaw === '')
+    ? 0
+    : round2_(toNumber_(balanceRaw));
+  var minBuffer = (bufferRaw == null || bufferRaw === '')
+    ? 0
+    : round2_(toNumber_(bufferRaw));
+  var usable = round2_(Math.max(0, currentBalance - minBuffer));
+  var included = policy === 'USE_FOR_DEBT' ||
+    policy === 'USE_FOR_BILLS' ||
+    policy === 'USE_WITH_CAUTION';
+  return {
+    name: name,
+    usePolicy: policy,
+    currentBalance: currentBalance,
+    minBuffer: minBuffer,
+    usableAfterBuffer: included ? usable : 0,
+    includedInEligibleCash: included,
+    excludedReason: included
+      ? ''
+      : (policy === 'DO_NOT_TOUCH'
+        ? 'DO_NOT_TOUCH'
+        : (policy ? 'unsupported use policy' : 'missing use policy'))
+  };
+}
+
+function debtPayoffUsableCashAfterBuffersFromAccounts_(accounts) {
+  var total = 0;
+  (accounts || []).forEach(function(account) {
+    if (!account || !String(account.name || '').trim()) return;
+    var row = debtPayoffAccountEligibleCashRow_(account);
+    total = round2_(total + Number(row.usableAfterBuffer || 0));
+  });
+  return total;
+}
+
+function debtPayoffSaleConfirmedAfterOpeningSnapshot_(snapshot, monthKey) {
+  var snap = debtPayoffNormalizeOpeningSnapshot_(snapshot);
+  return snap.known === true &&
+    snap.mixed !== true &&
+    snap.incomplete !== true &&
+    String(snap.date || '') === DEBT_PAYOFF_CONFIRMED_OPENING_SNAPSHOT_ISO_ &&
+    String(monthKey || '') === DEBT_PAYOFF_CONFIRMED_OPENING_SNAPSHOT_ISO_.slice(0, 7);
+}
+
+function debtPayoffAccountAsOfMonthKeys_(accounts) {
+  var keys = [];
+  (accounts || []).forEach(function(account) {
+    if (!account) return;
+    var iso = typeof formatBalanceAsOfIso_ === 'function'
+      ? formatBalanceAsOfIso_(account.balanceAsOf)
+      : String(account.balanceAsOf || '').trim();
+    if (iso) keys.push(iso.slice(0, 7));
+  });
+  return keys;
+}
+
+function debtPayoffResolveInflowConfirmation_(row, reflections, globalAlready, currentSnapshotKey) {
+  row = row || {};
+  reflections = reflections || [];
+  currentSnapshotKey = String(currentSnapshotKey || '');
+  var i;
+  for (i = 0; i < reflections.length; i++) {
+    var item = reflections[i];
+    if (!item) continue;
+    if (String(item.source || '') !== String(row.source || '')) continue;
+    if (String(item.monthKey || '') !== String(row.monthKey || '')) continue;
+    if (item.alreadyReflected !== true && item.alreadyReflected !== false) {
+      return { alreadyIncluded: null, stale: false };
+    }
+    var itemKey = String(item.accountSnapshotKey || '');
+    if (!currentSnapshotKey && !itemKey) {
+      return { alreadyIncluded: item.alreadyReflected, stale: false };
+    }
+    if (!itemKey || itemKey !== currentSnapshotKey) {
+      return { alreadyIncluded: null, stale: true };
+    }
+    return { alreadyIncluded: item.alreadyReflected, stale: false };
+  }
+  if (globalAlready === true || globalAlready === false) {
+    if (currentSnapshotKey) {
+      return { alreadyIncluded: null, stale: true };
+    }
+    return { alreadyIncluded: globalAlready, stale: false };
+  }
+  if (row.alreadyInOpeningEligible === true) {
+    return { alreadyIncluded: true, stale: false };
+  }
+  if (row.alreadyInOpeningEligible === false) {
+    return { alreadyIncluded: false, stale: false };
+  }
+  return { alreadyIncluded: null, stale: false };
+}
+
+function debtPayoffReflectionForInflow_(row, reflections, globalAlready, currentSnapshotKey) {
+  return debtPayoffResolveInflowConfirmation_(
+    row, reflections, globalAlready, currentSnapshotKey).alreadyIncluded;
 }
 
 function debtPayoffStrategyComparisonMonthlyExtra_(parsedAmount, cashFlowScenario) {
@@ -4386,7 +4706,8 @@ function debtPayoffWalkCashSafety_(start, surplus, extra, reserve, months, optio
   var walks = [];
   var i;
   for (i = 0; i < months.length; i++) {
-    var monthExtra = oneTime ? (i === 0 ? extra : 0) : extra;
+    var oneTimeIndex = options.oneTimeIndex == null ? 0 : Number(options.oneTimeIndex);
+    var monthExtra = oneTime ? (i === oneTimeIndex ? extra : 0) : extra;
     var inflow = round2_(Number(inflows[months[i].key]) || 0);
     var startingCash = cash;
     cash = round2_(cash + surplus + inflow - monthExtra - months[i].upcomingAmount);
@@ -4419,8 +4740,13 @@ function debtPayoffWalkCashSafety_(start, surplus, extra, reserve, months, optio
   };
 }
 
-function debtPayoffMaxOneTimePreservingReserve_(start, surplus, reserve, months) {
-  var atZero = debtPayoffWalkCashSafety_(start, surplus, 0, reserve, months);
+function debtPayoffMaxOneTimePreservingReserve_(start, surplus, reserve, months, options) {
+  options = options || {};
+  var walkOpts = {
+    inflowsByMonth: options.inflowsByMonth || {},
+    oneTimeIndex: options.oneTimeIndex == null ? 0 : Number(options.oneTimeIndex)
+  };
+  var atZero = debtPayoffWalkCashSafety_(start, surplus, 0, reserve, months, walkOpts);
   var walks = atZero.walks || [];
   if (!walks.length) {
     return { amount: 0, tightMonthKey: '', ok: atZero.ok, walks: [] };
@@ -4439,17 +4765,22 @@ function debtPayoffMaxOneTimePreservingReserve_(start, surplus, reserve, months)
   var lo = 0;
   var hi = Math.round(minHeadroom * 100);
   var best = 0;
+  var oneTimeOpts = {
+    inflowsByMonth: walkOpts.inflowsByMonth,
+    oneTime: true,
+    oneTimeIndex: walkOpts.oneTimeIndex
+  };
   while (lo <= hi) {
     var midCents = Math.floor((lo + hi) / 2);
     var mid = round2_(midCents / 100);
-    if (debtPayoffWalkCashSafety_(start, surplus, mid, reserve, months, { oneTime: true }).ok) {
+    if (debtPayoffWalkCashSafety_(start, surplus, mid, reserve, months, oneTimeOpts).ok) {
       best = mid;
       lo = midCents + 1;
     } else {
       hi = midCents - 1;
     }
   }
-  var atCap = debtPayoffWalkCashSafety_(start, surplus, best, reserve, months, { oneTime: true });
+  var atCap = debtPayoffWalkCashSafety_(start, surplus, best, reserve, months, oneTimeOpts);
   return {
     amount: round2_(best),
     tightMonthKey: tightMonthKey,
@@ -5350,7 +5681,8 @@ function buildDebtPayoffSupportedMonthlyExtra_(input) {
 }
 
 function collectDebtPayoffSupportedMonthlyExtraInput_(ss, debts, accounts) {
-  var incomeRead = readDebtPayoffSupportedMonthlyExtraIncome_(ss);
+  var asOfDate = new Date();
+  var incomeRead = readDebtPayoffSupportedMonthlyExtraIncome_(ss, asOfDate);
 
   var usableCashKnown = true;
   var usableCashAfterBuffers = 0;
@@ -5388,7 +5720,6 @@ function collectDebtPayoffSupportedMonthlyExtraInput_(ss, debts, accounts) {
     }
   }
 
-  var asOfDate = new Date();
   var reserveKnown = false;
   var requiredReserveAmount = null;
   var reserveUpcomingAmount = null;
@@ -5414,6 +5745,7 @@ function collectDebtPayoffSupportedMonthlyExtraInput_(ss, debts, accounts) {
   }
 
   var upcomingRead = readDebtPayoffUpcomingObligations_(ss);
+  var openingSnapshot = debtPayoffOpeningSnapshotFromAccounts_(accounts || []);
   var billsResult = readDebtPayoffSupportedMonthlyExtraBills_(ss, policyFloors);
   if (!billsResult.unavailable) {
     attachDebtPayoffVariableBillHistory_(ss, billsResult.rows, asOfDate);
@@ -5441,7 +5773,19 @@ function collectDebtPayoffSupportedMonthlyExtraInput_(ss, debts, accounts) {
     upcomingExpenses: upcomingRead.rows || [],
     upcomingUnavailable: upcomingRead.ok === false,
     upcomingUnavailableReason: upcomingRead.reason || '',
-    upcomingLocation: upcomingRead.location || DEBT_PAYOFF_CASH_SAFETY_LOCATION_
+    upcomingLocation: upcomingRead.location || DEBT_PAYOFF_CASH_SAFETY_LOCATION_,
+    classifiedInflows: incomeRead.classifiedInflows || [],
+    accountBalanceAsOf: (accounts || []).map(function(account) {
+      return {
+        name: account && account.name || '',
+        currentBalance: account && account.currentBalance,
+        balanceAsOf: account && account.balanceAsOf || '',
+        usePolicy: account && account.usePolicy || ''
+      };
+    }),
+    openingSnapshotDate: openingSnapshot.mixed ? '' : openingSnapshot.date,
+    openingSnapshotKnown: openingSnapshot.known === true,
+    openingSnapshotMixed: openingSnapshot.mixed === true
   };
 }
 
@@ -5478,7 +5822,12 @@ function cloneDebtPayoffSupportedExtraInput_(input) {
     upcomingLocation: input.upcomingLocation,
     pausePolicyFloors: false,
     hypotheticalCommitmentReductionMonthly: 0,
-    hypotheticalAdjustments: null
+    hypotheticalAdjustments: null,
+    classifiedInflows: (input.classifiedInflows || []).slice(),
+    accountBalanceAsOf: (input.accountBalanceAsOf || []).slice(),
+    openingSnapshotDate: input.openingSnapshotDate || '',
+    openingSnapshotKnown: input.openingSnapshotKnown === true,
+    openingSnapshotMixed: input.openingSnapshotMixed === true
   };
 }
 
@@ -5642,6 +5991,255 @@ function debtPayoffMonthKeyFromYearMonth_(year, month) {
   return parsedYear.year + '-' + mm;
 }
 
+function debtPayoffMonthKeyFromDate_(date) {
+  if (!(date instanceof Date) || isNaN(date.getTime())) return '';
+  var mm = String(date.getMonth() + 1);
+  if (mm.length < 2) mm = '0' + mm;
+  return date.getFullYear() + '-' + mm;
+}
+
+function debtPayoffIncomeIsAssetSaleName_(payee) {
+  var s = String(payee || '').toLowerCase();
+  return /\brsu\b|\bespp\b|\bstock\s+sales?\b/.test(s);
+}
+
+function debtPayoffParseKnownCashFlowIncomeAmount_(raw, display) {
+  var parsed = debtPayoffParseKnownCashFlowSpend_(raw, display);
+  if (!parsed || parsed.known !== true) return { known: false, amount: null };
+  return { known: true, amount: parsed.signed };
+}
+
+/**
+ * Read-only. Asset-sale Cash Flow rows only (RSU / ESPP / stock sale).
+ * Does not decide opening-balance inclusion and does not use the forecast
+ * month as a cutoff. Blank cells are skipped, not treated as $0.
+ */
+function collectDebtPayoffClassifiedStockSaleInflows_(display, values) {
+  display = display || [];
+  values = values || display;
+  var inflows = [];
+  if (!display.length) return inflows;
+  var headers = (display[0] || []).map(function(header) {
+    return String(header || '').trim();
+  });
+  var typeCol = -1;
+  var payeeCol = -1;
+  var activeCol = -1;
+  var monthCols = [];
+  var c;
+  for (c = 0; c < headers.length; c++) {
+    var lower = headers[c].toLowerCase();
+    if (lower === 'type') typeCol = c;
+    else if (lower === 'payee') payeeCol = c;
+    else if (lower === 'active') activeCol = c;
+    else if (typeof parseMonthHeader_ === 'function') {
+      var parsedMonth = parseMonthHeader_(headers[c]);
+      if (parsedMonth) {
+        monthCols.push({
+          col: c,
+          monthKey: debtPayoffMonthKeyFromDate_(parsedMonth)
+        });
+      }
+    }
+  }
+  if (typeCol < 0 || payeeCol < 0 || !monthCols.length) return inflows;
+  var r;
+  for (r = 1; r < display.length; r++) {
+    if (String(display[r][typeCol] || '').trim().toLowerCase() !== 'income') continue;
+    if (activeCol !== -1 && String(display[r][activeCol] || '').trim() &&
+        typeof normalizeYesNo_ === 'function' &&
+        normalizeYesNo_(display[r][activeCol]) === 'no') continue;
+    var payee = String(display[r][payeeCol] || '').trim();
+    if (!payee || !debtPayoffIncomeIsAssetSaleName_(payee)) continue;
+    monthCols.forEach(function(month) {
+      var cell = debtPayoffParseKnownCashFlowIncomeAmount_(
+        values[r] && values[r][month.col],
+        display[r] && display[r][month.col]
+      );
+      if (!cell.known || !(Number(cell.amount) > 0.005)) return;
+      inflows.push({
+        source: payee,
+        amount: round2_(cell.amount),
+        monthKey: month.monthKey || '',
+        cellHeader: headers[month.col] || '',
+        alreadyInOpeningEligible: null,
+        timingUnknown: !month.monthKey,
+        sourceClass: 'asset-sale proceeds'
+      });
+    });
+  }
+  return inflows;
+}
+
+/**
+ * Each account’s Current Balance stays paired with that account’s Balance
+ * As Of date. Inclusion is never inferred from the earliest date or from
+ * another account’s refresh. Month-precision only: a November 2026 sale
+ * is compared with each account’s as-of month. No settlement day is
+ * invented. Same-month or mixed-date sales stay unknown unless the overlay
+ * marks whether they are already in opening eligible cash, except the
+ * confirmed 2026-11-05 opening snapshot: November 2026 sales landed after
+ * those saved balances and are counted once for that snapshot.
+ */
+function debtPayoffClassifyOpeningInclusion_(monthKey, snapshot, alreadyIncluded) {
+  var saleKey = String(monthKey || '');
+  var snap = debtPayoffNormalizeOpeningSnapshot_(snapshot);
+  var monthKeys = debtPayoffAccountAsOfMonthKeys_(snap.accounts);
+  if (!monthKeys.length && snap.monthKey) monthKeys = [String(snap.monthKey)];
+  var sorted = monthKeys.slice().sort();
+  var minKey = sorted[0] || '';
+  var maxKey = sorted.length ? sorted[sorted.length - 1] : '';
+  var uniqueMonths = {};
+  monthKeys.forEach(function(key) { uniqueMonths[key] = true; });
+  var uniqueCount = Object.keys(uniqueMonths).length;
+  var saleBeforeAll = !!(saleKey && minKey && saleKey < minKey);
+  var saleAfterAll = !!(saleKey && maxKey && saleKey > maxKey);
+  var anyMayContain = !!(saleKey && monthKeys.some(function(key) {
+    return key >= saleKey;
+  }));
+  var sameMonthUniform = !!(saleKey && uniqueCount === 1 && minKey === saleKey &&
+    snap.mixed !== true);
+
+  if (alreadyIncluded === true) {
+    if (saleAfterAll) {
+      return {
+        include: true,
+        alreadyInOpening: false,
+        unknown: false,
+        reason: ''
+      };
+    }
+    return {
+      include: false,
+      alreadyInOpening: true,
+      unknown: false,
+      reason: 'already in opening eligible cash'
+    };
+  }
+  if (!saleKey) {
+    return {
+      include: false,
+      alreadyInOpening: false,
+      unknown: true,
+      reason: 'availability month unknown'
+    };
+  }
+  if (alreadyIncluded === false) {
+    if (saleBeforeAll) {
+      return {
+        include: false,
+        alreadyInOpening: true,
+        unknown: false,
+        reason: 'already in opening eligible cash'
+      };
+    }
+    return {
+      include: true,
+      alreadyInOpening: false,
+      unknown: false,
+      reason: ''
+    };
+  }
+  if (!monthKeys.length || snap.incomplete === true) {
+    return {
+      include: false,
+      alreadyInOpening: false,
+      unknown: true,
+      reason: 'opening snapshot cutoff unknown; the account-balance export has no snapshot date and inclusion was not marked'
+    };
+  }
+  if (saleBeforeAll) {
+    return {
+      include: false,
+      alreadyInOpening: true,
+      unknown: false,
+      reason: 'already in opening eligible cash'
+    };
+  }
+  if (saleAfterAll) {
+    return {
+      include: true,
+      alreadyInOpening: false,
+      unknown: false,
+      reason: ''
+    };
+  }
+  if (alreadyIncluded == null &&
+      debtPayoffSaleConfirmedAfterOpeningSnapshot_(snap, saleKey)) {
+    return {
+      include: true,
+      alreadyInOpening: false,
+      unknown: false,
+      reason: 'confirmed after the 2026-11-05 opening snapshot'
+    };
+  }
+  if (sameMonthUniform) {
+    return {
+      include: false,
+      alreadyInOpening: false,
+      unknown: true,
+      reason: 'sale availability is the same month as the opening snapshot with no settlement day, so inclusion is unknown'
+    };
+  }
+  if (anyMayContain) {
+    return {
+      include: false,
+      alreadyInOpening: false,
+      unknown: true,
+      reason: 'A later account balance may already include this inflow, and inclusion was not confirmed, so the lump-sum result that could double-count it was withheld.'
+    };
+  }
+  return {
+    include: false,
+    alreadyInOpening: false,
+    unknown: true,
+    reason: 'sale availability is the same month as the opening snapshot with no settlement day, so inclusion is unknown'
+  };
+}
+
+function debtPayoffResolveClassifiedInflowInclusion_(row, snapshot, alreadyIncluded) {
+  row = row || {};
+  var snap = debtPayoffNormalizeOpeningSnapshot_(snapshot);
+  var hasSnapshot = !!(snap.monthKey || snap.mixed ||
+    (snap.accounts && snap.accounts.length) || snap.known);
+  var hasAlreadyIncluded = alreadyIncluded === true || alreadyIncluded === false;
+  if (row.timingUnknown === true) {
+    return {
+      include: false,
+      alreadyInOpening: false,
+      unknown: true,
+      reason: 'availability month unknown'
+    };
+  }
+  if (hasSnapshot || hasAlreadyIncluded) {
+    return debtPayoffClassifyOpeningInclusion_(
+      row.monthKey, snap, hasAlreadyIncluded ? alreadyIncluded : null);
+  }
+  if (row.alreadyInOpeningEligible === true) {
+    return {
+      include: false,
+      alreadyInOpening: true,
+      unknown: false,
+      reason: 'already in opening eligible cash'
+    };
+  }
+  if (row.alreadyInOpeningEligible === false) {
+    return {
+      include: !!(row.monthKey),
+      alreadyInOpening: false,
+      unknown: !row.monthKey,
+      reason: row.monthKey ? '' : 'availability month unknown'
+    };
+  }
+  return debtPayoffClassifyOpeningInclusion_(row.monthKey, snap, null);
+}
+
+function debtPayoffAddTimelineInflow_(map, monthKey, amount) {
+  var key = String(monthKey || '');
+  if (!key) return;
+  map[key] = round2_((Number(map[key]) || 0) + round2_(Number(amount) || 0));
+}
+
 function debtPayoffCashFlowTimelineUnavailable_(reason, extras) {
   extras = extras || {};
   return {
@@ -5659,6 +6257,15 @@ function debtPayoffCashFlowTimelineUnavailable_(reason, extras) {
     proceedsMonthKey: extras.proceedsMonthKey || '',
     proceedsApplied: false,
     proceedsExcludedByDefault: extras.proceedsAmount > 0.005 ? false : true,
+    sustainableMonthlyExtra: 0,
+    sustainableMonthlyExtraKnown: true,
+    lumpSumEligible: null,
+    lumpSumEligibleKnown: false,
+    lumpSumReason: reason || '',
+    holdbackKnown: extras.holdbackKnown === true,
+    holdbackAmount: extras.holdbackAmount == null ? null : extras.holdbackAmount,
+    classifiedInflowsApplied: extras.classifiedInflowsApplied || [],
+    classifiedInflowsSkipped: extras.classifiedInflowsSkipped || [],
     reason: reason ||
       'A forward cash-flow timeline could not be proven. Missing values were not treated as $0.',
     assumptions: extras.assumptions || [],
@@ -5675,11 +6282,50 @@ function buildDebtPayoffCashFlowTimeline_(options) {
   var proceedsMonthKey = proceedsAmount > 0.005 && !proceedsTimingUnknown
     ? debtPayoffMonthKeyFromYearMonth_(options.proceedsYear, options.proceedsMonth)
     : '';
+  var holdbackKnown = options.holdbackKnown === true;
+  var holdbackAmount = holdbackKnown
+    ? round2_(Math.max(0, Number(options.holdbackAmount) || 0))
+    : null;
+  var classifiedInflows = (options.classifiedInflows || input.classifiedInflows || []).slice();
+  var snapshot = debtPayoffOpeningSnapshotFromAccounts_(
+    options.accountBalanceAsOf || input.accountBalanceAsOf || input.accounts || []);
+  if (options.openingSnapshotDate && snapshot.mixed !== true &&
+      !(snapshot.accounts && snapshot.accounts.length)) {
+    var forcedDate = typeof formatBalanceAsOfIso_ === 'function'
+      ? formatBalanceAsOfIso_(options.openingSnapshotDate)
+      : String(options.openingSnapshotDate || '').trim();
+    if (forcedDate) {
+      snapshot = {
+        known: true,
+        mixed: false,
+        date: forcedDate,
+        monthKey: forcedDate.slice(0, 7),
+        earliestDate: forcedDate,
+        latestDate: forcedDate,
+        incomplete: false,
+        source: 'account Balance As Of (' + forcedDate + ')',
+        accounts: snapshot.accounts || []
+      };
+    }
+  }
+  var openingSnapshotDate = snapshot.known ? snapshot.date : '';
+  var openingSnapshotMonthKey = snapshot.known
+    ? String(snapshot.monthKey || openingSnapshotDate.slice(0, 7))
+    : '';
+  var openingInflowsAlreadyIncluded = options.openingInflowsAlreadyIncluded;
+  if (openingInflowsAlreadyIncluded !== true && openingInflowsAlreadyIncluded !== false) {
+    openingInflowsAlreadyIncluded = null;
+  }
+  var classifiedInflowReflections = options.classifiedInflowReflections || [];
+  var accountSnapshotKey = debtPayoffAccountSnapshotKey_(snapshot.accounts || []);
+  var openingSnapshotCutoffSource = snapshot.source ||
+    'unknown — account Balance As Of dates are missing';
   var assumptions = [
     'This timeline reuses This Week’s canonical reserve floor and the existing cash-safety walk. It is not a second reserve formula.',
     'Eligible cash starts from usable cash after buffers. Recurring surplus or deficit is held constant; known rate or payment changes, including MTB’s 2027 change, are not modeled.',
-    'Share-sale proceeds are $0.00 unless a hypothetical net amount and availability month are entered. Reported sales are not treated as settled, net of taxes, or available.',
-    'One-time Cisco bonus income stays out of recurring cash flow and this reserve walk.',
+    'Each account’s Current Balance stays paired with that account’s Balance As Of date. When those dates differ, starting eligible cash is a mixed-date sum, not a single household snapshot from the earliest date. Classified stock-sale Cash Flow rows are counted once only when inclusion is confirmed against the current account-balance snapshot. They are not included or dropped because the forecast month advanced. Inclusion is not inferred from the earliest date or from another account’s refresh. A confirmation applies only to the balances it was checked against; if a relevant account balance later changes, that confirmation returns to unknown. Rows already reflected in opening eligible cash are not added again. If a refreshed balance may already include the proceeds and inclusion is not confirmed, the lump-sum result is withheld. November 2026 sales are treated as after the uniform 2026-11-05 opening snapshot. Later or mixed snapshots still require a per-sale confirmation.',
+    'Hypothetical overlay proceeds stay $0.00 unless a net amount and availability month are entered. Holdback is an explicit input; blank is unknown and is not estimated as tax withheld.',
+    'Lump-sum-eligible cash is separate from sustainable monthly extra. One-time Cisco bonus income stays out of recurring cash flow and this reserve walk.',
     'A modeled extra-payment start is not this month’s recommendation, is not saved, and does not change This Week.'
   ];
   if (proceedsTimingUnknown) {
@@ -5764,7 +6410,7 @@ function buildDebtPayoffCashFlowTimeline_(options) {
     if (!proceedsMonthKey) {
       return debtPayoffCashFlowTimelineUnavailable_(
         'Hypothetical share-sale proceeds were entered without a usable availability month. Timing was not inferred from reported sales.',
-        { proceedsAmount: proceedsAmount, assumptions: assumptions }
+        { proceedsAmount: proceedsAmount, assumptions: assumptions, holdbackKnown: holdbackKnown, holdbackAmount: holdbackAmount }
       );
     }
     if (proceedsMonthKey < firstKey) {
@@ -5781,19 +6427,122 @@ function buildDebtPayoffCashFlowTimeline_(options) {
       {
         proceedsAmount: proceedsAmount,
         proceedsMonthKey: proceedsMonthKey,
-        assumptions: assumptions
+        assumptions: assumptions,
+        holdbackKnown: holdbackKnown,
+        holdbackAmount: holdbackAmount
       }
     );
   }
+  var classifiedApplied = [];
+  var classifiedSkipped = [];
+  var classifiedTimingUnknown = false;
+  var classifiedInclusionUnknown = false;
+  var classifiedSeen = {};
+  classifiedInflows.forEach(function(row) {
+    if (!row) return;
+    var amount = round2_(Number(row.amount) || 0);
+    if (!(amount > 0.005)) return;
+    var source = row.source || 'A stock sale';
+    var monthKey = String(row.monthKey || '');
+    var seenKey = source + '|' + monthKey + '|' + amount.toFixed(2);
+    if (classifiedSeen[seenKey]) return;
+    classifiedSeen[seenKey] = true;
+    var confirmation = debtPayoffResolveInflowConfirmation_(
+      row, classifiedInflowReflections, openingInflowsAlreadyIncluded, accountSnapshotKey);
+    if (confirmation.stale === true) {
+      classifiedInclusionUnknown = true;
+      classifiedSkipped.push({
+        source: source,
+        amount: amount,
+        monthKey: monthKey,
+        reason: 'inclusion confirmation applied to a previous account-balance snapshot and is no longer valid'
+      });
+      return;
+    }
+    var alreadyIncluded = confirmation.alreadyIncluded;
+    var decision = debtPayoffResolveClassifiedInflowInclusion_(
+      row, snapshot, alreadyIncluded);
+    if (decision.unknown === true && decision.reason === 'availability month unknown') {
+      classifiedTimingUnknown = true;
+      classifiedSkipped.push({
+        source: source,
+        amount: amount,
+        monthKey: '',
+        reason: decision.reason
+      });
+      return;
+    }
+    if (decision.unknown === true) {
+      classifiedInclusionUnknown = true;
+      classifiedSkipped.push({
+        source: source,
+        amount: amount,
+        monthKey: monthKey,
+        reason: confirmation.stale === true
+          ? 'inclusion confirmation applied to a previous account-balance snapshot and is no longer valid'
+          : decision.reason
+      });
+      return;
+    }
+    if (decision.include !== true) {
+      classifiedSkipped.push({
+        source: source,
+        amount: amount,
+        monthKey: monthKey,
+        reason: decision.reason || 'already in opening eligible cash'
+      });
+      return;
+    }
+    classifiedApplied.push({
+      source: source,
+      amount: amount,
+      monthKey: monthKey,
+      cellHeader: row.cellHeader || '',
+      sourceClass: row.sourceClass || 'asset-sale proceeds'
+    });
+  });
+  if (classifiedTimingUnknown) {
+    timelineBlockers.push({
+      code: 'CLASSIFIED_INFLOW_TIMING_UNKNOWN',
+      reason: 'A classified stock-sale inflow is missing an availability month, so a precise extra-payment start month and lump-sum payoff amount were not shown. Timing was not inferred.'
+    });
+  }
+  var openingUnknownReason = classifiedInclusionUnknown
+    ? (classifiedSkipped.filter(function(row) {
+        return /opening snapshot cutoff unknown|same month as the opening snapshot|may already include this inflow|previous account-balance snapshot/i.test(row.reason || '');
+      })[0] || classifiedSkipped[0] || {}).reason ||
+      'A classified stock-sale inflow could not be proven as after the opening snapshot or already in opening eligible cash, so the lump-sum result was withheld.'
+    : '';
   var months = debtPayoffBuildCashSafetyMonths_(
     asOfDate, horizonMonths, input.upcomingExpenses || []);
   var inflowsByMonth = {};
-  if (proceedsInWindow) inflowsByMonth[proceedsMonthKey] = proceedsAmount;
+  classifiedApplied.forEach(function(row) {
+    var applyKey = row.monthKey;
+    if (applyKey < firstKey) applyKey = firstKey;
+    if (applyKey > lastKey) {
+      classifiedSkipped.push({
+        source: row.source,
+        amount: row.amount,
+        monthKey: row.monthKey,
+        reason: 'after this timeline window'
+      });
+      return;
+    }
+    debtPayoffAddTimelineInflow_(inflowsByMonth, applyKey, row.amount);
+  });
+  if (proceedsInWindow) {
+    debtPayoffAddTimelineInflow_(inflowsByMonth, proceedsMonthKey, proceedsAmount);
+  }
+  classifiedApplied = classifiedApplied.filter(function(row) {
+    var applyKey = row.monthKey < firstKey ? firstKey : row.monthKey;
+    return applyKey <= lastKey;
+  });
   var walk = debtPayoffWalkCashSafety_(
     start, surplus, 0, reserveFloor, months, { inflowsByMonth: inflowsByMonth });
   var outsideHorizon = debtPayoffListOutsideHorizonUpcoming_(
     asOfDate, horizonMonths, input.upcomingExpenses || []);
   var rows = (walk.walks || []).map(function(row, index) {
+    var month = months[index] || {};
     return {
       monthKey: row.monthKey,
       monthIndex: index + 1,
@@ -5801,12 +6550,25 @@ function buildDebtPayoffCashFlowTimeline_(options) {
       recurringSurplus: surplus,
       proceedsInflow: row.inflow,
       upcomingAmount: row.upcomingAmount,
+      upcomingItems: (month.obligations || []).map(function(item) {
+        return {
+          name: item && item.name || 'Upcoming expense',
+          amount: round2_(Number(item && item.amount) || 0)
+        };
+      }),
       reserveTarget: reserveFloor,
       endingEligibleCash: row.endingCash,
       reservePass: row.ok === true,
       extraEligible: surplus > 0.005 && row.startingCash + 0.005 >= reserveFloor
     };
   });
+  var upcomingInWalkTotal = 0;
+  rows.forEach(function(row) {
+    upcomingInWalkTotal = round2_(upcomingInWalkTotal + (Number(row.upcomingAmount) || 0));
+  });
+  var reserveUpcomingAmount = reserveUpcoming == null
+    ? 0
+    : round2_(Math.max(0, Number(reserveUpcoming) || 0));
   var suppressEarliest = timelineBlockers.length > 0;
   var earliestExtraMonthKey = '';
   var earliestExtraAmount = null;
@@ -5859,6 +6621,87 @@ function buildDebtPayoffCashFlowTimeline_(options) {
         ' in ' + proceedsMonthKey + ' fall after this window and were not applied.'
     ]);
   }
+  if (classifiedSkipped.length) {
+    assumptions = assumptions.concat([
+      'Historical or unconfirmed stock-sale rows were not added again: ' +
+        classifiedSkipped.map(function(row) {
+          return (row.source || 'A stock sale') + ' $' + Number(row.amount).toFixed(2) +
+            (row.monthKey ? ' (' + row.monthKey + ')' : '') +
+            ' — ' + row.reason;
+        }).join('; ') + '.'
+    ]);
+  }
+  var appliedInflowTotal = 0;
+  Object.keys(inflowsByMonth).forEach(function(key) {
+    appliedInflowTotal = round2_(appliedInflowTotal + Number(inflowsByMonth[key] || 0));
+  });
+  var classifiedAppliedTotal = 0;
+  classifiedApplied.forEach(function(row) {
+    classifiedAppliedTotal = round2_(classifiedAppliedTotal + (Number(row.amount) || 0));
+  });
+  var availabilityIndex = 0;
+  var inflowKeys = Object.keys(inflowsByMonth).sort();
+  if (inflowKeys.length && rows.length) {
+    var firstInflowKey = inflowKeys[0];
+    var idx = 0;
+    for (idx = 0; idx < rows.length; idx++) {
+      if (rows[idx].monthKey === firstInflowKey) {
+        availabilityIndex = idx;
+        break;
+      }
+    }
+  }
+  var lumpSumEligible = null;
+  var lumpSumEligibleKnown = false;
+  var lumpSumReason = '';
+  var baselineWalkOk = walk.ok === true;
+  if (classifiedTimingUnknown) {
+    lumpSumReason = timelineBlockers[0] && timelineBlockers[0].reason ||
+      'A classified stock-sale inflow is missing an availability month, so a lump-sum payoff amount was not shown.';
+  } else if (classifiedInclusionUnknown) {
+    lumpSumReason = openingUnknownReason;
+  } else if (!baselineWalkOk) {
+    lumpSumEligible = 0;
+    lumpSumEligibleKnown = true;
+    lumpSumReason =
+      'Even with classified one-time inflows kept as cash, eligible cash falls below This Week’s canonical reserve in ' +
+      (walk.monthKey || 'a later month') +
+      '. No lump payment is labeled safe.';
+  } else if (!holdbackKnown && appliedInflowTotal > 0.005) {
+    lumpSumReason =
+      'A lump-sum payoff amount is withheld because holdback is unknown. Holdback is an explicit input and was not estimated.';
+  } else {
+    var candidate = holdbackKnown
+      ? round2_(Math.max(0, appliedInflowTotal - Number(holdbackAmount || 0)))
+      : 0;
+    if (!(candidate > 0.005)) {
+      lumpSumEligible = 0;
+      lumpSumEligibleKnown = true;
+      lumpSumReason = appliedInflowTotal > 0.005
+        ? 'Explicit holdback leaves no classified one-time cash for a lump-sum payoff.'
+        : 'No post-cutoff one-time inflows are available for a lump-sum payoff.';
+    } else {
+      var lumpCap = debtPayoffMaxOneTimePreservingReserve_(
+        start, surplus, reserveFloor, months, {
+          inflowsByMonth: inflowsByMonth,
+          oneTimeIndex: availabilityIndex
+        });
+      lumpSumEligible = round2_(Math.min(candidate, Number(lumpCap.amount) || 0));
+      lumpSumEligibleKnown = true;
+      if (!(lumpSumEligible > 0.005)) {
+        lumpSumReason =
+          'The reserve test does not support a lump-sum payoff from these one-time inflows.';
+      } else {
+        lumpSumReason =
+          'Lump-sum-eligible cash is $' + lumpSumEligible.toFixed(2) +
+          ' after explicit holdback and the reserve test, available no earlier than ' +
+          (inflowKeys[0] || firstKey) +
+          '. It is not sustainable monthly extra.';
+      }
+    }
+  }
+  var sustainableMonthlyExtra = earliestExtraMonthKey ? earliestExtraAmount : 0;
+  var classifiedAppliedFlag = classifiedApplied.length > 0;
   return {
     available: true,
     hypothetical: true,
@@ -5869,9 +6712,18 @@ function buildDebtPayoffCashFlowTimeline_(options) {
     asOfMonthKey: firstKey,
     throughMonthKey: lastKey,
     startingEligibleCash: start,
+    startingEligibleCashFromAccounts: debtPayoffUsableCashAfterBuffersFromAccounts_(
+      snapshot.accounts || []),
     recurringSurplus: surplus,
     reserveTarget: reserveFloor,
     canonicalReserveAmount: requiredReserve,
+    reserveUpcomingAmount: reserveUpcomingAmount,
+    upcomingInWalkTotal: upcomingInWalkTotal,
+    reserveTargetExplanation:
+      'Timeline reserve target $' + reserveFloor.toFixed(2) +
+      ' is This Week’s canonical reserve $' + requiredReserve.toFixed(2) +
+      ' minus $' + reserveUpcomingAmount.toFixed(2) +
+      ' planned Upcoming already counted as monthly outflows, so Upcoming is not omitted or double-counted.',
     months: rows,
     earliestExtraMonthKey: earliestExtraMonthKey,
     earliestExtraAmount: earliestExtraAmount,
@@ -5879,16 +6731,43 @@ function buildDebtPayoffCashFlowTimeline_(options) {
     earliestReason: earliestReason,
     proceedsAmount: proceedsAmount,
     proceedsMonthKey: proceedsMonthKey,
-    proceedsApplied: proceedsInWindow,
-    proceedsExcludedByDefault: !(proceedsAmount > 0.005),
+    proceedsApplied: proceedsInWindow || classifiedAppliedFlag,
+    proceedsExcludedByDefault: !(proceedsAmount > 0.005) && !classifiedAppliedFlag,
     proceedsOutsideHorizon: proceedsOutsideHorizon,
+    sustainableMonthlyExtra: sustainableMonthlyExtra,
+    sustainableMonthlyExtraKnown: !suppressEarliest,
+    lumpSumEligible: lumpSumEligible,
+    lumpSumEligibleKnown: lumpSumEligibleKnown,
+    lumpSumReason: lumpSumReason,
+    holdbackKnown: holdbackKnown,
+    holdbackAmount: holdbackAmount,
+    classifiedInflowsApplied: classifiedApplied,
+    classifiedInflowsSkipped: classifiedSkipped,
+    classifiedInflowTotal: classifiedAppliedTotal,
+    openingSnapshotMonthKey: openingSnapshotMonthKey,
+    openingSnapshotDate: openingSnapshotDate,
+    openingSnapshotMixed: snapshot.mixed === true,
+    openingSnapshotIncomplete: snapshot.incomplete === true,
+    startingEligibleCashMixed: snapshot.mixed === true,
+    accountBalances: (snapshot.accounts || []).slice(),
+    accountSnapshotKey: accountSnapshotKey,
+    openingInflowsAlreadyIncluded: openingInflowsAlreadyIncluded,
+    openingSnapshotCutoffSource: openingSnapshotCutoffSource,
+    classifiedInflowsSeen: classifiedInflows.map(function(row) {
+      return {
+        source: row && row.source || 'A stock sale',
+        amount: round2_(Number(row && row.amount) || 0),
+        monthKey: row && row.monthKey || '',
+        cellHeader: row && row.cellHeader || ''
+      };
+    }).filter(function(row) { return row.amount > 0.005; }),
     reason: earliestReason,
     assumptions: assumptions,
     blockers: timelineBlockers
   };
 }
 
-function readDebtPayoffSupportedMonthlyExtraIncome_(ss) {
+function readDebtPayoffSupportedMonthlyExtraIncome_(ss, asOfDate) {
   var missingCadence =
     'INPUT - Cash Flow has no Recurring, Frequency, and Expected Amount confirmation. ' +
     'A monthly amount was not inferred from positive months. Add Recurring, Frequency, ' +
@@ -5896,6 +6775,7 @@ function readDebtPayoffSupportedMonthlyExtraIncome_(ss) {
   var emptyBonus = typeof debtPayoffParseCiscoBonusScenario_ === 'function'
     ? debtPayoffParseCiscoBonusScenario_([], [])
     : null;
+  var emptyClassified = [];
   // Read-only. Never self-heal schema here; the estimate must not write.
   try {
     if (typeof findLatestCashFlowYearWithIncome_ !== 'function' ||
@@ -5904,7 +6784,8 @@ function readDebtPayoffSupportedMonthlyExtraIncome_(ss) {
         unavailable: true,
         cadenceUnconfirmed: false,
         sources: [],
-        datedBonusScenario: emptyBonus
+        datedBonusScenario: emptyBonus,
+        classifiedInflows: emptyClassified
       };
     }
     var year = findLatestCashFlowYearWithIncome_(ss);
@@ -5913,7 +6794,8 @@ function readDebtPayoffSupportedMonthlyExtraIncome_(ss) {
         unavailable: true,
         cadenceUnconfirmed: false,
         sources: [],
-        datedBonusScenario: emptyBonus
+        datedBonusScenario: emptyBonus,
+        classifiedInflows: emptyClassified
       };
     }
     var sheet = getCashFlowSheet_(ss, year);
@@ -5925,9 +6807,13 @@ function readDebtPayoffSupportedMonthlyExtraIncome_(ss) {
         unavailable: true,
         cadenceUnconfirmed: false,
         sources: [],
-        datedBonusScenario: emptyBonus
+        datedBonusScenario: emptyBonus,
+        classifiedInflows: emptyClassified
       };
     }
+    var classifiedInflows = typeof collectDebtPayoffClassifiedStockSaleInflows_ === 'function'
+      ? collectDebtPayoffClassifiedStockSaleInflows_(display, values)
+      : [];
     var bonusScenario = debtPayoffParseCiscoBonusScenario_(display, values);
     var parsed = debtPayoffParseConfirmedCashFlowIncome_(display, values);
     if (parsed.cadenceUnconfirmed) {
@@ -5937,7 +6823,8 @@ function readDebtPayoffSupportedMonthlyExtraIncome_(ss) {
         cadenceReason: parsed.reason || missingCadence,
         incompleteRows: parsed.incompleteRows || [],
         sources: [],
-        datedBonusScenario: bonusScenario
+        datedBonusScenario: bonusScenario,
+        classifiedInflows: classifiedInflows
       };
     }
     return {
@@ -5945,14 +6832,16 @@ function readDebtPayoffSupportedMonthlyExtraIncome_(ss) {
       cadenceUnconfirmed: false,
       incompleteRows: [],
       sources: parsed.sources,
-      datedBonusScenario: bonusScenario
+      datedBonusScenario: bonusScenario,
+      classifiedInflows: classifiedInflows
     };
   } catch (e) {
     return {
       unavailable: true,
       cadenceUnconfirmed: false,
       sources: [],
-      datedBonusScenario: emptyBonus
+      datedBonusScenario: emptyBonus,
+      classifiedInflows: emptyClassified
     };
   }
 }

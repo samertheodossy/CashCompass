@@ -74,7 +74,12 @@ assert.match(debtOverview, /id="debt_payoff_scenario_pause_policy_floors"/);
 assert.match(debtOverview, /id="debt_payoff_scenario_share_sale_proceeds"/);
 assert.match(debtOverview, /id="debt_payoff_scenario_share_sale_month"/);
 assert.match(debtOverview, /id="debt_payoff_scenario_share_sale_year"/);
-assert.match(debtOverview, /Reported share sales are\s+not treated as settled/);
+assert.match(debtOverview, /id="debt_payoff_scenario_holdback"/);
+assert.match(debtOverview, /id="debt_payoff_scenario_inflow_reflections"/);
+assert.doesNotMatch(debtOverview, /id="debt_payoff_scenario_opening_snapshot_month"/);
+assert.match(debtOverview, /Already reflected in opening eligible cash/);
+assert.match(debtOverview, /Balance As Of/);
+assert.match(debtOverview, /Reported sales are\s+not treated as settled/);
 assert.match(debtOverview, /Hypothetical and unsaved/);
 assert.match(debtOverview, /does not pick a bill to cut/);
 assert.doesNotMatch(debtOverview, /safe to reduce/);
@@ -161,9 +166,28 @@ assert.doesNotMatch(sliceFunction(projection, 'buildDebtPayoffHypotheticalCashFl
 assert.match(projection, /function parseDebtPayoffHypotheticalCashFlowScenario_/);
 assert.match(projection, /STANDING_WEEKLY_FLOOR_TIMES_52_DIV_12/);
 assert.match(client, /function collectDebtPayoffHypotheticalCashFlowScenarioFromInput_/);
+assert.match(client, /function renderDebtPayoffInflowReflectionControls_/);
+assert.match(client, /classifiedInflowReflections/);
 assert.match(client, /function renderDebtPayoffCashFlowScenarioHtml_/);
 assert.match(client, /function renderDebtPayoffCashFlowTimelineHtml_/);
 assert.match(projection, /function buildDebtPayoffCashFlowTimeline_/);
+assert.match(projection, /function collectDebtPayoffClassifiedStockSaleInflows_/);
+assert.match(projection, /function debtPayoffClassifyOpeningInclusion_/);
+assert.match(projection, /function parseDebtPayoffOpeningSnapshotCutoff_/);
+assert.match(projection, /function debtPayoffOpeningSnapshotFromAccounts_/);
+assert.match(projection, /function debtPayoffAccountSnapshotKey_/);
+assert.match(projection, /function debtPayoffResolveInflowConfirmation_/);
+assert.match(client, /data-account-snapshot-key/);
+assert.match(sliceFunction(client, 'renderDebtPayoffInflowReflectionControls_'),
+  /prev\.snapshotKey === snapshotKey/);
+assert.match(sliceFunction(client, 'collectDebtPayoffHypotheticalCashFlowScenarioFromInput_'),
+  /accountSnapshotKey/);
+assert.match(help, /tied to the account-balance snapshot/);
+assert.match(help, /returns to unknown until you mark it again/);
+assert.match(debtOverview, /returns to\s+unknown until you mark it again/);
+assert.doesNotMatch(sliceFunction(projection, 'collectDebtPayoffClassifiedStockSaleInflows_'),
+  /debtPayoffScenarioMonthKey_|asOfKey/,
+  'classified collection must not use the forecast month as an inclusion cutoff');
 assert.match(projection, /DEBT_PAYOFF_CASH_FLOW_TIMELINE_HORIZON_MONTHS_ = 36/);
 assert.doesNotMatch(sliceFunction(projection, 'buildDebtPayoffCashFlowTimeline_'),
   /setValue\(|appendRow\(|PropertiesService|buildCapitalAllocationPlan_|should_draw_from_heloc|40000/);
@@ -173,6 +197,37 @@ assert.match(help, /standing investment policy floors \(weekly amount × 52 ÷ 1
 assert.match(help, /one-time bonus stays out of recurring monthly income and the 90-day reserve/);
 assert.match(help, /forward cash-flow and reserve timeline/);
 assert.match(help, /reported sales are not treated as settled/);
+assert.match(help, /Lump-sum-eligible cash after holdback/);
+assert.match(help, /already reflected in that opening eligible cash are not added again/);
+assert.match(help, /not the forecast month/);
+assert.match(help, /Unknown inclusion withholds the lump-sum result/);
+assert.match(help, /Balance As Of date/);
+assert.match(help, /A later date on some other account does not absorb them/);
+assert.match(help, /mixed-date sum/);
+assert.match(help, /Inclusion is not inferred from the earliest date/);
+assert.match(help, /For the 2026-11-05 snapshot/);
+assert.match(help, /timeline reserve target is This Week’s canonical reserve minus Upcoming/);
+assert.match(help, /not treated as observed cash loss/);
+assert.match(help, /Starting eligible cash is the sum of max\(0, Current Balance − Min Buffer\)/);
+assert.match(debtOverview, /mixed-date sum/);
+assert.match(debtOverview, /For the 2026-11-05 snapshot/);
+assert.match(client, /Account balances paired with Balance As Of dates/);
+assert.match(sliceFunction(client, 'renderDebtPayoffCashFlowTimelineHtml_'),
+  /Usable after buffer/);
+assert.match(sliceFunction(client, 'renderDebtPayoffCashFlowTimelineHtml_'),
+  /DO_NOT_TOUCH is excluded/);
+assert.match(sliceFunction(client, 'renderDebtPayoffCashFlowTimelineHtml_'),
+  /Planned upcoming/);
+assert.match(sliceFunction(client, 'renderDebtPayoffCashFlowTimelineHtml_'),
+  /Classified inflows/);
+assert.match(sliceFunction(client, 'renderDebtPayoffInflowReflectionControls_'),
+  /For the 2026-11-05 snapshot/);
+assert.match(sliceFunction(projection, 'getDebtPayoffStrategyComparison'),
+  /ensureAccountsBalanceAsOfColumn_/);
+assert.doesNotMatch(sliceFunction(projection, 'getDebtPayoffStrategyComparison'),
+  /applySuppliedNovember5BalanceAsOfSnapshot_|runSuppliedNovember5BalanceAsOfSnapshot|inspectSysAccountsBalanceAsOf/);
+assert.doesNotMatch(sliceFunction(projection, 'collectDebtPayoffSupportedMonthlyExtraInput_'),
+  /ensureAccountsBalanceAsOfColumn_|applySuppliedNovember5BalanceAsOfSnapshot_/);
 assert.doesNotMatch(capital, /evaluateDebtPayoffFutureCashSafety_|readDebtPayoffUpcomingObligations_/);
 assert.doesNotMatch(rolling, /evaluateDebtPayoffFutureCashSafety_|readDebtPayoffUpcomingObligations_/);
 assert.match(help, /3-month cash-safety forecast/);
@@ -452,6 +507,7 @@ vm.runInContext(
   sliceFunction(plannerHelpers, 'toNumber_') +
   '\n' + sliceFunction(plannerHelpers, 'fmtCurrency_') +
   '\n' + sliceFunction(plannerHelpers, 'round2_') +
+  '\n' + sliceFunction(plannerHelpers, 'formatBalanceAsOfIso_') +
   '\n' + sliceFunction(plannerHelpers, 'parseMonthHeader_') +
   '\n' + sliceFunction(plannerCore, 'debtMinimumPaymentCellIsKnown_') +
   '\n' + sliceFunction(dashboardData, 'normalizeBillName_') +
@@ -577,6 +633,51 @@ assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_({
 assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_({
   shareSaleProceeds: 25000
 }).proceedsTimingUnknown, true);
+assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_(null).holdbackKnown, false);
+assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_({
+  holdbackAmount: 0
+}).holdbackKnown, true);
+assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_({
+  holdbackAmount: 0
+}).holdbackAmount, 0);
+assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_({
+  holdbackAmount: 5000
+}).holdbackAmount, 5000);
+assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_({
+  holdbackAmount: 5000
+}).useForComparison, false,
+  'holdback must not replace the current extra comparison');
+assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_(null).openingSnapshotMonthKey, '');
+assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_(null).openingInflowsAlreadyIncluded, null);
+assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_(null).classifiedInflowReflections.length, 0);
+assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_({
+  openingInflowsAlreadyIncluded: 'no'
+}).openingInflowsAlreadyIncluded, false);
+assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_({
+  openingInflowsAlreadyIncluded: 'yes'
+}).openingInflowsAlreadyIncluded, true);
+assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_({
+  classifiedInflowReflections: [{
+    source: 'Cisco RSU Sale', monthKey: '2026-11', alreadyReflected: 'no'
+  }]
+}).classifiedInflowReflections[0].alreadyReflected, false);
+assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_({
+  classifiedInflowReflections: [{
+    source: 'Cisco RSU Sale', monthKey: '2026-11', alreadyReflected: 'no',
+    accountSnapshotKey: 'Checking|5000|2026-11-05'
+  }]
+}).classifiedInflowReflections[0].accountSnapshotKey, 'Checking|5000|2026-11-05');
+assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_({
+  openingSnapshotMonth: 11,
+  openingSnapshotYear: 2026
+}).openingSnapshotMonthKey, '',
+  'overlay month/year must not become the opening snapshot cutoff');
+assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_({
+  classifiedInflowReflections: [{
+    source: 'Cisco RSU Sale', monthKey: '2026-11', alreadyReflected: 'no'
+  }]
+}).useForComparison, false,
+  'per-inflow inclusion confirmation must not replace the current extra comparison');
 assert.equal(context.parseDebtPayoffHypotheticalCashFlowScenario_({
   shareSaleProceeds: 25000,
   shareSaleMonth: 11
@@ -709,6 +810,10 @@ assert.equal(rpcPayloads[0].cashFlowScenario.oneTimeBonusIncome, 0);
 assert.equal(rpcPayloads[0].cashFlowScenario.shareSaleProceeds, 0);
 assert.equal(rpcPayloads[0].cashFlowScenario.shareSaleMonth, '');
 assert.equal(rpcPayloads[0].cashFlowScenario.shareSaleYear, '');
+assert.equal(rpcPayloads[0].cashFlowScenario.holdbackAmount, '');
+assert.equal(rpcPayloads[0].cashFlowScenario.holdbackKnown, false);
+assert.equal(rpcPayloads[0].cashFlowScenario.openingInflowsAlreadyIncluded, '');
+assert.equal(rpcPayloads[0].cashFlowScenario.classifiedInflowReflections.length, 0);
 assert.equal(rpcPayloads[0].cashFlowScenario.pausePolicyFloors, false);
 assert.equal(statusCalls.some(function(row) { return row.isError; }), false);
 
@@ -1905,6 +2010,529 @@ assert.equal(deficitProceeds.months[1].proceedsInflow, 8000);
 assert.ok(deficitProceeds.months[0].endingEligibleCash < deficitProceeds.months[0].startingEligibleCash);
 assert.equal(deficitProceeds.earliestExtraKnown, false,
   'a monthly deficit still cannot create a recurring extra from one-time proceeds');
+
+const asOfNov = new Date(2026, 10, 17);
+const asOfDec = new Date(2026, 11, 17);
+const saleSheet = [
+  ['Type', 'Payee', 'Active', 'Jan-26', 'Feb-26', 'Nov-26', 'Dec-26'],
+  ['Income', 'Cisco Pay 1', 'YES', 5000, 5000, 5000, 5000],
+  ['Income', 'Cisco RSU Sale', 'YES', 0, 18360.47, 46079.93, 0],
+  ['Income', 'Other Stock Sales', 'YES', 0, 0, 9895.80, 0],
+  ['Income', 'Cisco Mid Year Bonus', 'YES', 0, 22766.25, 0, 0]
+];
+const collectedSales = context.collectDebtPayoffClassifiedStockSaleInflows_(
+  saleSheet, saleSheet);
+assert.equal(collectedSales.some(function(row) {
+  return /bonus/i.test(row.source);
+}), false, 'bonuses are not asset-sale proceeds');
+assert.equal(collectedSales.some(function(row) {
+  return Math.abs(Number(row.amount) - 30000) < 0.005;
+}), false, 'do not invent an extra approximately $30,000 Cisco sale');
+assert.equal(collectedSales.every(function(row) {
+  return row.alreadyInOpeningEligible == null;
+}), true, 'collection must not infer opening inclusion from the forecast month');
+assert.equal(collectedSales.filter(function(row) {
+  return row.source === 'Cisco RSU Sale' && row.monthKey === '2026-11' &&
+    row.amount === 46079.93;
+}).length, 1);
+assert.equal(collectedSales.filter(function(row) {
+  return row.source === 'Other Stock Sales' && row.monthKey === '2026-11' &&
+    row.amount === 9895.8;
+}).length, 1);
+
+const nov5Accounts = [
+  { name: 'Checking', currentBalance: 5000, balanceAsOf: '2026-11-05', usePolicy: 'USE_FOR_BILLS' },
+  { name: 'Savings', currentBalance: 8000, balanceAsOf: '2026-11-05', usePolicy: 'DO_NOT_TOUCH' }
+];
+function inflowReflectionsFor_(accounts, alreadyReflected) {
+  const snapshotKey = context.debtPayoffAccountSnapshotKey_(accounts);
+  return [
+    {
+      source: 'Cisco RSU Sale', monthKey: '2026-11',
+      alreadyReflected: alreadyReflected, accountSnapshotKey: snapshotKey
+    },
+    {
+      source: 'Other Stock Sales', monthKey: '2026-11',
+      alreadyReflected: alreadyReflected, accountSnapshotKey: snapshotKey
+    }
+  ];
+}
+const novSalesReflectedNo = inflowReflectionsFor_(nov5Accounts, false);
+const novSalesReflectedYes = inflowReflectionsFor_(nov5Accounts, true);
+
+function timelineFromAccountDates_(asOfDate, accountDates, reflections) {
+  return context.buildDebtPayoffCashFlowTimeline_({
+    supported: verifiedBaseline,
+    input: Object.assign({}, verifiedBaselineInput, {
+      asOfDate: asOfDate,
+      accountBalanceAsOf: accountDates
+    }),
+    asOfDate: asOfDate,
+    classifiedInflows: collectedSales,
+    accountBalanceAsOf: accountDates,
+    classifiedInflowReflections: reflections || []
+  });
+}
+
+function appliedNovemberSales_(timeline) {
+  return (timeline.classifiedInflowsApplied || []).filter(function(row) {
+    return row.monthKey === '2026-11';
+  });
+}
+
+const snapshotFromAccounts = context.debtPayoffOpeningSnapshotFromAccounts_(nov5Accounts);
+assert.equal(snapshotFromAccounts.known, true);
+assert.equal(snapshotFromAccounts.mixed, false);
+assert.equal(snapshotFromAccounts.date, '2026-11-05');
+assert.equal(snapshotFromAccounts.monthKey, '2026-11');
+assert.match(snapshotFromAccounts.source, /account Balance As Of \(2026-11-05\)/);
+assert.equal(snapshotFromAccounts.accounts[0].currentBalance, 5000);
+assert.equal(snapshotFromAccounts.accounts[0].balanceAsOf, '2026-11-05');
+assert.equal(snapshotFromAccounts.accounts[0].usePolicy, 'USE_FOR_BILLS');
+assert.equal(snapshotFromAccounts.accounts[0].minBuffer, 0);
+assert.equal(snapshotFromAccounts.accounts[0].usableAfterBuffer, 5000);
+assert.equal(snapshotFromAccounts.accounts[0].includedInEligibleCash, true);
+assert.equal(snapshotFromAccounts.accounts[1].usePolicy, 'DO_NOT_TOUCH');
+assert.equal(snapshotFromAccounts.accounts[1].usableAfterBuffer, 0);
+assert.equal(snapshotFromAccounts.accounts[1].includedInEligibleCash, false);
+
+const nov5DecemberForecast = timelineFromAccountDates_(
+  asOfDec, nov5Accounts, novSalesReflectedNo);
+assert.equal(nov5DecemberForecast.available, true);
+assert.equal(nov5DecemberForecast.currentRecommendationUnchanged, true);
+assert.equal(verifiedBaseline.amount, 0,
+  'classified November sales must not change the current $0 recommendation');
+assert.equal(nov5DecemberForecast.recurringSurplus, -11128.24,
+  'stock-sale proceeds must stay out of recurring monthly income');
+assert.equal(nov5DecemberForecast.openingSnapshotDate, '2026-11-05');
+assert.equal(nov5DecemberForecast.months[0].monthKey, '2026-12');
+assert.equal(nov5DecemberForecast.months[0].proceedsInflow, 55975.73,
+  'a November 5 opening snapshot must include post-cutoff November sales once when the forecast is December');
+assert.equal(nov5DecemberForecast.classifiedInflowTotal, 55975.73);
+assert.equal(appliedNovemberSales_(nov5DecemberForecast).length, 2);
+assert.equal(appliedNovemberSales_(nov5DecemberForecast).some(function(row) {
+  return row.source === 'Cisco RSU Sale' && row.amount === 46079.93;
+}), true);
+assert.equal(appliedNovemberSales_(nov5DecemberForecast).some(function(row) {
+  return row.source === 'Other Stock Sales' && row.amount === 9895.8;
+}), true);
+assert.equal(nov5DecemberForecast.classifiedInflowsApplied.some(function(row) {
+  return row.monthKey === '2026-02';
+}), false, 'February RSU must not be added on top of the November 5 opening snapshot');
+assert.equal(nov5DecemberForecast.sustainableMonthlyExtra, 0);
+assert.match(nov5DecemberForecast.openingSnapshotCutoffSource,
+  /account Balance As Of \(2026-11-05\)/);
+assert.equal(nov5DecemberForecast.openingSnapshotMixed, false);
+assert.equal(nov5DecemberForecast.accountSnapshotKey,
+  context.debtPayoffAccountSnapshotKey_(nov5Accounts));
+
+const partialRefreshAccounts = [
+  { name: 'Checking', currentBalance: 2200, balanceAsOf: '2026-11-20', usePolicy: 'USE_FOR_BILLS' },
+  { name: 'Savings', currentBalance: 8000, balanceAsOf: '2026-11-05', usePolicy: 'DO_NOT_TOUCH' }
+];
+const staleAfterRefresh = timelineFromAccountDates_(
+  asOfNov, partialRefreshAccounts, novSalesReflectedNo);
+assert.equal(staleAfterRefresh.openingSnapshotMixed, true,
+  'a partial account refresh is a mixed-date household snapshot');
+assert.equal(staleAfterRefresh.openingSnapshotDate, '',
+  'the earliest Balance As Of date is not a household snapshot date');
+assert.equal(staleAfterRefresh.startingEligibleCashMixed, true);
+assert.equal(staleAfterRefresh.accountBalances.find(function(row) {
+  return row.name === 'Checking';
+}).balanceAsOf, '2026-11-20');
+assert.equal(staleAfterRefresh.accountBalances.find(function(row) {
+  return row.name === 'Checking';
+}).currentBalance, 2200);
+assert.equal(staleAfterRefresh.accountBalances.find(function(row) {
+  return row.name === 'Savings';
+}).balanceAsOf, '2026-11-05');
+assert.equal(staleAfterRefresh.accountBalances.find(function(row) {
+  return row.name === 'Savings';
+}).currentBalance, 8000);
+assert.notEqual(
+  context.debtPayoffAccountSnapshotKey_(nov5Accounts),
+  context.debtPayoffAccountSnapshotKey_(partialRefreshAccounts));
+assert.equal(context.debtPayoffResolveInflowConfirmation_(
+  { source: 'Cisco RSU Sale', monthKey: '2026-11' },
+  novSalesReflectedNo,
+  null,
+  context.debtPayoffAccountSnapshotKey_(partialRefreshAccounts)
+).stale, true);
+assert.equal(context.debtPayoffResolveInflowConfirmation_(
+  { source: 'Cisco RSU Sale', monthKey: '2026-11' },
+  novSalesReflectedNo,
+  null,
+  context.debtPayoffAccountSnapshotKey_(nov5Accounts)
+).alreadyIncluded, false);
+assert.equal(staleAfterRefresh.classifiedInflowTotal, 0,
+  'a sale marked not included for the November 5 snapshot cannot remain not included after a later balance refresh');
+assert.equal(appliedNovemberSales_(staleAfterRefresh).length, 0);
+assert.equal(staleAfterRefresh.lumpSumEligibleKnown, false,
+  'a stale not-included confirmation must withhold the lump-sum result');
+assert.match(staleAfterRefresh.lumpSumReason, /previous account-balance snapshot/i);
+assert.ok(staleAfterRefresh.classifiedInflowsSkipped.some(function(row) {
+  return /previous account-balance snapshot/i.test(row.reason || '');
+}));
+
+const refreshConfirmedAbsent = timelineFromAccountDates_(
+  asOfNov, partialRefreshAccounts, inflowReflectionsFor_(partialRefreshAccounts, false));
+assert.equal(refreshConfirmedAbsent.classifiedInflowTotal, 55975.73,
+  'the sale is counted once only after the user verifies it is absent from the refreshed balances');
+assert.equal(appliedNovemberSales_(refreshConfirmedAbsent).length, 2);
+
+const confirmedRefresh = timelineFromAccountDates_(
+  asOfNov, partialRefreshAccounts, inflowReflectionsFor_(partialRefreshAccounts, true));
+assert.equal(confirmedRefresh.months[0].proceedsInflow, 0,
+  'a confirmed refresh that includes the sales must not add them again');
+assert.equal(confirmedRefresh.classifiedInflowsApplied.length, 0);
+assert.equal(confirmedRefresh.classifiedInflowTotal, 0,
+  'the sale is not added when the user verifies it is already included in the refreshed balances');
+assert.equal(confirmedRefresh.lumpSumEligibleKnown, true);
+assert.ok(confirmedRefresh.classifiedInflowsSkipped.length >= 2);
+
+const partialRefreshUnknown = timelineFromAccountDates_(
+  asOfNov, partialRefreshAccounts, []);
+assert.equal(partialRefreshUnknown.classifiedInflowTotal, 0,
+  'unknown inclusion must not add November sales when a refreshed account might contain them');
+assert.equal(partialRefreshUnknown.months[0].proceedsInflow, 0);
+assert.equal(partialRefreshUnknown.lumpSumEligibleKnown, false,
+  'unknown inclusion after a maybe-containing refresh must withhold the lump-sum result');
+assert.match(partialRefreshUnknown.lumpSumReason, /may already include this inflow/i);
+
+const unknownInclusion = timelineFromAccountDates_(asOfNov, nov5Accounts, []);
+assert.equal(unknownInclusion.classifiedInflowTotal, 55975.73,
+  'the 2026-11-05 snapshot treats November sales as after those balances without leaving them unknown');
+assert.equal(unknownInclusion.months[0].proceedsInflow, 55975.73);
+assert.equal(unknownInclusion.lumpSumEligibleKnown, true);
+assert.doesNotMatch(String(unknownInclusion.lumpSumReason),
+  /same month as the opening snapshot/i);
+
+const firstCalc = timelineFromAccountDates_(asOfNov, nov5Accounts, novSalesReflectedNo);
+const repeatedCalc = timelineFromAccountDates_(asOfNov, nov5Accounts, novSalesReflectedNo);
+const advancedForecast = timelineFromAccountDates_(asOfDec, nov5Accounts, novSalesReflectedNo);
+assert.equal(firstCalc.classifiedInflowTotal, 55975.73);
+assert.equal(repeatedCalc.classifiedInflowTotal, firstCalc.classifiedInflowTotal,
+  'recalculating the same snapshot must not add the same inflow again');
+assert.equal(advancedForecast.classifiedInflowTotal, firstCalc.classifiedInflowTotal,
+  'advancing the forecast month must not drop the post-snapshot November sales');
+assert.equal(firstCalc.months[0].proceedsInflow, 55975.73);
+assert.equal(repeatedCalc.months[0].proceedsInflow, 55975.73);
+assert.equal(advancedForecast.months[0].proceedsInflow, 55975.73);
+assert.equal(advancedForecast.months[0].monthKey, '2026-12');
+
+const novSaleTimeline = firstCalc;
+assert.equal(novSaleTimeline.lumpSumEligibleKnown, true);
+assert.equal(novSaleTimeline.lumpSumEligible, 0);
+assert.match(novSaleTimeline.lumpSumReason, /No lump payment is labeled safe/i);
+assert.equal(novSaleTimeline.holdbackKnown, false);
+
+const centralCurrentSaleSheet = [
+  ['Type', 'Flow Source', 'Active', 'Payee', 'Jan-26', 'Feb-26', 'Mar-26', 'Apr-26', 'May-26', 'Jun-26', 'Jul-26', 'Aug-26', 'Sep-26', 'Oct-26', 'Nov-26', 'Dec-26', 'Totals', 'Yearly Total', 'Recurring'],
+  ['Income', 'CASH', 'YES', 'Cisco RSU Sale', 0, 18360.47, 0, 77985.65, 46221.21, 86006.17, 0, 0, 0, 0, 66404.98, 0, 274653.43, '', 'No'],
+  ['Income', 'CASH', 'YES', 'Other Stock Sales', 0, 0, 0, 8712.50, 0, 0, 0, 0, 0, 0, 9895.80, 0, 18608.30, '', 'No'],
+  ['Income', 'CASH', 'YES', 'Cisco Mid Year Bonus', 0, 0, 22766.25, 0, 0, 0, 0, 0, 0, 0, 0, 0, 22766.25, '', 'Yes']
+];
+const centralCollectedSales = context.collectDebtPayoffClassifiedStockSaleInflows_(
+  centralCurrentSaleSheet, centralCurrentSaleSheet);
+const centralNovCisco = centralCollectedSales.filter(function(row) {
+  return row.source === 'Cisco RSU Sale' && row.monthKey === '2026-11';
+});
+const centralNovOther = centralCollectedSales.filter(function(row) {
+  return row.source === 'Other Stock Sales' && row.monthKey === '2026-11';
+});
+assert.equal(centralNovCisco.length, 1);
+assert.equal(centralNovCisco[0].amount, 66404.98,
+  'the current Nov-26 Cisco RSU Sale cell is the recorded value');
+assert.equal(centralNovCisco[0].cellHeader, 'Nov-26');
+assert.equal(centralCollectedSales.filter(function(row) {
+  return row.source === 'Cisco RSU Sale' && row.monthKey === '2026-02' &&
+    row.amount === 18360.47 && row.cellHeader === 'Feb-26';
+}).length, 1);
+assert.equal(centralCollectedSales.filter(function(row) {
+  return row.source === 'Cisco RSU Sale' && row.monthKey === '2026-10';
+}).length, 0, 'blank Oct-26 is not treated as the November cell');
+assert.equal(centralNovOther.length, 1);
+assert.equal(centralNovOther[0].amount, 9895.8);
+assert.equal(centralCollectedSales.filter(function(row) {
+  return row.amount === 46079.93;
+}).length, 0, 'the earlier Nov extract is not added on top of the current cell');
+assert.equal(centralCollectedSales.some(function(row) {
+  return Math.abs(Number(row.amount) - 30000) < 0.005;
+}), false, 'do not invent another approximate $30,000 Cisco sale');
+assert.equal(centralCollectedSales.filter(function(row) {
+  return row.amount === 274653.43;
+}).length, 0, 'the Totals column is not a sale month');
+assert.equal(centralCollectedSales.some(function(row) {
+  return /bonus/i.test(row.source);
+}), false);
+
+function suppliedSysAccount_(name, currentBalance, minBuffer, usePolicy) {
+  return {
+    name: name,
+    currentBalance: currentBalance,
+    minBuffer: minBuffer,
+    usePolicy: usePolicy,
+    balanceAsOf: '2026-11-05'
+  };
+}
+const suppliedSysAccounts = [
+  suppliedSysAccount_('Ally - Samer Savings Account - 0393', 30640.38, 0, 'DO_NOT_TOUCH'),
+  suppliedSysAccount_('Ally - Lutfi Savings Account - 1219', 17868.59, 0, 'DO_NOT_TOUCH'),
+  suppliedSysAccount_('Ally - Laith Savings Account - 1367', 17868.59, 0, 'DO_NOT_TOUCH'),
+  suppliedSysAccount_('Cash Maximizer - 8747', 52376.99, 52376.99, 'USE_FOR_BILLS'),
+  suppliedSysAccount_('Checking - 1198', 941.71, 941.71, 'USE_FOR_BILLS'),
+  suppliedSysAccount_('Laith Checking Account - 8174', 2068.71, 2068.71, 'DO_NOT_TOUCH'),
+  suppliedSysAccount_('Munira Account - 1528', 501.40, 501.40, 'DO_NOT_TOUCH'),
+  suppliedSysAccount_('Rental Account - 0521', 55532.68, 55532.68, 'USE_WITH_CAUTION'),
+  suppliedSysAccount_('Savings - 2167', 1626.99, 1626.99, 'USE_FOR_BILLS'),
+  suppliedSysAccount_('Laith Account - 3337', 64191.51, 64191.51, 'DO_NOT_TOUCH'),
+  suppliedSysAccount_('Laith Saving Account - 8187', 185.09, 185.09, 'DO_NOT_TOUCH'),
+  suppliedSysAccount_('Lutfi Account - 0448', 35629.23, 35629.23, 'DO_NOT_TOUCH'),
+  suppliedSysAccount_('Pay Your Self Savings - 3117', 36806.84, 36806.84, 'USE_FOR_DEBT'),
+  suppliedSysAccount_('Payoff Account - 8588', 14402.60, 14402.60, 'USE_FOR_DEBT'),
+  suppliedSysAccount_('BofA - Luma Adv Tiered Interest Chkg - 6198', 447.77, 221.85, 'DO_NOT_TOUCH'),
+  suppliedSysAccount_('Lutfi Checking - 3425', 82.41, 0, 'DO_NOT_TOUCH'),
+  suppliedSysAccount_('Lutfi Savings - 3991', 5622.17, 0, 'DO_NOT_TOUCH'),
+  suppliedSysAccount_('Lutfi Savings To Pay Back - 8371', 1270.05, 0, 'DO_NOT_TOUCH'),
+  suppliedSysAccount_('Lutfi Bofa Visa Signature - 8830', -107.64, 0, 'DO_NOT_TOUCH'),
+  suppliedSysAccount_('Laith Pay YourSelf Savings - 2466', 4305.56, 4305.56, 'DO_NOT_TOUCH')
+];
+const suppliedEligibleRows = context.debtPayoffOpeningSnapshotFromAccounts_(suppliedSysAccounts).accounts;
+const suppliedUsableAfterBuffers =
+  context.debtPayoffUsableCashAfterBuffersFromAccounts_(suppliedSysAccounts);
+assert.equal(suppliedEligibleRows.length, 20);
+assert.equal(suppliedUsableAfterBuffers, 0,
+  'the supplied SYS - Accounts snapshot has $0 usable cash after buffers');
+function suppliedAccountRow_(name) {
+  return suppliedEligibleRows.find(function(row) { return row.name === name; });
+}
+[
+  ['Cash Maximizer - 8747', 'USE_FOR_BILLS', 52376.99, 52376.99],
+  ['Checking - 1198', 'USE_FOR_BILLS', 941.71, 941.71],
+  ['Savings - 2167', 'USE_FOR_BILLS', 1626.99, 1626.99],
+  ['Rental Account - 0521', 'USE_WITH_CAUTION', 55532.68, 55532.68],
+  ['Pay Your Self Savings - 3117', 'USE_FOR_DEBT', 36806.84, 36806.84],
+  ['Payoff Account - 8588', 'USE_FOR_DEBT', 14402.60, 14402.60]
+].forEach(function(expected) {
+  const row = suppliedAccountRow_(expected[0]);
+  assert.ok(row, expected[0] + ' must be in the supplied snapshot');
+  assert.equal(row.usePolicy, expected[1]);
+  assert.equal(row.currentBalance, expected[2]);
+  assert.equal(row.minBuffer, expected[3]);
+  assert.equal(row.usableAfterBuffer, 0,
+    expected[0] + ' Current Balance equals Min Buffer, so usable after buffer is $0');
+  assert.equal(row.includedInEligibleCash, true);
+});
+[
+  'Ally - Samer Savings Account - 0393',
+  'Ally - Lutfi Savings Account - 1219',
+  'Ally - Laith Savings Account - 1367',
+  'Laith Checking Account - 8174',
+  'Munira Account - 1528',
+  'Laith Account - 3337',
+  'Laith Saving Account - 8187',
+  'Lutfi Account - 0448',
+  'BofA - Luma Adv Tiered Interest Chkg - 6198',
+  'Lutfi Checking - 3425',
+  'Lutfi Savings - 3991',
+  'Lutfi Savings To Pay Back - 8371',
+  'Lutfi Bofa Visa Signature - 8830',
+  'Laith Pay YourSelf Savings - 2466'
+].forEach(function(name) {
+  const row = suppliedAccountRow_(name);
+  assert.ok(row, name + ' must be in the supplied snapshot');
+  assert.equal(row.usePolicy, 'DO_NOT_TOUCH');
+  assert.equal(row.includedInEligibleCash, false);
+  assert.equal(row.usableAfterBuffer, 0);
+  assert.equal(row.excludedReason, 'DO_NOT_TOUCH');
+});
+assert.notEqual(suppliedUsableAfterBuffers, 110139.19,
+  '$110,139.19 is not the SYS - Accounts usable-after-buffer total');
+
+const centralDebtPayments = 21877.05;
+const centralShortfall = 11066.68;
+const centralTimelineInput = Object.assign({}, verifiedBaselineInput, {
+  asOfDate: asOfNov,
+  debts: [{
+    name: 'Household debts', active: true, balance: 100000,
+    minimumPayment: centralDebtPayments, minimumPaymentKnown: true, type: 'Credit Card'
+  }],
+  usableCashAfterBuffers: suppliedUsableAfterBuffers,
+  requiredReserveAmount: 43137.30,
+  reserveUpcomingAmount: 39500,
+  upcomingExpenses: [{
+    name: 'November planned',
+    status: 'Planned',
+    dueDate: '2026-11-20',
+    dueDateKnown: true,
+    amount: 35000,
+    amountKnown: true
+  }, {
+    name: 'December planned',
+    status: 'Planned',
+    dueDate: '2026-12-10',
+    dueDateKnown: true,
+    amount: 4500,
+    amountKnown: true
+  }],
+  accountBalanceAsOf: suppliedSysAccounts
+});
+const centralSupported = context.buildDebtPayoffSupportedMonthlyExtra_(centralTimelineInput);
+assert.equal(centralSupported.components.debtMinimumsMonthly, centralDebtPayments,
+  'Central Debt Overview debt payments are the snapshot debt minimums');
+assert.equal(centralSupported.cashPicture.debtPayments.total, centralDebtPayments);
+assert.equal(centralSupported.cashPicture.shortfall, centralShortfall,
+  'the monthly shortfall stays the Central Debt Overview displayed amount');
+assert.equal(
+  context.round2_(centralSupported.components.recurringIncomeMonthly -
+    centralSupported.components.recurringBillsMonthly -
+    centralSupported.components.variableBillsMonthly -
+    centralSupported.components.debtMinimumsMonthly -
+    centralSupported.components.policyFloorMonthly -
+    centralSupported.components.unmatchedInvestmentBillsMonthly),
+  -centralShortfall,
+  'shortfall is income minus required bills, variable bills, debt payments, policy floors, and unmatched investment bills'
+);
+assert.equal(centralSupported.amount, 0);
+const centralTimeline = context.buildDebtPayoffCashFlowTimeline_({
+  supported: centralSupported,
+  input: centralTimelineInput,
+  asOfDate: asOfNov,
+  classifiedInflows: centralCollectedSales,
+  accountBalanceAsOf: suppliedSysAccounts,
+  classifiedInflowReflections: []
+});
+assert.equal(centralTimeline.available, true);
+assert.equal(centralTimeline.openingSnapshotDate, '2026-11-05');
+assert.equal(centralTimeline.startingEligibleCash, 0,
+  'timeline start matches the supplied SYS - Accounts usable cash after buffers');
+assert.equal(centralTimeline.startingEligibleCashFromAccounts, 0);
+assert.notEqual(centralTimeline.startingEligibleCash, 110139.19);
+assert.equal(centralTimeline.recurringSurplus, -centralShortfall);
+assert.equal(centralTimeline.canonicalReserveAmount, 43137.30);
+assert.equal(centralTimeline.reserveUpcomingAmount, 39500);
+assert.equal(centralTimeline.reserveTarget, 3637.30,
+  'timeline reserve target is canonical reserve minus Upcoming walked as outflows');
+assert.equal(
+  context.round2_(centralTimeline.canonicalReserveAmount - centralTimeline.reserveUpcomingAmount),
+  centralTimeline.reserveTarget
+);
+assert.equal(
+  context.round2_(43137.30 - 3637.30),
+  39500,
+  'the $39,500 household-vs-timeline reserve gap is the Upcoming already in the walk'
+);
+assert.equal(centralTimeline.upcomingInWalkTotal, 39500);
+assert.equal(centralTimeline.classifiedInflowTotal, 76300.78,
+  'current Nov-26 cells are counted once and not added to the earlier extract or an extra $30,000');
+assert.equal(centralTimeline.classifiedInflowsApplied.filter(function(row) {
+  return row.source === 'Cisco RSU Sale' && row.amount === 66404.98 &&
+    row.monthKey === '2026-11' && row.cellHeader === 'Nov-26';
+}).length, 1);
+assert.equal(centralTimeline.classifiedInflowsApplied.filter(function(row) {
+  return row.source === 'Other Stock Sales' && row.amount === 9895.8;
+}).length, 1);
+assert.equal(centralTimeline.classifiedInflowsApplied.filter(function(row) {
+  return row.monthKey !== '2026-11';
+}).length, 0, 'historical sale months stay in the November 5 opening snapshot');
+assert.match(String(centralTimeline.reserveTargetExplanation), /43137\.30/);
+assert.match(String(centralTimeline.reserveTargetExplanation), /3637\.30/);
+assert.match(String(centralTimeline.reserveTargetExplanation), /39500\.00|39,500/);
+const centralNov = centralTimeline.months.find(function(row) {
+  return row.monthKey === '2026-11';
+});
+const centralDec = centralTimeline.months.find(function(row) {
+  return row.monthKey === '2026-12';
+});
+assert.ok(centralNov);
+assert.ok(centralDec);
+assert.equal(centralNov.startingEligibleCash, 0);
+assert.equal(centralNov.upcomingAmount, 35000);
+assert.equal(centralDec.upcomingAmount, 4500);
+assert.equal(centralNov.proceedsInflow, 76300.78);
+assert.equal(centralDec.proceedsInflow, 0);
+assert.equal(centralNov.reserveTarget, 3637.30);
+assert.equal(centralDec.reserveTarget, 3637.30);
+assert.equal(centralNov.recurringSurplus, -centralShortfall);
+assert.equal(centralDec.recurringSurplus, -centralShortfall);
+assert.equal(centralNov.endingEligibleCash, 30234.10,
+  'November ending cash is $0 start − $11,066.68 surplus + $76,300.78 inflows − $35,000 Upcoming');
+assert.equal(centralDec.startingEligibleCash, 30234.10);
+assert.equal(centralDec.endingEligibleCash, 14667.42,
+  'December ending cash is November ending − $11,066.68 surplus − $4,500 Upcoming');
+assert.equal(
+  context.round2_(centralNov.startingEligibleCash + centralNov.recurringSurplus +
+    centralNov.proceedsInflow - centralNov.upcomingAmount),
+  centralNov.endingEligibleCash,
+  'November ending cash is start + surplus + inflows − planned Upcoming'
+);
+assert.equal(
+  context.round2_(centralDec.startingEligibleCash + centralDec.recurringSurplus +
+    centralDec.proceedsInflow - centralDec.upcomingAmount),
+  centralDec.endingEligibleCash,
+  'December ending cash is start + surplus + inflows − planned Upcoming'
+);
+assert.equal(centralDec.startingEligibleCash, centralNov.endingEligibleCash);
+assert.equal(
+  context.round2_(centralNov.endingEligibleCash - centralNov.startingEligibleCash -
+    centralNov.recurringSurplus - centralNov.proceedsInflow),
+  -35000
+);
+assert.equal(
+  context.round2_(centralDec.endingEligibleCash - centralDec.startingEligibleCash -
+    centralDec.recurringSurplus - centralDec.proceedsInflow),
+  -4500
+);
+assert.equal(centralSupported.cashPicture.shortfall, centralShortfall,
+  'timeline Upcoming does not overwrite the displayed monthly shortfall');
+
+const missingSaleTiming = context.buildDebtPayoffCashFlowTimeline_({
+  supported: extraStartSupported,
+  input: extraStartInput,
+  asOfDate: asOf,
+  classifiedInflows: [{
+    source: 'Cisco RSU Sale', amount: 46079.93,
+    alreadyInOpeningEligible: false, timingUnknown: true
+  }]
+});
+assert.equal(missingSaleTiming.earliestExtraKnown, false,
+  'missing classified timing must suppress a precise extra-payment month');
+assert.match(missingSaleTiming.earliestReason, /availability month/i);
+assert.equal(missingSaleTiming.lumpSumEligibleKnown, false);
+assert.match(missingSaleTiming.lumpSumReason, /availability month/i);
+
+const holdbackUnknownLump = context.buildDebtPayoffCashFlowTimeline_({
+  supported: extraStartSupported,
+  input: extraStartInput,
+  asOfDate: asOf,
+  classifiedInflows: [{
+    source: 'Other Stock Sales', amount: 8000, monthKey: '2026-10',
+    alreadyInOpeningEligible: false
+  }]
+});
+assert.equal(holdbackUnknownLump.months[0].proceedsInflow, 8000);
+assert.equal(holdbackUnknownLump.lumpSumEligibleKnown, false,
+  'unknown holdback must withhold a lump-sum amount rather than estimating tax');
+assert.match(holdbackUnknownLump.lumpSumReason, /holdback is unknown/i);
+assert.ok(holdbackUnknownLump.earliestExtraKnown === true ||
+  holdbackUnknownLump.months[0].endingEligibleCash > extraStartSupported.requiredReserveAmount);
+
+const holdbackKnownLump = context.buildDebtPayoffCashFlowTimeline_({
+  supported: extraStartSupported,
+  input: extraStartInput,
+  asOfDate: asOf,
+  classifiedInflows: [{
+    source: 'Other Stock Sales', amount: 8000, monthKey: '2026-10',
+    alreadyInOpeningEligible: false
+  }],
+  holdbackKnown: true,
+  holdbackAmount: 1000
+});
+assert.equal(holdbackKnownLump.holdbackKnown, true);
+assert.equal(holdbackKnownLump.lumpSumEligibleKnown, true);
+assert.ok(holdbackKnownLump.lumpSumEligible > 0.005);
+assert.ok(holdbackKnownLump.lumpSumEligible <= 7000);
+assert.match(holdbackKnownLump.lumpSumReason, /not sustainable monthly extra/i);
 
 const missingIncome = context.buildDebtPayoffSupportedMonthlyExtra_(Object.assign({}, baseSupported, {
   recurringIncomeSources: [],
@@ -3751,7 +4379,7 @@ assert.match(help, /snowball applies both smallest balance first/);
 assert.doesNotMatch(sliceFunction(projection, 'resolveDebtPayoffScenarioBonusEvents_'),
   /setValue\(|appendRow\(|PropertiesService|parseMonthHeader_/);
 assert.doesNotMatch(sliceFunction(projection, 'getDebtPayoffStrategyComparison'),
-  /setValue\(|appendRow\(|PropertiesService/);
+  /setValue\(|appendRow\(|PropertiesService|applySuppliedNovember5BalanceAsOfSnapshot_/);
 assert.match(projection, /appliedToComparison: false/);
 assert.match(projection, /countedInRecurringIncomeMonthly: false/);
 assert.match(projection, /countedInReserve: false/);

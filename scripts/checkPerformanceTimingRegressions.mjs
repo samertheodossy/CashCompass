@@ -58,7 +58,7 @@ assert.match(bankAccountsSource,
   /function syncAllAccountsFromLatestCurrentYear_\(optionalSs, optionalBankDisplay\)[\s\S]*?getLatestBankAccountValuesForYear_\([\s\S]*?optionalBankDisplay[\s\S]*?return \{[\s\S]*?sheet: targetSheet,[\s\S]*?display: targetDisplay,[\s\S]*?headerMap: targetHeaderMap/,
   'Bank synchronization must accept an optional same-call display and return reusable SYS Accounts context');
 assert.match(bankAccountsSource,
-  /function getLatestBankAccountValuesForYear_\(sheet, year, optionalDisplay\)[\s\S]*?optionalDisplay && optionalDisplay\.length[\s\S]*?: sheet\.getDataRange\(\)\.getDisplayValues\(\)/,
+  /function getLatestBankAccountValuesForYear_\(sheet, year, optionalDisplay(?:, optionalAsOfOut)?\)[\s\S]*?optionalDisplay && optionalDisplay\.length[\s\S]*?: sheet\.getDataRange\(\)\.getDisplayValues\(\)/,
   'Latest Bank values must preserve the standalone display read while accepting a same-call snapshot');
 assert.match(bankAccountsSource,
   /function updateAccountsSheetFields_\(accountName, options, optionalSs, optionalAccountsContext\)[\s\S]*?context && context\.sheet[\s\S]*?: ensureSysAccountsSheet_\(optionalSs\)[\s\S]*?context && context\.display[\s\S]*?: sheet\.getDataRange\(\)\.getDisplayValues\(\)/,
@@ -184,8 +184,9 @@ assert.ok(!fullSnapshotBuilder.includes('ensureActivityLogSheet_'),
   'Full Overview reads must not create or repair Activity before rendering');
 const postRenderMaintenance = functionSource_(dashboardSource, 'runDashboardPostRenderMaintenance');
 assert.ok(postRenderMaintenance.includes('ensureActivityLogSheet_') &&
-  postRenderMaintenance.includes('ensureDebouncePlannerTrigger_'),
-  'Existing Activity and debounce maintenance must remain available after render');
+  postRenderMaintenance.includes('ensureDebouncePlannerTrigger_') &&
+  postRenderMaintenance.includes('ensureAccountsBalanceAsOfColumn_'),
+  'Existing Activity, debounce, and Balance As Of maintenance must remain available after render');
 const overviewCoreEntry = functionSource_(dashboardSource, 'getDashboardOverviewCoreSnapshot');
 assert.ok(overviewCoreEntry.includes('cacheDashboardOverviewCurrentPosition_(ss, current)'),
   'Core Overview must issue a server-side continuation for its verified aggregates');

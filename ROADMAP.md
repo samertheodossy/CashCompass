@@ -42,6 +42,7 @@ It never executes payments or silently changes financial data. Retirement outloo
 - ✅ **Optional one-time Cisco bonus overlay** on that comparison — committed (`5425be7`) and Central-tested. Mid/End Year bonuses are opt-in scenario cash with explicit month/year; same amounts and dates in every strategy; baseline is minimums plus those events; interest vs baseline is signed (less / more / same). Not recurring monthly income, not the 90-day reserve, and not auto-added to the extra estimate. Later household bonus/RSU/rental scenarios remain later.
 - ✅ **Monthly shortfall explanation and Type-grouped debt minimums** — when recurring commitments exceed income, Debt Overview names the monthly gap and splits debt minimums by saved Type (Credit Cards, HELOC, Loans/Mortgages, Other/Unknown). That Type breakdown has been **runtime-tested in Central**. Missing Type stays Other/Unknown; it is not inferred from the account name.
 - ✅ **Reserve and upcoming-expense safety checks** — the supported extra is reduced or withheld when usable cash, This Week’s canonical reserve, or a later month in the cash-safety window would fall below the protected reserve. Upcoming already in the reserve is not held twice. If no extra is safe, recommend $0.
+- ✅ **Snapshot-aware Debt Overview cash timeline (Slice 4)** — implemented, tested, and Central-checked. Per-account Balance As Of dates and the initial Nov 5, 2026 snapshot are in source. The read-only overlay timeline counts confirmed post-snapshot sale inflows once, shows planned Upcoming outflows, and reuses This Week’s canonical reserve and the existing cash-safety walk. Central validation matched **$0** opening eligible cash, the modeled monthly deficit **$11,066.68**, current November sale cells, and the November/December bridge. **Limitation:** this is a modeled scenario. The deficit is not verified actual monthly loss; the timeline holds it constant. No payment, transfer, or This Week behavior changed. Actual vs modeled reconciliation is remaining slice **4.5**.
 
 ### Implemented in source — local tests passing; Central end-to-end validation pending
 
@@ -55,16 +56,15 @@ These items are **already implemented**. Local Debt Payoff Strategy, Dashboard U
 
 Also in source, with the same Central-proof status:
 
-- **Supported recurring extra estimate and automatic monthly extra-payoff recommendation** on Debt Overview, including **variable-bill YTD running averages** and a **3-month cash-safety forecast**. Confirmed Cash Flow Recurring / Frequency / Expected Amount income, minus required bills, known debt minimums, investment policy floors, then This Week’s canonical reserve (including upcoming expenses and property contingency). The recurring extra is then reduced or withheld when a later month in that 3-month horizon would fall below the protected reserve after required payments and known Planned upcoming expenses counted once; the shortfall month and obligation are named. Planned upcoming after that window is named as outside this check. Varies bills use January through the latest completed month this year, known spending ÷ completed months; explicit $0 counts; a blank month withholds that bill. Missing facts, including a Planned upcoming date or amount, a $0 extra after protections, or an incomplete household APR/minimum set withhold a recommendation instead of showing three identical $0-extra results. A $0 recurring extra still reports cash remaining above the reserve after the 3-month forecast. A separate one-time extra from cash above the reserve is sized on a 12-month walk of the current recurring surplus and known Planned upcoming expenses, counted once, while preserving the protected reserve floor each month. If the no-lump baseline later falls below that floor, no lump is labeled safe and the shortfall month is named. Optional Cisco bonuses are not assumed. A missing cash APY stays `CASH_YIELD_DATA_REQUIRED` rather than inventing a winner. Unknown values are not treated as $0. When extra cash can be proven, Debt Overview automatically compares avalanche and snowball using that estimate and recommends a strategy in one monthly recommendation section at the top of Debt Overview; the user does not type an amount for that recommendation. Account totals, the payoff chart, and the debt table stay in a collapsed Debt balances and payoff estimates section. Typed extra and Cisco bonuses remain an optional hypothetical scenario. The estimate is not treated as guaranteed affordable and is not a payment. **Needs revalidation:** the displayed $11,128.24 shortfall is this modeled recurring standing-policy gap, not a reconciled actual-cash conclusion. See **Current condition**.
+- **Supported recurring extra estimate and automatic monthly extra-payoff recommendation** on Debt Overview, including **variable-bill YTD running averages** and a **3-month cash-safety forecast**. Confirmed Cash Flow Recurring / Frequency / Expected Amount income, minus required bills, known debt minimums, investment policy floors, then This Week’s canonical reserve (including upcoming expenses and property contingency). The recurring extra is then reduced or withheld when a later month in that 3-month horizon would fall below the protected reserve after required payments and known Planned upcoming expenses counted once; the shortfall month and obligation are named. Planned upcoming after that window is named as outside this check. Varies bills use January through the latest completed month this year, known spending ÷ completed months; explicit $0 counts; a blank month withholds that bill. Missing facts, including a Planned upcoming date or amount, a $0 extra after protections, or an incomplete household APR/minimum set withhold a recommendation instead of showing three identical $0-extra results. A $0 recurring extra still reports cash remaining above the reserve after the 3-month forecast. A separate one-time extra from cash above the reserve is sized on a 12-month walk of the current recurring surplus and known Planned upcoming expenses, counted once, while preserving the protected reserve floor each month. If the no-lump baseline later falls below that floor, no lump is labeled safe and the shortfall month is named. Optional Cisco bonuses are not assumed. A missing cash APY stays `CASH_YIELD_DATA_REQUIRED` rather than inventing a winner. Unknown values are not treated as $0. When extra cash can be proven, Debt Overview automatically compares avalanche and snowball using that estimate and recommends a strategy in one monthly recommendation section at the top of Debt Overview; the user does not type an amount for that recommendation. Account totals, the payoff chart, and the debt table stay in a collapsed Debt balances and payoff estimates section. Typed extra and Cisco bonuses remain an optional hypothetical scenario. The estimate is not treated as guaranteed affordable and is not a payment. **Needs revalidation:** the displayed $11,066.68 shortfall is this modeled recurring standing-policy gap, not verified actual monthly loss. Remaining slice **4.5** is the actual cash-flow reconciliation. See **Current condition**.
 - **Next-dollar allocation comparison** — compare eligible uses of the supported amount, or the explicit missing-fact result: high-APR debt payoff, holding cash/reserve, extra mortgage principal, or investing. Show the amount, timing, interest/return assumptions, liquidity effect, and tradeoffs. Do **not** change This Week’s frozen kernel or initiate payments or transfers. The Debt Overview what-if extra field stays optional and is not auto-filled.
-- **Unsaved Debt Overview cash-flow scenarios** — committed (`f8e0ed1`). On the existing optional hypothetical overlay, enter a recurring income increase and/or commitment change. Edits are labeled hypothetical and are not written. The saved monthly baseline still includes standing investment policy floors (weekly × 52 ÷ 12); This Week’s Robinhood pause does not change that baseline. Safe extra is $0 unless both the adjusted recurring cash flow and the reserve forecast support it. One-time bonus income stays out of recurring income and the 90-day reserve. If extra is proven, it is passed into the existing strategy comparison. No bill is marked safe to reduce without explicit user input. RSU/ESPP/rental scenarios remain later. **Needs revalidation:** this overlay still uses the modeled recurring baseline; it does not ingest classified actual stock-sale proceeds. Do not treat its $11,128.24 shortfall as a reconciled actual-cash conclusion.
-- **Forward cash-flow and reserve timeline (first cut; not finalized)** — in source on the same unsaved overlay (local tests passing). It projects eligible cash month by month using This Week’s canonical reserve floor and the existing cash-safety walk. Share-sale proceeds stay $0 unless a hypothetical net amount and availability month are entered. A modeled extra-payment start is shown only when surplus and the reserve test both pass inside a 36-month window; missing timing suppresses a precise month. This does not change This month’s action, This Week, or payment order. **Do not treat this first cut as the finished household timeline.** It currently holds recurring surplus/deficit constant, excludes unclassified actual stock-sale proceeds, and does not distinguish lump-sum cash from sustainable monthly extra using confirmed inflows. Finalize it only after remaining slices 1–3; see remaining slice 4.
+- **Unsaved Debt Overview cash-flow scenarios** — committed (`f8e0ed1`). On the existing optional hypothetical overlay, enter a recurring income increase and/or commitment change. Edits are labeled hypothetical and are not written. The saved monthly baseline still includes standing investment policy floors (weekly × 52 ÷ 12); This Week’s Robinhood pause does not change that baseline. Safe extra is $0 unless both the adjusted recurring cash flow and the reserve forecast support it. One-time bonus income stays out of recurring income and the 90-day reserve. If extra is proven, it is passed into the existing strategy comparison. No bill is marked safe to reduce without explicit user input. RSU/ESPP/rental scenarios remain later. **Needs revalidation:** this overlay still uses the modeled recurring baseline. Do not treat the modeled shortfall as a reconciled actual-cash conclusion; remaining slice **4.5** is the actual cash-flow reconciliation.
 
 ### Current condition (dated, changeable; not a fully reconciled baseline)
 
 The modeled Debt Overview monthly shortfall is **not** a completed reconciliation against 2026 actual Cash Flow. Recalculate from saved facts on each refresh. Do not schedule $400/month or any other extra until affordability and reserve checks, using classified available cash, support it.
 
-**Modeled Debt Overview baseline (captured 2026-11-10, still displayed):** recurring income **$22,033.22**; required bills **$4,653.61**; variable bills **$4,387.57**; debt minimums **$21,938.61**; standing investment floors **$2,166.67** (Robinhood $500/week × 52 ÷ 12); other investment bill **$15**; displayed monthly shortfall **$11,128.24**. Usable cash after buffers and current safe extra remain **$0** under this standing-policy picture. This Week may pause Robinhood for the current week under a cash constraint; that weekly pause does **not** change this monthly baseline. Current payoff strategies remain **conditional scenarios, not affordable actions**.
+**Modeled Debt Overview baseline (Slice 4 Central-checked 2026-11-18):** recurring income **$22,033.22**; required bills **$4,653.61**; variable bills **$4,387.57**; debt payments **$21,877.05**; standing investment floors **$2,166.67** (Robinhood $500/week × 52 ÷ 12); other investment bill **$15**; displayed monthly shortfall **$11,066.68**. Opening eligible cash after buffers is **$0** on the supplied SYS - Accounts snapshot. Current safe extra remains **$0** under this standing-policy picture. This Week may pause Robinhood for the current week under a cash constraint; that weekly pause does **not** change this monthly baseline. Current payoff strategies remain **conditional scenarios, not affordable actions**. **Limitation:** the $11,066.68 deficit is the modeled recurring standing-policy gap held constant on the timeline; it is not verified actual monthly loss. An earlier displayed $11,128.24 used modeled debt mins $21,938.61.
 
 **Identified gap vs 2026 Cash Flow (captured 2026-11-11; audit, not a new formula):** the household’s actual Cash Flow is variable and includes positive months, bonuses, a tax refund, and stock-sale proceeds. The 2026 Cash Flow summary shows Jan–Nov net of **−$34,260.67**, plus a December **−$2,922.60** entry, for a displayed total of **−$37,183.27**. December 2026 has not occurred yet, so do **not** describe that full total as realized YTD cash flow. The supplied file shows **Cisco RSU Sale $274,653.43** and **Other Stock Sales $18,608.30** to date; the latter includes a November **$9,895.80** entry that may be the approximately $10,000 sale the user mentioned. An additional approximately **$30,000 Cisco RSU sale is not yet recorded**. Genuine cash inflows, including **settled** stock-sale proceeds, should be considered for debt decisions, but one-time proceeds stay distinct from recurring monthly income. Do **not** assume gross proceeds are settled, net of taxes, or available before that is confirmed.
 
@@ -72,24 +72,28 @@ The modeled Debt Overview monthly shortfall is **not** a completed reconciliatio
 
 **Conclusions that need revalidation**
 
-- The **$11,128.24** displayed shortfall is the modeled recurring standing-policy gap. It is incomplete as a household cash-available conclusion until actual inflows, future-dated entries, transfers, and any card double-count are bridged.
+- The **$11,066.68** displayed shortfall is the modeled recurring standing-policy gap. It is incomplete as a household cash-available conclusion until remaining slice **4.5** bridges actual inflows, future-dated entries, transfers, lumpy expenses, and any card purchase/payment overlap.
 - **$0 current safe extra** remains the current Debt Overview action under that modeled baseline. Reopen or revise that interpretation if the reconciliation shows available one-time or irregular cash that the recurring model omitted.
-- The first-cut forward timeline’s earliest extra-payment month is a hypothetical-overlay result, not household advice.
+- The Slice 4 timeline’s earliest extra-payment month is a modeled overlay result, not household advice, and holds the modeled deficit constant.
 
 ### NEXT — Ordered remaining slices
 
 Work these slices **one at a time** on **existing Debt Overview, Cash Flow, and Rolling Debt Payoff**. Do not start a later slice’s product behavior until the earlier slice’s acceptance criteria pass. Keep frozen This Week / RFP-3 unchanged. Do not initiate payments. Do not recommend a HELOC transfer or change debt ordering until a later approved slice explicitly does so. Keep the existing page, navigation, and payment behavior unless a later approved slice explicitly changes them.
 
+**Completed in this track:** remaining slices **1–4** (2026 Cash Flow audit, inflow classification, actual-month back-test, and the snapshot-aware timeline). Next product work is **4.5**, then **5**, then **6**.
+
 **Illustrative extra only:** $400/month toward a Bank of America mortgage (versus $100/week) may be used in examples to show that monthly and weekly extras are not equivalent. It is **not** an agreed target, household budget, or default extra. The recommendation must calculate any affordable amount from saved facts. If none is safe, recommend $0.
 
-**Standing cash-inflow rules for remaining slices 1–6**
+**Standing cash-inflow rules for remaining slices 4.5–6**
 
 - Settled stock-sale proceeds and other irregular cash inflows are **candidate one-time funds** for debt payoff after any explicitly held-back amount and reserve protections. Unconfirmed gross proceeds are not treated as settled or available.
 - Keep those inflows **separate from sustainable recurring monthly income**. Do not inflate the recurring baseline with asset liquidation.
 - **Count each inflow exactly once.** If it is already reflected in the opening eligible account balance at the forecast cutoff, do not add the historical Cash Flow row again. Add only post-cutoff inflows that are not already in that balance.
 - Compare **one-time cash available for a lump-sum payoff** separately from **sustainable monthly extra**.
 
-#### 1. Reconcile 2026 actual Cash Flow against the Debt Overview baseline
+#### 1. Reconcile 2026 actual Cash Flow against the Debt Overview baseline — complete
+
+**Status.** Complete as a read-only audit. Findings remain in **Current condition**. The credit-card purchase/payment overlap stays open for remaining slice **4.5**.
 
 **Scope.** Read-only numerical audit. Identify categories, positive-month sources, future-dated entries, transfers, and any credit-card purchase/payment double counting. Produce a numerical bridge from the displayed Cash Flow months to the modeled Debt Overview baseline ($22,033.22 income; $4,653.61 required bills; $4,387.57 variable bills; $21,938.61 debt minimums; $2,166.67 standing floors; $15 other investment bill; $11,128.24 shortfall). Separate Jan–Nov displayed net (−$34,260.67) from the not-yet-occurred December −$2,922.60 entry. Record Cisco RSU Sale $274,653.43, Other Stock Sales $18,608.30 (including November $9,895.80), and the unrecorded approximately $30,000 Cisco RSU sale as **reported file amounts**, not as settled/net/available cash. In the bridge, mark each irregular/sale inflow as already in the opening eligible balance at the forecast cutoff, post-cutoff and not in that balance, or timing unknown — so later slices can count it once and keep it off the recurring income line. **Make no code or workbook changes.**
 
@@ -112,7 +116,9 @@ Work these slices **one at a time** on **existing Debt Overview, Cash Flow, and 
 
 **Must remain unchanged.** This Week / RFP-3, This month’s action, Debt Overview recommendation, Rolling Debt Payoff, page/navigation, payment flows, workbook values, and the first-cut hypothetical timeline code.
 
-#### 2. Define and implement cash-inflow classification
+#### 2. Define and implement cash-inflow classification — complete
+
+**Status.** Complete. Classified stock-sale Cash Flow rows stay off recurring income and are counted once against the opening snapshot.
 
 **Scope.** After the bridge exists, classify inflows as **recurring income**, **dated irregular income**, or **one-time asset-sale proceeds**. Count each inflow **exactly once**. If it is already reflected in the opening eligible account balance at the forecast cutoff, do not add the historical Cash Flow row again. Add only post-cutoff inflows that are not already in that balance. Settled stock-sale proceeds and other irregular cash inflows are candidate one-time funds for debt payoff after any explicitly held-back amount and reserve protections; they stay separate from sustainable recurring monthly income. Do not inflate recurring income with asset liquidation. Do not infer that reported Cisco or other stock-sale totals are settled, net of taxes, or available until that is confirmed.
 
@@ -139,9 +145,11 @@ Work these slices **one at a time** on **existing Debt Overview, Cash Flow, and 
 
 **Must remain unchanged.** This Week / RFP-3 kernel, This month’s action until a later slice consumes classified cash, Rolling Debt Payoff, payment initiation, HELOC advice, debt order, page/navigation, and workbook writes.
 
-#### 3. Back-test the monthly forecast against available actual months
+#### 3. Back-test the monthly forecast against available actual months — complete
 
-**Scope.** Compare the monthly forecast with available actual Cash Flow months and explain material variances. Reopen or revise the **$11,128.24** baseline interpretation if the reconciliation shows it is incomplete or misleading. Do not silently treat missing values as $0.
+**Status.** Complete as a modeled-versus-file audit. The displayed shortfall remains a modeled standing-policy gap, not verified actual monthly loss. Remaining slice **4.5** is the actual cash-flow reconciliation.
+
+**Scope.** Compare the monthly forecast with available actual Cash Flow months and explain material variances. Reopen or revise the modeled shortfall interpretation if the reconciliation shows it is incomplete or misleading. Do not silently treat missing values as $0.
 
 **Acceptance criteria**
 
@@ -161,9 +169,13 @@ Work these slices **one at a time** on **existing Debt Overview, Cash Flow, and 
 
 **Must remain unchanged.** Frozen This Week / RFP-3, payment flows, HELOC advice, debt order, page/navigation, and workbook values.
 
-#### 4. Finalize the forward cash-flow and reserve timeline
+#### 4. Finalize the forward cash-flow and reserve timeline — implemented, tested, Central-checked
 
-**Scope.** Only after the data rules and baseline reconcile, finish the first-cut Debt Overview timeline. Include irregular inflows on their availability dates **only when they are not already in the opening eligible balance at the forecast cutoff**. Settled stock-sale proceeds and other irregular cash inflows are candidate one-time funds for a lump-sum payoff after any explicitly held-back amount and reserve protections. Compare that one-time cash separately from **sustainable monthly extra**. Continue to reuse This Week’s canonical reserve floor and the existing cash-safety walk. Do not create a competing reserve formula.
+**Status.** Complete. See **Already in place**. Per-account Balance As Of dates and the initial Nov 5, 2026 snapshot are in source. The read-only overlay timeline counts confirmed post-snapshot sale inflows once, shows planned Upcoming outflows, and reuses the existing reserve logic. Central validation matched **$0** opening eligible cash, modeled monthly deficit **$11,066.68**, current November sale cells, and the November/December bridge.
+
+**Limitation.** This is a modeled scenario. The deficit is not verified actual monthly loss; the timeline holds it constant. No payment, transfer, or This Week behavior changed.
+
+**Scope.** Finish the first-cut Debt Overview timeline. Include irregular inflows on their availability dates **only when they are not already in the opening eligible balance at the forecast cutoff**. Settled stock-sale proceeds and other irregular cash inflows are candidate one-time funds for a lump-sum payoff after any explicitly held-back amount and reserve protections. Compare that one-time cash separately from **sustainable monthly extra**. Continue to reuse This Week’s canonical reserve floor and the existing cash-safety walk. Do not create a competing reserve formula.
 
 **Acceptance criteria**
 
@@ -187,9 +199,33 @@ Work these slices **one at a time** on **existing Debt Overview, Cash Flow, and 
 
 **Must remain unchanged.** This Week / RFP-3, This month’s action, workbook values, payment flows, HELOC advice, and debt order.
 
+#### 4.5. Actual cash-flow reconciliation before payoff comparisons
+
+**Scope.** Reconcile **actual recorded** income and outflows against the modeled Slice 4 baseline before remaining slice 5 payoff comparisons. Use the supplied data. Include irregular income, one-time sales, lumpy expenses, and the credit-card purchase/payment overlap. If that overlap cannot be established without transaction evidence, keep it **explicitly unresolved**. Do **not** label Cash Flow Summary as actual burn.
+
+**Acceptance criteria**
+
+- Actual recorded income and outflows are compared with the modeled baseline (recurring income $22,033.22; required bills $4,653.61; variable bills $4,387.57; debt payments $21,877.05; standing floors $2,166.67; other investment bill $15; modeled shortfall $11,066.68).
+- Irregular income, one-time sales, and lumpy expenses are named separately from the recurring modeled gap.
+- The credit-card purchase/payment overlap is either closed with supplied-data evidence or left explicitly unresolved.
+- Cash Flow Summary is not labeled as actual burn.
+- The modeled $11,066.68 deficit is not treated as verified actual monthly loss.
+- No payment, transfer, This Week, or workbook-balance change.
+
+**Regression tests**
+
+- Working tree for this slice contains no unrelated application or clasp changes unless a later approved slice consumes the reconciliation.
+- Blank or unknown actuals stay unknown; they are not treated as $0.
+- This Week / RFP-3, current monthly recommendation, and payoff comparisons remain unchanged until slice 5.
+- `test:debt-payoff-strategy`, `test:rfp-capital-allocation`, and `test:dashboard-ux` pass if source is touched.
+
+**Dependencies.** Slices 1–4. Uses the supplied snapshot and Slice 4 timeline facts.
+
+**Must remain unchanged.** Frozen This Week / RFP-3, payment flows, HELOC advice, debt order, page/navigation, and workbook values.
+
 #### 5. Compare debt actions from validated available cash and reserve
 
-**Scope.** Using the validated classified cash and the existing reserve test, compare **keep cash**, **make a lump-sum payment**, and **pay recurring extra**. Settled stock-sale proceeds and other irregular cash inflows are candidate one-time funds for the lump-sum option after any explicitly held-back amount and reserve protections. Keep them separate from sustainable recurring monthly income and from sustainable monthly extra. Count each inflow once (opening eligible balance at cutoff versus post-cutoff only). Do not recommend a HELOC transfer in this slice. Do not change debt ordering in this slice. Evaluate any HELOC transfer in a **separate later slice** with its rate, payment, collateral, and variable-rate risks.
+**Scope.** After remaining slice **4.5**, using the validated classified cash and the existing reserve test, compare **keep cash**, **make a lump-sum payment**, and **pay recurring extra**. Settled stock-sale proceeds and other irregular cash inflows are candidate one-time funds for the lump-sum option after any explicitly held-back amount and reserve protections. Keep them separate from sustainable recurring monthly income and from sustainable monthly extra. Count each inflow once (opening eligible balance at cutoff versus post-cutoff only). Do not recommend a HELOC transfer in this slice. Do not change debt ordering in this slice. Evaluate any HELOC transfer in a **separate later slice** with its rate, payment, collateral, and variable-rate risks.
 
 **Acceptance criteria**
 
@@ -208,13 +244,13 @@ Work these slices **one at a time** on **existing Debt Overview, Cash Flow, and 
 - This Week / RFP-3 and Rolling Debt Payoff behavior stay unchanged.
 - `test:debt-payoff-strategy`, `test:rfp-capital-allocation`, and `test:dashboard-ux` pass.
 
-**Dependencies.** Slices 1–4.
+**Dependencies.** Slices 1–4.5.
 
 **Must remain unchanged.** This Week kernel, payment initiation, HELOC recommendation, debt order, page/navigation, and workbook writes from Compare.
 
 #### 6. Validate in Central with representative months and confirmed sale timing
 
-**Scope.** After slices 1–5, validate in Central with representative **positive and negative** months and **confirmed** cash-sale timing. Update roadmap status only after that evidence passes. Do not initiate payments or create another page or payment flow.
+**Scope.** After remaining slices **4.5** and **5**, validate in Central with representative **positive and negative** months and **confirmed** cash-sale timing. Update roadmap status only after that evidence passes. Do not initiate payments or create another page or payment flow.
 
 **Acceptance criteria**
 
@@ -231,9 +267,13 @@ Work these slices **one at a time** on **existing Debt Overview, Cash Flow, and 
 - Central cases cover at least one positive month, one negative month, one confirmed sale already in opening eligible cash (not added again), one post-cutoff confirmed sale counted once, and a missing-timing case that withholds a precise extra start.
 - Lump-sum-capable one-time cash and sustainable monthly extra are shown as separate results.
 
-**Dependencies.** Slices 1–5. Owner-operated clasp push/deploy only.
+**Dependencies.** Remaining slices 4.5 and 5. Owner-operated clasp push/deploy only.
 
 **Must remain unchanged.** Frozen This Week / RFP-3, bounded-workbook safety, administrator identity, one product design, and no autonomous clasp or workbook writes.
+
+### Later — Debt Overview UX simplification
+
+Present a clear weekly/monthly plan using **only existing sheet and account data**. Make actions, amounts, and reasons easy to find. Move detail and assumptions into optional disclosures. Avoid duplicate data and new required user inputs. Preserve safe withholding when source data is incomplete. Do not start this until remaining slices **4.5–6** have closed the cash-flow track unless a later approved instruction says otherwise. This is not remaining slice 5 or 6 and does not add a HELOC transfer recommendation.
 
 ### Still remaining after this cash-flow track
 
@@ -242,7 +282,7 @@ Do not start these until remaining slice 6 has Central evidence, except for shar
 - **Read-only reconciliation of saved debt facts** — every active debt’s saved balance, Type, APR, and minimum, or a named blocker; P&I versus escrow known or payment relief unknown; term/maturity as a cross-check, including MTB’s unconfirmed future rate/payment. No workbook overwrites.
 - **Combined payoff schedule and payment direction** — natural payoff order versus rolled-payment targets; released amount equals the contractual debt payment that stops, not escrow/T&I; keep-cash versus rollover remain different benefits.
 - **Monthly actual-versus-plan review of balances, payments, and rate changes** — compare saved balances and known rate/payment changes with the last plan without treating the plan as a payment instruction. Distinct from remaining slice 3’s Cash Flow back-test.
-- **In-source extra recommendation and $0 cash-safety gate** — already implemented; re-check after the classified-cash interpretation from remaining slices 1–5, rather than treating the 2026-11-10 $11,128.24 picture as permanently settled.
+- **In-source extra recommendation and $0 cash-safety gate** — already implemented; re-check after remaining slices **4.5–5**, rather than treating the modeled $11,066.68 picture as permanently settled actual burn.
 
 ### Data-reconciliation example — MTB (not permission to change workbook data)
 
@@ -256,11 +296,11 @@ Use these lender details only to **flag** disagreements with CashCompass. Do not
 
 ### LATER — Household and variable-income scenarios
 
-The optional Cisco overlay, the unsaved recurring income/commitment hypothetical, and the first-cut forward timeline on Debt Overview do not complete this item. Remaining **Decision-roadmap slices 1–6** classify genuine inflows, including settled stock-sale proceeds, without inflating recurring income. After that track, remaining work is RSU/ESPP vesting, rental-surplus, HELOC-use (not HELOC as a debt already in the household plan), and further bonus timing, only with explicit timing and assumptions. Keep variable income and one-time proceeds separate from recurring income. Mortgage extra-principal **scenarios** may illustrate a calculated extra or a labeled hypothetical; they do not install a fixed monthly extra.
+The optional Cisco overlay, the unsaved recurring income/commitment hypothetical, and the Slice 4 snapshot-aware timeline on Debt Overview do not complete this item. Remaining **Decision-roadmap slices 4.5–6** reconcile actual recorded cash flow against that modeled baseline, then compare keep-cash / lump / recurring extra, without inflating recurring income. After that track, remaining work is RSU/ESPP vesting, rental-surplus, HELOC-use (not HELOC as a debt already in the household plan), and further bonus timing, only with explicit timing and assumptions. Keep variable income and one-time proceeds separate from recurring income. Mortgage extra-principal **scenarios** may illustrate a calculated extra or a labeled hypothetical; they do not install a fixed monthly extra.
 
 ### LATER — Connect the debt plan to retirement decisions
 
-After the household debt-payoff model is reliable (Decision-roadmap remaining slices 1–6 complete, including Central validation of classified cash and the finalized timeline), use the debt plan’s extra, timing, and residual cash-flow as inputs to retirement tradeoffs. Use editable Education inputs for each child’s 529 and school costs, and include future RSUs and retirement contribution/match assumptions in retirement scenarios. Keep estimates labeled and editable; do not hardcode financial values. Education forecasts are not calculated yet. This phase stays **separate** from the current debt implementation.
+After the household debt-payoff model is reliable (Decision-roadmap remaining slices 4.5–6 complete, including Central validation of classified cash and the finalized timeline), use the debt plan’s extra, timing, and residual cash-flow as inputs to retirement tradeoffs. Use editable Education inputs for each child’s 529 and school costs, and include future RSUs and retirement contribution/match assumptions in retirement scenarios. Keep estimates labeled and editable; do not hardcode financial values. Education forecasts are not calculated yet. This phase stays **separate** from the current debt implementation.
 
 ---
 
@@ -338,7 +378,7 @@ These are planned, not complete:
 
 - **f. Optional Zillow/Redfin or uploaded valuation evidence** — provider-neutral property evidence only if later approved. No live Zillow/Redfin APIs are in the current product.
 - **g. Remaining investment imports** — Production customer import path for remaining E\*TRADE accounts (**Laith Etrade Account**, **Lutfi Etrade Account**; client-statement PDF/OCR **deferred**); **Laith 529** and **Lutfi 529** stay manual until a reliable source exists; any account without a reliable supported export stays deferred. The combined **E\*TRADE Cisco Statement — RSU/ESPP + Future** monthly-value profile is complete. **Samer Etrade Account** monthly value + Unified holdings is runtime-validated and is not a remaining build. **401K Account** blank-month Apply is implemented in source; Central runtime proof is **deferred**. **Lutfi Robinhood** eligibility and runtime validation are **on hold**. **Charles Schwab - Personal** holdings Apply is runtime-validated; blank-only monthly INPUT **October** validation is **deferred**. **Samer Robinhood**, **M1 Account - Gmail**, **M1 Account - yahoo**, **Charles Schwab - Personal**, and **Stash Account** detailed holdings are no longer in this remaining list. Robinhood → Unified stays deferred. Stash does not gain monthly INPUT writes in this sequence. No auto-mapping and no silent Apply.
-- **h. Income, debt payoff, HELOC, mortgage, tax, and portfolio decision features** — a **separate** decision track, not an import prerequisite. Residual Rolling Financial Plan / Multi-Broker Portfolio Intelligence ranking, Whole-Household Debt Freedom Planner, and related north-star work do not interrupt the activity-drawer sequence. See **Decision roadmap** for the debt-free North Star, implemented household payoff comparison, and remaining ordered slices (Cash Flow vs baseline reconciliation first; HELOC-use later). Performance work stays separate. **LATER** remaining HELOC-use / mortgage-acceleration / debt-to-retirement after those slices. A round extra such as $400/month is illustrative only, not a target. The modeled $11,128.24 shortfall is not a fully reconciled household-cash conclusion.
+- **h. Income, debt payoff, HELOC, mortgage, tax, and portfolio decision features** — a **separate** decision track, not an import prerequisite. Residual Rolling Financial Plan / Multi-Broker Portfolio Intelligence ranking, Whole-Household Debt Freedom Planner, and related north-star work do not interrupt the activity-drawer sequence. See **Decision roadmap** for the debt-free North Star, implemented household payoff comparison, and remaining ordered slices 4.5–6 (actual cash-flow reconciliation first; HELOC-use later). Performance work stays separate. **LATER** remaining HELOC-use / mortgage-acceleration / debt-to-retirement after those slices. A round extra such as $400/month is illustrative only, not a target. The modeled $11,066.68 shortfall is not verified actual monthly loss.
 - **i. Education forecasts** — Planning → Education currently saves inputs only. Coverage, overlap, and projection math stay deferred. Do not mix 529 balances back into Retirement investable assets.
 - **j. 401K Account Central proof** — blank-month ending-balance Apply already exists in source. Occupied cells, including explicit $0, must not be overwritten. Owner will run Central Preview/Apply later. Do not treat this as current in-progress.
 - **k. Lutfi Robinhood** — CSV eligibility and runtime validation in the existing Portfolio activity drawer are **on hold**. Do not copy **Samer Robinhood** proof onto this account. Do not treat this as current in-progress.
@@ -397,14 +437,12 @@ These are planned, not complete:
   now uses the supported extra automatically for a monthly extra-payoff
   recommendation and a next-dollar use of that extra (local tests; Central
   proof separate); the optional hypothetical extra field is not auto-filled.
-  Next *decision* work is the remaining Decision-roadmap slices on Debt
-  Overview (reconcile 2026 Cash Flow vs the modeled baseline → classify
-  inflows → back-test actual months and reopen the $11,128.24 interpretation
-  if incomplete → finalize the forward timeline → compare keep-cash / lump /
-  recurring extra → Central validation). Do not treat the modeled shortfall as
-  fully reconciled. Do not create a second planner. A round extra such as
-  $400/month is illustrative only. Performance replay stays separate. See
-  **Decision roadmap**.
+  Next *decision* work is remaining Decision-roadmap slices 4.5–6 on Debt
+  Overview (actual cash-flow reconciliation → compare keep-cash / lump /
+  recurring extra → Central validation after slice 5). Do not treat the modeled
+  $11,066.68 shortfall as verified actual monthly loss. Do not create a second
+  planner. A round extra such as $400/month is illustrative only. Performance
+  replay stays separate. See **Decision roadmap**.
 - **Completed lifecycle cluster:** Bills, House tracking/recovery, and Income
   tracking/recovery are complete. Safe soft-delete existed before full recovery
   parity; the completed contract now includes counted inactive discovery,
@@ -481,16 +519,16 @@ IDs and estimates remain in `FULL_BETA_REMAINING_PLAN.md`.
 | C — known product gap | Central planner-email debounce/trigger noise | Open historical Central design issue; no financial-data impact | Must be dispositioned in known limitations/operations; implementation priority depends on cohort impact | Re-qualify before implementation; do not mix into import work |
 | C — known product gap | AutoPay creation of a missing exact Cash Flow payee row | Open product/financial decision; current behavior fails closed to manual handling | No unless cohort evidence promotes it | Separate higher-risk Bills decision; not part of completed lifecycle |
 | D — deferred strategic | Residual `RFP-4`/`RFP-5`, shared sheet-write utilities, Income Expected/Due, Money Plan Phase 2, debt aliases/merge, refresh awareness | Deferred | No, except exact evidence already represented elsewhere | Re-qualify after current Beta-critical work |
-| E — future/north star | **Complete financial decision engine** (source-neutral evidence → history → explainable payoff/investment recommendations), plus Strategic Capital Allocation, Whole-Household Debt Freedom Planner, **Multi-Broker Portfolio Intelligence** (`MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` Phases 1–8), rewards/spend optimization, recurring schedule/gap modeling, Recurring Bill & Subscription Discovery, Property Value / AVM Refresh, broader transaction/provider ingestion, Chat/Assistant, billing activation | Sequenced separately from import: strategy comparison, Cisco bonus overlay, and Type-grouped minimums **complete**; extra estimate, next-dollar comparison, household keep-cash vs rollover, P&I/escrow paths, and Debt Overview UI cleanup in source (Central end-to-end validation pending); **NEXT** is Decision-roadmap remaining slices 1–6 (reconcile 2026 Cash Flow vs the modeled $11,128.24 baseline first; that shortfall is not a fully reconciled household-cash conclusion) | No | Does not interrupt the Import / Refresh cluster, frozen This Week / RFP-3, Rolling Debt Payoff, performance replay, or bounded-workbook safety. Additional imports are **not** a prerequisite. See **Decision roadmap** and **Complete financial decision engine**. Current account list and statuses: Activity architecture inventory (2026-10-01). Combined **E\*TRADE Cisco Statement — RSU/ESPP + Future** monthly-value import is complete. **Samer Etrade Account** monthly value + Unified holdings is runtime-validated. **Laith Etrade Account**, **Lutfi Etrade Account**, **Lutfi Robinhood**, **Laith 529**, **Lutfi 529**, and any account without a reliable supported export remain deferred. **401K Account** blank-month Apply is implemented in source; Central runtime proof is deferred. |
+| E — future/north star | **Complete financial decision engine** (source-neutral evidence → history → explainable payoff/investment recommendations), plus Strategic Capital Allocation, Whole-Household Debt Freedom Planner, **Multi-Broker Portfolio Intelligence** (`MULTI_BROKER_PORTFOLIO_INTELLIGENCE.md` Phases 1–8), rewards/spend optimization, recurring schedule/gap modeling, Recurring Bill & Subscription Discovery, Property Value / AVM Refresh, broader transaction/provider ingestion, Chat/Assistant, billing activation | Sequenced separately from import: strategy comparison, Cisco bonus overlay, Type-grouped minimums, and Slice 4 snapshot-aware timeline **complete**; extra estimate, next-dollar comparison, household keep-cash vs rollover, P&I/escrow paths, and Debt Overview UI cleanup in source (Central end-to-end validation pending for those earlier items); **NEXT** is Decision-roadmap remaining slices 4.5–6 (actual cash-flow reconciliation before payoff comparisons; keep-cash / lump / recurring extra; Central validation after slice 5). The modeled $11,066.68 shortfall is not verified actual monthly loss | No | Does not interrupt the Import / Refresh cluster, frozen This Week / RFP-3, Rolling Debt Payoff, performance replay, or bounded-workbook safety. Additional imports are **not** a prerequisite. See **Decision roadmap** and **Complete financial decision engine**. Current account list and statuses: Activity architecture inventory (2026-10-01). Combined **E\*TRADE Cisco Statement — RSU/ESPP + Future** monthly-value import is complete. **Samer Etrade Account** monthly value + Unified holdings is runtime-validated. **Laith Etrade Account**, **Lutfi Etrade Account**, **Lutfi Robinhood**, **Laith 529**, **Lutfi 529**, and any account without a reliable supported export remain deferred. **401K Account** blank-month Apply is implemented in source; Central runtime proof is deferred. |
 | F — obsolete/stale | Bills/House/Income recovery listed as open; native browser confirmation migration listed as open; zero-count recovery listed as missing; old Bank Import Step 2a “not started”; old bounded deployment cleanup item | Closed or superseded | No | Retain only as clearly labeled history |
 
 The Planning Overview and This Week / RFP-3 kernel remain frozen. **Rolling Debt
 Payoff** already exists. **Debt Overview strategy comparison** and the optional
 Cisco bonus overlay are completed hypothetical overlays (not affordability
-recommendations and not writes). Next decision work is the remaining
-Decision-roadmap slices on that same Debt Overview surface, starting with a
-read-only 2026 Cash Flow vs modeled-baseline bridge. The displayed $11,128.24
-shortfall is not a fully reconciled household-cash conclusion. Import work improves the quality
+recommendations and not writes). Next decision work is remaining
+Decision-roadmap slices 4.5–6 on that same Debt Overview surface, starting with
+actual cash-flow reconciliation. The displayed $11,066.68 shortfall is not
+verified actual monthly loss. Import work improves the quality
 and freshness of facts they consume; it does not authorize another UX redesign,
 an authority switch, or a second product design. Additional imports are **not**
 a prerequisite for the **Decision roadmap**. Performance work stays separate.
@@ -1223,11 +1261,10 @@ holdings Apply, **401K Account** blank-month Apply (Central runtime proof
 deferred), remaining E*TRADE/529 tabs, or bounded-workbook safety rules.
 Additional imports are **not** a prerequisite. Next-dollar allocation
 comparison is in source (Central proof separate). Next *decision* work is
-Decision-roadmap remaining slices 1–6, starting with reconciling 2026 Cash
-Flow against the modeled baseline. HELOC / mortgage-acceleration stay later.
+Decision-roadmap remaining slices 4.5–6, starting with actual cash-flow
+reconciliation against the modeled baseline. HELOC / mortgage-acceleration stay later.
 This is not a new Planning surface and does not auto-fill the scenario extra.
-The modeled $11,128.24 shortfall is not a fully reconciled household-cash
-conclusion.
+The modeled $11,066.68 shortfall is not verified actual monthly loss.
 
 **Objective.** CashCompass becomes a **source-neutral financial decision engine**
 that can use current valid facts (manual or imported), historical values,
@@ -1336,14 +1373,13 @@ highest-APR-first, smallest-balance-first, or a labeled hypothetical selected
 order. P&I and escrow fields, P&I-only principal math, the cash-safety $0
 gate, and the Debt Overview section/strategy-comparison UI cleanup are
 implemented in source with local tests passing. Unsaved cash-flow scenarios
-are committed; a first-cut forward cash-flow/reserve timeline is in source
-and is **not finalized**. That is **not** the completed North Star. Remaining
-work is Decision-roadmap slices 1–6: reconcile 2026 actual Cash Flow against
-the modeled baseline, classify inflows, back-test actual months, finalize the
-timeline, compare keep-cash / lump / recurring extra, then Central validation.
-The displayed **$11,128.24** shortfall is the modeled standing-policy gap, not
-a reconciled actual-cash conclusion; reopen it if the bridge shows it is
-incomplete. Extra stays $0 unless classified available cash and cash-safety
+are committed; the Slice 4 snapshot-aware cash timeline is implemented, tested,
+and Central-checked. That is **not** the completed North Star. Remaining work
+is Decision-roadmap slices 4.5–6: actual cash-flow reconciliation, compare
+keep-cash / lump / recurring extra, then Central validation after slice 5.
+The displayed **$11,066.68** shortfall is the modeled standing-policy gap, not
+verified actual monthly loss; remaining slice 4.5 reopens it against recorded
+cash flow. Extra stays $0 unless classified available cash and cash-safety
 pass. A round extra such as $400/month is illustrative only, not a default.
 **Central end-to-end validation is pending.** Typed extra remains an optional
 hypothetical scenario and is not auto-filled. The estimate is not guaranteed
@@ -1351,8 +1387,8 @@ affordable. Next-dollar comparison of that extra is in Area 6.
 
 **LATER in this area:** further RSU/ESPP vesting, rental-surplus, and HELOC-use
 scenarios only with explicit timing and assumptions, after remaining slices
-1–6. Classification of confirmed sale proceeds is remaining slice 2, not this
-LATER item. The Cisco overlay does not complete those items. Variable income
+4.5–6. Classification of confirmed sale proceeds is complete in remaining
+slice 2. The Cisco overlay does not complete those items. Variable income
 and one-time proceeds stay separate from recurring income.
 
 Must not violate required obligations, liquidity, or 30/90-day safety. Must not
@@ -1420,12 +1456,11 @@ reserve checks, or $0. A round extra such as $400/month toward a Bank of
 America mortgage (versus $100/week) is only an illustrative scenario showing
 that monthly and weekly extras are not equivalent. It is not an agreed target,
 budget, or default. Current Debt Overview facts show a **modeled** dated
-shortfall of $11,128.24 and $0 usable cash; that picture is **not fully
-reconciled** against 2026 actual Cash Flow, so extra stays withheld until
-classified available cash and reserve checks prove otherwise. Reuse existing
-Debt Overview and scheduling surfaces; do not create a payment flow or
-automate payments. See **Decision roadmap → NEXT — Ordered remaining
-slices**.
+shortfall of $11,066.68 and $0 usable cash; that picture is **not verified
+actual monthly loss**, so extra stays withheld until classified available cash
+and reserve checks prove otherwise. Reuse existing Debt Overview and scheduling
+surfaces; do not create a payment flow or automate payments. See
+**Decision roadmap → NEXT — Ordered remaining slices**.
 
 ### Area 10 — Retirement and income planning
 
@@ -1500,13 +1535,13 @@ frozen-candidate evidence `8a`–`8f`.
 | **DE-1** | Source-neutral evidence completeness | Part 2A-0–2A-5; current four-status readiness; no Planning authority switch | Identity, source, as-of, freshness, provenance, confidence on cash/card and then later domains; manual/Plaid/CSV/PDF count equally; explicit zero valid. **Separate import track** — not a prerequisite for DE-4 remaining slices |
 | **DE-2** | Account-coverage adapters | DE-0, DE-1; per-provider format inspection | Remaining (not current): remaining E\*TRADE partitions (**Laith Etrade Account**, **Lutfi Etrade Account**; OCR deferred); **Laith 529** / **Lutfi 529** only if a reliable source appears. Combined Cisco monthly-value import is complete. **Samer Etrade Account** monthly value + Unified holdings is runtime-validated. **401K Account** blank-month Apply is implemented in source; Central runtime proof is deferred. **Lutfi Robinhood** eligibility/runtime validation is on hold. **Charles Schwab - Personal** blank-only monthly INPUT October validation is deferred. Do not rebuild runtime-validated Robinhood/M1/Schwab/Stash/Samer E\*TRADE holdings paths |
 | **DE-3** | Historical data foundation | DE-1; duplicate/replay-safe import | Monthly snapshots, holdings/lots, cash/debt/mortgage/income/expense history, lineage. **Separate import track** |
-| **DE-4** | Debt-payoff optimizer | Current valid facts; frozen This Week / RFP-3 safety; existing Rolling Debt Payoff unchanged | **Completed:** Debt Overview min/avalanche/snowball comparison and optional Cisco bonus overlay (hypothetical; Central-tested; non-writing; not affordability); Type-grouped shortfall minimums runtime-tested in Central. **In source, local tests; Central end-to-end validation pending:** supported extra estimate including Varies YTD running average; automatic monthly extra-payoff recommendation from that estimate; optional hypothetical extra not auto-filled; withhold $0/missing-fact results; name the monthly gap to break even from the same category totals without inventing a safe reduction; P&I and escrow fields/read paths; P&I-only mortgage principal; household keep-cash vs rollover comparison; cash-safety gate that can recommend $0; Debt Overview section and strategy-comparison UI cleanup. Unsaved cash-flow scenarios committed; first-cut forward timeline in source, not finalized. The modeled $11,128.24 shortfall is **not** a fully reconciled household-cash conclusion. **NEXT — remaining slices 1–6:** reconcile 2026 Cash Flow vs the modeled baseline (no code); classify recurring / irregular / one-time sale proceeds; back-test actual months and reopen the $11,128.24 interpretation if incomplete; finalize the forward timeline; compare keep-cash / lump / recurring extra (no HELOC in that slice); Central validation with positive and negative months and confirmed sale timing. Saved-debt fact audit, combined-schedule verification, and balance actual-versus-plan remain after that track. Do not create a second planner. A round extra such as $400/month is illustrative only. **LATER:** further RSU/ESPP vesting, rental-surplus, and HELOC-use scenarios with explicit timing |
+| **DE-4** | Debt-payoff optimizer | Current valid facts; frozen This Week / RFP-3 safety; existing Rolling Debt Payoff unchanged | **Completed:** Debt Overview min/avalanche/snowball comparison and optional Cisco bonus overlay (hypothetical; Central-tested; non-writing; not affordability); Type-grouped shortfall minimums runtime-tested in Central; Slice 4 snapshot-aware cash timeline (Central-checked modeled $0 opening eligible cash, $11,066.68 deficit, November sale cells, and Nov/Dec bridge; deficit is not verified actual monthly loss). **In source, local tests; Central end-to-end validation pending:** supported extra estimate including Varies YTD running average; automatic monthly extra-payoff recommendation from that estimate; optional hypothetical extra not auto-filled; withhold $0/missing-fact results; name the monthly gap to break even from the same category totals without inventing a safe reduction; P&I and escrow fields/read paths; P&I-only mortgage principal; household keep-cash vs rollover comparison; cash-safety gate that can recommend $0; Debt Overview section and strategy-comparison UI cleanup; unsaved cash-flow scenarios. **NEXT — remaining slices 4.5–6:** actual cash-flow reconciliation before payoff comparisons (irregular income, one-time sales, lumpy expenses, card overlap unresolved without transaction evidence; do not label Cash Flow Summary as actual burn); compare keep-cash / lump / recurring extra (no HELOC in that slice); Central validation after slice 5. Saved-debt fact audit, combined-schedule verification, balance actual-versus-plan, and a later Debt Overview UX simplification remain after that track. Do not create a second planner. A round extra such as $400/month is illustrative only. **LATER:** further RSU/ESPP vesting, rental-surplus, and HELOC-use scenarios with explicit timing |
 | **DE-5** | Idle-cash / next-dollar allocation | Supported extra estimate or explicit missing-fact result; hard reserve + preferred liquidity | **In source, local tests; Central proof separate:** compare high-APR payoff, holding cash/reserve, extra mortgage principal, or investing on Debt Overview; show amount, timing, interest/return assumptions, liquidity, and tradeoffs. A separate one-time extra from cash above reserve is sized on a 12-month walk of current recurring surplus and known Planned upcoming; if the no-lump baseline later breaches the reserve, no lump is labeled safe. Missing cash APY is not invented into a winner. Does not change This Week’s frozen kernel, auto-fill the scenario extra, or initiate payments/transfers. Does **not** wait on DE-3 history |
-| **DE-6** | HELOC analysis | Remaining DE-4 slices 1–6; house financing identity | **LATER, not remaining slice 5:** cash vs HELOC vs staged use; variable-rate, repayment, collateral, reserve, liquidity, tax; never “because credit exists” |
-| **DE-7** | Mortgage acceleration | Remaining DE-4 Decision-roadmap slices; Property Performance V1 | **LATER, after remaining household payoff slices 1–6:** extra principal, refinance, interest, cash-flow, opportunity cost, rental treatment, prepayment limits. Extra principal is calculated from saved facts and reserve checks, or $0. A $400/month versus $100/week mortgage extra is an illustrative scenario only, not a target or budget. The modeled $11,128.24 shortfall / $0 usable cash withholds extra until classified available cash and reserve checks prove otherwise. See **Decision roadmap** |
+| **DE-6** | HELOC analysis | Remaining DE-4 slices 4.5–6; house financing identity | **LATER, not remaining slice 5:** cash vs HELOC vs staged use; variable-rate, repayment, collateral, reserve, liquidity, tax; never “because credit exists” |
+| **DE-7** | Mortgage acceleration | Remaining DE-4 Decision-roadmap slices; Property Performance V1 | **LATER, after remaining household payoff slices 4.5–6:** extra principal, refinance, interest, cash-flow, opportunity cost, rental treatment, prepayment limits. Extra principal is calculated from saved facts and reserve checks, or $0. A $400/month versus $100/week mortgage extra is an illustrative scenario only, not a target or budget. The modeled $11,066.68 shortfall / $0 usable cash withholds extra until classified available cash and reserve checks prove otherwise. See **Decision roadmap** |
 | **DE-8** | Tax-aware portfolio actions | DE-2, DE-3 tax lots; Robinhood protection policy | Candidate lots, ST/LT, basis, RSU/ESPP, concentration, taxable vs retirement, estimated tax; no auto-sell |
 | **DE-9** | Robinhood funding optimization | DE-3, DE-5; current Robinhood policy floor | Contribution, capacity, allocation, dividends, total return, tax, concentration, time-to-income; not yield-only |
-| **DE-10** | Retirement and income planning | Household debt-payoff remaining slices 1–6 complete, including classified-cash Central validation; current Retirement and Education surfaces; current valid facts | **LATER — after the debt-payoff model is reliable:** connect the household debt plan to retirement decisions. Editable Education 529/school-cost inputs, future RSUs, contribution/match assumptions; estimates labeled and editable; no hardcoded financial values. Remaining: wrappers, sequencing, SS/pension when present, cash-flow gap. Already done: Retirement investable assets exclude SYS - Assets rows typed Education or 529; Overview uses that filtered total; Education saved inputs exist without forecasts. Additional 401(k)/history imports are **not** a prerequisite. Keep this phase separate from the current debt implementation |
+| **DE-10** | Retirement and income planning | Household debt-payoff remaining slices 4.5–6 complete, including classified-cash Central validation; current Retirement and Education surfaces; current valid facts | **LATER — after the debt-payoff model is reliable:** connect the household debt plan to retirement decisions. Editable Education 529/school-cost inputs, future RSUs, contribution/match assumptions; estimates labeled and editable; no hardcoded financial values. Remaining: wrappers, sequencing, SS/pension when present, cash-flow gap. Already done: Retirement investable assets exclude SYS - Assets rows typed Education or 529; Overview uses that filtered total; Education saved inputs exist without forecasts. Additional 401(k)/history imports are **not** a prerequisite. Keep this phase separate from the current debt implementation |
 | **DE-11** | Explainable recommendation packet | Required output of remaining DE-4 through DE-10 | Action, amount, benefit, assumptions, tax, liquidity, risks, missing data, confidence; explicit approval. Withhold when facts are missing |
 | **DE-12** | Safety and governance evidence | Cross-cutting | No auto-trade/pay/match/apply; assumptions; audit trail; user approval; bounded-workbook writer prohibition |
 
@@ -1518,12 +1553,12 @@ In source (Central end-to-end validation pending): DE-4 supported extra
 estimate including Varies YTD averages, the automatic monthly extra-payoff
 recommendation, household keep-cash vs rollover comparison, P&I/escrow paths,
 cash-safety $0 gate, Debt Overview UI cleanup, unsaved cash-flow scenarios,
-first-cut forward timeline (not finalized), and DE-5 next-dollar allocation.
-**NEXT:** DE-4 remaining slices 1–6 (reconcile 2026 Cash Flow vs the modeled
-$11,128.24 baseline → classify inflows → back-test actual months → finalize
-the forward timeline → compare keep-cash / lump / recurring extra → Central
-validation). The modeled shortfall is not a fully reconciled household-cash
-conclusion. Performance replay stays separate.
+Slice 4 snapshot-aware cash timeline (Central-checked; modeled deficit not
+actual loss), and DE-5 next-dollar allocation.
+**NEXT:** DE-4 remaining slices 4.5–6 (actual cash-flow reconciliation →
+compare keep-cash / lump / recurring extra → Central validation after slice 5).
+The modeled $11,066.68 shortfall is not verified actual monthly loss.
+Performance replay stays separate.
 **LATER:** remaining variable-income / HELOC-use / DE-7 mortgage-acceleration
 scenarios → DE-10 debt-to-retirement after the household debt plan is reliable
 → DE-8 / DE-9 as tax-lot and funding data allow → DE-11 / DE-12 as the
@@ -1589,13 +1624,13 @@ Sequenced **immediately after Validator Phase 2 and before major new user featur
   overlay, and Type-grouped minimums; extra estimate, next-dollar comparison,
   household keep-cash vs rollover, P&I/escrow paths, cash-safety $0 gate,
   Debt Overview UI cleanup, and unsaved cash-flow scenarios in source
-  (Central end-to-end validation pending); first-cut forward timeline in
-  source, not finalized. The modeled $11,128.24 shortfall is not a fully
-  reconciled household-cash conclusion. **NEXT** remaining slices 1–6
-  (reconcile 2026 Cash Flow vs the modeled baseline, classify inflows,
-  back-test actual months, finalize the timeline, compare keep-cash / lump /
-  recurring extra, Central validation); **LATER** remaining variable-income,
-  HELOC-use, and debt-to-retirement after that debt plan is reliable.
+  (Central end-to-end validation pending); Slice 4 snapshot-aware cash
+  timeline implemented, tested, and Central-checked. The modeled $11,066.68
+  shortfall is not verified actual monthly loss. **NEXT** remaining slices
+  4.5–6 (actual cash-flow reconciliation, compare keep-cash / lump /
+  recurring extra, Central validation after slice 5); **LATER** Debt Overview
+  UX simplification, remaining variable-income, HELOC-use, and
+  debt-to-retirement after that debt plan is reliable.
   Performance work stays separate. Imports are a separate
   track, not a prerequisite. A round extra such as $400/month is illustrative
   only, not a target.
